@@ -1,0 +1,15 @@
+# Estado local de scripts (no se versiona: es progreso de una corrida, no código)
+scripts/github/.issue-map.*.json
+
+# Python
+__pycache__/
+*.pyc
+
+# Entorno
+.env
+
+# Editores/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
