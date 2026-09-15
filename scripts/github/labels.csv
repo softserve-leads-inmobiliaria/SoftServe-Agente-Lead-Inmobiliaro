@@ -1,0 +1,21 @@
+# name|color|description
+# Formato: 3 campos separados por "|". Líneas que empiezan con # se ignoran.
+# Editar este archivo (o pasar otro con create_labels.sh <repo> <otro.csv>) para reutilizarlo en otro proyecto.
+track:core|1D76DB|Track A — Motor del agente
+track:borde|0E8A16|Track B — Canal y borde
+track:datos|5319E7|Track C — Datos y conocimiento
+track:cross|FBCA04|Cross-track — observabilidad, CI, cierre
+prio:P0|B60205|Núcleo — no se recorta
+prio:P1|D93F0B|Mejora de demo — tiene fallback
+prio:P2|C5DEF5|Extensión — solo si el núcleo cierra
+epic:contratos|5319E7|E0 — Contratos y entorno
+epic:motor-agente|1D76DB|E1 — Motor del agente
+epic:canal-borde|0E8A16|E2 — Canal y borde
+epic:datos|5319E7|E3 — Datos y conocimiento
+epic:observabilidad|FBCA04|E4 — Observabilidad y calidad
+epic:cierre|C2E0C6|E5 — Cierre y demo
+points:1|C2E0C6|1 punto Fibonacci (~2h ideales)
+points:2|C2E0C6|2 puntos Fibonacci (~4h ideales)
+points:3|C2E0C6|3 puntos Fibonacci (~6h ideales)
+points:5|C2E0C6|5 puntos Fibonacci (~10h ideales)
+points:8|C2E0C6|8 puntos Fibonacci (~16h ideales) — se parte salvo P2 sin alcance confirmado
