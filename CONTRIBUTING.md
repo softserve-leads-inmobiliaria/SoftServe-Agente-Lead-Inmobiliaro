@@ -71,6 +71,12 @@ olvida bajo presión de entrega:
   se edita el `.md` vía PR, no solo el Issue.
 - Si dudás dónde poner algo nuevo, es más probable que ya exista un lugar (`docs/DECISIONS/`,
   `docs/DESIGN/`) que necesite un archivo nuevo.
+- **Contenido nuevo no referencia proyectos anteriores** ("v1", "FINAL-PROJECT", "en el proyecto
+  anterior..."). Este repo se documenta y se justifica por sí mismo — cada regla, decisión o
+  historia nueva lleva su propia razón, autocontenida, no una comparación con algo previo. Esto
+  es hacia adelante, **no retroactivo**: lo que ya existe con ese tipo de referencia (algunas
+  secciones de `docs/STORIES/*.md` y `docs/ESTRUCTURA-DEL-PROYECTO.md`) se deja como está — no
+  hay que "arreglarlo" al pasar por ahí.
 
 ## Secretos y configuración
 

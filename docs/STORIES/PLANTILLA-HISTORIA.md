@@ -22,9 +22,9 @@ Como <rol>, quiero <acción/capacidad>, para <beneficio/razón>.
 - [ ] Si la historia introduce o cambia una decisión de arquitectura, tiene su entrada correspondiente en `docs/DECISIONS/decisions.md`.
 - [ ] <Criterio de DoD específico de esta historia, si aplica — p. ej. "gold set en verde en CI", "verificado en vivo contra el sistema real, no solo mockeado">
 
-## Notas para v2 (aprendido en v1)
+## Notas de diseño
 
-<Opcional. Solo si esta historia repite o corrige explícitamente algo documentado en la retrospectiva o en LESSONS-LEARNED.md de v1 — si no aplica, borrar esta sección entera en vez de dejarla vacía.>
+<Opcional. Solo si esta historia depende de una decisión de diseño no obvia que vale la pena dejar explícita — si no aplica, borrar esta sección entera en vez de dejarla vacía. No referenciar proyectos anteriores (ver `CONTRIBUTING.md`); si el razonamiento viene de una experiencia previa, escribilo como una razón propia y autocontenida de este proyecto.>
 
 ---
 
