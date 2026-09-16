@@ -253,6 +253,8 @@ def main() -> int:
     for story in stories.values():
         if story.id not in issue_map:
             continue
+        if only_ids is not None and story.id not in only_ids:
+            continue
         entry = issue_map[story.id]
 
         if story.depends:
