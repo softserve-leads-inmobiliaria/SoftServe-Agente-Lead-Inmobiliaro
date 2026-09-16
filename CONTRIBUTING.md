@@ -4,6 +4,10 @@ Documento corto, operativo. El *por qué* de las decisiones de arquitectura vive
 `docs/DECISIONS/decisions.md`; el *qué* de cada historia vive en `docs/STORIES/`. Esto es el
 *cómo* del día a día con 3 personas tocando el mismo repo a la vez.
 
+**¿Primera vez usando Git/GitHub en equipo?** Empezá por [`docs/ONBOARDING.md`](docs/ONBOARDING.md)
+— tiene el flujo completo paso a paso con los comandos exactos. Este documento son las reglas;
+ese es el tutorial.
+
 ## Regla #1 — nunca push directo a `main`
 
 Todo cambio entra por Pull Request, sin excepción — ni un `README.md` typo, ni un fix de 1 línea
@@ -74,6 +78,24 @@ olvida bajo presión de entrega:
   una clave real, se rota la clave, no alcanza con un commit que la borre (queda en el historial).
 - Ningún token/API key en código, logs, ni en el cuerpo de un Issue/PR — ni siquiera "temporalmente
   para probar".
+
+## Al cerrar un Issue
+
+Antes de cerrar (o al mergear el PR que lo cierra), revisar — no todo aplica siempre, pero el
+chequeo es obligatorio, no opcional:
+
+- **¿La historia cambió de alcance real respecto a `docs/STORIES/<ID>.md`?** Si sí, editar ese
+  archivo en el mismo PR — no dejar que el Issue diga una cosa y el `.md` otra.
+- **¿Se tomó una decisión de arquitectura nueva (o se cambió una existente)?** Agregar su entrada
+  en `docs/DECISIONS/decisions.md`, enlazando al Issue/PR — ya está en la Definition of Done común.
+- **¿Algo salió distinto de lo esperado, se pisó un supuesto equivocado, o se encontró un
+  *gotcha* que le va a ahorrar tiempo a la próxima persona (o a nosotros mismos en 2 semanas)?**
+  Agregar una entrada corta en `docs/LESSONS-LEARNED.md` — esto es lo que en v1 evitó (o no)
+  repetir el mismo error 3 veces (ver `docs/ESTRUCTURA-DEL-PROYECTO.md` §0). No hace falta para
+  historias que salieron exactamente como estaban planeadas; sí para cualquier `[gap]`,
+  `[tech-debt]`, o sorpresa real.
+
+`docs/LESSONS-LEARNED.md` todavía no existe en este repo — crear la primera entrada ya lo crea.
 
 ## Cuando algo sale mal
 

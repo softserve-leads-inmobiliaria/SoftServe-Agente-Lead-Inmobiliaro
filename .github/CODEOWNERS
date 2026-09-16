@@ -1,0 +1,26 @@
+# Sugiere reviewer automático según el Track/carpeta que tocás — reglas en CONTRIBUTING.md
+# ("Quién revisa"), asignación de Track por persona en docs/STORIES/ROADMAP.md §3.
+#
+# ⚠️ PENDIENTE: los placeholders @persona-track-a/b/c hay que reemplazarlos por los
+# usernames reales de GitHub una vez que tus 2 compañeros acepten la invitación a la
+# organización (softserve-leads-inmobiliaria) — hasta entonces GitHub no puede
+# resolverlos y este archivo simplemente no sugiere a nadie (no rompe nada).
+#
+# La última regla que matchea gana — por eso lo específico va después de lo general.
+
+# Track C — datos y conocimiento (Catalog Service + db/ compartido)
+/services/catalog/   @persona-track-c
+/db/                  @persona-track-c
+
+# Track B — canal y borde (Telegram + panel de asesores)
+/services/panel/      @persona-track-b
+
+# Track A — motor del agente (FSM, orquestador, guardrails, scoring)
+# services/core/app/ hoy se reparte entre Track A (agente) y Track B (canal Telegram)
+# dentro de la misma carpeta, y CT-5 todavía no define los nombres de archivo finales
+# — agregar acá un patrón más fino (ej. services/core/app/fsm.py) recién cuando esa
+# estructura exista de verdad, no adivinar nombres ahora.
+
+# Contratos y planificación — cualquiera de los 3 puede revisar, sin dueño único
+/contracts/            @persona-track-a @persona-track-b @persona-track-c
+/docs/STORIES/         @persona-track-a @persona-track-b @persona-track-c
