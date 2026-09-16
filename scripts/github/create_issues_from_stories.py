@@ -173,7 +173,7 @@ def gh_issue_create(repo: str, title: str, body: str, labels: list[str]) -> int:
         ]
         for label in labels:
             cmd += ["--label", label]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=True)
     finally:
         Path(body_file).unlink(missing_ok=True)
     url = result.stdout.strip().splitlines()[-1]
@@ -187,7 +187,7 @@ def gh_issue_edit_body(repo: str, number: int, body: str) -> None:
         body_file = f.name
     try:
         cmd = ["gh", "issue", "edit", str(number), "--repo", repo, "--body-file", body_file]
-        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=True)
     finally:
         Path(body_file).unlink(missing_ok=True)
 

@@ -1,0 +1,45 @@
+name: Gap, bug o deuda técnica
+description: Algo encontrado durante el desarrollo que no estaba en el backlog original (bug, deuda técnica, constraint de infra, tarea de DevOps)
+title: "[gap] Título breve"
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Para esto NO hace falta un archivo en `docs/STORIES/` — es trabajo que surge sobre la
+        marcha, no una historia planificada. Usar el prefijo del título que corresponda:
+        `[gap]` (falta algo que se asumía cubierto), `[bug]`, `[tech-debt]`, `[DevOps]`,
+        `[constraint]` (una limitación de infra/entorno descubierta, ej. rate limit de un proveedor).
+
+        Asignar labels `track:*` y `prio:*` igual que a cualquier historia. `epic:*` y `points:*`
+        son opcionales acá — si termina siendo trabajo grande, mejor formalizarlo como historia
+        nueva en `docs/STORIES/`.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Qué pasa y por qué importa
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Cómo reproducirlo / dónde se encontró
+      description: Pasos, comando, o el contexto en el que apareció (ej. "al correr docker compose up").
+
+  - type: textarea
+    id: fix
+    attributes:
+      label: Solución propuesta (si ya se tiene una idea)
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Prioridad
+      options:
+        - "P0 — bloquea el núcleo, arreglar ya"
+        - "P1 — afecta la demo, con fallback"
+        - "P2 — deuda técnica, no urgente"
+    validations:
+      required: true

@@ -1,0 +1,79 @@
+name: Historia de usuario (backlog)
+description: Nueva historia del backlog planificado — copiarla primero a docs/STORIES/<ID>.md
+title: "[ID] Título breve"
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Antes de crear este Issue:** la historia tiene que existir primero como archivo en
+        `docs/STORIES/<ID>.md` (copiando `docs/STORIES/PLANTILLA-HISTORIA.md`) y aparecer en la
+        tabla de su épica en `docs/STORIES/README.md`. Este Issue es el *tracking* de esa historia,
+        no reemplaza el archivo — el contenido completo (criterios de aceptación, DoD) vive ahí.
+
+        Asignar labels: `track:core|borde|datos|cross`, `prio:P0|P1|P2`, `epic:contratos|motor-agente|canal-borde|datos|observabilidad|cierre`, `points:1|2|3|5|8`.
+        Asignar Milestone = la épica. Si depende de otra historia, dejarlo en el campo de abajo y además
+        marcarla en el Project.
+
+  - type: input
+    id: backlog-id
+    attributes:
+      label: ID del backlog
+      placeholder: "CT-1, A-4, B-1, C-5, OBS-2..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: user-story
+    attributes:
+      label: Historia de usuario
+      description: "Formato: Como <rol>, quiero <acción/capacidad>, para <beneficio/razón>."
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Criterios de aceptación
+      description: Lista verificable, no ambigua.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: dod
+    attributes:
+      label: Definition of Done específica de esta historia
+      description: La DoD común (PR revisado, tests en verde, contract tests, decisions.md) ya aplica siempre — acá solo el criterio extra si esta historia tiene uno (ej. "gold set en verde", "verificado en vivo").
+
+  - type: input
+    id: depends-on
+    attributes:
+      label: Depende de
+      description: IDs de otras historias/Issues que deben cerrarse antes.
+      placeholder: "CT-1, CT-6"
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Prioridad
+      options:
+        - "P0 — núcleo, no se recorta"
+        - "P1 — mejora de demo, con fallback"
+        - "P2 — extensión, solo si sobra tiempo"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: track
+    attributes:
+      label: Track
+      options:
+        - "A — Motor del agente"
+        - "B — Canal y borde"
+        - "C — Datos y conocimiento"
+        - "Cross"
+    validations:
+      required: true
