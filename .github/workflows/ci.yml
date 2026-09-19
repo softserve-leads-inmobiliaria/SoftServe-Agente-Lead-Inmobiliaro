@@ -38,7 +38,7 @@ jobs:
       - name: Tests por servicio y paquete
         run: |
           status=0
-          for dir in db/tests services/core/tests services/catalog/tests services/panel/tests tests/harness; do
+          for dir in tests/infra db/tests services/core/tests services/catalog/tests services/panel/tests tests/harness; do
             if find "$dir" -name 'test_*.py' 2>/dev/null | grep -q .; then
               echo "::group::$dir"
               python -m pytest "$dir" -q || status=1
