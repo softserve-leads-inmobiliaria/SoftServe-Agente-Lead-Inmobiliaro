@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://softserve.local/contracts/mcp/get_property.schema.json",
+  "name": "get_property",
+  "description": "Ficha completa de una propiedad. address_exact solo viene poblada si el orquestador pasa lead_qualified=true (valor derivado de la FSM/banda de score, nunca elegido por el LLM); si no, viene null.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "property_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "lead_qualified": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "property_id",
+      "lead_qualified"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "price": {
+        "type": "number",
+        "minimum": 0
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "venta",
+          "renta",
+          "preventa"
+        ]
+      },
+      "zone": {
+        "type": "string"
+      },
+      "m2": {
+        "type": "number",
+        "minimum": 0
+      },
+      "bedrooms": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "bathrooms": {
+        "type": "number",
+        "minimum": 0
+      },
+      "amenities": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "disponible",
+          "apartado",
+          "cerrado"
+        ]
+      },
+      "address_approx": {
+        "type": "string"
+      },
+      "address_exact": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "null salvo que el input haya traído lead_qualified=true."
+      }
+    },
+    "required": [
+      "id",
+      "title",
+      "price",
+      "type",
+      "zone",
+      "m2",
+      "bedrooms",
+      "bathrooms",
+      "amenities",
+      "status",
+      "address_approx",
+      "address_exact"
+    ],
+    "additionalProperties": false
+  },
+  "errorSchema": "catalog_error.schema.json",
+  "errors": {
+    "NOT_FOUND": "property_id no existe",
+    "INVALID_INPUT": "El input no cumple el inputSchema o es semánticamente inválido",
+    "UPSTREAM_UNAVAILABLE": "La fuente de datos (Postgres/servicio) no está disponible"
+  }
+}

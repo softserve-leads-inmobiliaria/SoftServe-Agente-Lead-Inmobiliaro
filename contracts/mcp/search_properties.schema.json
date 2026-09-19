@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://softserve.local/contracts/mcp/search_properties.schema.json",
+  "name": "search_properties",
+  "description": "Busca propiedades por filtros. Todos los filtros son opcionales. Sin coincidencias devuelve properties: [] (no es un error). NUNCA incluye address_exact: el output tiene additionalProperties=false para que no pueda colarse en un resumen de búsqueda.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "zone": {
+        "type": "string",
+        "minLength": 1
+      },
+      "budget_range": {
+        "type": "object",
+        "properties": {
+          "min": {
+            "type": "number",
+            "minimum": 0
+          },
+          "max": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "min",
+          "max"
+        ],
+        "additionalProperties": false,
+        "description": "min > max es INVALID_INPUT."
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "venta",
+          "renta",
+          "preventa"
+        ]
+      },
+      "bedrooms": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "price": {
+              "type": "number",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "venta",
+                "renta",
+                "preventa"
+              ]
+            },
+            "zone": {
+              "type": "string"
+            },
+            "m2": {
+              "type": "number",
+              "minimum": 0
+            },
+            "bedrooms": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "bathrooms": {
+              "type": "number",
+              "minimum": 0
+            },
+            "amenities": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "disponible",
+                "apartado",
+                "cerrado"
+              ]
+            },
+            "address_approx": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "title",
+            "price",
+            "type",
+            "zone",
+            "m2",
+            "bedrooms",
+            "bathrooms",
+            "amenities",
+            "status",
+            "address_approx"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "properties"
+    ],
+    "additionalProperties": false
+  },
+  "errorSchema": "catalog_error.schema.json",
+  "errors": {
+    "INVALID_INPUT": "El input no cumple el inputSchema o es semánticamente inválido (p. ej. budget_range.min > max)",
+    "UPSTREAM_UNAVAILABLE": "La fuente de datos (Postgres/servicio) no está disponible"
+  },
+  "errors_not_applicable": {
+    "NOT_FOUND": "Sin resultados se responde properties: [], no un error."
+  }
+}

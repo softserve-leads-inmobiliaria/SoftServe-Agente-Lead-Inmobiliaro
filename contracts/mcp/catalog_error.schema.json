@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://softserve.local/contracts/mcp/catalog_error.schema.json",
+  "title": "CatalogToolError",
+  "description": "Forma de error común a las 5 tools. En MCP viaja como contenido de una respuesta con isError=true. Cada tool declara en su campo `errors` cuáles de estos códigos puede devolver y cuándo.",
+  "type": "object",
+  "properties": {
+    "error_code": {
+      "type": "string",
+      "enum": [
+        "NOT_FOUND",
+        "INVALID_INPUT",
+        "UPSTREAM_UNAVAILABLE"
+      ]
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Legible; nunca expone detalles internos (stack traces, SQL)."
+    }
+  },
+  "required": [
+    "error_code",
+    "message"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://softserve.local/contracts/mcp/get_availability.schema.json",
+  "name": "get_availability",
+  "description": "Estado de disponibilidad de una propiedad en este momento. El orquestador lo revalida después de cualquier search_properties/get_property y antes de mostrar o agendar (A-4).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "property_id": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "property_id"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "property_id": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "disponible",
+          "apartado",
+          "cerrado"
+        ]
+      },
+      "checked_at": {
+        "type": "string",
+        "format": "date-time"
+      }
+    },
+    "required": [
+      "property_id",
+      "status",
+      "checked_at"
+    ],
+    "additionalProperties": false
+  },
+  "errorSchema": "catalog_error.schema.json",
+  "errors": {
+    "NOT_FOUND": "property_id no existe",
+    "INVALID_INPUT": "El input no cumple el inputSchema o es semánticamente inválido",
+    "UPSTREAM_UNAVAILABLE": "La fuente de datos (Postgres/servicio) no está disponible"
+  }
+}

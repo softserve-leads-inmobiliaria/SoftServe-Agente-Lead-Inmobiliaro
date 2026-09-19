@@ -1,0 +1,10 @@
+{
+  "promotions": [
+    {
+      "id": "promo_001",
+      "property_id": "prop_00231",
+      "title": "Enganche diferido",
+      "description": "Enganche en 6 mensualidades."
+    }
+  ]
+}

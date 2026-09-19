@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://softserve.local/contracts/mcp/check_requirements.schema.json",
+  "name": "check_requirements",
+  "description": "Verifica requisitos de compra/renta de una propiedad contra el perfil declarado. meets_requirements alimenta la dimensión Eligibility del scoring BANT-E (design.md §3): lo decide el catálogo, nunca el LLM.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "property_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "lead_profile": {
+        "type": "object",
+        "properties": {
+          "down_payment": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Enganche disponible."
+          },
+          "monthly_income": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Ingreso mensual declarado."
+          },
+          "has_references": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "down_payment",
+          "monthly_income",
+          "has_references"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "property_id",
+      "lead_profile"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "meets_requirements": {
+        "type": "boolean"
+      },
+      "details": {
+        "type": "object",
+        "properties": {
+          "down_payment_ok": {
+            "type": "boolean"
+          },
+          "income_ok": {
+            "type": "boolean"
+          },
+          "references_ok": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "down_payment_ok",
+          "income_ok",
+          "references_ok",
+          "notes"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "meets_requirements",
+      "details"
+    ],
+    "additionalProperties": false
+  },
+  "errorSchema": "catalog_error.schema.json",
+  "errors": {
+    "NOT_FOUND": "property_id no existe",
+    "INVALID_INPUT": "El input no cumple el inputSchema o es semánticamente inválido",
+    "UPSTREAM_UNAVAILABLE": "La fuente de datos (Postgres/servicio) no está disponible"
+  }
+}
