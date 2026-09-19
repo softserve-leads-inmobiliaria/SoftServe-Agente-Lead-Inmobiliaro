@@ -1,3 +1,4 @@
+-r db/requirements.txt
 -r services/panel/requirements.txt
 -r services/catalog/requirements.txt
 -r services/core/requirements.txt
