@@ -182,3 +182,25 @@ no podría distinguir en runtime qué forma recibió.
 **Consecuencias.** Todo productor de eventos debe fijar `schema_version`. Los contratos de las
 tools MCP (`CT-2`) y de estado de la FSM (`CT-3`) no llevan este campo por ahora; si alguno lo
 necesita, se aplica la misma regla en una entrada nueva.
+
+---
+
+## DT-9 — Observabilidad: Arize Phoenix autoalojado (OpenTelemetry)
+
+**Estado:** aceptada
+
+**Contexto.** `OBS-1` necesita trazar cada turno (estado FSM, tools, guardrails, latencia, costo)
+con auto-instrumentación del SDK del proveedor de LLM (DT-6) y *spans* manuales. El requisito de
+`CT-6` es que todo levante con `docker compose up`, sin nube y sin Redis (DT-3, DT-4).
+
+**Decisión.** Phoenix corriendo como un solo contenedor en el `docker-compose`, recibiendo trazas
+OpenTelemetry por OTLP (HTTP en `6006`, gRPC en `4317`). Imagen con versión fija, persistencia en
+un volumen propio.
+
+**Alternativas.** Langfuse autoalojado — descartado: su versión vigente exige varios servicios
+adicionales (incluido Redis), lo que contradice DT-3. Solo logs JSON — descartado: no da vista de
+trazas por turno ni de costo por llamada al LLM.
+
+**Consecuencias.** Las trazas usan el estándar OpenTelemetry, así que cambiar de herramienta no
+obliga a re-instrumentar el código (esto es la base del plan B de `OBS-8`). Fijar la versión de la
+imagen y actualizarla a propósito, no con `latest`.
