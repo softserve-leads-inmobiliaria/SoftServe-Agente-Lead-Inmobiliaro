@@ -1,0 +1,53 @@
+# Stack base local (CT-6): Postgres+pgvector, observabilidad (Phoenix) y un panel vacío.
+# Sin nube y sin Redis (DT-3, DT-4). Todos los valores tienen un default de desarrollo, así que
+# `docker compose up` funciona sin crear un .env; copiá .env.example a .env solo para cambiarlos.
+#
+# `core` y `catalog` se suman a este archivo en CT-4, cuando exista el esqueleto end-to-end.
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.6-pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-leads}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-leads_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-leads}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-leads} -d ${POSTGRES_DB:-leads}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  phoenix:
+    image: arizephoenix/phoenix:version-20.14.0
+    ports:
+      # UI y receptor OTLP/HTTP (/v1/traces) en 6006; OTLP/gRPC en 4317.
+      - "${PHOENIX_UI_PORT:-6006}:6006"
+      - "${PHOENIX_OTLP_GRPC_PORT:-4317}:4317"
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/data
+    volumes:
+      - phoenixdata:/mnt/data
+
+  panel:
+    build:
+      # Contexto en la raíz del repo para poder copiar db/ y contracts/ (patrón de todos los servicios).
+      context: .
+      dockerfile: services/panel/Dockerfile
+    ports:
+      - "${PANEL_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  phoenixdata:
