@@ -158,3 +158,27 @@ el pipeline de FAQ a la disponibilidad/cuota de ese proveedor para algo que no l
 
 **Consecuencias.** `C-5` fija el nombre exacto del modelo y su dimensión al implementarse; ese
 valor es el que define `N` en el esquema de `FaqEntry`.
+
+---
+
+## DT-8 — Versionado de los contratos: `schema_version` en el evento, archivo nuevo si es incompatible
+
+**Estado:** aceptada
+
+**Contexto.** El evento canónico (`CT-1`) lo consumen `core`, el arnés y los canales, construidos
+en paralelo. Sin una regla previa, el primer cambio de forma se improvisa a mitad de proyecto.
+
+**Decisión.** El evento lleva un campo obligatorio `schema_version` (hoy `1`) y vive en
+`contracts/event.schema.json`. Un cambio *compatible* (agregar un campo opcional) se hace en el
+mismo archivo, sin cambiar la versión. Un cambio *incompatible* (quitar o renombrar un campo,
+endurecer un tipo, volver obligatorio un campo opcional) crea `contracts/event.v2.schema.json`
+con `schema_version` 2; el archivo anterior se mantiene hasta que todos los consumidores migren.
+No se usan carpetas por versión.
+
+**Alternativas.** Carpeta `contracts/<versión>/` por cada versión — descartada: mueve todos los
+contratos por un cambio en uno solo. Sin campo de versión en el evento — descartada: un consumidor
+no podría distinguir en runtime qué forma recibió.
+
+**Consecuencias.** Todo productor de eventos debe fijar `schema_version`. Los contratos de las
+tools MCP (`CT-2`) y de estado de la FSM (`CT-3`) no llevan este campo por ahora; si alguno lo
+necesita, se aplica la misma regla en una entrada nueva.

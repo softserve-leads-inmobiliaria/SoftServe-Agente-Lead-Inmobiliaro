@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "event_id": "0c9a1f2e-8d3b-4a57-9e61-2f4b7c1d5a90",
+  "conversation_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "lead_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "channel": "telegram",
+  "direction": "inbound",
+  "text": "Hola, me interesa esta propiedad",
+  "timestamp": "2026-09-14T15:00:00-06:00",
+  "property_id": "prop_00231",
+  "utm_campaign": "septiembre_redes"
+}
