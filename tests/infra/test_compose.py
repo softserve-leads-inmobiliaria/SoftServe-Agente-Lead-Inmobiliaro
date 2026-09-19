@@ -70,3 +70,12 @@ def test_e2e_skeleton_services_are_wired_in_order():
 
 def test_harness_runs_once_and_does_not_restart():
     assert SERVICES["harness"]["restart"] == "no"
+
+
+def test_migrate_runs_alembic_after_postgres_is_healthy():
+    """C-3: las migraciones se aplican solas con `docker compose up`."""
+    migrate = SERVICES["migrate"]
+    assert (ROOT / migrate["build"]["dockerfile"]).is_file()
+    assert migrate["depends_on"]["postgres"]["condition"] == "service_healthy"
+    assert migrate["environment"]["POSTGRES_HOST"] == "postgres"
+    assert migrate["restart"] == "no"

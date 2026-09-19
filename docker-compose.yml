@@ -4,7 +4,9 @@
 #
 # Esqueleto end-to-end (CT-4): `harness` -> `core` (fake) -> `catalog` (fake, MCP en /mcp). Al hacer
 # `docker compose up --build` el arnés reproduce todos los guiones de harness/fixtures contra el core
-# y termina; usá `--exit-code-from harness` para que el comando falle si algún guion falla.
+# y termina. Para que el comando devuelva el resultado del arnés (0 = todo en verde):
+#   docker compose run --rm --build harness
+# (no usar `up --exit-code-from`: `migrate` también termina y apagaría todo antes de tiempo).
 
 services:
   postgres:
@@ -49,6 +51,23 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Aplica las migraciones de Alembic (db/migrations) y termina. Los servicios que usen la base
+  # (core, panel) dependen de que este paso termine bien.
+  migrate:
+    build:
+      context: .
+      dockerfile: db/Dockerfile
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-leads}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-leads_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-leads}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   catalog:
     build:
