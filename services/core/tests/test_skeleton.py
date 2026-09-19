@@ -33,8 +33,9 @@ class StubCatalog:
 
 
 @pytest.fixture
-def client(monkeypatch):
+def client(monkeypatch, engine):
     monkeypatch.setattr(main, "catalog", StubCatalog())
+    monkeypatch.setattr(main, "get_engine", lambda: engine)
     return TestClient(main.app)
 
 
@@ -75,8 +76,30 @@ def test_invalid_event_is_422(client):
 
 @pytest.mark.parametrize("error", [ConnectionError("caído"),
                                    CatalogToolError({"error_code": "UPSTREAM_UNAVAILABLE", "message": "x"})])
-def test_catalog_failure_is_503_without_details(monkeypatch, error):
+def test_catalog_failure_is_503_without_details(monkeypatch, engine, error):
     monkeypatch.setattr(main, "catalog", StubCatalog(error=error))
+    monkeypatch.setattr(main, "get_engine", lambda: engine)
     response = TestClient(main.app).post("/events", json=INBOUND | {"text": "Busco casa"})
     assert response.status_code == 503
     assert "caído" not in response.text
+
+
+def test_database_failure_is_503_without_details(monkeypatch):
+    from sqlalchemy import create_engine
+
+    dead = create_engine("postgresql+psycopg://x:secreto@127.0.0.1:1/x", connect_args={"connect_timeout": 1})
+    monkeypatch.setattr(main, "catalog", StubCatalog())
+    monkeypatch.setattr(main, "get_engine", lambda: dead)
+    response = TestClient(main.app).post("/events", json=INBOUND | {"text": "Hola"})
+    assert response.status_code == 503
+    assert "secreto" not in response.text
+
+
+def test_post_event_persists_the_new_state(client, engine):
+    from sqlalchemy import text
+
+    client.post("/events", json=INBOUND | {"text": "Hola"})
+    with engine.connect() as connection:
+        state = connection.execute(text("SELECT fsm_state FROM conversations WHERE id = :c"),
+                                   {"c": INBOUND["conversation_id"]}).scalar()
+    assert state == "DISCOVERY"
