@@ -21,6 +21,8 @@ sys.path.insert(0, str(ROOT / "harness" / "scripts"))
 import run_all  # noqa: E402
 from replay import build_events, http_responder, replay  # noqa: E402
 
+from db.testing import temporary_database  # noqa: E402
+
 
 def _free_port():
     with socket.socket() as probe:
@@ -49,10 +51,17 @@ def _start(service, port, extra_env=None):
 
 
 @pytest.fixture(scope="module")
-def stack():
+def database_url():
+    with temporary_database() as url:
+        yield url
+
+
+@pytest.fixture(scope="module")
+def stack(database_url):
     catalog_port, core_port = _free_port(), _free_port()
     catalog = _start("catalog", catalog_port)
-    core = _start("core", core_port, {"CATALOG_SERVICE_URL": f"http://127.0.0.1:{catalog_port}"})
+    core = _start("core", core_port, {"CATALOG_SERVICE_URL": f"http://127.0.0.1:{catalog_port}",
+                                      "DATABASE_URL": database_url})
     yield f"http://127.0.0.1:{core_port}"
     for process in (core, catalog):
         process.terminate()
@@ -71,9 +80,39 @@ def test_search_reply_carries_data_that_only_the_catalog_has(stack, tmp_path):
     assert "Por ejemplo: Depto 2 rec. en Providencia." in reply["text"]
 
 
-def test_core_answers_503_when_the_catalog_is_down():
+# Estado final en Postgres tras reproducir cada guion (A-1): lo que dejó el flujo de la FSM.
+EXPECTED_FINAL_STATE = {
+    "saludo_y_busqueda": "RECOMMEND",
+    "deep_link_y_visita": "HUMAN_HANDOFF",
+    "flujo_completo_hasta_handoff": "HANDOFF",
+}
+
+
+@pytest.mark.parametrize("name,expected", EXPECTED_FINAL_STATE.items())
+def test_fsm_state_is_persisted_in_postgres(stack, database_url, name, expected):
+    from sqlalchemy import create_engine, text
+
+    path = ROOT / "harness" / "fixtures" / f"{name}.jsonl"
+    replay(path, http_responder(stack))
+    conversation_id = build_events(name, [{"text": "x"}])[0]["conversation_id"]
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            state = connection.execute(text("SELECT fsm_state FROM conversations WHERE id = :c"),
+                                       {"c": conversation_id}).scalar()
+    finally:
+        engine.dispose()
+    assert state == expected
+
+
+def test_every_fixture_has_a_declared_final_state():
+    assert {p.stem for p in run_all.discover()} == set(EXPECTED_FINAL_STATE)
+
+
+def test_core_answers_503_when_the_catalog_is_down(database_url):
     core_port = _free_port()
-    core = _start("core", core_port, {"CATALOG_SERVICE_URL": f"http://127.0.0.1:{_free_port()}"})
+    core = _start("core", core_port, {"CATALOG_SERVICE_URL": f"http://127.0.0.1:{_free_port()}",
+                                      "DATABASE_URL": database_url})
     try:
         (event,) = build_events("caido", [{"text": "Busco casa"}])
         with pytest.raises(urllib.error.HTTPError) as exc:
