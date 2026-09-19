@@ -20,6 +20,23 @@ jobs:
 
   tests:
     runs-on: ubuntu-latest
+    env:
+      # Los tests de db/ (migraciones, constraints) corren contra un Postgres real; en CI no se omiten.
+      REQUIRE_DB: "1"
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.6-pg16
+        env:
+          POSTGRES_USER: leads
+          POSTGRES_PASSWORD: leads_dev_password
+          POSTGRES_DB: leads
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U leads -d leads"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
