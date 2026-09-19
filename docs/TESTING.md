@@ -40,4 +40,9 @@ Se agregan aquí apenas se descubren.
 
 - **"failed to connect to the docker API ... dockerDesktopLinuxEngine"** (Windows): Docker Desktop
   no está corriendo. Abrirlo y esperar a que diga "Engine running" antes de `docker compose up`.
-- **Puerto ocupado** (p. ej. `5432` si hay un Postgres local): cambiar `POSTGRES_PORT` en `.env`.
+- **Puerto ocupado** (p. ej. `5432` si hay un Postgres local, o `8080` si otro programa ya lo usa
+  — pasó en Windows con un servicio del sistema): cambiar `POSTGRES_PORT` / `PANEL_PORT` en `.env`,
+  o solo para una corrida: `PANEL_PORT=8090 docker compose up`. El error dice "ports are not
+  available ... Solo se permite un uso de cada dirección de socket".
+- **Docker Desktop no arranca con doble clic** (Windows): probar `docker desktop start` desde la
+  terminal, que además espera a que el motor responda.
