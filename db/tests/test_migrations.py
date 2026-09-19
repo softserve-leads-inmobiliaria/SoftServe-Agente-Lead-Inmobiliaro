@@ -5,18 +5,15 @@ Postgres alcanzable los tests se omiten; en CI (`REQUIRE_DB=1`) fallan en lugar 
 Localmente: `docker compose up -d postgres`.
 """
 import json
-import os
 import uuid
 from datetime import UTC, date, datetime
 
 import pytest
 from alembic import command
 from alembic.autogenerate import compare_metadata
-from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from jsonschema import Draft202012Validator, FormatChecker
 from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 
@@ -34,48 +31,22 @@ from db.models import (
     Visit,
 )
 from db.repo_root import repo_root
-from db.settings import database_url
+from db.testing import alembic_config, temporary_database
 
 ROOT = repo_root()
 CONTRACT = json.loads((ROOT / "contracts" / "fsm_state.schema.json").read_text(encoding="utf-8"))
 FSM_VALIDATOR = Draft202012Validator(CONTRACT, format_checker=FormatChecker())
 
 
-def _admin_engine():
-    url = make_url(database_url()).set(database="postgres")
-    return create_engine(url, isolation_level="AUTOCOMMIT")
-
-
-def _alembic_config(url: str) -> Config:
-    config = Config(str(ROOT / "alembic.ini"))
-    config.set_main_option("script_location", str(ROOT / "db" / "migrations"))
-    config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
-    return config
-
-
 @pytest.fixture(scope="module")
 def database_urls():
-    admin = _admin_engine()
-    try:
-        with admin.connect() as connection:
-            connection.execute(text("SELECT 1"))
-    except Exception as exc:
-        if os.environ.get("REQUIRE_DB") == "1":
-            raise
-        pytest.skip(f"Postgres no disponible ({type(exc).__name__}); levantarlo con `docker compose up -d postgres`")
-    name = f"leads_test_{uuid.uuid4().hex[:10]}"
-    with admin.connect() as connection:
-        connection.execute(text(f'CREATE DATABASE "{name}"'))
-    url = make_url(database_url()).set(database=name).render_as_string(hide_password=False)
-    yield url
-    with admin.connect() as connection:
-        connection.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
-    admin.dispose()
+    with temporary_database(migrate=False) as url:
+        yield url
 
 
 @pytest.fixture(scope="module")
 def engine(database_urls):
-    command.upgrade(_alembic_config(database_urls), "head")
+    command.upgrade(alembic_config(database_urls), "head")
     engine = create_engine(database_urls)
     yield engine
     engine.dispose()
@@ -122,7 +93,7 @@ def test_migrations_and_models_do_not_drift(engine):
 
 
 def test_downgrade_then_upgrade_round_trips(database_urls):
-    config = _alembic_config(database_urls)
+    config = alembic_config(database_urls)
     command.downgrade(config, "base")
     engine = create_engine(database_urls)
     assert inspect(engine).get_table_names() == ["alembic_version"]
