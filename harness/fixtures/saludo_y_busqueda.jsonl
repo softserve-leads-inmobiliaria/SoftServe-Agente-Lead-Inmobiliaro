@@ -1,0 +1,3 @@
+{"text": "Hola, buenas tardes", "expect_reply_contains": "asistente"}
+{"text": "Busco un departamento de 2 recámaras", "expect_reply_contains": ["zona", "recámaras"]}
+{"text": "¿Cuánto cuesta?", "expect_reply_contains": "precio"}
