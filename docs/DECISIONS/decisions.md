@@ -204,3 +204,24 @@ trazas por turno ni de costo por llamada al LLM.
 **Consecuencias.** Las trazas usan el estándar OpenTelemetry, así que cambiar de herramienta no
 obliga a re-instrumentar el código (esto es la base del plan B de `OBS-8`). Fijar la versión de la
 imagen y actualizarla a propósito, no con `latest`.
+
+---
+
+## DT-10 — SDK de MCP: `mcp==1.30.0` fijo (serie 1.x), no 2.x
+
+**Estado:** aceptada
+
+**Contexto.** El catálogo (CT-8) y, más adelante, el cliente de `core` usan el SDK oficial de MCP por
+streamable HTTP (DT-2). La serie 2.x renombró la API de alto nivel (`FastMCP` pasó a `MCPServer`) y
+la mayoría de la documentación y ejemplos siguen siendo de 1.x.
+
+**Decisión.** Fijar `mcp==1.30.0` (versión exacta, no un rango) en `services/catalog/requirements.txt`, y
+la misma versión en cualquier servicio que use el SDK. Los argumentos de las tools se validan contra
+el `inputSchema` de `contracts/mcp/`, así que el contrato queda como única fuente de verdad y no
+depende de cómo el SDK tipa los parámetros.
+
+**Alternativas.** `mcp` 2.x — descartado por ahora: API distinta a la documentada y sin ventaja
+que el proyecto necesite. Sin fijar versión — descartado: un `pip install` futuro podría traer otra
+API mayor.
+
+**Consecuencias.** Subir a 2.x será una decisión propia, con migración del servidor y del cliente a la vez.
