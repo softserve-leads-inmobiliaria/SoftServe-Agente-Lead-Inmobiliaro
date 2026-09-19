@@ -225,3 +225,30 @@ que el proyecto necesite. Sin fijar versión — descartado: un `pip install` fu
 API mayor.
 
 **Consecuencias.** Subir a 2.x será una decisión propia, con migración del servidor y del cliente a la vez.
+
+---
+
+## DT-11 — Dónde vive el estado de la FSM: `Conversation.fsm_state` + `fsm_context` + `lead_scores`
+
+**Estado:** aceptada
+
+**Contexto.** El contrato `FsmState` (CT-3) junta el estado actual, el contexto del turno
+(`lead_qualified`, `last_tool_results`, `score_signal`) y el último score. `design.md` §1 ya pone
+`fsm_state` en `Conversation`; guardar además una copia en otra tabla dejaría dos fuentes de verdad
+que pueden divergir (DT-1).
+
+**Decisión.** El estado actual vive **solo** en `conversations.fsm_state` (con un `CHECK` contra la
+lista de estados). El resto del contexto vive en `fsm_context` (1:1 con la conversación, columnas
+`jsonb` para `last_tool_results` y `score_signal`) y el último score en `lead_scores` (una fila por
+lead). `FsmState` se arma leyendo las tres. Migraciones con Alembic; los modelos de `db/models.py`
+son la fuente de verdad y un test falla si las migraciones se desvían de ellos.
+
+**Alternativas.** Una sola tabla `fsm_state` con todo — descartada: duplica `fsm_state` de
+`Conversation`, que el panel (B-5) ya lee. Guardar el contexto como un único `jsonb` en
+`Conversation` — descartada: mezcla el estado con datos que se sobrescriben cada turno.
+
+**Consecuencias.** `A-1` lee y escribe estado con una transacción sobre `conversations` +
+`fsm_context`. `funnel_events` es *append-only* (un *trigger* rechaza UPDATE/DELETE) y sin
+`ON DELETE CASCADE`: un lead con eventos no se puede borrar; el opt-out marca
+`consent_status=withdrawn` y no borra. La dimensión del vector de la FAQ (`EMBEDDING_DIM=384`) es un
+valor de partida que `C-5` confirma o cambia con una migración (DT-7).
