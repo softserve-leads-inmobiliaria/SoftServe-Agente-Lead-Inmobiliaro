@@ -1,0 +1,12 @@
+{
+  "conversation_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "fsm_state": "CLOSED_WON",
+  "lead_qualified": "si",
+  "last_tool_results": [],
+  "score_signal": {
+    "budget_hint": null,
+    "decision_maker": "no_se_sabe",
+    "urgency": "3_meses",
+    "nationality": "MX"
+  }
+}

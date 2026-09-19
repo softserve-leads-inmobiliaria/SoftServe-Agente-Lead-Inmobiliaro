@@ -1,0 +1,17 @@
+{
+  "lead_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "need_fit": 10,
+  "budget": 20,
+  "authority": 12,
+  "timing": 12,
+  "eligibility": 0,
+  "total": 54,
+  "band": "WARM",
+  "reasons": [
+    "Need fit: 1-2 propiedades coinciden con la búsqueda",
+    "Budget: presupuesto declarado",
+    "Authority: decide en pareja",
+    "Timing: urgencia a 3 meses",
+    "Eligibility: requisitos aún sin verificar"
+  ]
+}
