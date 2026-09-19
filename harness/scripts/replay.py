@@ -6,11 +6,14 @@ respuesta sea otro evento canónico y cumpla lo que el guion espera.
 
 Uso:
     python harness/scripts/replay.py harness/fixtures/saludo_y_busqueda.jsonl
+    CORE_URL=http://localhost:8000 python harness/scripts/replay.py <guion.jsonl>   # contra el core por HTTP
 """
 from __future__ import annotations
 
 import json
+import os
 import sys
+import urllib.request
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -52,9 +55,10 @@ def load_script(path: Path) -> list[dict[str, Any]]:
             raise ScriptError(f"{where}: campos desconocidos {sorted(unknown)}")
         expected = turn.get("expect_reply_contains", [])
         if isinstance(expected, str):
-            turn["expect_reply_contains"] = [expected]
-        elif not (isinstance(expected, list) and all(isinstance(e, str) for e in expected)):
+            expected = [expected]
+        if not (isinstance(expected, list) and all(isinstance(e, str) for e in expected)):
             raise ScriptError(f"{where}: `expect_reply_contains` debe ser string o lista de strings")
+        turn["expect_reply_contains"] = expected
         turns.append(turn)
     if not turns:
         raise ScriptError(f"{path.name}: el guion no tiene turnos")
@@ -114,14 +118,35 @@ def default_responder() -> Responder:
     return FakeCore().handle_event
 
 
+def http_responder(core_url: str) -> Responder:
+    """Responder por HTTP: POST {core_url}/events con el evento canónico (CT-4)."""
+
+    def send(event: dict[str, Any]) -> dict[str, Any]:
+        request = urllib.request.Request(
+            core_url.rstrip("/") + "/events",
+            data=json.dumps(event).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.loads(response.read())
+
+    return send
+
+
+def configured_responder() -> Responder:
+    """Con CORE_URL habla con el core real por HTTP; sin ella usa el fake core en proceso."""
+    core_url = os.environ.get("CORE_URL")
+    return http_responder(core_url) if core_url else default_responder()
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 2:
         print("uso: python harness/scripts/replay.py <guion.jsonl>", file=sys.stderr)
         return 2
     path = Path(argv[1])
     try:
-        outbound = replay(path, default_responder())
-    except (ScriptError, AssertionError) as exc:
+        outbound = replay(path, configured_responder())
+    except (ScriptError, AssertionError, OSError) as exc:
         print(f"FALLA {exc}", file=sys.stderr)
         return 1
     for turn, reply in zip(load_script(path), outbound, strict=True):
