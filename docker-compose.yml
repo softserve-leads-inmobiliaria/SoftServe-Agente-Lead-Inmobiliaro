@@ -85,11 +85,19 @@ services:
       dockerfile: services/core/Dockerfile
     environment:
       CATALOG_SERVICE_URL: http://catalog:8000
+      # El estado de las conversaciones vive en Postgres (DT-1): sin base no hay core.
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-leads}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-leads_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-leads}
     ports:
       - "${CORE_PORT:-8000}:8000"
     depends_on:
       catalog:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 5s

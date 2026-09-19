@@ -6,6 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+COPY db/requirements.txt db/requirements.txt
 COPY services/core/requirements.txt services/core/requirements.txt
 RUN pip install --no-cache-dir -r services/core/requirements.txt
 
