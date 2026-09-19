@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://softserve.local/contracts/mcp/get_promotions.schema.json",
+  "name": "get_promotions",
+  "description": "Promociones VIGENTES (valid_until >= hoy), opcionalmente de una propiedad. Nunca devuelve promociones vencidas: el filtro de vigencia es parte del contrato, no del consumidor (claim prohibido #6 de guardrails.md). Sin promociones devuelve promotions: [].",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "property_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      }
+    },
+    "required": [],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "promotions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "property_id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "valid_until": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          "required": [
+            "id",
+            "property_id",
+            "title",
+            "description",
+            "valid_until"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "promotions"
+    ],
+    "additionalProperties": false
+  },
+  "errorSchema": "catalog_error.schema.json",
+  "errors": {
+    "NOT_FOUND": "property_id informado no existe (sin property_id, nunca aplica)",
+    "INVALID_INPUT": "El input no cumple el inputSchema o es semánticamente inválido",
+    "UPSTREAM_UNAVAILABLE": "La fuente de datos (Postgres/servicio) no está disponible"
+  }
+}

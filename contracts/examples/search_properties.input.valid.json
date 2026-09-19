@@ -1,0 +1,9 @@
+{
+  "zone": "Providencia",
+  "budget_range": {
+    "min": 1500000,
+    "max": 2500000
+  },
+  "type": "venta",
+  "bedrooms": 2
+}

@@ -1,0 +1,16 @@
+{
+  "id": "prop_00231",
+  "title": "Depto 2 rec. en Providencia",
+  "price": 2350000,
+  "type": "venta",
+  "zone": "Providencia",
+  "m2": 78.5,
+  "bedrooms": 2,
+  "bathrooms": 2,
+  "amenities": [
+    "alberca",
+    "gimnasio"
+  ],
+  "status": "disponible",
+  "address_exact": null
+}
