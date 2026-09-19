@@ -106,7 +106,7 @@ chequeo es obligatorio, no opcional:
 ## Cuando algo sale mal
 
 - Antes de cualquier comando destructivo (`git reset --hard`, `git clean -f`, `git checkout --`
-  sobre cambios sin commitear) corré `git status` primero y confirmá qué se pierde.
+  sobre cambios sin commitear) ejecutar `git status` primero y confirmar qué se pierde.
 - Si rompiste `main` sin querer (no debería poder pasar con la protección de rama activa, pero
   por si acaso): avisar al equipo antes de forzar nada — un revert vía PR es casi siempre más
   seguro que un force-push.
