@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://softserve.local/contracts/fsm_state.schema.json",
+  "title": "FsmState",
+  "description": "Contrato congelado (CT-3) del estado + contexto de la FSM. PERSISTENCIA: todo lo declarado aquí vive en Postgres (modelos en db/models.py, fuente de verdad del esquema) y se lee/escribe directo desde la primera historia que lo necesita (A-1) — no existe una versión solo en memoria que se persista después (DT-1, docs/ESTRUCTURA-DEL-PROYECTO.md §4). La raíz es FsmState; LeadScore, Conversation y ScoreSignal están en $defs y se referencian como fsm_state.schema.json#/$defs/<Nombre>. Los estados y entidades salen de docs/DESIGN/design.md §1-§3.",
+  "type": "object",
+  "properties": {
+    "conversation_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Conversation.id. Una FsmState por conversación."
+    },
+    "lead_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Lead.id dueño de la conversación."
+    },
+    "fsm_state": { "$ref": "#/$defs/FsmStateName" },
+    "lead_qualified": {
+      "type": "boolean",
+      "description": "Lo determina la FSM a partir de lead.status, nunca el LLM. Mientras sea false, address_exact de Property permanece reservada (docs/DESIGN/guardrails.md)."
+    },
+    "last_tool_results": {
+      "type": "object",
+      "description": "Payloads de las tools catalog.* llamadas en el último turno, indexados por nombre de tool (search_properties, get_property, get_availability, get_promotions, check_requirements). Se persiste (columna jsonb) y se sobrescribe cada turno; el guardrail de salida (A-5) lo usa para verificar factualidad y A-9 para derivar matching_properties y meets_requirements.",
+      "additionalProperties": true
+    },
+    "score_signal": { "$ref": "#/$defs/ScoreSignal" },
+    "score": {
+      "oneOf": [{ "$ref": "#/$defs/LeadScore" }, { "type": "null" }],
+      "description": "Último LeadScore persistido del lead; null mientras no se haya calculado ninguno."
+    }
+  },
+  "required": [
+    "conversation_id",
+    "lead_id",
+    "fsm_state",
+    "lead_qualified",
+    "last_tool_results",
+    "score_signal",
+    "score"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "FsmStateName": {
+      "type": "string",
+      "description": "Estados de la FSM (docs/DESIGN/design.md §2). HUMAN_HANDOFF es alcanzable desde cualquier estado.",
+      "enum": [
+        "GREETING",
+        "DISCOVERY",
+        "QUALIFY",
+        "RECOMMEND",
+        "SCHEDULE",
+        "HANDOFF",
+        "HUMAN_HANDOFF",
+        "NURTURE",
+        "LOST"
+      ]
+    },
+    "ScoreSignal": {
+      "type": "object",
+      "description": "Señal estructurada que emite el LLM por turno; una función pura de Python calcula el LeadScore a partir de ella (el LLM nunca emite el número final). Sin campo para categoría protegida (origen, religión, situación familiar, nacionalidad, género): garantía estructural de fair housing (design.md §3). matching_properties y meets_requirements NO los emite el LLM — salen de last_tool_results (search_properties / check_requirements) y los completa el código.",
+      "properties": {
+        "budget_hint": {
+          "type": ["string", "null"],
+          "description": "Presupuesto declarado en texto libre; null si no se mencionó. No se parsea como rango numérico."
+        },
+        "decision_maker": {
+          "type": "string",
+          "enum": ["solo", "pareja", "familia", "no_declarado"]
+        },
+        "urgency": {
+          "type": "string",
+          "enum": ["inmediata", "3_meses", "explorando", "no_declarada"]
+        },
+        "matching_properties": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Conteo de resultados de search_properties del turno (derivado por código, no por el LLM)."
+        },
+        "meets_requirements": {
+          "type": ["boolean", "null"],
+          "description": "Resultado de check_requirements; null si todavía no se verificó (derivado por código, no por el LLM)."
+        }
+      },
+      "required": [
+        "budget_hint",
+        "decision_maker",
+        "urgency",
+        "matching_properties",
+        "meets_requirements"
+      ],
+      "additionalProperties": false
+    },
+    "LeadScore": {
+      "type": "object",
+      "description": "Score BANT-E persistido (tabla LeadScore). 5 dimensiones de 0-20, total 0-100. Bandas: COLD <= 40, WARM 41-70, HOT >= 71 (design.md §3). Lo calcula una función pura, nunca el LLM.",
+      "properties": {
+        "lead_id": { "type": "string", "format": "uuid" },
+        "need_fit": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "budget": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "authority": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "timing": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "eligibility": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "total": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "band": { "type": "string", "enum": ["COLD", "WARM", "HOT"] },
+        "reasons": {
+          "type": "array",
+          "description": "Una razón en texto por dimensión, para que el score sea auditable.",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "required": [
+        "lead_id",
+        "need_fit",
+        "budget",
+        "authority",
+        "timing",
+        "eligibility",
+        "total",
+        "band",
+        "reasons"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "band": { "const": "COLD" } } },
+          "then": { "properties": { "total": { "maximum": 40 } } }
+        },
+        {
+          "if": { "properties": { "band": { "const": "WARM" } } },
+          "then": { "properties": { "total": { "minimum": 41, "maximum": 70 } } }
+        },
+        {
+          "if": { "properties": { "band": { "const": "HOT" } } },
+          "then": { "properties": { "total": { "minimum": 71 } } }
+        }
+      ]
+    },
+    "Conversation": {
+      "type": "object",
+      "description": "Fila de Conversation (una por hilo). Es la proyección que consume el panel (B-5); el esquema completo de tablas lo define C-3.",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "lead_id": { "type": "string", "format": "uuid" },
+        "fsm_state": { "$ref": "#/$defs/FsmStateName" },
+        "started_at": { "type": "string", "format": "date-time" },
+        "last_message_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "lead_id", "fsm_state", "started_at", "last_message_at"],
+      "additionalProperties": false
+    }
+  }
+}
