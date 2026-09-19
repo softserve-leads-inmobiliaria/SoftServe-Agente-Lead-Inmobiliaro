@@ -1,0 +1,18 @@
+name: Alta de Issues al Project
+
+# Cada Issue nuevo entra solo al GitHub Project v2 (docs/ESTRUCTURA-DEL-PROYECTO.md §5).
+# Requiere el secreto ADD_TO_PROJECT_PAT: un token con permiso `project` (el GITHUB_TOKEN
+# por defecto no puede escribir en un Project de organización).
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  add-to-project:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/add-to-project@v1.0.2
+        with:
+          project-url: https://github.com/orgs/softserve-leads-inmobiliaria/projects/1
+          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}

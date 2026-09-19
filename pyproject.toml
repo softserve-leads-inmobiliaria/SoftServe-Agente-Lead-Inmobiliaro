@@ -1,0 +1,23 @@
+# Solo configuración de herramientas del repo (lint y tests). Las dependencias de cada servicio
+# viven en su propio requirements.txt; las de desarrollo, en requirements-dev.txt.
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["db/migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+# E501: sin formateador automático que lo haga cumplir, las líneas largas de texto/comentarios no
+# justifican romper CI.
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/**" = ["B007"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "db"]
+
+[tool.pytest.ini_options]
+# Permite `import db` desde cualquier carpeta de tests sin instalar el paquete.
+pythonpath = ["."]
