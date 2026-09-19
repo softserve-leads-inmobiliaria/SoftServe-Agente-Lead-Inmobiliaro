@@ -16,6 +16,23 @@ No hace falta crear un `.env`: `docker-compose.yml` trae defaults de desarrollo.
 | `postgres` | `localhost:5432` (usuario/clave/BD: ver `.env.example`) | Postgres 16 con `pgvector` |
 | `phoenix` | http://localhost:6006 (OTLP/HTTP `/v1/traces`, OTLP/gRPC en `4317`) | Observabilidad (DT-9) |
 | `panel` | http://localhost:8080/health | Panel de asesores (por ahora solo el esqueleto) |
+| `catalog` | solo dentro de la red de Docker (`http://catalog:8000`, MCP en `/mcp`) | Catálogo *fake* como servidor MCP (CT-8) |
+| `core` | http://localhost:8000/health (`POST /events`) | Core *fake* (CT-7 + CT-4) |
+| `harness` | — (termina al acabar) | Reproduce `harness/fixtures/*.jsonl` contra el core |
+
+El arnés corre solo al levantar el stack: al final imprime `N/N guiones en verde` y termina, sin
+apagar el resto. Para que el comando falle si algún guion falla (y apague todo al terminar):
+
+```
+docker compose up --build --exit-code-from harness
+```
+
+Esto es el esqueleto end-to-end de CT-4: arnés → core → catálogo por MCP → respuesta. Todo el
+contenido es *fake*, a propósito. Para probar un mensaje a mano con el stack arriba:
+
+```
+curl -X POST localhost:8000/events -H "Content-Type: application/json" -d @contracts/examples/event.valid.json
+```
 
 Para apagar: `docker compose down`. Para borrar también los datos: `docker compose down -v`.
 
@@ -28,7 +45,9 @@ python -m pytest tests/contracts       # contratos: no necesitan ningún servici
 python -m pytest tests/infra           # valida docker-compose.yml (sin Docker)
 python -m pytest db/tests
 python -m pytest services/core/tests
+python -m pytest services/catalog/tests
 python -m pytest services/panel/tests
+python -m pytest tests/harness         # arnés + e2e: levanta catalog y core como procesos, sin Docker
 ```
 
 Cada suite se corre por separado (los servicios comparten el nombre de paquete `app`); el CI
