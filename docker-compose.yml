@@ -2,7 +2,9 @@
 # Sin nube y sin Redis (DT-3, DT-4). Todos los valores tienen un default de desarrollo, así que
 # `docker compose up` funciona sin crear un .env; copiá .env.example a .env solo para cambiarlos.
 #
-# `core` y `catalog` se suman a este archivo en CT-4, cuando exista el esqueleto end-to-end.
+# Esqueleto end-to-end (CT-4): `harness` -> `core` (fake) -> `catalog` (fake, MCP en /mcp). Al hacer
+# `docker compose up --build` el arnés reproduce todos los guiones de harness/fixtures contra el core
+# y termina; usá `--exit-code-from harness` para que el comando falle si algún guion falla.
 
 services:
   postgres:
@@ -47,6 +49,44 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  catalog:
+    build:
+      context: .
+      dockerfile: services/catalog/Dockerfile
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  core:
+    build:
+      context: .
+      dockerfile: services/core/Dockerfile
+    environment:
+      CATALOG_SERVICE_URL: http://catalog:8000
+    ports:
+      - "${CORE_PORT:-8000}:8000"
+    depends_on:
+      catalog:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  harness:
+    build:
+      context: .
+      dockerfile: harness/Dockerfile
+    environment:
+      CORE_URL: http://core:8000
+    depends_on:
+      core:
+        condition: service_healthy
+    restart: "no"
 
 volumes:
   pgdata:
