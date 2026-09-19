@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://softserve.local/contracts/event.schema.json",
+  "title": "CanonicalMessageEvent",
+  "description": "Contrato congelado (CT-1) del evento de mensaje canónico. Toda entrada y salida de cualquier canal se traduce a esta forma antes de tocar `core`, de modo que `core` no conoce ningún detalle del canal (B-3). VERSIONADO (DT-8): `schema_version` es obligatorio y vale 1 en este archivo. Un cambio compatible (campo opcional nuevo) se hace aquí sin cambiar la versión; un cambio incompatible (quitar/renombrar un campo, endurecer un tipo o hacer obligatorio uno opcional) crea `contracts/event.v2.schema.json` con `schema_version` 2 y este archivo se mantiene hasta que todos los consumidores migren.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "description": "Versión del contrato. Ver política de versionado en la descripción del schema y en DT-8."
+    },
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Identificador único del evento. Permite deduplicar reintentos del canal."
+    },
+    "conversation_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Conversation.id. Estable durante todo el hilo de ese lead."
+    },
+    "lead_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Lead.id, con la identidad entre canales ya resuelta (B-4)."
+    },
+    "channel": {
+      "type": "string",
+      "enum": ["telegram"],
+      "description": "Canal de origen/destino. Único canal en alcance; agregar otro es un cambio compatible (nuevo valor del enum) solo si ningún consumidor hace un switch exhaustivo."
+    },
+    "direction": {
+      "type": "string",
+      "enum": ["inbound", "outbound"],
+      "description": "inbound: del lead hacia el agente. outbound: del agente hacia el lead."
+    },
+    "text": {
+      "type": "string",
+      "description": "Contenido textual. Puede ser vacío en un evento inbound que solo trae property_id/utm_campaign (p. ej. un deep-link sin texto adicional)."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 con zona horaria."
+    },
+    "property_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Opcional. Propiedad referenciada por el evento (p. ej. deep-link `?start=prop_<id>`, B-1). Se omite si el evento no referencia ninguna."
+    },
+    "utm_campaign": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Opcional. Campaña de origen (p. ej. deep-link `?start=camp_<x>`). Se omite si el evento no viene de una campaña."
+    }
+  },
+  "required": [
+    "schema_version",
+    "event_id",
+    "conversation_id",
+    "lead_id",
+    "channel",
+    "direction",
+    "text",
+    "timestamp"
+  ],
+  "additionalProperties": false
+}
