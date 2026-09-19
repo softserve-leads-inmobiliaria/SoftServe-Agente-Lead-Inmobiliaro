@@ -79,3 +79,10 @@ def test_migrate_runs_alembic_after_postgres_is_healthy():
     assert migrate["depends_on"]["postgres"]["condition"] == "service_healthy"
     assert migrate["environment"]["POSTGRES_HOST"] == "postgres"
     assert migrate["restart"] == "no"
+
+
+def test_core_waits_for_the_migrations_and_can_reach_postgres():
+    """A-1: el estado de la FSM vive en Postgres, así que core espera al esquema migrado."""
+    core = SERVICES["core"]
+    assert core["depends_on"]["migrate"]["condition"] == "service_completed_successfully"
+    assert core["environment"]["POSTGRES_HOST"] == "postgres"

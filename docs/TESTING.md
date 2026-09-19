@@ -29,6 +29,12 @@ solo lo que necesita:
 docker compose run --rm --build harness
 ```
 
+Para ver el estado persistido de las conversaciones que dejó el arnés:
+
+```
+docker compose exec postgres psql -U leads -d leads -c "select id, fsm_state from conversations"
+```
+
 `migrate` aplica las migraciones de Alembic (`db/migrations`) sobre Postgres y termina; los
 servicios que usen la base dependerán de él.
 
@@ -56,6 +62,9 @@ python -m pytest tests/harness         # arnés + e2e: levanta catalog y core co
 ```
 
 ### Tests de la base de datos
+
+Los tests de `db/`, `services/core/` y `tests/harness` (estado de la FSM, e2e) usan un Postgres real
+mediante `db/testing.py`: una base temporal ya migrada que se borra sola.
 
 `db/tests/test_migrations.py` corre contra un Postgres real: crea una base temporal, aplica
 `alembic upgrade head`, prueba constraints y persistencia de la FSM, y la borra. Con Postgres

@@ -252,3 +252,34 @@ son la fuente de verdad y un test falla si las migraciones se desvían de ellos.
 `ON DELETE CASCADE`: un lead con eventos no se puede borrar; el opt-out marca
 `consent_status=withdrawn` y no borra. La dimensión del vector de la FAQ (`EMBEDDING_DIM=384`) es un
 valor de partida que `C-5` confirma o cambia con una migración (DT-7).
+
+---
+
+## DT-12 — FSM: transiciones por *triggers*, estados terminales y bloqueo por conversación
+
+**Estado:** aceptada
+
+**Contexto.** `A-1` implementa el diagrama de `design.md` §2. El diagrama dice que `HUMAN_HANDOFF` es
+alcanzable "desde cualquier estado", pero solo dibuja la arista desde cinco; y no dice qué hace un
+mensaje que llega a un estado terminal, ni qué pasa si dos mensajes de la misma conversación llegan a la vez.
+
+**Decisión.**
+- La FSM es una tabla `(estado, trigger) -> estado` (`services/core/app/fsm.py`); cualquier otra
+  combinación lanza `InvalidTransition`. Los mensajes del lead se traducen a *triggers* con una
+  política mínima basada en el fake LLM (`trigger_for`), que `A-2` y `A-9` reemplazan con señales reales.
+- Terminales: `HANDOFF`, `HUMAN_HANDOFF` y `LOST`. Sin salida; los mensajes que llegan ahí se
+  responden pero no mueven el estado.
+- `HUMAN_HANDOFF` se puede alcanzar desde todos los estados no terminales, incluido `NURTURE`
+  (una arista más que las dibujadas).
+- Cada turno bloquea la fila de la conversación (`SELECT ... FOR UPDATE`) durante el
+  leer-decidir-escribir: dos mensajes simultáneos se procesan uno tras otro. La respuesta (que puede
+  esperar al catálogo por red) se arma **antes**, sin transacción abierta.
+- Los triggers `no_response` (`DISCOVERY -> NURTURE -> LOST`) los emitirá el *scheduler* (fuera de `A-1`).
+
+**Alternativas.** Estado en memoria — descartada por DT-1. Sostener la transacción durante toda la
+llamada al catálogo — descartada: bloquea la fila mientras se espera por red.
+
+**Consecuencias.** Si el core recibe un evento de un lead que aún no existe crea una fila `Lead`
+provisional (`telegram_user_id` = id del lead): el canal (`B-3`) debe crear al lead con su id real
+antes de que su primer evento llegue al core. La intención `otro` nunca dispara `HUMAN_HANDOFF`
+hasta que `A-2`/`A-13` revisen el criterio.
