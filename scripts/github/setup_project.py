@@ -264,7 +264,7 @@ def main() -> int:
     script_dir = Path(__file__).resolve().parent
     map_file = Path(args.map_file) if args.map_file else script_dir / f".issue-map.{args.repo.replace('/', '__')}.json"
     if not map_file.exists():
-        print(f"No existe {map_file} — corré primero create_issues_from_stories.py --apply", file=sys.stderr)
+        print(f"No existe {map_file} — ejecutar primero create_issues_from_stories.py --apply", file=sys.stderr)
         return 1
     issue_map = json.loads(map_file.read_text(encoding="utf-8"))
 
@@ -289,7 +289,7 @@ def main() -> int:
     print("\n=== Project ===")
     number = ensure_project(args.project_owner, args.project_title, args.apply)
     if number is None:
-        print("\n(dry-run sin project existente — no se puede previsualizar fields/items; corré --apply o creá el project primero)")
+        print("\n(dry-run sin project existente — no se puede previsualizar fields/items; ejecutar --apply o crear el project primero)")
         return 0
     ensure_fields(number, args.project_owner, args.apply)
     link_project(number, args.project_owner, args.repo, args.apply)

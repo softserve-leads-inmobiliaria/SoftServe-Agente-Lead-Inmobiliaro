@@ -15,7 +15,7 @@ Parsea cada historia (formato fijado por docs/STORIES/PLANTILLA-HISTORIA.md):
 y crea un Issue por historia: título "[ID] Título", cuerpo = el resto del
 archivo, labels = prio:*/track:*/epic:* según la tabla de docs/STORIES/README.md.
 
-Dos fases (podés correrlas juntas o por separado):
+Dos fases (se pueden correr juntas o por separado):
 
   1. Creación — una Issue por historia que todavía no esté en el archivo de
      mapeo (idempotente: correr el script de nuevo no duplica).
