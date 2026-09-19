@@ -1,5 +1,6 @@
 -r services/panel/requirements.txt
 -r services/catalog/requirements.txt
+-r services/core/requirements.txt
 httpx==0.28.1
 jsonschema==4.26.0
 pytest==9.1.1

@@ -89,3 +89,9 @@ def test_invalid_responder_output_is_reported(tmp_path):
     path = _write(tmp_path, '{"text": "Hola"}\n')
     with pytest.raises(jsonschema.ValidationError):
         replay(path, lambda event: {"texto": "no canónico"})
+
+
+def test_turn_without_expectations_replays_fine(tmp_path):
+    path = _write(tmp_path, '{"text": "Hola"}\n')
+    (reply,) = replay(path, default_responder())
+    assert reply["direction"] == "outbound"

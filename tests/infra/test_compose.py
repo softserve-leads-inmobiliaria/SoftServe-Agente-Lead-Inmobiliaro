@@ -53,3 +53,20 @@ def test_env_example_documents_every_compose_variable():
         if "=" in line and not line.startswith("#")
     }
     assert used <= documented
+
+
+def test_e2e_skeleton_services_are_wired_in_order():
+    """CT-4: harness -> core -> catalog, cada uno esperando a que el siguiente esté sano."""
+    assert {"catalog", "core", "harness"} <= set(SERVICES)
+    for name in ("catalog", "core", "harness"):
+        build = SERVICES[name]["build"]
+        assert build["context"] == "."
+        assert (ROOT / build["dockerfile"]).is_file()
+    assert SERVICES["core"]["depends_on"]["catalog"]["condition"] == "service_healthy"
+    assert SERVICES["harness"]["depends_on"]["core"]["condition"] == "service_healthy"
+    assert SERVICES["core"]["environment"]["CATALOG_SERVICE_URL"] == "http://catalog:8000"
+    assert SERVICES["harness"]["environment"]["CORE_URL"] == "http://core:8000"
+
+
+def test_harness_runs_once_and_does_not_restart():
+    assert SERVICES["harness"]["restart"] == "no"
