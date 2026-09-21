@@ -597,3 +597,35 @@ descartada: una baja de datos personales no puede depender de que un modelo la i
 Verificado en vivo contra un bot real de @BotFather: aviso de privacidad en el primer turno, deep-link
 `?start=prop_<id>` resuelto, opt-out con `STOP`, y *long polling* confirmado por un `getUpdates` externo
 devolviendo `409 Conflict`.
+
+## DT-21 — Disponibilidad revalidada en código, con fallo cerrado
+
+**Contexto.** El listado de `search_properties` y la ficha de `get_property` traen un `status`, pero es el
+del momento de la consulta: una propiedad puede haberse apartado entre el listado y el mensaje al lead.
+Dejarlo al *prompt* ("no ofrezcas propiedades apartadas") no es una garantía: el modelo puede ignorarlo.
+
+**Decisión.**
+- `AvailabilityGuard` (`services/core/app/availability.py`) envuelve al catálogo y `process_turn` se lo
+  entrega a cualquier agente (el falso o el LLM real), así que no hay un camino que se lo salte. Tras
+  `search_properties` y `get_property` llama a `get_availability` y sustituye el `status` por el vigente,
+  con `availability_checked_at`.
+- **Búsqueda:** en `properties` solo quedan las `disponible`. Las demás pasan a `unavailable` con su
+  estado (`apartado`, `cerrado`, `sin_verificar`): así, si el lead pregunta por una concreta, se le dice
+  la verdad en vez de negar que exista. El prompt del chat lo indica.
+- **Fallo cerrado:** si `get_availability` falla o el catálogo no publica la tool, la propiedad queda
+  `sin_verificar` y no se ofrece. Nunca se deja el `disponible` viejo.
+- Solo se revalida lo que el listado marca `disponible` (lo demás no se ofrece de todos modos), en paralelo:
+  como mucho una consulta por propiedad ofrecida, y ninguna si no hay coincidencias.
+- Los resultados revalidados son los que se guardan en `last_tool_results`, la base de la factualidad
+  (`A-5`), y de ahí sale `matching_properties` del scoring (`A-9`): cuenta solo propiedades realmente
+  disponibles.
+
+**Alternativas.** Reglas en el *prompt* — descartada: no es un guardrail. Filtrar en el propio catálogo —
+descartada: el catálogo es un contrato externo (`C-1`) y `core` no debe fiarse de su listado para algo que
+protege a la agencia. Revalidar también las no disponibles — descartada: una llamada más por propiedad sin
+cambiar lo que se ofrece.
+
+**Consecuencias.** Cada turno con búsqueda añade hasta N consultas de disponibilidad y sus *spans*
+(`catalog.get_availability`), visibles en la traza. Un catálogo real con muchos resultados por búsqueda
+puede pedir limitar el número de propiedades que se revalidan; `A-5` comparará contra estos mismos datos.
+

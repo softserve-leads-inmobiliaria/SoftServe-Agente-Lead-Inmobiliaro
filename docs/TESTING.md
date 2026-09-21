@@ -129,6 +129,15 @@ test `test_migrations_and_models_do_not_drift` falla si los modelos y las migrac
 Cada suite se corre por separado (los servicios comparten el nombre de paquete `app`); el CI
 hace lo mismo en `.github/workflows/ci.yml`.
 
+### Disponibilidad revalidada (A-4)
+
+`services/core/tests/test_availability.py` prueba `AvailabilityGuard` con un catálogo cuyo listado dice
+`disponible` para todo pero cuya disponibilidad vigente es otra: una apartada o cerrada nunca se ofrece,
+un error al verificar deja la propiedad `sin_verificar`, y el LLM recibe (y `tool_results` guarda) el
+mismo resultado ya revalidado. Los tests que pasan por `process_turn` usan `tests/catalog_stub.py`, un
+catálogo con `id`, `status` y `get_availability`. Para verlo en vivo: en la traza de un turno con
+búsqueda aparecen `catalog.get_availability` además de `catalog.search_properties`.
+
 ### Suite de transiciones de la FSM
 
 `services/core/tests/test_fsm_edges.py` (necesita Postgres, como el resto de `core`) protege la FSM

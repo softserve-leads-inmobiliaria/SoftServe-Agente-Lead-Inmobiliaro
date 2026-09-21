@@ -58,6 +58,7 @@ existir) — se actualiza en el mismo PR que cierra la historia correspondiente.
 
 | Guardrail | Historia | Estado |
 | :--- | :--- | :--- |
+| Disponibilidad (revalidación tras cada búsqueda/ficha) | `A-4` | Implementado: `services/core/app/availability.py`, aplicado por `process_turn` a todo agente |
 | Factualidad | `A-5` | Pendiente |
 | Dirección reservada | `A-6` | Pendiente |
 | Promesas no autorizadas (8 *claims*) | `A-7` | Pendiente |
@@ -68,6 +69,7 @@ existir) — se actualiza en el mismo PR que cierra la historia correspondiente.
 
 | Guardrail | Prueba | ¿*Gate* de CI? |
 | :--- | :--- | :--- |
+| Disponibilidad | `services/core/tests/test_availability.py` | Sí — corre con la suite de `core` |
 | Factualidad | Gold set ≥30 preguntas (`C-7`) | Sí — 100% |
 | Dirección reservada | Gold set de dirección reservada (`C-8`) | Sí — 0 fugas |
 | *Claims* prohibidos | Suite adversarial | Sí (básica en núcleo) |
