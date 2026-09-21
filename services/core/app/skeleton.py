@@ -24,10 +24,12 @@ class Reply:
     tool_results: dict[str, Any]  # payloads de las tools llamadas en este turno, por nombre
 
 
-async def respond(event: Mapping[str, Any], catalog: Catalog) -> Reply:
+async def respond(event: Mapping[str, Any], catalog: Catalog, *, intent: str | None = None,
+                  text: str | None = None) -> Reply:
+    """`intent` y `text` los fija el guardrail de entrada cuando el mensaje no debe seguir el flujo normal."""
     llm = FakeLLM()
-    outbound = FakeCore(llm).handle_event(event)
-    intent = llm.classify_intent(event["text"])
+    intent = intent or llm.classify_intent(event["text"])
+    outbound = FakeCore(llm).handle_event(event, intent=intent, text=text)
     tool_results: dict[str, Any] = {}
     if intent == "busqueda_propiedad":
         tool_results["search_properties"] = await catalog.call("search_properties", {})

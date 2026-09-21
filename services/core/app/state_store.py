@@ -14,7 +14,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.scoring import Score
-from db.models import Conversation, FsmContext, Lead, LeadScore
+from db.models import AuditLog, Conversation, FsmContext, Lead, LeadScore
 
 
 class ConversationMismatch(ValueError):
@@ -42,6 +42,14 @@ class ConversationState:
             "score_signal": self.score_signal,
             "score": self.score,
         }
+
+
+@dataclass(frozen=True)
+class GuardContext:
+    """Lo que el guardrail de entrada necesita saber antes de responder."""
+
+    consent_status: str
+    out_of_domain_count: int
 
 
 class StateStore:
@@ -97,6 +105,23 @@ class StateStore:
         self._session.execute(insert(LeadScore).values(lead_id=lead_id, **values)
                               .on_conflict_do_update(index_elements=[LeadScore.lead_id],
                                                      set_=values | {"updated_at": func.now()}))
+
+    def guard_context(self, conversation_id: uuid.UUID, lead_id: uuid.UUID) -> GuardContext:
+        """Consentimiento del lead y cuántos mensajes fuera de dominio lleva la conversación."""
+        consent = self._session.execute(select(Lead.consent_status).where(Lead.id == lead_id)).scalar()
+        out_of_domain = self._session.execute(
+            select(func.count()).select_from(AuditLog)
+            .where(AuditLog.action == "input.out_of_domain",
+                   AuditLog.payload["conversation_id"].astext == str(conversation_id))).scalar()
+        return GuardContext(consent_status=consent or "pending", out_of_domain_count=out_of_domain or 0)
+
+    def withdraw_consent(self, lead_id: uuid.UUID) -> None:
+        self._session.execute(update(Lead).where(Lead.id == lead_id)
+                              .values(consent_status="withdrawn", updated_at=func.now()))
+
+    def audit(self, action: str, payload: Mapping[str, Any]) -> None:
+        """Registra una detección del guardrail. El `payload` no debe llevar el contenido del mensaje."""
+        self._session.add(AuditLog(actor="input_guard", action=action, payload=dict(payload)))
 
     def touch(self, conversation_id: uuid.UUID) -> None:
         """Marca actividad: `last_message_at` en la conversación y `updated_at` en su contexto."""

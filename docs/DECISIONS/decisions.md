@@ -349,3 +349,41 @@ aún no se invoca en ningún turno, así que `eligibility` queda en 0 hasta que 
 `decision_maker` distingue `pareja` y `familia`; su tratamiento frente a fair housing lo resuelven
 `A-11`/`C-6`.
 
+
+## DT-15 — Guardrail de entrada: reglas deterministas antes de la FSM y el LLM
+
+**Estado:** aceptada
+
+**Contexto.** `A-8` cubre los 5 detectores de `docs/DESIGN/guardrails.md` §1. El detalle de qué hace
+cada acción al detectar, y qué pasa con un lead dado de baja, no estaba fijado.
+
+**Decisión.**
+- Los detectores son reglas (`services/core/app/input_guard.py`, función pura); ninguno usa LLM. El
+  turno los aplica antes de responder (`app/turn.py`).
+- **`/stop`** (comando o frases como "dame de baja", "no me escribas"): marca
+  `leads.consent_status=withdrawn`, lo audita y confirma con un texto fijo. Manda sobre todo lo demás
+  y no toca la FSM, el score, el catálogo ni el LLM. Un lead ya dado de baja recibe siempre un aviso
+  fijo y ningún otro flujo. Una frase con negación ("no dejen de mandarme opciones") no cuenta.
+- **Anti-*jailbreak*:** se contesta como una pregunta de dominio cualquiera (intención `otro`), sin
+  reflejar la instrucción y sin efectos: no dispara traspaso a humano ni búsquedas, y no aporta señal
+  al score. Se audita.
+- **PII no solicitada** (tarjeta con dígito verificador válido, CURP, RFC, INE/pasaporte/licencia con su
+  número): se sustituye por `[dato omitido]` antes de que el texto llegue a la FSM, el LLM o la base, y
+  la respuesta recuerda qué datos sí hacen falta. La auditoría guarda el tipo, nunca el valor.
+- **Fuera de dominio:** respuesta acotada, sin mover la FSM. Un dictamen legal, fiscal o crediticio se
+  declina siempre; un tema ajeno solo si el mensaje no habla de propiedades. Al segundo mensaje fuera de
+  dominio de la conversación la respuesta ofrece un asesor; la oferta no fuerza `HUMAN_HANDOFF`, lo
+  pide el lead. El conteo sale de `audit_log`.
+- **Categoría protegida:** el mensaje se responde con normalidad y se audita **sin** decir cuál. La señal
+  del score se extrae de una copia del texto sin esos fragmentos, de modo que mencionarla no cambia el
+  score: descartar solo el campo afectado lo habría bajado.
+
+**Alternativas.** Clasificar con el LLM — descartada: no es determinista ni auditable, y `/stop` no puede
+depender de un modelo. Bloquear el mensaje ante *jailbreak* o PII — descartada: la regla general es
+degradar, no cortar. Contar el fuera de dominio en `fsm_context` — descartada: exigía una migración.
+
+**Consecuencias.** Las listas de palabras del detector son una primera versión y se afinan con casos
+reales; los falsos positivos se cubren en `services/core/tests/test_input_guard.py`. Tras la baja no hay
+reingreso hasta que `B-2` defina el consentimiento. `decision_maker` sigue distinguiendo `pareja` y
+`familia` en el contrato: su revisión frente a fair housing sigue en `A-11`/`C-6`.
+

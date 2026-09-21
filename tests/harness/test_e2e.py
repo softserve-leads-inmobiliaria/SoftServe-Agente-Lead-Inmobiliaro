@@ -130,6 +130,34 @@ def test_score_is_persisted_in_postgres(stack, database_url, name, expected):
     assert (row.total, row.band) == expected
 
 
+def test_stop_withdraws_consent_in_postgres(stack, database_url, tmp_path):
+    """A-8: tras `/stop` el lead queda dado de baja y se audita, sin que el LLM intervenga.
+
+    Guion temporal y no de `harness/fixtures`: una baja es persistente y solo existe contra el core real.
+    """
+    from sqlalchemy import create_engine, text
+
+    script = tmp_path / "baja_del_lead.jsonl"
+    turns = ({"text": "Hola, buenas tardes", "expect_reply_contains": "asistente"},
+             {"text": "/stop", "expect_reply_contains": "baja"},
+             {"text": "Busco un departamento", "expect_reply_contains": "baja"})
+    script.write_text("".join(json.dumps(turn) + chr(10) for turn in turns), encoding="utf-8")
+    replay(script, http_responder(stack))
+    lead_id = build_events("baja_del_lead", [{"text": "x"}])[0]["lead_id"]
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            consent = connection.execute(text("SELECT consent_status FROM leads WHERE id = :l"),
+                                         {"l": lead_id}).scalar()
+            audited = connection.execute(text("SELECT count(*) FROM audit_log WHERE action = 'input.opt_out' "
+                                              "AND payload->>'lead_id' = :l"), {"l": lead_id}).scalar()
+            state = connection.execute(text("SELECT fsm_state FROM conversations WHERE lead_id = :l"),
+                                       {"l": lead_id}).scalar()
+    finally:
+        engine.dispose()
+    assert (consent, audited, state) == ("withdrawn", 1, "DISCOVERY")
+
+
 def test_every_fixture_has_a_declared_final_state():
     assert {p.stem for p in run_all.discover()} == set(EXPECTED_FINAL_STATE)
 
