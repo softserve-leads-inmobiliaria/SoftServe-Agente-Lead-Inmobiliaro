@@ -35,6 +35,12 @@ Para ver el estado persistido de las conversaciones que dejó el arnés:
 docker compose exec postgres psql -U leads -d leads -c "select id, fsm_state from conversations"
 ```
 
+Y el score BANT-E que se acumuló por lead (A-9):
+
+```
+docker compose exec postgres psql -U leads -d leads -c "select lead_id, need_fit, budget, authority, timing, eligibility, total, band from lead_scores"
+```
+
 `migrate` aplica las migraciones de Alembic (`db/migrations`) sobre Postgres y termina; los
 servicios que usen la base dependerán de él.
 

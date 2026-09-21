@@ -313,3 +313,39 @@ extra es un viaje de ida y vuelta local; se reevalúa si la latencia del turno l
 **Consecuencias.** Que el catálogo publique exactamente las 5 tools de `contracts/mcp` se verifica en
 las pruebas de extremo a extremo (`tests/harness`), no en el cliente. El caché no se invalida solo si
 una tool desaparece; una llamada a ella fallará con el error del catálogo.
+
+
+## DT-14 — Score BANT-E integrado en el turno: señal acumulada en Postgres
+
+**Estado:** aceptada
+
+**Contexto.** `C-4` dejó las reglas del score como función pura. `A-9` tiene que acumularlo turno a
+turno y persistirlo desde el primer commit (mismo criterio que `A-1`), sin que el LLM emita el número.
+
+**Decisión.**
+- Cada turno, dentro de la misma transacción que mueve la FSM y bajo el mismo bloqueo de la
+  conversación, se acumula la señal y se recalcula el score (`app/lead_scoring.py`); el estado y el
+  score se guardan juntos o no se guarda nada.
+- Reparto del contrato `ScoreSignal`: el LLM emite solo `budget_hint`, `decision_maker` y `urgency`;
+  `matching_properties` (conteo de `search_properties`) y `meets_requirements` (`check_requirements`)
+  los deriva el código de los resultados de las tools del turno.
+- Acumulación: lo declarado se conserva; un campo que el mensaje no menciona, o que el LLM devuelve
+  inválido, **no** pisa lo ya declarado (se ignora antes que inventar); lo declarado más
+  recientemente gana. Los campos que no son del contrato (p. ej. una categoría protegida) no llegan a
+  la señal.
+- Se persisten la señal acumulada en `fsm_context.score_signal`, los resultados de tools del último
+  turno en `fsm_context.last_tool_results` (se sobrescriben cada turno) y el score en `lead_scores`
+  (una fila por lead, con *upsert*).
+- Se puntúa en todos los estados, también en los terminales: el asesor ve el último score.
+- El score no condiciona las transiciones de la FSM. La banda mínima para recomendar es de `A-4`.
+
+**Alternativas.** Recalcular el score desde el historial completo cada turno — descartada: cuesta más
+y obliga a guardar todo el texto. Puntuar fuera de la transacción de la FSM — descartada: podría
+quedar un score sin el estado que lo produjo.
+
+**Consecuencias.** Con el fake LLM la extracción es por palabras clave; el LLM real (`A-2`) debe
+devolver el mismo formato de tres campos y `merge_signal` descarta lo que no cumpla. `check_requirements`
+aún no se invoca en ningún turno, así que `eligibility` queda en 0 hasta que `A-4`/`A-12` lo llamen.
+`decision_maker` distingue `pareja` y `familia`; su tratamiento frente a fair housing lo resuelven
+`A-11`/`C-6`.
+
