@@ -60,6 +60,7 @@ El orden recomendado para avanzar las historias con 3 personas en paralelo, mini
 | [`A-11`](A-11.md) | Fair housing en el scoring | P0 | 3 | 6h | A-9, C-6 |
 | [`A-12`](A-12.md) | Ficha del lead al asesor en HANDOFF | P0 | 3 | 6h | A-9, B-7 |
 | [`A-13`](A-13.md) | `HUMAN_HANDOFF` desde cualquier estado | P1 | 1 | 2h | A-1 |
+| [`A-14`](A-14.md) | Reintentos con backoff exponencial ante límites de Bedrock | P1 | 2 | 4h | A-2 |
 
 ### E2 — Canal y borde
 
