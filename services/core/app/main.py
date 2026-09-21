@@ -1,18 +1,35 @@
-"""Core fake (CT-4): recibe eventos canónicos por HTTP y responde con el esqueleto end-to-end."""
+"""Core fake (CT-4): recibe eventos canónicos por HTTP y responde con el esqueleto end-to-end.
+
+El bot de Telegram (B-1) corre embebido en el `lifespan` de esta misma app y llama a `process_turn`
+en proceso; `POST /events` se mantiene para el arnés E2E, que habla por HTTP.
+"""
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
 
 from app.catalog_client import CatalogClient
+from app.channels.telegram import start_bot, stop_bot
 from app.turn import process_turn
 from db.session import get_engine
 
 logger = logging.getLogger("core")
-app = FastAPI(title="core (fake)")
 catalog = CatalogClient()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    application = await start_bot(engine=get_engine(), catalog=catalog)
+    try:
+        yield
+    finally:
+        await stop_bot(application)
+
+
+app = FastAPI(title="core (fake)", lifespan=lifespan)
 
 
 @app.get("/health")

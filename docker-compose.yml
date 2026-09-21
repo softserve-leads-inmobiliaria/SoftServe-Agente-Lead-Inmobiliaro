@@ -91,6 +91,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-leads}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-leads_dev_password}
       POSTGRES_DB: ${POSTGRES_DB:-leads}
+      # Sin token, el core levanta igual y solo atiende /events (B-1, DT-4).
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
     ports:
       - "${CORE_PORT:-8000}:8000"
     depends_on:
