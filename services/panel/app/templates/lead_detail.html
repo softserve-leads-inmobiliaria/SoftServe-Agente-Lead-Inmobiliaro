@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Lead {{ lead.telegram_user_id }}{% endblock %}
+{% block heading %}Lead {{ lead.telegram_user_id }}{% endblock %}
+{% block subheading %}
+  <a href="/panel/{{ token }}">&larr; Volver a mis leads</a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <dl>
+    <dt>Etapa</dt><dd>{{ fsm_state or "—" }}</dd>
+    <dt>Estado</dt><dd>{{ lead.status }}</dd>
+    <dt>Zona</dt><dd>{{ lead.zone or "—" }}</dd>
+    <dt>Presupuesto</dt><dd>{{ lead.budget or "—" }}</dd>
+    <dt>Plazo</dt><dd>{{ lead.timing or "—" }}</dd>
+    <dt>Consentimiento</dt><dd>{{ lead.consent_status }}</dd>
+    <dt>Teléfono</dt><dd>{{ lead.phone or "—" }}</dd>
+    <dt>Correo</dt><dd>{{ lead.email or "—" }}</dd>
+  </dl>
+</div>
+
+<div class="card">
+  <h2 style="font-size:15px;margin:0 0 12px">Score BANT-E</h2>
+  {% if score %}
+  <p>
+    <span class="band band-{{ score.band }}">{{ score.band }}</span>
+    <span class="muted">{{ score.total }}/100</span>
+  </p>
+  <dl>
+    <dt>Necesidad</dt><dd>{{ score.need_fit }}</dd>
+    <dt>Presupuesto</dt><dd>{{ score.budget }}</dd>
+    <dt>Decisión</dt><dd>{{ score.authority }}</dd>
+    <dt>Plazo</dt><dd>{{ score.timing }}</dd>
+    <dt>Elegibilidad</dt><dd>{{ score.eligibility }}</dd>
+  </dl>
+  {% if score.reasons %}
+  <ul class="muted">{% for reason in score.reasons %}<li>{{ reason }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% else %}
+  <p class="muted">Todavía sin calificar.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2 style="font-size:15px;margin:0 0 12px">Visitas</h2>
+  {% if visits %}
+  <table>
+    <thead><tr><th>Fecha</th><th>Propiedad</th></tr></thead>
+    <tbody>
+      {% for visit in visits %}
+      <tr>
+        <td>{{ visit.scheduled_at.strftime("%d/%m/%Y %H:%M") }}</td>
+        <td>{{ visit.property_id }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Sin visitas agendadas.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2 style="font-size:15px;margin:0 0 12px">Conversación</h2>
+  {% if messages %}
+    {% for message in messages %}
+    <div class="msg msg-{{ message.role }}">
+      <div class="msg-role">
+        {{ "Lead" if message.role == "user" else "Agente" }} ·
+        {{ message.created_at.strftime("%d/%m %H:%M") }}
+      </div>
+      <div>{{ message.content }}</div>
+    </div>
+    {% endfor %}
+  {% else %}
+  <p class="muted">Sin mensajes todavía.</p>
+  {% endif %}
+</div>
+{% endblock %}

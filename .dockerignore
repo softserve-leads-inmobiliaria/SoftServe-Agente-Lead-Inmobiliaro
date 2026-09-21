@@ -8,3 +8,5 @@ __pycache__/
 .ruff_cache/
 docs/
 scripts/
+# Excepción: el seed de demo sí va a la imagen de db/ (servicio `seed` del compose, B-5).
+!scripts/seed_advisors.py
