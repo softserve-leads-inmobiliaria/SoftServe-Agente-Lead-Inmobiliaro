@@ -1,4 +1,4 @@
-"""Bot de Telegram por *long polling* (B-1, DT-4).
+"""Bot de Telegram por *long polling* (B-1, DT-4, DT-20).
 
 Corre embebido en el `lifespan` de FastAPI (`initialize` + `start` + `updater.start_polling`), no
 con `run_polling()`, que tomaría el control del event loop del servidor. Sin token configurado el
@@ -14,15 +14,9 @@ from typing import Any
 from sqlalchemy import Engine
 from starlette.concurrency import run_in_threadpool
 from telegram import Bot, Update
-from telegram.ext import (
-    Application,
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
-)
+from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageHandler, filters
 
+from app.agent import Agent
 from app.channels import canonical, consent
 from app.channels.identity import resolve_identity
 from app.skeleton import Catalog
@@ -30,28 +24,42 @@ from app.turn import process_turn
 
 logger = logging.getLogger("core.channels.telegram")
 
+# Lo que ve el lead si el turno falla: nunca se le deja sin respuesta.
+ERROR_REPLY = "Perdona, tuve un problema para responderte. ¿Me lo puedes repetir en un momento?"
+
 _ENGINE_KEY = "engine"
 _CATALOG_KEY = "catalog"
+_AGENT_KEY = "agent"
 
 _application: Application | None = None
 
 
-def build_application(token: str, *, engine: Engine, catalog: Catalog) -> Application:
-    application = ApplicationBuilder().token(token).build()
+def _quiet_http_logs() -> None:
+    """La URL de la API de Telegram lleva el token del bot: `httpx` la registra a nivel INFO."""
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
+def build_application(token: str, *, engine: Engine, catalog: Catalog, agent: Agent | None = None) -> Application:
+    # Un solo manejador para todo texto, comandos incluidos: `/stop` (la baja) no puede quedar sin
+    # atender. `concurrent_updates` evita que un turno lento (p. ej. esperando cupo del LLM) bloquee
+    # a los demás leads; el orden de un mismo lead lo garantiza el bloqueo por conversación.
+    application = ApplicationBuilder().token(token).concurrent_updates(True).build()
     application.bot_data[_ENGINE_KEY] = engine
     application.bot_data[_CATALOG_KEY] = catalog
-    application.add_handler(CommandHandler("start", _on_start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _on_message))
+    application.bot_data[_AGENT_KEY] = agent
+    application.add_handler(MessageHandler(filters.TEXT, _on_message))
     return application
 
 
-async def start_bot(*, engine: Engine, catalog: Catalog) -> Application | None:
+async def start_bot(*, engine: Engine, catalog: Catalog, agent: Agent | None = None) -> Application | None:
     global _application
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
     if not token:
         logger.warning("TELEGRAM_BOT_TOKEN vacío: el bot de Telegram no arranca")
         return None
-    application = build_application(token, engine=engine, catalog=catalog)
+    _quiet_http_logs()
+    application = build_application(token, engine=engine, catalog=catalog, agent=agent)
     await application.initialize()
     await application.start()
     await application.updater.start_polling()
@@ -77,38 +85,35 @@ def get_bot() -> Bot | None:
     return _application.bot if _application is not None else None
 
 
-async def _on_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _dispatch(update, context, deep_link=context.args[0] if context.args else None)
-
-
 async def _on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _dispatch(update, context, deep_link=None)
-
-
-async def _dispatch(update: Update, context: ContextTypes.DEFAULT_TYPE, *,
-                    deep_link: str | None) -> None:
     message = update.effective_message
     user = update.effective_user
     if message is None or user is None:
         return
+    text, deep_link = canonical.split_command(message.text or "")
     try:
         reply = await reply_to(
             context.application.bot_data[_ENGINE_KEY],
             context.application.bot_data[_CATALOG_KEY],
             telegram_user_id=str(user.id),
-            text=message.text or "",
+            text=text,
             deep_link=deep_link,
             timestamp=message.date,
+            agent=context.application.bot_data.get(_AGENT_KEY),
         )
     except Exception:
-        # Un turno que falla no puede tumbar el polling del bot.
+        # Un turno que falla no puede tumbar el polling ni dejar al lead sin respuesta.
         logger.exception("fallo al procesar un mensaje de Telegram")
-        return
-    await message.reply_text(reply)
+        reply = ERROR_REPLY
+    try:
+        await message.reply_text(reply)
+    except Exception:
+        logger.exception("no se pudo enviar la respuesta por Telegram")
 
 
 async def reply_to(engine: Engine, catalog: Catalog, *, telegram_user_id: str, text: str,
-                   deep_link: str | None = None, timestamp: datetime | None = None) -> str:
+                   deep_link: str | None = None, timestamp: datetime | None = None,
+                   agent: Agent | None = None) -> str:
     """Un turno completo del canal, sin tipos de Telegram: es el punto de prueba del bot."""
     identity = await run_in_threadpool(resolve_identity, engine, telegram_user_id)
 
@@ -127,6 +132,6 @@ async def reply_to(engine: Engine, catalog: Catalog, *, telegram_user_id: str, t
         timestamp=timestamp,
         **canonical.parse_deep_link(deep_link),
     )
-    outbound = await process_turn(engine, event, catalog)
+    outbound = await process_turn(engine, event, catalog, agent)
     reply = canonical.from_canonical(outbound)
     return consent.with_privacy_notice(reply) if first_turn else reply

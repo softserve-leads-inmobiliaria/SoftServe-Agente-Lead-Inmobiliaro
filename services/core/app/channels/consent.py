@@ -11,7 +11,8 @@ from typing import Final
 
 from sqlalchemy import Engine, select, update
 
-from db.models import Conversation, Lead
+from app.input_guard import is_opt_out as core_is_opt_out
+from db.models import AuditLog, Conversation, Lead
 from db.session import session_scope
 
 PRIVACY_NOTICE: Final = (
@@ -19,8 +20,7 @@ PRIVACY_NOTICE: Final = (
     "ponerte en contacto con un asesor. Escribe STOP cuando quieras y no volvemos a escribirte."
 )
 OPT_OUT_CONFIRMATION: Final = (
-    "Listo, di de baja tus datos y no volveré a escribirte. Si cambias de idea, escríbeme cuando "
-    "quieras."
+    "Listo, registré tu baja y no volveré a escribirte. Si cambias de idea, escríbeme cuando quieras."
 )
 
 _OPT_OUT_PHRASES: Final[tuple[str, ...]] = (
@@ -42,12 +42,14 @@ def _normalize(text: str) -> str:
 
 
 def is_opt_out(text: str) -> bool:
+    """Baja por las frases del canal o por el criterio del core (A-8): quien pida la baja de cualquiera
+    de las dos maneras la recibe, sin importar por qué camino llegue el mensaje."""
     normalized = _normalize(text)
     if not normalized:
         return False
-    return normalized in _OPT_OUT_PHRASES or any(
-        phrase in normalized for phrase in _OPT_OUT_PHRASES if " " in phrase
-    )
+    return (normalized in _OPT_OUT_PHRASES
+            or any(phrase in normalized for phrase in _OPT_OUT_PHRASES if " " in phrase)
+            or core_is_opt_out(text))
 
 
 def is_first_turn(engine: Engine, conversation_id: uuid.UUID) -> bool:
@@ -67,13 +69,18 @@ def is_first_turn(engine: Engine, conversation_id: uuid.UUID) -> bool:
 
 
 def withdraw_consent(engine: Engine, lead_id: uuid.UUID) -> None:
-    """Marca la baja de inmediato: `consent_status=withdrawn` y el lead fuera del funnel."""
+    """Marca la baja de inmediato: `consent_status=withdrawn` y el lead fuera del funnel.
+
+    Deja el mismo rastro de auditoría (`input.opt_out`) que la baja que detecta el core.
+    """
     with session_scope(engine) as session:
         session.execute(
             update(Lead)
             .where(Lead.id == lead_id)
             .values(consent_status="withdrawn", status="closed_lost")
         )
+        session.add(AuditLog(actor="channel", action="input.opt_out",
+                             payload={"lead_id": str(lead_id), "channel": "telegram"}))
 
 
 def with_privacy_notice(reply: str) -> str:
