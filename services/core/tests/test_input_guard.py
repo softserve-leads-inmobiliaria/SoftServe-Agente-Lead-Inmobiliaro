@@ -188,3 +188,35 @@ def test_no_script_of_the_harness_is_flagged():
 
 def test_empty_text_is_clean():
     assert not inspect_input("").flagged
+
+
+# --- el texto que ven el LLM y el historial (A-2) -------------------------------------------------------------
+
+@pytest.mark.parametrize("text,expected", [
+    ("Soy católico y busco un departamento", "Soy y busco un departamento"),
+    ("Busco casa. Tengo hijos y presupuesto 3 millones", "Busco casa. y presupuesto 3 millones"),
+    ("Hola", "Hola"),
+    ("Busco casa en Providencia", "Busco casa en Providencia"),
+])
+def test_the_llm_text_drops_protected_mentions_and_keeps_the_rest_as_written(text, expected):
+    from app.input_guard import strip_protected
+
+    assert strip_protected(text) == expected
+
+
+@pytest.mark.parametrize("text", ["Soy extranjero", "Tengo hijos", "Estoy casado", "Soy madre soltera", "Somos católicos"])
+def test_a_message_that_is_only_a_protected_mention_leaves_nothing(text):
+    from app.input_guard import strip_protected
+
+    assert strip_protected(text) == ""
+
+
+def test_the_llm_text_keeps_capitals_and_accents():
+    verdict = inspect_input("Necesito un Depa en Providencia, soy musulmán")
+    assert "Depa" in verdict.signal_text and "Providencia" in verdict.signal_text
+    assert "musulm" not in verdict.signal_text.lower()
+
+
+def test_pii_is_gone_from_the_llm_text_too():
+    verdict = inspect_input(f"Mi tarjeta es {CARD}, busco casa")
+    assert "4111" not in verdict.signal_text and "busco casa" in verdict.signal_text

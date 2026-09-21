@@ -99,3 +99,12 @@ def test_core_sends_its_traces_to_phoenix_without_depending_on_it():
 def test_message_content_is_kept_out_of_the_traces_by_default():
     assert SERVICES["core"]["environment"]["TRACE_CONTENT"] == "${TRACE_CONTENT:-}"
 
+
+def test_core_uses_the_fake_llm_unless_told_otherwise():
+    """A-2: sin credenciales el stack sigue funcionando; el LLM real se activa por variable de entorno."""
+    env = SERVICES["core"]["environment"]
+    assert env["LLM_PROVIDER"] == "${LLM_PROVIDER:-fake}"
+    assert env["LLM_RATE_LIMIT_PER_MINUTE"] == "${LLM_RATE_LIMIT_PER_MINUTE:-10}"
+    for name in ("BEDROCK_MODEL_ID_CHAT", "BEDROCK_MODEL_ID_CLASSIFIER", "AWS_ACCESS_KEY_ID"):
+        assert env[name].endswith(":-}")  # sin valor por defecto: nunca hay un ID ni una credencial en el repo
+
