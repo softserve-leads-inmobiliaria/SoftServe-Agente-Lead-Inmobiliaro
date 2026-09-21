@@ -35,6 +35,12 @@ Para ver el estado persistido de las conversaciones que dejó el arnés:
 docker compose exec postgres psql -U leads -d leads -c "select id, fsm_state from conversations"
 ```
 
+Y el funnel que se fue registrando, una fila por transición real (OBS-2, DT-17):
+
+```
+docker compose exec postgres psql -U leads -d leads -c "select event_type, count(distinct lead_id) as leads from funnel_events group by event_type order by min(id)"
+```
+
 Y el score BANT-E que se acumuló por lead (A-9):
 
 ```

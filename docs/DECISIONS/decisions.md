@@ -419,3 +419,36 @@ repetidos en vez de `otro` — descartada: necesita el historial completo (`A-2`
 riesgo de usar `otro` como proxy y `A-2` debe revisarlo con el clasificador real y su taxonomía. La
 respuesta de aviso se decide con la racha leída antes de la transacción; si dos mensajes de la misma
 conversación llegan a la vez, el texto puede no coincidir con el estado (el estado siempre es el correcto).
+
+
+## DT-17 — Métricas del funnel: una fila por transición real, escrita al guardar el estado
+
+**Estado:** aceptada
+
+**Contexto.** `OBS-2` pide `funnel_events` *append-only* con una fila por transición real de
+`fsm_state`, no por turno. La tabla y el *trigger* que impide UPDATE/DELETE ya existían (`C-3`, DT-11).
+
+**Decisión.**
+- El evento se escribe en `StateStore.save_state`, en la misma transacción que el cambio de estado, con
+  un `UPDATE ... WHERE fsm_state <> :nuevo RETURNING lead_id`: si el estado no cambió no hay fila, y
+  toda transición (mensaje, *scheduler*) queda registrada sin que quien la provoque tenga que acordarse.
+- `event_type` es `state.<ESTADO>` (`state.QUALIFY`): el estado al que **entra** la conversación. El
+  prefijo deja sitio a otros tipos de evento sin que choquen con los nombres de estado.
+- No hay cambios de esquema: la tabla sigue con `id, lead_id, event_type, created_at`.
+- La entrada inicial a `GREETING` no es una transición y no se registra: el total de leads que empezaron
+  sale de `leads`/`conversations`.
+
+**Consulta para `B-9`** (leads distintos que alcanzaron cada etapa, en orden de primera aparición):
+
+    SELECT event_type, count(DISTINCT lead_id) AS leads
+    FROM funnel_events GROUP BY event_type ORDER BY min(id);
+
+**Alternativas.** Una fila por turno — descartada: es lo que la historia excluye. Registrar el evento
+desde `advance` — descartada: el *scheduler* (`NO_RESPONSE`) cambia el estado sin pasar por ahí. Añadir
+`conversation_id`, `from_state` a la tabla — descartada por ahora: `B-9` no los necesita (la etapa
+anterior se deduce del orden) y exigiría otra migración.
+
+**Consecuencias.** Un lead que vuelve de `NURTURE` a `DISCOVERY` genera otra fila `state.DISCOVERY`: la
+consulta de arriba lo cuenta una vez, pero quien quiera medir reentradas puede contar filas. Si `B-9`
+necesita saber de qué estado se venía, hay que añadir `from_state` con una migración.
+
