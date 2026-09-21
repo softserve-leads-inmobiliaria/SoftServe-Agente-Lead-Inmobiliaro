@@ -86,6 +86,7 @@ def traced_stack():
 
 def test_a_real_turn_exports_its_trace_over_otlp(traced_stack, tmp_path):
     core_url, collector = traced_stack
+    collector.spans.clear()
     script = tmp_path / "traza.jsonl"
     script.write_text(json.dumps({"text": "Busco un departamento, mi presupuesto es 3 millones"}) + chr(10),
                       encoding="utf-8")
@@ -93,9 +94,9 @@ def test_a_real_turn_exports_its_trace_over_otlp(traced_stack, tmp_path):
 
     assert collector.wait_for("turn"), collector.names()
     time.sleep(0.6)
-    print("SPANS:", sorted(collector.names()))
-    names = set(collector.names())
-    assert {"turn", "guardrail.input", "fsm.advance", "catalog.search_properties"} <= names
+    # Revisada la primera traza real: salen exactamente los spans manuales. El instrumentador de MCP
+    # solo propaga el contexto y no añade ninguno; si eso cambia, esta línea avisa.
+    assert sorted(collector.names()) == ["catalog.search_properties", "fsm.advance", "guardrail.input", "turn"]
     assert {"service.name": "core", "openinference.project.name": "lead-agent"}.items() <= collector.resources[0].items()
 
 
