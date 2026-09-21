@@ -93,6 +93,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-leads}
       # Sin token, el core levanta igual y solo atiende /events (B-1, DT-4).
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      # Trazas por turno hacia Phoenix (OBS-1, DT-9). Sin `depends_on` a propósito: si Phoenix está
+      # caído las trazas se pierden, pero el bot sigue respondiendo.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://phoenix:6006
+      # Vacío = las trazas no llevan el texto de los mensajes. `1` solo para depurar en local.
+      TRACE_CONTENT: ${TRACE_CONTENT:-}
     ports:
       - "${CORE_PORT:-8000}:8000"
     depends_on:

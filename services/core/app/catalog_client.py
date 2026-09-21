@@ -14,6 +14,8 @@ from typing import Any, Awaitable, Callable, TypeVar
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
+from app.tracing import SPAN_KIND, get_tracer
+
 DEFAULT_URL = "http://localhost:8001"
 
 T = TypeVar("T")
@@ -77,6 +79,15 @@ class CatalogClient:
                 for t in (await self.discover()).values()]
 
     async def call(self, tool: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
+        # Un span por llamada. Solo se registran los NOMBRES de los argumentos: sus valores pueden
+        # ser datos del lead (p. ej. el perfil de `check_requirements`).
+        with get_tracer().start_as_current_span(f"catalog.{tool}") as span:
+            span.set_attribute(SPAN_KIND, "TOOL")
+            span.set_attribute("tool.name", tool)
+            span.set_attribute("tool.argument_names", sorted(arguments or {}))
+            return await self._call(tool, arguments, span)
+
+    async def _call(self, tool: str, arguments: dict[str, Any] | None, span: Any) -> dict[str, Any]:
         async def invoke(session: ClientSession) -> Any:
             # Sin lanzar aquí dentro: la sesión MCP corre en un grupo de tareas que envuelve excepciones.
             if tool not in (self._tools or {}):
@@ -89,6 +100,9 @@ class CatalogClient:
             result = await self._run(invoke, refresh=True)
         if result is None:
             raise UnknownTool(tool, sorted(self._tools or {}))
+        span.set_attribute("tool.is_error", bool(result.isError))
         if result.isError:
-            raise CatalogToolError(json.loads(result.content[0].text))
+            error = json.loads(result.content[0].text)
+            span.set_attribute("catalog.error_code", str(error.get("code", "")))
+            raise CatalogToolError(error)
         return result.structuredContent
