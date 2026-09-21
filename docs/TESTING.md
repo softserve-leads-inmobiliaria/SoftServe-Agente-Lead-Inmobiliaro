@@ -50,6 +50,31 @@ docker compose exec postgres psql -U leads -d leads -c "select lead_id, need_fit
 `migrate` aplica las migraciones de Alembic (`db/migrations`) sobre Postgres y termina; los
 servicios que usen la base dependerán de él.
 
+### Usar el LLM real (Bedrock)
+
+Por defecto el agente es el *fake* (`LLM_PROVIDER=fake`): respuestas fijas y sin credenciales. Para
+usar Bedrock (A-2, DT-19) en el `.env`:
+
+```
+LLM_PROVIDER=bedrock
+BEDROCK_MODEL_ID_CHAT=<modelo conversacional>
+BEDROCK_MODEL_ID_CLASSIFIER=<modelo liviano>
+AWS_ACCESS_KEY_ID=...   AWS_SECRET_ACCESS_KEY=...   (o AWS_PROFILE fuera de Docker)
+```
+
+Antes de darlos por buenos, probar **una llamada real de un token** con cada ID: algunos modelos de
+Bedrock exigen un *inference profile* y el error solo aparece en la primera llamada. Sin los dos IDs,
+`core` no arranca (falla con un mensaje claro). Si Bedrock falla o el cupo (10 por minuto y modelo) se
+agota, el turno responde con un texto seguro en vez de dejar al lead esperando. Ver DT-19: **con el LLM
+real todavía no hay guardrails de salida** (A-5, A-6, A-7), así que no usarlo con leads reales.
+
+El historial de cada conversación se guarda en `messages` (solo el texto ya filtrado, sin PII ni
+categorías protegidas):
+
+```
+docker compose exec postgres psql -U leads -d leads -c "select role, content from messages order by created_at"
+```
+
 ### Ver la traza de cada turno (Phoenix)
 
 Con el stack arriba, `core` envía una traza por turno a Phoenix (OBS-1, DT-18). Tras correr el arnés
