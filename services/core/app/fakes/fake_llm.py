@@ -6,6 +6,7 @@ disponibilidad, promesas): eso es lo que los guardrails reales tendrán que veri
 """
 from __future__ import annotations
 
+import re
 import unicodedata
 
 # Categorías de intención. `otro` es el cajón de sastre: NO debe disparar ningún efecto de sistema
@@ -40,6 +41,21 @@ REPLIES: dict[str, str] = {
 }
 
 
+# Señal cruda por turno (A-9): solo los tres campos que el contrato deja emitir al LLM. Un `None`
+# significa "no lo dijo en este mensaje"; el número final del score nunca sale de aquí.
+_DECISION_MAKER: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("solo", ("decido yo", "yo decido", "solo yo", "soy yo quien")),
+    ("pareja", ("mi pareja", "mi esposa", "mi esposo", "mi novia", "mi novio")),
+    ("familia", ("mi familia", "mis padres", "mis papas", "mis hijos")),
+)
+_URGENCY: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("inmediata", ("urgente", "lo antes posible", "cuanto antes", "de inmediato", "este mes", "ya mismo")),
+    ("3_meses", ("tres meses", "3 meses", "en unos meses", "pronto")),
+    ("explorando", ("explorando", "solo estoy viendo", "curiosidad", "mas adelante", "sin prisa")),
+)
+_BUDGET = re.compile(r"presupuesto[^.,;!?\n]*|\$\s?[\d.,]+(?:\s?(?:mil|millones|k))?|\b\d[\d.,]*\s?(?:mil|millones)\b")
+
+
 def _normalize(text: str) -> str:
     decomposed = unicodedata.normalize("NFD", text.lower())
     return "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
@@ -60,3 +76,17 @@ class FakeLLM:
             return REPLIES[intent]
         except KeyError:
             raise ValueError(f"intención desconocida: {intent!r} (válidas: {INTENTS})") from None
+
+    def extract_signal(self, text: str) -> dict[str, str | None]:
+        """Lo que el mensaje declara sobre presupuesto, quién decide y urgencia (None = no dicho)."""
+        normalized = _normalize(text)
+
+        def first(table: tuple[tuple[str, tuple[str, ...]], ...]) -> str | None:
+            return next((value for value, words in table if any(w in normalized for w in words)), None)
+
+        budget = _BUDGET.search(normalized)
+        return {
+            "budget_hint": budget.group(0).strip() if budget else None,
+            "decision_maker": first(_DECISION_MAKER),
+            "urgency": first(_URGENCY),
+        }

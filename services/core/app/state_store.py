@@ -7,12 +7,13 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping
 
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from app.scoring import Score
 from db.models import Conversation, FsmContext, Lead, LeadScore
 
 
@@ -84,6 +85,18 @@ class StateStore:
     def save_state(self, conversation_id: uuid.UUID, fsm_state: str) -> None:
         self._session.execute(update(Conversation).where(Conversation.id == conversation_id)
                               .values(fsm_state=fsm_state))
+
+    def save_scoring(self, conversation_id: uuid.UUID, lead_id: uuid.UUID, signal: Mapping[str, Any],
+                     tool_results: Mapping[str, Any], score: Score) -> None:
+        """Guarda la señal acumulada, los resultados de tools del turno y el score (una fila por lead)."""
+        self._session.execute(update(FsmContext).where(FsmContext.conversation_id == conversation_id)
+                              .values(score_signal=dict(signal), last_tool_results=dict(tool_results)))
+        values = {"need_fit": score.need_fit, "budget": score.budget, "authority": score.authority,
+                  "timing": score.timing, "eligibility": score.eligibility, "total": score.total,
+                  "band": score.band, "reasons": list(score.reasons)}
+        self._session.execute(insert(LeadScore).values(lead_id=lead_id, **values)
+                              .on_conflict_do_update(index_elements=[LeadScore.lead_id],
+                                                     set_=values | {"updated_at": func.now()}))
 
     def touch(self, conversation_id: uuid.UUID) -> None:
         """Marca actividad: `last_message_at` en la conversación y `updated_at` en su contexto."""
