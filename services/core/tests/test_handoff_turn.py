@@ -4,6 +4,7 @@ import json
 import uuid
 
 import pytest
+from catalog_stub import stub_call
 from sqlalchemy import create_engine, text
 
 from app.handoff import FRUSTRATION_REPLY, FRUSTRATION_STREAK
@@ -22,7 +23,7 @@ OFF_TOPIC = "¿Cómo va el clima hoy?"
 
 class StubCatalog:
     async def call(self, tool, arguments=None):
-        return {"properties": [{"title": "Casa de prueba"}]}
+        return stub_call(tool, arguments)
 
 
 class Chat:

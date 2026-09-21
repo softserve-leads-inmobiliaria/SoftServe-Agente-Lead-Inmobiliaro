@@ -13,6 +13,7 @@ import re
 import uuid
 
 import pytest
+from catalog_stub import stub_call
 from sqlalchemy import text
 
 from app.fakes.fake_llm import INTENTS
@@ -138,7 +139,7 @@ class Conversation:
 
 class StubCatalog:
     async def call(self, tool, arguments=None):
-        return {"properties": [{"title": "Casa de prueba"}]}
+        return stub_call(tool, arguments)
 
 
 @pytest.mark.parametrize("edge", sorted(TRANSITIONS), ids=lambda e: f"{e[0]}--{e[1]}")

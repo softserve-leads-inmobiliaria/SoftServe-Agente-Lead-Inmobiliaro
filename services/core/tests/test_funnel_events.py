@@ -4,6 +4,7 @@ import json
 import uuid
 
 import pytest
+from catalog_stub import stub_call
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
@@ -29,7 +30,7 @@ FUNNEL_QUERY = """
 
 class StubCatalog:
     async def call(self, tool, arguments=None):
-        return {"properties": [{"title": "Casa de prueba"}]}
+        return stub_call(tool, arguments)
 
 
 class Chat:

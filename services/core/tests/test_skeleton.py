@@ -3,6 +3,7 @@ import asyncio
 import json
 
 import pytest
+from catalog_stub import PROPERTY, stub_call
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator, FormatChecker
 
@@ -22,13 +23,15 @@ INBOUND = json.loads((ROOT / "contracts" / "examples" / "event.valid.json").read
 class StubCatalog:
     def __init__(self, properties=None, error=None):
         self.calls = []
-        self._properties = properties if properties is not None else [{"title": "Casa de prueba"}]
+        self._properties = properties if properties is not None else [dict(PROPERTY)]
         self._error = error
 
     async def call(self, tool, arguments=None):
         self.calls.append((tool, arguments))
         if self._error:
             raise self._error
+        if tool == "get_availability":
+            return stub_call(tool, arguments)
         return {"properties": self._properties}
 
 

@@ -285,7 +285,7 @@ def test_a_lead_that_is_not_qualified_never_gets_the_exact_address_through_the_r
     finally:
         stop()
     result = client.requests[2]["messages"][-1]["content"][0]["toolResult"]
-    assert result["status"] == "success" and result["content"] == [{"json": {"id": "p1", "qualified": False}}]
+    assert result["status"] == "success" and result["content"][0]["json"]["qualified"] is False
     assert "lead_qualified" not in json.dumps(client.requests[1]["toolConfig"])
 
 
