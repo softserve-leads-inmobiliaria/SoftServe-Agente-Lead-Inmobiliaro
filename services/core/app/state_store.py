@@ -7,14 +7,14 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.scoring import Score
-from db.models import AuditLog, Conversation, FsmContext, FunnelEvent, Lead, LeadScore
+from db.models import AuditLog, Conversation, FsmContext, FunnelEvent, Lead, LeadScore, Message
 
 
 def funnel_event_type(fsm_state: str) -> str:
@@ -58,6 +58,8 @@ class GuardContext:
     out_of_domain_count: int
     fsm_state: str
     unresolved_streak: int
+    lead_qualified: bool = False
+    history: tuple[tuple[str, str], ...] = ()  # (rol, contenido) de los últimos mensajes, del más viejo al más nuevo
 
 
 class StateStore:
@@ -131,7 +133,8 @@ class StateStore:
                               .on_conflict_do_update(index_elements=[LeadScore.lead_id],
                                                      set_=values | {"updated_at": func.now()}))
 
-    def guard_context(self, conversation_id: uuid.UUID, lead_id: uuid.UUID) -> GuardContext:
+    def guard_context(self, conversation_id: uuid.UUID, lead_id: uuid.UUID,
+                      history_limit: int = 20) -> GuardContext:
         """Consentimiento del lead y cuántos mensajes fuera de dominio lleva la conversación."""
         consent = self._session.execute(select(Lead.consent_status).where(Lead.id == lead_id)).scalar()
         out_of_domain = self._session.execute(
@@ -139,12 +142,30 @@ class StateStore:
             .where(AuditLog.action == "input.out_of_domain",
                    AuditLog.payload["conversation_id"].astext == str(conversation_id))).scalar()
         state = self._session.execute(
-            select(Conversation.fsm_state, FsmContext.unresolved_streak)
+            select(Conversation.fsm_state, FsmContext.unresolved_streak, FsmContext.lead_qualified)
             .join(FsmContext, FsmContext.conversation_id == Conversation.id)
             .where(Conversation.id == conversation_id)).one_or_none()
         return GuardContext(consent_status=consent or "pending", out_of_domain_count=out_of_domain or 0,
                             fsm_state=state.fsm_state if state else "GREETING",
-                            unresolved_streak=state.unresolved_streak if state else 0)
+                            unresolved_streak=state.unresolved_streak if state else 0,
+                            lead_qualified=state.lead_qualified if state else False,
+                            history=self.history(conversation_id, history_limit))
+
+    def history(self, conversation_id: uuid.UUID, limit: int) -> tuple[tuple[str, str], ...]:
+        """Los últimos `limit` mensajes de la conversación (solo lead y asistente), en orden cronológico."""
+        rows = self._session.execute(
+            select(Message.role, Message.content)
+            .where(Message.conversation_id == conversation_id, Message.role.in_(("user", "assistant")))
+            .order_by(Message.created_at.desc(), Message.id.desc()).limit(limit)).all()
+        return tuple((row.role, row.content) for row in reversed(rows))
+
+    def add_messages(self, conversation_id: uuid.UUID,
+                     messages: Sequence[tuple[str, str, list[dict[str, Any]] | None]]) -> None:
+        """Guarda los mensajes del turno. `clock_timestamp()` da una marca distinta a cada fila aunque
+        vayan en la misma transacción, así el orden se conserva."""
+        for role, content, tool_calls in messages:
+            self._session.add(Message(conversation_id=conversation_id, role=role, content=content,
+                                      tool_calls=tool_calls or None, created_at=func.clock_timestamp()))
 
     def withdraw_consent(self, lead_id: uuid.UUID) -> None:
         self._session.execute(update(Lead).where(Lead.id == lead_id)

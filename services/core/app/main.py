@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException
 
 from app import tracing
 from app.catalog_client import CatalogClient
+from app.llm_config import build_agent
 from app.turn import process_turn
 from db.session import get_engine
 
@@ -15,6 +16,7 @@ logger = logging.getLogger("core")
 tracing.configure()  # sin OTEL_EXPORTER_OTLP_ENDPOINT queda apagado
 app = FastAPI(title="core (fake)")
 catalog = CatalogClient()
+agent = build_agent()  # LLM_PROVIDER=fake (por defecto) o bedrock; una config inválida falla al arrancar
 
 
 @app.get("/health")
@@ -25,7 +27,7 @@ def health() -> dict[str, str]:
 @app.post("/events")
 async def post_event(event: dict[str, Any]) -> dict[str, Any]:
     try:
-        return await process_turn(get_engine(), event, catalog)
+        return await process_turn(get_engine(), event, catalog, agent)
     except ValueError as exc:  # evento incompleto o no inbound
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:

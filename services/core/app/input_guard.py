@@ -15,6 +15,8 @@ import unicodedata
 from dataclasses import dataclass
 
 REDACTED = "[dato omitido]"
+# Lo que se guarda y se le da al LLM cuando de un mensaje no queda nada utilizable (solo PII o categoría protegida).
+OMITTED_MESSAGE = "[mensaje omitido]"
 
 OPT_OUT_REPLY = "Listo, registramos tu baja: no te enviaremos más mensajes."
 WITHDRAWN_REPLY = "Tu baja ya está registrada y no te escribiremos más."
@@ -83,6 +85,10 @@ _PROTECTED = _any((
     r"\b(?:tengo hijos|mis hijos)\b",
 ))
 
+# Lo que puede quedar de un mensaje al quitar una mención protegida ("Soy ___") sin aportar contenido.
+_FILLER_WORDS = frozenset({"soy", "estoy", "somos", "estamos", "tengo", "tenemos", "y", "e", "es", "mi", "que", "con",
+                           "pero", "de", "un", "una", "el", "la"})
+
 # --- PII no solicitada --------------------------------------------------------------------------
 _CARD = re.compile(r"(?<!\d)(?:\d[ -]?){12,18}\d(?!\d)")
 _CURP = re.compile(r"\b[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d\b", re.IGNORECASE)
@@ -107,8 +113,8 @@ class InputVerdict:
     """Lo que el guardrail encontró en un mensaje. Sin valores sensibles: solo tipos y banderas."""
 
     clean_text: str
-    # Texto del que se extrae la señal del score: sin PII y sin los fragmentos de categoría
-    # protegida, para que mencionarla no cambie el score (ni para bien ni para mal).
+    # Lo único que ven el LLM y el historial: sin PII y sin los fragmentos de categoría protegida
+    # (conserva mayúsculas y acentos). Así mencionarla no cambia el score ni orienta las respuestas.
     signal_text: str = ""
     opt_out: bool = False
     jailbreak: bool = False
@@ -159,6 +165,31 @@ def _redact_pii(text: str) -> tuple[str, tuple[str, ...]]:
     return text, tuple(dict.fromkeys(found))
 
 
+def strip_protected(text: str) -> str:
+    """Quita del texto los fragmentos de categoría protegida sin perder mayúsculas ni acentos.
+
+    Las reglas trabajan sobre el texto normalizado (minúsculas, sin acentos); aquí se recuerda a qué
+    posición del original corresponde cada carácter normalizado para poder recortar el original.
+    """
+    normalized: list[str] = []
+    origin: list[int] = []
+    for index, char in enumerate(text):
+        for base in unicodedata.normalize("NFD", char.lower()):
+            if unicodedata.category(base) != "Mn":
+                normalized.append(base)
+                origin.append(index)
+    keep = [True] * len(text)
+    for match in _PROTECTED.finditer("".join(normalized)):
+        for position in range(match.start(), match.end()):
+            keep[origin[position]] = False
+    if all(keep):
+        return text
+    stripped = re.sub(r"\s{2,}", " ", "".join(c for c, kept in zip(text, keep, strict=True) if kept)).strip()
+    words = re.findall(r"\w+", stripped.lower())
+    # Si al quitar la mención solo queda relleno ("Soy", "Tengo y"), no queda nada utilizable.
+    return "" if all(word in _FILLER_WORDS for word in words) else stripped
+
+
 def is_opt_out(text: str) -> bool:
     normalized = normalize(text)
     return bool(_STOP_COMMAND.search(normalized) or _STOP_PHRASES.search(normalized))
@@ -173,7 +204,7 @@ def inspect_input(text: str) -> InputVerdict:
     domain = bool(_REAL_ESTATE.search(normalized))
     return InputVerdict(
         clean_text=clean,
-        signal_text=_PROTECTED.sub(" ", normalized),
+        signal_text=strip_protected(clean),
         jailbreak=bool(_JAILBREAK.search(normalized)),
         pii=pii,
         out_of_domain=bool(_FORMAL_ADVICE.search(normalized)) or (not domain and bool(_OFF_TOPIC.search(normalized))),
