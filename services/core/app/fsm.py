@@ -67,15 +67,21 @@ _ADVANCE: Final[dict[str, tuple[str, str | None]]] = {
 }
 
 
-def trigger_for(state: str, intent: str) -> str | None:
+# Intenciones que un agente de ventas no atiende: las ve una persona (A-13).
+HUMAN_INTENTS: Final = frozenset({"solicitud_humano", "fuera_de_alcance"})
+
+
+def trigger_for(state: str, intent: str, frustrated: bool = False) -> str | None:
     """Trigger que provoca el mensaje de un lead en `state`, o None si no mueve la FSM.
 
-    La intención `otro` (cajón de sastre) nunca dispara `HUMAN_REQUESTED`: revisar el criterio de
-    A-2/A-13 antes de darle ese efecto.
+    `HUMAN_HANDOFF` se alcanza por tres caminos: petición explícita, intención fuera de alcance y
+    una racha de turnos sin resolver (`frustrated`, ver `app/handoff.py`). La intención `otro`
+    (cajón de sastre) por sí sola nunca lo dispara: un mensaje que el clasificador no entendió es
+    ruido, no una petición; solo cuenta cuando se repite.
     """
     if state in TERMINAL_STATES:
         return None
-    if intent == "solicitud_humano":
+    if intent in HUMAN_INTENTS or frustrated:
         return HUMAN_REQUESTED
     if state == "NURTURE":
         return LEAD_RETURNED

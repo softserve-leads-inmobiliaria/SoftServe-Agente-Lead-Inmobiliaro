@@ -387,3 +387,35 @@ reales; los falsos positivos se cubren en `services/core/tests/test_input_guard.
 reingreso hasta que `B-2` defina el consentimiento. `decision_maker` sigue distinguiendo `pareja` y
 `familia` en el contrato: su revisión frente a fair housing sigue en `A-11`/`C-6`.
 
+
+
+## DT-16 — Traspaso a un humano: tres caminos y el criterio del cajón de sastre
+
+**Estado:** aceptada
+
+**Contexto.** `HUMAN_HANDOFF` debe ser alcanzable desde cualquier estado (`design.md` §2). `A-13` pide
+tres caminos y que se revise, contra el criterio anotado en `A-2`, si la intención `otro` (cajón de
+sastre del clasificador) es segura para disparar esa transición.
+
+**Decisión.**
+- **Petición explícita:** intención `solicitud_humano` (incluye "supervisor", "gerente", "hablar con una persona").
+- **Fuera de alcance:** intención nueva `fuera_de_alcance` (quejas, reclamos, contratos o depósitos ya
+  existentes): lo atiende una persona. Es distinta del fuera de dominio del guardrail de entrada
+  (`A-8`, DT-15), que declina con una respuesta acotada y solo ofrece un asesor.
+- **Frustración (proxy):** 3 turnos seguidos con intención `otro` (`FRUSTRATION_STREAK`). Se guarda en
+  `fsm_context.unresolved_streak` (migración `0002`), se reinicia al resolverse un turno y tras el
+  traspaso. La respuesta de ese turno avisa al lead ("te comunico con un asesor").
+- **Cajón de sastre:** un `otro` suelto **no** dispara el traspaso: un "ok" o un "gracias" caen ahí y
+  darle efecto real sería un traspaso por ruido. Solo cuenta repetido. Los turnos que fuerza el guardrail
+  de entrada (*jailbreak*, fuera de dominio) **no suman ni reinician** la racha: nadie puede provocar un
+  traspaso con mensajes adversariales, ni evitarlo intercalándolos.
+- Los estados terminales no cuentan racha.
+
+**Alternativas.** Que `otro` dispare el traspaso directamente — descartada por lo anterior. Guardar la
+racha en `audit_log` o en la señal del score — descartada: mezcla responsabilidades. Contar mensajes
+repetidos en vez de `otro` — descartada: necesita el historial completo (`A-2`).
+
+**Consecuencias.** Con el clasificador falso, tres "ok" o "gracias" seguidos dejan un traspaso: es el
+riesgo de usar `otro` como proxy y `A-2` debe revisarlo con el clasificador real y su taxonomía. La
+respuesta de aviso se decide con la racha leída antes de la transacción; si dos mensajes de la misma
+conversación llegan a la vez, el texto puede no coincidir con el estado (el estado siempre es el correcto).

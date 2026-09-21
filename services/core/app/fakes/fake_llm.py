@@ -13,6 +13,7 @@ import unicodedata
 # real (p. ej. un traspaso a humano) sin revisarlo antes — ver criterio de A-2/A-13.
 INTENTS = (
     "solicitud_humano",
+    "fuera_de_alcance",
     "agendar_visita",
     "consulta_precio",
     "busqueda_propiedad",
@@ -22,7 +23,14 @@ INTENTS = (
 
 # El orden importa: gana la primera categoría cuya palabra clave aparece en el mensaje.
 _KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("solicitud_humano", ("asesor", "humano", "persona real", "hablar con alguien")),
+    ("solicitud_humano", (
+        "asesor", "humano", "persona real", "hablar con alguien", "hablar con una persona",
+        "supervisor", "gerente",
+    )),
+    # Lo que un agente de ventas no atiende (cuentas, contratos vigentes, quejas): lo ve una persona.
+    ("fuera_de_alcance", (
+        "queja", "reclamo", "reclamacion", "ya soy cliente", "mi contrato", "mi deposito",
+    )),
     ("agendar_visita", ("visita", "agendar", "cita")),
     ("consulta_precio", ("precio", "cuesta", "costo", "cuanto")),
     ("busqueda_propiedad", (
@@ -33,6 +41,7 @@ _KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
 
 REPLIES: dict[str, str] = {
     "solicitud_humano": "Claro, te comunico con un asesor de nuestro equipo.",
+    "fuera_de_alcance": "Eso lo atiende directamente nuestro equipo: te comunico con un asesor.",
     "agendar_visita": "Con gusto coordinamos una visita. ¿Qué día te acomoda?",
     "consulta_precio": "Con gusto reviso el precio de esa propiedad y te lo comparto.",
     "busqueda_propiedad": "Cuéntame más: ¿en qué zona buscas y cuántas recámaras necesitas?",

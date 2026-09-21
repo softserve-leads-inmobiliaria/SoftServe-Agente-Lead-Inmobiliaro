@@ -30,6 +30,7 @@ class ConversationState:
     last_tool_results: dict[str, Any]
     score_signal: dict[str, Any]
     score: dict[str, Any] | None
+    unresolved_streak: int = 0  # interno (A-13): no forma parte del contrato FsmState
 
     def to_contract(self) -> dict[str, Any]:
         """El estado tal como lo describe el contrato FsmState (CT-3)."""
@@ -50,6 +51,8 @@ class GuardContext:
 
     consent_status: str
     out_of_domain_count: int
+    fsm_state: str
+    unresolved_streak: int
 
 
 class StateStore:
@@ -81,6 +84,7 @@ class StateStore:
             fsm_state=conversation.fsm_state,
             lead_qualified=context.lead_qualified,
             last_tool_results=context.last_tool_results,
+            unresolved_streak=context.unresolved_streak,
             score_signal=context.score_signal,
             score=None if score is None else {
                 "lead_id": str(score.lead_id), "need_fit": score.need_fit, "budget": score.budget,
@@ -89,6 +93,10 @@ class StateStore:
                 "reasons": list(score.reasons),
             },
         )
+
+    def save_streak(self, conversation_id: uuid.UUID, streak: int) -> None:
+        self._session.execute(update(FsmContext).where(FsmContext.conversation_id == conversation_id)
+                              .values(unresolved_streak=streak))
 
     def save_state(self, conversation_id: uuid.UUID, fsm_state: str) -> None:
         self._session.execute(update(Conversation).where(Conversation.id == conversation_id)
@@ -113,7 +121,13 @@ class StateStore:
             select(func.count()).select_from(AuditLog)
             .where(AuditLog.action == "input.out_of_domain",
                    AuditLog.payload["conversation_id"].astext == str(conversation_id))).scalar()
-        return GuardContext(consent_status=consent or "pending", out_of_domain_count=out_of_domain or 0)
+        state = self._session.execute(
+            select(Conversation.fsm_state, FsmContext.unresolved_streak)
+            .join(FsmContext, FsmContext.conversation_id == Conversation.id)
+            .where(Conversation.id == conversation_id)).one_or_none()
+        return GuardContext(consent_status=consent or "pending", out_of_domain_count=out_of_domain or 0,
+                            fsm_state=state.fsm_state if state else "GREETING",
+                            unresolved_streak=state.unresolved_streak if state else 0)
 
     def withdraw_consent(self, lead_id: uuid.UUID) -> None:
         self._session.execute(update(Lead).where(Lead.id == lead_id)

@@ -14,7 +14,8 @@ from starlette.concurrency import run_in_threadpool
 
 from app.fakes.fake_core import FakeCore
 from app.fakes.fake_llm import FakeLLM
-from app.fsm import next_state, trigger_for
+from app.fsm import HUMAN_INTENTS, HUMAN_REQUESTED, TERMINAL_STATES, next_state, trigger_for
+from app.handoff import FRUSTRATION_REPLY, is_frustrated, next_streak
 from app.input_guard import (
     HANDOFF_OFFER,
     OPT_OUT_REPLY,
@@ -41,6 +42,7 @@ class Transition:
     after: str
     trigger: str | None
     score: Score
+    unresolved_streak: int = 0
 
 
 def _ids(event: Mapping[str, Any]) -> tuple[uuid.UUID, uuid.UUID]:
@@ -60,22 +62,32 @@ def read_guard_context(engine: Engine, event: Mapping[str, Any]) -> GuardContext
 
 
 def advance(engine: Engine, event: Mapping[str, Any], intent: str,
-            evidence: TurnEvidence | None = None, audits: Sequence[Audit] = ()) -> Transition:
-    """Carga y bloquea el estado, aplica el trigger, puntúa, audita y guarda, en una transacción."""
+            evidence: TurnEvidence | None = None, audits: Sequence[Audit] = (),
+            counts_as_unresolved: bool = True) -> Transition:
+    """Carga y bloquea el estado, aplica el trigger, puntúa, audita y guarda, en una transacción.
+
+    `counts_as_unresolved=False` para los turnos que fuerza el guardrail de entrada: no suman a la
+    racha de frustración.
+    """
     conversation_id, lead_id = _ids(event)
     with session_scope(engine) as session:
         store = StateStore(session)
         state = store.lock(conversation_id, lead_id)
-        trigger = trigger_for(state.fsm_state, intent)
+        streak = next_streak(state.unresolved_streak, intent, counts_as_unresolved)
+        trigger = trigger_for(state.fsm_state, intent, frustrated=is_frustrated(streak))
         after = next_state(state.fsm_state, trigger) if trigger else state.fsm_state
         if after != state.fsm_state:
             store.save_state(conversation_id, after)
+        if trigger == HUMAN_REQUESTED:
+            streak = 0  # la racha ya cumplió su función
+        store.save_streak(conversation_id, streak)
         evidence = evidence or TurnEvidence()
         signal, score = score_turn(state.score_signal, evidence)
         store.save_scoring(conversation_id, lead_id, signal, dict(evidence.tool_results), score)
         _write_audits(store, event, audits)
         store.touch(conversation_id)
-        return Transition(before=state.fsm_state, after=after, trigger=trigger, score=score)
+        return Transition(before=state.fsm_state, after=after, trigger=trigger, score=score,
+                          unresolved_streak=streak)
 
 
 def withdraw(engine: Engine, event: Mapping[str, Any], audits: Sequence[Audit]) -> None:
@@ -129,7 +141,11 @@ async def process_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalo
     outbound = dict(reply.outbound)
     if verdict.pii:
         outbound["text"] += " " + PII_REMINDER
+    counts = not (verdict.jailbreak or verdict.out_of_domain)
+    if (counts and context.fsm_state not in TERMINAL_STATES and reply.intent not in HUMAN_INTENTS
+            and is_frustrated(next_streak(context.unresolved_streak, reply.intent))):
+        outbound["text"] = FRUSTRATION_REPLY  # esta racha dispara el traspaso: se le avisa al lead
 
     evidence = TurnEvidence(raw_signal=_raw_signal(verdict), tool_results=reply.tool_results)
-    await run_in_threadpool(advance, engine, event, reply.intent, evidence, audits)
+    await run_in_threadpool(advance, engine, event, reply.intent, evidence, audits, counts)
     return outbound

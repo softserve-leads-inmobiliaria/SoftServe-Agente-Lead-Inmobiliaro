@@ -86,6 +86,7 @@ EXPECTED_FINAL_STATE = {
     "deep_link_y_visita": "HUMAN_HANDOFF",
     "flujo_completo_hasta_handoff": "HANDOFF",
     "lead_que_declara_todo": "QUALIFY",
+    "queja_a_humano": "HUMAN_HANDOFF",
 }
 
 
@@ -156,6 +157,28 @@ def test_stop_withdraws_consent_in_postgres(stack, database_url, tmp_path):
     finally:
         engine.dispose()
     assert (consent, audited, state) == ("withdrawn", 1, "DISCOVERY")
+
+
+def test_a_streak_of_unresolved_turns_hands_off_to_a_human(stack, database_url, tmp_path):
+    """A-13: tres turnos seguidos sin resolver dejan la conversación en HUMAN_HANDOFF."""
+    from sqlalchemy import create_engine, text
+
+    script = tmp_path / "frustracion.jsonl"
+    turns = ({"text": "Hola, buenas tardes", "expect_reply_contains": "asistente"},
+             {"text": "ok", "expect_reply_contains": "propiedad"},
+             {"text": "ok", "expect_reply_contains": "propiedad"},
+             {"text": "ok", "expect_reply_contains": "asesor"})
+    script.write_text("".join(json.dumps(turn) + chr(10) for turn in turns), encoding="utf-8")
+    replay(script, http_responder(stack))
+    conversation_id = build_events("frustracion", [{"text": "x"}])[0]["conversation_id"]
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            state = connection.execute(text("SELECT fsm_state FROM conversations WHERE id = :c"),
+                                       {"c": conversation_id}).scalar()
+    finally:
+        engine.dispose()
+    assert state == "HUMAN_HANDOFF"
 
 
 def test_every_fixture_has_a_declared_final_state():
