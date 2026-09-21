@@ -125,6 +125,16 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://phoenix:6006
       # Vacío = las trazas no llevan el texto de los mensajes. `1` solo para depurar en local.
       TRACE_CONTENT: ${TRACE_CONTENT:-}
+      # LLM (A-2, DT-6): `fake` no necesita credenciales; `bedrock` usa el LLM real.
+      LLM_PROVIDER: ${LLM_PROVIDER:-fake}
+      BEDROCK_REGION: ${BEDROCK_REGION:-us-east-1}
+      BEDROCK_MODEL_ID_CHAT: ${BEDROCK_MODEL_ID_CHAT:-}
+      BEDROCK_MODEL_ID_CLASSIFIER: ${BEDROCK_MODEL_ID_CLASSIFIER:-}
+      LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-10}
+      LLM_MAX_QUEUE_WAIT_SECONDS: ${LLM_MAX_QUEUE_WAIT_SECONDS:-15}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
     ports:
       - "${CORE_PORT:-8000}:8000"
     depends_on:

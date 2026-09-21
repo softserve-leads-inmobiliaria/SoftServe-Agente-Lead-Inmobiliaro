@@ -5,6 +5,7 @@ devuelve dicts que cumplen `contracts/event.schema.json`, para que `core` nunca 
 """
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Mapping
@@ -26,6 +27,25 @@ def parse_deep_link(payload: str | None) -> dict[str, str]:
         if payload.startswith(prefix) and len(payload) > len(prefix):
             return {field: payload if field == "property_id" else payload[len(prefix):]}
     return {}
+
+
+_COMMAND_SUFFIX = re.compile(r"^(/\w+)@\w+")
+_START = re.compile(r"^/start(?:\s+(\S+))?\s*$")
+
+
+def split_command(text: str) -> tuple[str, str | None]:
+    """Lo que el lead escribió, sin la parte de protocolo de Telegram: `(texto, deep_link)`.
+
+    - `/start prop_00231` -> ("", "prop_00231"): el comando no es un mensaje del lead; el texto vacío
+      se trata como un saludo, no como un mensaje raro.
+    - `/stop@mi_bot` (así llegan los comandos en grupos) -> "/stop".
+    - Cualquier otro texto, comandos incluidos, pasa tal cual: el core decide qué hacer con él.
+    """
+    text = _COMMAND_SUFFIX.sub(lambda match: match.group(1), text.strip())
+    start = _START.match(text)
+    if start:
+        return "", start.group(1)
+    return text, None
 
 
 def to_canonical(

@@ -13,12 +13,14 @@ from typing import Any, Mapping, Sequence
 from sqlalchemy import Engine
 from starlette.concurrency import run_in_threadpool
 
+from app.agent import Agent, AgentResult, FakeAgent, TurnInput
 from app.fakes.fake_core import FakeCore
 from app.fakes.fake_llm import FakeLLM
 from app.fsm import HUMAN_INTENTS, HUMAN_REQUESTED, TERMINAL_STATES, next_state, trigger_for
 from app.handoff import FRUSTRATION_REPLY, is_frustrated, next_streak
 from app.input_guard import (
     HANDOFF_OFFER,
+    OMITTED_MESSAGE,
     OPT_OUT_REPLY,
     OUT_OF_DOMAIN_OFFER_AFTER,
     OUT_OF_DOMAIN_REPLY,
@@ -33,10 +35,12 @@ from app.scoring import Score
 from app.skeleton import Catalog, respond
 from app.state_store import GuardContext, StateStore
 from app.tracing import SPAN_KIND, get_tracer
-from app.transcript import record_turn
 from db.session import session_scope
 
 Audit = tuple[str, Mapping[str, Any]]
+SavedMessage = tuple[str, str, list[dict[str, Any]] | None]  # (rol, contenido, tools usadas)
+
+DEFAULT_AGENT = FakeAgent()
 
 
 @dataclass(frozen=True)
@@ -76,13 +80,14 @@ def read_guard_context(engine: Engine, event: Mapping[str, Any]) -> GuardContext
 
 def advance(engine: Engine, event: Mapping[str, Any], intent: str,
             evidence: TurnEvidence | None = None, audits: Sequence[Audit] = (),
-            counts_as_unresolved: bool = True, inbound_text: str = "",
-            outbound_text: str = "") -> Transition:
+            counts_as_unresolved: bool = True, messages: Sequence[SavedMessage] = ()) -> Transition:
     """Carga y bloquea el estado, aplica el trigger, puntúa, audita y guarda, en una transacción.
 
+    `messages` son los mensajes del turno (lead y asistente): van en la misma transacción, así el
+    historial nunca queda desfasado del estado.
+
     `counts_as_unresolved=False` para los turnos que fuerza el guardrail de entrada: no suman a la
-    racha de frustración. `inbound_text`/`outbound_text` son el texto ya saneado por el guardrail
-    (B-5): se guardan como transcripción en la misma transacción que el estado.
+    racha de frustración.
     """
     conversation_id, lead_id = _ids(event)
     with get_tracer().start_as_current_span("fsm.advance") as span, session_scope(engine) as session:
@@ -101,7 +106,7 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         signal, score = score_turn(state.score_signal, evidence)
         store.save_scoring(conversation_id, lead_id, signal, dict(evidence.tool_results), score)
         _write_audits(store, event, audits)
-        record_turn(session, conversation_id, inbound_text=inbound_text, outbound_text=outbound_text)
+        store.add_messages(conversation_id, messages)
         store.touch(conversation_id)
         transition = Transition(before=state.fsm_state, after=after, trigger=trigger, score=score,
                                 unresolved_streak=streak)
@@ -112,8 +117,7 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         return transition
 
 
-def withdraw(engine: Engine, event: Mapping[str, Any], audits: Sequence[Audit],
-             inbound_text: str = "", outbound_text: str = "") -> None:
+def withdraw(engine: Engine, event: Mapping[str, Any], audits: Sequence[Audit]) -> None:
     """Baja del lead (`/stop`): marca `consent_status=withdrawn` y lo audita. Sin FSM ni score."""
     conversation_id, lead_id = _ids(event)
     with session_scope(engine) as session:
@@ -121,7 +125,6 @@ def withdraw(engine: Engine, event: Mapping[str, Any], audits: Sequence[Audit],
         store.lock(conversation_id, lead_id)
         store.withdraw_consent(lead_id)
         _write_audits(store, event, audits)
-        record_turn(session, conversation_id, inbound_text=inbound_text, outbound_text=outbound_text)
         store.touch(conversation_id)
 
 
@@ -131,16 +134,27 @@ def _out_of_domain_reply(context: GuardContext) -> str:
     return OUT_OF_DOMAIN_REPLY + (HANDOFF_OFFER if insisting else "")
 
 
-def _raw_signal(verdict: InputVerdict) -> dict[str, Any]:
+def _raw_signal(verdict: InputVerdict, from_agent: Mapping[str, Any]) -> dict[str, Any]:
     if verdict.jailbreak:
         return {}  # un mensaje adversarial no aporta señal al score
-    raw = FakeLLM().extract_signal(verdict.signal_text)
-    if REDACTED in (raw["budget_hint"] or ""):
+    raw = dict(from_agent)
+    if REDACTED in str(raw.get("budget_hint") or ""):
         raw["budget_hint"] = None  # un dato sensible omitido no es un presupuesto
     return raw
 
 
-async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, span: Any) -> dict[str, Any]:
+def _lead_message(verdict: InputVerdict, original: str) -> list[SavedMessage]:
+    """El mensaje del lead tal como se guarda: nunca el original. Sin PII ni categorías protegidas, y un
+    intento de *jailbreak* no se guarda para que no vuelva al LLM como historial."""
+    if not original.strip():
+        return []  # p. ej. un deep-link sin texto
+    if verdict.jailbreak or not verdict.signal_text.strip():
+        return [("user", OMITTED_MESSAGE, None)]
+    return [("user", verdict.signal_text, None)]
+
+
+async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, span: Any,
+                    agent: Agent) -> dict[str, Any]:
     FakeCore().validate(event)  # evento incompleto o no inbound -> ValueError (422)
     with get_tracer().start_as_current_span("guardrail.input") as guard:
         verdict = inspect_input(event["text"])
@@ -155,7 +169,7 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     # /stop: determinista, sin LLM. Un lead ya dado de baja tampoco recibe más flujo.
     if verdict.opt_out:
         span.set_attribute("turn.outcome", "opt_out")
-        await run_in_threadpool(withdraw, engine, event, audits, verdict.clean_text, OPT_OUT_REPLY)
+        await run_in_threadpool(withdraw, engine, event, audits)
         return (await respond(event, catalog, intent="otro", text=OPT_OUT_REPLY)).outbound
     if context.consent_status == "withdrawn":
         span.set_attribute("turn.outcome", "withdrawn")
@@ -163,33 +177,36 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
 
     span.set_attribute("turn.outcome", "out_of_domain" if verdict.out_of_domain
                        else "jailbreak" if verdict.jailbreak else "normal")
-    clean_event = {**event, "text": verdict.clean_text}
     if verdict.out_of_domain:
-        reply = await respond(clean_event, catalog, intent="otro", text=_out_of_domain_reply(context))
+        result = AgentResult(text=_out_of_domain_reply(context), intent="otro")
     elif verdict.jailbreak:
-        # Se contesta como una pregunta de dominio cualquiera: no se refleja la instrucción ni
-        # dispara efectos (traspaso a humano, búsquedas).
-        reply = await respond(clean_event, catalog, intent="otro")
+        # Se contesta como una pregunta de dominio cualquiera: no se refleja la instrucción, no se
+        # llama al LLM y no dispara efectos (traspaso a humano, búsquedas).
+        result = AgentResult(text=FakeLLM().generate_reply("otro"), intent="otro")
     else:
-        reply = await respond(clean_event, catalog)
-    outbound = dict(reply.outbound)
+        # El agente solo ve el texto filtrado y el historial que guardó este mismo servicio.
+        text = verdict.signal_text if verdict.signal_text.strip() or not event["text"].strip() else OMITTED_MESSAGE
+        result = await agent.run(TurnInput(event=event, text=text, history=context.history,
+                                           lead_qualified=context.lead_qualified), catalog)
+    outbound = FakeCore().handle_event(event, intent=result.intent, text=result.text)
     if verdict.pii:
         outbound["text"] += " " + PII_REMINDER
     counts = not (verdict.jailbreak or verdict.out_of_domain)
-    if (counts and context.fsm_state not in TERMINAL_STATES and reply.intent not in HUMAN_INTENTS
-            and is_frustrated(next_streak(context.unresolved_streak, reply.intent))):
+    if (counts and context.fsm_state not in TERMINAL_STATES and result.intent not in HUMAN_INTENTS
+            and is_frustrated(next_streak(context.unresolved_streak, result.intent))):
         outbound["text"] = FRUSTRATION_REPLY  # esta racha dispara el traspaso: se le avisa al lead
 
-    evidence = TurnEvidence(raw_signal=_raw_signal(verdict), tool_results=reply.tool_results)
-    span.set_attribute("turn.intent", reply.intent)
-    span.set_attribute("turn.tools", sorted(reply.tool_results))
-    transition = await run_in_threadpool(advance, engine, event, reply.intent, evidence, audits,
-                                         counts, verdict.clean_text, outbound["text"])
+    evidence = TurnEvidence(raw_signal=_raw_signal(verdict, result.raw_signal), tool_results=result.tool_results)
+    span.set_attributes({"turn.intent": result.intent, "turn.tools": sorted(result.tool_results),
+                         "turn.agent": agent.name, "turn.llm_error": result.llm_error or ""})
+    saved = [*_lead_message(verdict, event["text"]), ("assistant", outbound["text"], result.tool_calls or None)]
+    transition = await run_in_threadpool(advance, engine, event, result.intent, evidence, audits, counts, saved)
     _describe(span, transition)
     return outbound
 
 
-async def process_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog) -> dict[str, Any]:
+async def process_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog,
+                       agent: Agent | None = None) -> dict[str, Any]:
     """Un turno completo dentro de un span `turn`. El span no lleva el texto del mensaje."""
     with get_tracer().start_as_current_span("turn") as span:
         span.set_attributes({
@@ -199,6 +216,6 @@ async def process_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalo
         })
         started = time.perf_counter()
         try:
-            return await _run_turn(engine, event, catalog, span)
+            return await _run_turn(engine, event, catalog, span, agent or DEFAULT_AGENT)
         finally:
             span.set_attribute("turn.latency_ms", round((time.perf_counter() - started) * 1000, 1))
