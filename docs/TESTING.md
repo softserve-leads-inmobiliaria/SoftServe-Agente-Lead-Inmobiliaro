@@ -84,6 +84,26 @@ test `test_migrations_and_models_do_not_drift` falla si los modelos y las migrac
 Cada suite se corre por separado (los servicios comparten el nombre de paquete `app`); el CI
 hace lo mismo en `.github/workflows/ci.yml`.
 
+### Suite de transiciones de la FSM
+
+`services/core/tests/test_fsm_edges.py` (necesita Postgres, como el resto de `core`) protege la FSM
+contra la divergencia:
+
+```
+python -m pytest services/core/tests/test_fsm_edges.py
+```
+
+- **Diagrama, contrato y código.** Lee el diagrama de `docs/DESIGN/design.md` §2 y el enum de
+  `contracts/fsm_state.schema.json` y exige que coincidan con `services/core/app/fsm.py`. La única
+  arista del código que el diagrama no dibuja es `NURTURE -> HUMAN_HANDOFF`, documentada en DT-12.
+- **Una arista, un test.** Cada arista de `TRANSITIONS` se prueba con un mensaje real del lead (o con el
+  trigger del *scheduler*) sobre Postgres. Si se añade una arista sin su prueba, la suite falla.
+- **Rejilla estado x intención.** Todas las combinaciones, con el resultado esperado escrito a mano:
+  también prueba lo que **no** debe moverse.
+
+Al cambiar la FSM hay que tocar los tres sitios a la vez: el diagrama, `fsm.py` y `EDGE_MESSAGES` en
+este archivo.
+
 ## Caveats de Docker conocidos
 
 Se agregan aquí apenas se descubren.
