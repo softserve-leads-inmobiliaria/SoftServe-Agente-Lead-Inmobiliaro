@@ -128,9 +128,9 @@ def test_start_with_a_deep_link_sends_the_property_and_an_empty_text(engine, mon
     seen = []
     real = telegram.process_turn
 
-    async def spy(engine_, event, catalog_, agent_=None):
+    async def spy(engine_, event, catalog_, agent_=None, on_qualified=None):
         seen.append(dict(event))
-        return await real(engine_, event, catalog_, agent_)
+        return await real(engine_, event, catalog_, agent_, on_qualified)
 
     monkeypatch.setattr(telegram, "process_turn", spy)
     dispatch(engine, "/start prop_00231", user_id=914)

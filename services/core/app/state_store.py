@@ -167,6 +167,21 @@ class StateStore:
             self._session.add(Message(conversation_id=conversation_id, role=role, content=content,
                                       tool_calls=tool_calls or None, created_at=func.clock_timestamp()))
 
+    def qualify(self, conversation_id: uuid.UUID, lead_id: uuid.UUID) -> bool:
+        """Marca al lead como calificado (`status=mql`, `lead_qualified=true`) una sola vez (B-7).
+
+        La guarda de idempotencia es la propia fila: `WHERE status = 'nuevo'` hace que el segundo
+        turno que cruce la banda no devuelva nada, y por lo tanto no vuelva a notificar al asesor.
+        """
+        claimed = self._session.execute(
+            update(Lead).where(Lead.id == lead_id, Lead.status == "nuevo")
+            .values(status="mql", updated_at=func.now()).returning(Lead.id)).scalar()
+        if claimed is None:
+            return False
+        self._session.execute(update(FsmContext).where(FsmContext.conversation_id == conversation_id)
+                              .values(lead_qualified=True))
+        return True
+
     def set_zone_if_unknown(self, lead_id: uuid.UUID, zone: str) -> None:
         """Completa `Lead.zone` la primera vez que se sabe, y no la pisa después (#81).
 

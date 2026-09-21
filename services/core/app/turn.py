@@ -5,10 +5,11 @@ auditar en una sola transacción (A-1, A-9).
 """
 from __future__ import annotations
 
+import logging
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any, Awaitable, Callable, Mapping, Sequence
 
 from sqlalchemy import Engine
 from starlette.concurrency import run_in_threadpool
@@ -33,11 +34,14 @@ from app.input_guard import (
 )
 from app.interest import zone_of_interest
 from app.lead_scoring import TurnEvidence, score_turn
+from app.qualification import just_qualified
 from app.scoring import Score
 from app.skeleton import Catalog, respond
 from app.state_store import GuardContext, StateStore
 from app.tracing import SPAN_KIND, get_tracer
 from db.session import session_scope
+
+logger = logging.getLogger("core.turn")
 
 Audit = tuple[str, Mapping[str, Any]]
 SavedMessage = tuple[str, str, list[dict[str, Any]] | None]  # (rol, contenido, tools usadas)
@@ -52,6 +56,10 @@ class Transition:
     trigger: str | None
     score: Score
     unresolved_streak: int = 0
+    qualified: bool = False  # True solo en el turno en que el lead pasó a calificado (B-7)
+
+
+OnQualified = Callable[[Mapping[str, Any], "Transition"], Awaitable[None]]
 
 
 def _describe(span: Any, transition: "Transition") -> None:
@@ -110,11 +118,13 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         zone = zone_of_interest(evidence.tool_results)
         if zone:
             store.set_zone_if_unknown(lead_id, zone)
+        previous_band = state.score["band"] if state.score else None
+        qualified = just_qualified(previous_band, score.band) and store.qualify(conversation_id, lead_id)
         _write_audits(store, event, audits)
         store.add_messages(conversation_id, messages)
         store.touch(conversation_id)
         transition = Transition(before=state.fsm_state, after=after, trigger=trigger, score=score,
-                                unresolved_streak=streak)
+                                unresolved_streak=streak, qualified=qualified)
         _describe(span, transition)
         if trigger == HUMAN_REQUESTED:
             span.set_attribute("fsm.handoff_reason", intent if intent in HUMAN_INTENTS else "frustration")
@@ -159,7 +169,7 @@ def _lead_message(verdict: InputVerdict, original: str) -> list[SavedMessage]:
 
 
 async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, span: Any,
-                    agent: Agent) -> dict[str, Any]:
+                    agent: Agent, on_qualified: OnQualified | None = None) -> dict[str, Any]:
     FakeCore().validate(event)  # evento incompleto o no inbound -> ValueError (422)
     with get_tracer().start_as_current_span("guardrail.input") as guard:
         verdict = inspect_input(event["text"])
@@ -207,12 +217,23 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     saved = [*_lead_message(verdict, event["text"]), ("assistant", outbound["text"], result.tool_calls or None)]
     transition = await run_in_threadpool(advance, engine, event, result.intent, evidence, audits, counts, saved)
     _describe(span, transition)
+    span.set_attribute("lead.qualified_now", transition.qualified)
+    if transition.qualified and on_qualified is not None:
+        # Ya está commiteado (advance cerró su transacción). Lo que pase acá no puede tocar el turno.
+        try:
+            await on_qualified(event, transition)
+        except Exception:
+            logger.exception("fallo al notificar la calificación del lead")
     return outbound
 
 
 async def process_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog,
-                       agent: Agent | None = None) -> dict[str, Any]:
-    """Un turno completo dentro de un span `turn`. El span no lleva el texto del mensaje."""
+                       agent: Agent | None = None, on_qualified: OnQualified | None = None) -> dict[str, Any]:
+    """Un turno completo dentro de un span `turn`. El span no lleva el texto del mensaje.
+
+    `on_qualified` se invoca, después del commit, solo en el turno en que el lead pasa a calificado
+    (B-7). Lo pasa el canal; el `POST /events` del arnés no, así los E2E nunca notifican a nadie.
+    """
     with get_tracer().start_as_current_span("turn") as span:
         span.set_attributes({
             SPAN_KIND: "CHAIN", "conversation.id": str(event.get("conversation_id", "")),
@@ -221,6 +242,6 @@ async def process_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalo
         })
         started = time.perf_counter()
         try:
-            return await _run_turn(engine, event, catalog, span, agent or DEFAULT_AGENT)
+            return await _run_turn(engine, event, catalog, span, agent or DEFAULT_AGENT, on_qualified)
         finally:
             span.set_attribute("turn.latency_ms", round((time.perf_counter() - started) * 1000, 1))
