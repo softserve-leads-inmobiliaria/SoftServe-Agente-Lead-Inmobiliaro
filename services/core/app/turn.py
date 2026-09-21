@@ -31,6 +31,7 @@ from app.input_guard import (
     InputVerdict,
     inspect_input,
 )
+from app.interest import zone_of_interest
 from app.lead_scoring import TurnEvidence, score_turn
 from app.scoring import Score
 from app.skeleton import Catalog, respond
@@ -106,6 +107,9 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         evidence = evidence or TurnEvidence()
         signal, score = score_turn(state.score_signal, evidence)
         store.save_scoring(conversation_id, lead_id, signal, dict(evidence.tool_results), score)
+        zone = zone_of_interest(evidence.tool_results)
+        if zone:
+            store.set_zone_if_unknown(lead_id, zone)
         _write_audits(store, event, audits)
         store.add_messages(conversation_id, messages)
         store.touch(conversation_id)
