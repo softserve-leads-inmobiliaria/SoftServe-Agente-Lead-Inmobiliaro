@@ -550,3 +550,50 @@ descartada: el dato sensible quedaría en la base.
 - El límite es por proceso: con varios *workers* sería N veces mayor. El compose corre uno.
 - El historial guardado no incluye las menciones protegidas ni la PII de los leads: es deliberado y no se
   puede reconstruir el mensaje original desde la base.
+
+
+## DT-20 — Canal de Telegram: bot embebido en `core`, identidad por `ON CONFLICT`, opt-out antes del LLM
+
+**Estado:** aceptada
+
+**Contexto.** `B-1..B-4` construyen el primer canal real (Telegram, `docs/ESTRUCTURA-DEL-PROYECTO.md`
+línea 38: el canal vive dentro de `core`, no es un microservicio nuevo). Tres decisiones de diseño no
+estaban escritas en ningún lado y afectan cómo cualquier canal futuro se integraría.
+
+**Decisión.**
+- **Ciclo de vida del bot:** `python-telegram-bot` (`Application`) arranca dentro del `lifespan` de
+  FastAPI con `updater.start_polling()`, nunca `run_polling()` (que tomaría el control del *event loop*
+  del servidor). Sin `TELEGRAM_BOT_TOKEN` el bot no arranca y `core` solo atiende `POST /events`: así
+  CI, tests y el arnés E2E siguen funcionando sin credenciales de Telegram (DT-4).
+- **Identidad del lead (`B-4`):** `telegram_user_id` resuelve al `Lead` real con
+  `INSERT ... ON CONFLICT DO NOTHING` sobre el índice único, no derivando un id determinista con `uuid5`
+  (que no evita una condición de carrera real). La unicidad la garantiza la base, no un supuesto del código.
+- **Reuso de conversación:** un lead reutiliza su conversación mientras su `fsm_state` no sea terminal
+  (`HANDOFF`/`HUMAN_HANDOFF`/`LOST`); al llegar a un estado terminal, el siguiente mensaje abre una
+  conversación nueva. La alternativa de una única conversación permanente por lead (determinista,
+  `uuid5(lead_id)`) se descartó: dejaría al lead sin forma de volver a hablar tras un estado terminal.
+- **Opt-out (`B-2`):** la detección de baja (`/stop`, "date de baja", etc.) es determinista y corre en
+  el canal, **antes** de construir el evento canónico — nunca pasa por `process_turn` ni por el LLM. La
+  baja marca `Lead.consent_status=withdrawn` y `status=closed_lost` en una sola actualización y deja
+  el mismo rastro de auditoría (`input.opt_out`) que la baja que detecta el guardrail del core. El
+  criterio es la unión del canal y de `app/input_guard.py` (A-8): pedir la baja de cualquiera de las dos
+  maneras la registra. La confirmación no promete borrar datos: solo registra la baja.
+- **Un solo manejador de texto, comandos incluidos:** el bot atiende todo mensaje de texto, también
+  `/stop`, que es la forma natural de pedir la baja; `/start <payload>` se traduce a texto vacío más el
+  *deep-link*, y `/comando@bot` (grupos) se normaliza. Las actualizaciones se procesan en concurrencia
+  para que un turno lento (p. ej. esperando cupo del LLM, DT-19) no bloquee a los demás leads, y si un
+  turno falla el lead recibe una respuesta genérica en vez de silencio.
+- **El agente lo elige `main`:** el bot recibe el mismo agente que `POST /events` (`LLM_PROVIDER`), así
+  Telegram no queda hablando con el fake cuando se configura Bedrock (DT-19). Los logs de `httpx` se
+  mantienen en WARNING porque la URL de la API de Telegram lleva el token.
+
+**Alternativas.** Un microservicio de canal aparte, hablándole a `core` por HTTP — descartada: contradice
+la estructura ya definida y agrega una llamada de red por turno sin necesidad, cuando el proceso ya
+comparte engine y catálogo. Detectar el opt-out con el LLM (clasificar la intención y luego actuar) —
+descartada: una baja de datos personales no puede depender de que un modelo la interprete bien.
+
+**Consecuencias.** Cualquier canal nuevo (WhatsApp, web chat) sigue el mismo patrón: un módulo en
+`app/channels/`, aislado de tipos externos, resolviendo identidad antes de construir el evento canónico.
+Verificado en vivo contra un bot real de @BotFather: aviso de privacidad en el primer turno, deep-link
+`?start=prop_<id>` resuelto, opt-out con `STOP`, y *long polling* confirmado por un `getUpdates` externo
+devolviendo `409 Conflict`.

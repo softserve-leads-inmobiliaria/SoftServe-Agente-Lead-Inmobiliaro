@@ -91,6 +91,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-leads}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-leads_dev_password}
       POSTGRES_DB: ${POSTGRES_DB:-leads}
+      # Sin token, el core levanta igual y solo atiende /events (B-1, DT-4).
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       # Trazas por turno hacia Phoenix (OBS-1, DT-9). Sin `depends_on` a propósito: si Phoenix está
       # caído las trazas se pierden, pero el bot sigue respondiendo.
       OTEL_EXPORTER_OTLP_ENDPOINT: http://phoenix:6006
