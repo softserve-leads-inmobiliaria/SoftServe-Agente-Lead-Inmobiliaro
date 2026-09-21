@@ -85,6 +85,7 @@ EXPECTED_FINAL_STATE = {
     "saludo_y_busqueda": "RECOMMEND",
     "deep_link_y_visita": "HUMAN_HANDOFF",
     "flujo_completo_hasta_handoff": "HANDOFF",
+    "lead_que_declara_todo": "QUALIFY",
 }
 
 
@@ -103,6 +104,30 @@ def test_fsm_state_is_persisted_in_postgres(stack, database_url, name, expected)
     finally:
         engine.dispose()
     assert state == expected
+
+
+# Score BANT-E que dejó cada guion en Postgres (A-9): (total, banda). El lead que declara presupuesto,
+# que decide solo y que tiene urgencia, con propiedades que coinciden, es HOT; sin señales es COLD.
+EXPECTED_FINAL_SCORE = {
+    "saludo_y_busqueda": (20, "COLD"),
+    "lead_que_declara_todo": (80, "HOT"),
+}
+
+
+@pytest.mark.parametrize("name,expected", EXPECTED_FINAL_SCORE.items())
+def test_score_is_persisted_in_postgres(stack, database_url, name, expected):
+    from sqlalchemy import create_engine, text
+
+    replay(ROOT / "harness" / "fixtures" / f"{name}.jsonl", http_responder(stack))
+    lead_id = build_events(name, [{"text": "x"}])[0]["lead_id"]
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            row = connection.execute(text("SELECT total, band FROM lead_scores WHERE lead_id = :l"),
+                                     {"l": lead_id}).one()
+    finally:
+        engine.dispose()
+    assert (row.total, row.band) == expected
 
 
 def test_every_fixture_has_a_declared_final_state():
