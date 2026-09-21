@@ -35,8 +35,10 @@ def seed(engine=None) -> list[Advisor]:
     with session_scope(engine or get_engine()) as session:
         for advisor in ADVISORS:
             session.execute(
+                # Hex y no urlsafe: sin `-`/`_` (rompen el deep-link de Telegram en algunos clientes)
+                # y sin caracteres confundibles (l/I, O/0), porque el asesor puede tener que teclearlo.
                 insert(Advisor)
-                .values(access_token=secrets.token_urlsafe(24), **advisor)
+                .values(access_token=secrets.token_hex(16), **advisor)
                 .on_conflict_do_nothing(index_elements=["id"]))
         session.flush()
         return [session.get(Advisor, advisor["id"]) for advisor in ADVISORS]
@@ -45,7 +47,9 @@ def seed(engine=None) -> list[Advisor]:
 def main() -> None:
     for advisor in seed():
         # El token es la sesión del asesor (DT-5): se imprime para poder abrir el panel en la demo.
-        print(f"{advisor.id}  {advisor.name:<15} {advisor.zone:<15} /panel/{advisor.access_token}")
+        # El deep-link registra su chat de Telegram para recibir la tarjeta del lead (B-7).
+        print(f"{advisor.id}  {advisor.name:<15} {advisor.zone:<15} /panel/{advisor.access_token}"
+              f"   registro: ?start=adv_{advisor.access_token}")
 
 
 if __name__ == "__main__":
