@@ -1,4 +1,11 @@
 fastapi==0.141.1
 uvicorn==0.53.0
 mcp==1.30.0
+# Trazas por turno (OBS-1, DT-9, DT-18). boto3 es el SDK de Bedrock (DT-6): el instrumentador
+# necesita instalarlo para poder auto-instrumentar las llamadas al LLM.
+opentelemetry-sdk==1.44.0
+opentelemetry-exporter-otlp-proto-http==1.44.0
+openinference-instrumentation-bedrock==0.1.53
+openinference-instrumentation-mcp==2.0.10
+boto3==1.43.98
 -r ../../db/requirements.txt
