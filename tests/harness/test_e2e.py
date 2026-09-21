@@ -181,6 +181,23 @@ def test_a_streak_of_unresolved_turns_hands_off_to_a_human(stack, database_url, 
     assert state == "HUMAN_HANDOFF"
 
 
+def test_funnel_events_are_written_once_per_transition(stack, database_url):
+    """OBS-2: el flujo completo deja una fila por etapa alcanzada, en orden, y no una por turno."""
+    from sqlalchemy import create_engine, text
+
+    name = "flujo_completo_hasta_handoff"
+    replay(ROOT / "harness" / "fixtures" / f"{name}.jsonl", http_responder(stack))
+    lead_id = build_events(name, [{"text": "x"}])[0]["lead_id"]
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            events = [r.event_type for r in connection.execute(
+                text("SELECT event_type FROM funnel_events WHERE lead_id = :l ORDER BY id"), {"l": lead_id})]
+    finally:
+        engine.dispose()
+    assert events == ["state.DISCOVERY", "state.QUALIFY", "state.RECOMMEND", "state.SCHEDULE", "state.HANDOFF"]
+
+
 def test_every_fixture_has_a_declared_final_state():
     assert {p.stem for p in run_all.discover()} == set(EXPECTED_FINAL_STATE)
 
