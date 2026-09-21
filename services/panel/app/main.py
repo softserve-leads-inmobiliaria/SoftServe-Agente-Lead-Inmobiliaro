@@ -10,12 +10,12 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.auth import resolve_advisor
-from app.repo import as_context, lead_detail, leads_for_advisor
+from app.repo import as_context, claim_lead, lead_detail, leads_for_advisor
 from db.models import Advisor
 from db.session import get_engine, session_scope
 
@@ -66,3 +66,11 @@ def lead_card(request: Request, lead_id: uuid.UUID, advisor: CurrentAdvisor,
     return templates.TemplateResponse(request, "lead_detail.html", {
         "advisor": advisor, "token": advisor.access_token, **as_context(detail),
     })
+
+
+@app.post("/panel/{advisor_token}/leads/{lead_id}/gestionar")
+def take_lead(lead_id: uuid.UUID, advisor: CurrentAdvisor, session: DbSession) -> RedirectResponse:
+    """"Marcar en gestión" (B-6). Vuelve a la ficha; 303 para que el navegador haga GET."""
+    if not claim_lead(session, advisor, lead_id):
+        raise NOT_FOUND
+    return RedirectResponse(url=f"/panel/{advisor.access_token}/leads/{lead_id}", status_code=303)

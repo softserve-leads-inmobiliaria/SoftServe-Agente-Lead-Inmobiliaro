@@ -37,6 +37,17 @@
     dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
     dt { color: var(--muted); font-size: 13px; }
     dd { margin: 0; }
+    form.inline { display: inline; margin: 0; }
+    button {
+      font: inherit; font-size: 13px; padding: 5px 10px; border-radius: 6px; cursor: pointer;
+      border: 1px solid var(--ink); background: var(--ink); color: #fff;
+    }
+    .pill {
+      display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px;
+      border: 1px solid var(--line); color: var(--muted);
+    }
+    .pill-sql { border-color: var(--hot); color: var(--hot); }
+    .pill-mql { border-color: var(--warm); color: var(--warm); }
   </style>
 </head>
 <body>
