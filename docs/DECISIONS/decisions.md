@@ -495,8 +495,64 @@ servidor: su parte se ve como la duración del *span* `catalog.<tool>` en `core`
 crece unos 70 MB por `boto3`; encaja con `#65` (optimizar Dockerfiles).
 
 
+## DT-19 — Agente con LLM real: historial en Postgres, tool calling y límite de tasa
 
-## DT-19 — Canal de Telegram: bot embebido en `core`, identidad por `ON CONFLICT`, opt-out antes del LLM
+**Estado:** aceptada — **con el LLM real sin verificar contra Bedrock** (ver Consecuencias)
+
+**Contexto.** `A-2` pide que el orquestador arme el prompt con el historial leído de Postgres, use
+*tool calling* real contra el catálogo y contemple desde el inicio el límite de tasa del proveedor
+(DT-6: 10 solicitudes/minuto por modelo). Ya existían el cliente MCP (`A-3`), el guardrail de entrada
+(`A-8`), el traspaso a humano (`A-13`) y las trazas (`OBS-1`).
+
+**Decisión.**
+- **Interfaz `Agent`** (`app/agent.py`) con dos implementaciones: `FakeAgent` (lo de siempre, sin
+  credenciales) y `BedrockAgent`. Se elige con `LLM_PROVIDER` (`fake` por defecto). Una configuración
+  inválida falla al arrancar (`app/llm_config.py`), no en el primer turno.
+- **Dos llamadas por turno, a dos modelos** (DT-6): el modelo liviano clasifica la intención y extrae
+  la señal cruda (`budget_hint`, `decision_maker`, `urgency`); el modelo conversacional responde con las
+  tools del catálogo. Ambos a través de la API Converse (`app/bedrock_llm.py`). La respuesta del
+  clasificador se parsea aunque venga en un bloque de código; una intención fuera de la taxonomía es `otro`.
+- **Memoria en Postgres:** `core` guarda cada mensaje en `messages` **en la misma transacción** que el
+  estado, la FSM y el score, y lee de ahí los últimos 20 mensajes en cada turno. No hay historial en memoria.
+- **Qué ve el LLM y qué se guarda:** solo el texto filtrado por el guardrail de entrada, sin PII ni
+  menciones de categorías protegidas (`InputVerdict.signal_text`, que conserva mayúsculas y acentos). Así
+  esas menciones no llegan al modelo, no pueden orientar las recomendaciones (*steering*) y no quedan en
+  la base. Un mensaje del que no queda nada utilizable se guarda como `[mensaje omitido]`; un intento de
+  *jailbreak* también, para que no vuelva al LLM como historial. El clasificador solo recibe el mensaje
+  actual y la última respuesta del asistente, nunca mensajes anteriores del lead.
+- **`lead_qualified` lo fija el código:** se quita del esquema que ve el LLM y se inyecta en cada llamada
+  a una tool con el valor de `fsm_context`. El modelo no puede pedir la dirección exacta (`A-6`).
+- **Textos fijos** para las intenciones de traspaso a una persona (`solicitud_humano`,
+  `fuera_de_alcance`), sin llamar al modelo conversacional. Jailbreak, fuera de dominio, mensajes vacíos
+  o sin contenido utilizable tampoco gastan una llamada.
+- **Si el LLM falla** (límite, red, credenciales, formato) el turno responde con un texto seguro, con
+  intención `otro`: cuenta como turno sin resolver y tres seguidos llevan a `HUMAN_HANDOFF` (DT-16).
+  Una caída del catálogo, en cambio, no se disfraza de fallo del LLM: sigue siendo un 503.
+- **Límite de tasa** propio, sin Redis (`app/rate_limit.py`): ventana deslizante en memoria por modelo,
+  10 por minuto (`LLM_RATE_LIMIT_PER_MINUTE`), con cola. Un turno espera cupo hasta 15 s
+  (`LLM_MAX_QUEUE_WAIT_SECONDS`) y, si no lo hay, responde con el texto seguro.
+- **Cajón de sastre (`otro`):** revisado en `A-13` (DT-16): un `otro` suelto no dispara ningún efecto, solo
+  una racha. El agente real puede devolver `otro` cuando el modelo falla; eso cuenta como turno sin resolver.
+
+**Alternativas.** Una sola llamada que clasifique y responda — descartada (DT-6): mezcla la extracción
+silenciosa con la conversación visible. Dejar que el modelo pase `lead_qualified` — descartada: la
+reserva de dirección no puede depender de un prompt. Guardar el texto original y filtrar al leer —
+descartada: el dato sensible quedaría en la base.
+
+**Consecuencias.**
+- **No se ha probado una llamada real a Bedrock.** Las peticiones se validan contra el modelo de servicio de
+  `botocore` (un `Stubber` rechaza parámetros mal formados) y todo lo demás con un cliente simulado. Los IDs
+  de modelo de `.env.example` van vacíos a propósito: DT-6 advierte que algunos exigen un *inference
+  profile*, y hay que probar una llamada de un token antes de darlos por buenos.
+- **Sin guardrails de salida no debe usarse en producción.** `A-5` (factualidad), `A-6` (dirección),
+  `A-7` (promesas) y `A-11` (fair housing) siguen pendientes: con `LLM_PROVIDER=bedrock` nada revisa lo que
+  el modelo escribe salvo lo que dice el *prompt*. El *prompt* de sistema es una primera versión.
+- El límite es por proceso: con varios *workers* sería N veces mayor. El compose corre uno.
+- El historial guardado no incluye las menciones protegidas ni la PII de los leads: es deliberado y no se
+  puede reconstruir el mensaje original desde la base.
+
+
+## DT-20 — Canal de Telegram: bot embebido en `core`, identidad por `ON CONFLICT`, opt-out antes del LLM
 
 **Estado:** aceptada
 
@@ -510,16 +566,26 @@ estaban escritas en ningún lado y afectan cómo cualquier canal futuro se integ
   del servidor). Sin `TELEGRAM_BOT_TOKEN` el bot no arranca y `core` solo atiende `POST /events`: así
   CI, tests y el arnés E2E siguen funcionando sin credenciales de Telegram (DT-4).
 - **Identidad del lead (`B-4`):** `telegram_user_id` resuelve al `Lead` real con
-  `INSERT ... ON CONFLICT DO NOTHING` sobre el índice único, no derivando el id con `uuid5` (que era el
-  atajo de la v1 para evitar una condición de carrera real). La unicidad la garantiza la base, no un
-  supuesto del código.
+  `INSERT ... ON CONFLICT DO NOTHING` sobre el índice único, no derivando un id determinista con `uuid5`
+  (que no evita una condición de carrera real). La unicidad la garantiza la base, no un supuesto del código.
 - **Reuso de conversación:** un lead reutiliza su conversación mientras su `fsm_state` no sea terminal
   (`HANDOFF`/`HUMAN_HANDOFF`/`LOST`); al llegar a un estado terminal, el siguiente mensaje abre una
   conversación nueva. La alternativa de una única conversación permanente por lead (determinista,
   `uuid5(lead_id)`) se descartó: dejaría al lead sin forma de volver a hablar tras un estado terminal.
 - **Opt-out (`B-2`):** la detección de baja (`/stop`, "date de baja", etc.) es determinista y corre en
   el canal, **antes** de construir el evento canónico — nunca pasa por `process_turn` ni por el LLM. La
-  baja marca `Lead.consent_status=withdrawn` y `status=closed_lost` en una sola actualización.
+  baja marca `Lead.consent_status=withdrawn` y `status=closed_lost` en una sola actualización y deja
+  el mismo rastro de auditoría (`input.opt_out`) que la baja que detecta el guardrail del core. El
+  criterio es la unión del canal y de `app/input_guard.py` (A-8): pedir la baja de cualquiera de las dos
+  maneras la registra. La confirmación no promete borrar datos: solo registra la baja.
+- **Un solo manejador de texto, comandos incluidos:** el bot atiende todo mensaje de texto, también
+  `/stop`, que es la forma natural de pedir la baja; `/start <payload>` se traduce a texto vacío más el
+  *deep-link*, y `/comando@bot` (grupos) se normaliza. Las actualizaciones se procesan en concurrencia
+  para que un turno lento (p. ej. esperando cupo del LLM, DT-19) no bloquee a los demás leads, y si un
+  turno falla el lead recibe una respuesta genérica en vez de silencio.
+- **El agente lo elige `main`:** el bot recibe el mismo agente que `POST /events` (`LLM_PROVIDER`), así
+  Telegram no queda hablando con el fake cuando se configura Bedrock (DT-19). Los logs de `httpx` se
+  mantienen en WARNING porque la URL de la API de Telegram lleva el token.
 
 **Alternativas.** Un microservicio de canal aparte, hablándole a `core` por HTTP — descartada: contradice
 la estructura ya definida y agrega una llamada de red por turno sin necesidad, cuando el proceso ya
