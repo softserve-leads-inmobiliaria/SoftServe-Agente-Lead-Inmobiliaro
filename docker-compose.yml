@@ -41,11 +41,20 @@ services:
       # Contexto en la raíz del repo para poder copiar db/ y contracts/ (patrón de todos los servicios).
       context: .
       dockerfile: services/panel/Dockerfile
+    environment:
+      # El panel lee leads, scores, visitas y la transcripción directo de Postgres (B-5).
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-leads}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-leads_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-leads}
     ports:
       - "${PANEL_PORT:-8080}:8080"
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
       interval: 10s
@@ -67,6 +76,24 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: "no"
+
+  # Siembra los asesores de demo y termina (B-5): sin ellos el panel no se puede abrir. Idempotente,
+  # así que corre en cada `up` sin duplicar. El inventario de propiedades es de C-9, no de acá.
+  seed:
+    build:
+      context: .
+      dockerfile: db/Dockerfile
+    command: ["python", "scripts/seed_advisors.py"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-leads}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-leads_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-leads}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     restart: "no"
 
   catalog:

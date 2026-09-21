@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Panel de asesores{% endblock %}</title>
+  <style>
+    :root {
+      --bg: #f6f7f9; --card: #fff; --ink: #1b1f24; --muted: #6a7280; --line: #e3e6ea;
+      --hot: #b3261e; --warm: #a8620a; --cold: #486581;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 24px 16px; background: var(--bg); color: var(--ink);
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    main { max-width: 900px; margin: 0 auto; }
+    header { margin-bottom: 24px; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .muted { color: var(--muted); font-size: 13px; }
+    a { color: inherit; }
+    .card {
+      background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+      padding: 16px; margin-bottom: 16px;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); }
+    th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    tr:last-child td { border-bottom: 0; }
+    .band { font-weight: 600; }
+    .band-HOT { color: var(--hot); } .band-WARM { color: var(--warm); } .band-COLD { color: var(--cold); }
+    .empty { color: var(--muted); padding: 24px 8px; text-align: center; }
+    .msg { padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .msg:last-child { border-bottom: 0; }
+    .msg-role { font-size: 12px; color: var(--muted); }
+    .msg-user .msg-role { color: var(--cold); }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+    dt { color: var(--muted); font-size: 13px; }
+    dd { margin: 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>{% block heading %}{% endblock %}</h1>
+      <p class="muted">{% block subheading %}{% endblock %}</p>
+    </header>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
