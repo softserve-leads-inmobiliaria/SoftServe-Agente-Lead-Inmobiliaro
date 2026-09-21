@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Mis leads — {{ advisor.name }}{% endblock %}
 {% block heading %}Mis leads{% endblock %}
-{% block subheading %}{{ advisor.name }} · zona {{ advisor.zone }} · ordenados por calidad{% endblock %}
+{% block subheading %}
+  {{ advisor.name }} · zona {{ advisor.zone }} · ordenados por calidad ·
+  <a href="/panel/{{ token }}/funnel">Funnel del negocio &rarr;</a>
+{% endblock %}
 
 {% block content %}
 <div class="card">

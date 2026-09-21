@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.auth import resolve_advisor
+from app.funnel import funnel_report
 from app.repo import as_context, claim_lead, lead_detail, leads_for_advisor
 from db.models import Advisor
 from db.session import get_engine, session_scope
@@ -65,6 +66,14 @@ def lead_card(request: Request, lead_id: uuid.UUID, advisor: CurrentAdvisor,
         raise NOT_FOUND
     return templates.TemplateResponse(request, "lead_detail.html", {
         "advisor": advisor, "token": advisor.access_token, **as_context(detail),
+    })
+
+
+@app.get("/panel/{advisor_token}/funnel", response_class=HTMLResponse)
+def funnel(request: Request, advisor: CurrentAdvisor, session: DbSession) -> HTMLResponse:
+    """Dashboard del funnel (B-9): global, lo ve cualquier asesor con token válido."""
+    return templates.TemplateResponse(request, "funnel.html", {
+        "advisor": advisor, "token": advisor.access_token, "report": funnel_report(session),
     })
 
 
