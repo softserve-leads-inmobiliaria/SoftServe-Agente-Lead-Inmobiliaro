@@ -12,6 +12,8 @@ RUN pip install --no-cache-dir -r db/requirements.txt
 COPY alembic.ini alembic.ini
 COPY db/ db/
 COPY contracts/ contracts/
+# Esta imagen corre también el seed de demo (servicio `seed` del compose, B-5).
+COPY scripts/ scripts/
 
 ENV PYTHONPATH=/app
 
