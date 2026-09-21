@@ -4,6 +4,7 @@ import json
 import uuid
 
 import pytest
+from catalog_stub import CHECKED_AT, PROPERTY, stub_call
 from sqlalchemy import create_engine, text
 
 from app.fsm import next_state
@@ -26,7 +27,7 @@ SAY = {
 
 class StubCatalog:
     async def call(self, tool, arguments=None):
-        return {"properties": [{"title": "Casa de prueba"}]}
+        return stub_call(tool, arguments)
 
 
 class Conversation:
@@ -228,7 +229,8 @@ def test_tool_results_are_kept_only_for_the_last_turn(engine):
                                       {"c": chat.conversation_id}).scalar()
 
     chat.say("busqueda_propiedad")
-    assert last_results() == {"search_properties": {"properties": [{"title": "Casa de prueba"}]}}
+    assert last_results() == {"search_properties": {"properties": [PROPERTY | {"availability_checked_at": CHECKED_AT}],
+                                                    "unavailable": []}}
     chat.say("saludo")
     assert last_results() == {}
 

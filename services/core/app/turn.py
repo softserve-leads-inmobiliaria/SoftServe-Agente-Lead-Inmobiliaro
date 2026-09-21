@@ -14,6 +14,7 @@ from sqlalchemy import Engine
 from starlette.concurrency import run_in_threadpool
 
 from app.agent import Agent, AgentResult, FakeAgent, TurnInput
+from app.availability import AvailabilityGuard
 from app.fakes.fake_core import FakeCore
 from app.fakes.fake_llm import FakeLLM
 from app.fsm import HUMAN_INTENTS, HUMAN_REQUESTED, TERMINAL_STATES, next_state, trigger_for
@@ -187,7 +188,7 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
         # El agente solo ve el texto filtrado y el historial que guardó este mismo servicio.
         text = verdict.signal_text if verdict.signal_text.strip() or not event["text"].strip() else OMITTED_MESSAGE
         result = await agent.run(TurnInput(event=event, text=text, history=context.history,
-                                           lead_qualified=context.lead_qualified), catalog)
+                                           lead_qualified=context.lead_qualified), AvailabilityGuard(catalog))
     outbound = FakeCore().handle_event(event, intent=result.intent, text=result.text)
     if verdict.pii:
         outbound["text"] += " " + PII_REMINDER

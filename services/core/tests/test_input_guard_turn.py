@@ -4,6 +4,7 @@ import json
 import uuid
 
 import pytest
+from catalog_stub import stub_call
 from sqlalchemy import text
 
 from app.input_guard import (
@@ -26,7 +27,7 @@ class RecordingCatalog:
 
     async def call(self, tool, arguments=None):
         self.calls.append(tool)
-        return {"properties": [{"title": "Casa de prueba"}]}
+        return stub_call(tool, arguments)
 
 
 class Chat:
@@ -209,7 +210,7 @@ def test_the_out_of_domain_count_is_per_conversation(engine):
 def test_the_rest_of_a_message_with_a_protected_mention_is_answered_normally(engine):
     chat = Chat(engine)
     reply = chat.say("Soy extranjero y busco un departamento")
-    assert "zona" in reply and chat.catalog.calls == ["search_properties"]
+    assert "zona" in reply and chat.catalog.calls == ["search_properties", "get_availability"]
     (entry,) = chat.audits("input.protected_category")
     assert entry.payload.keys() == {"conversation_id", "lead_id", "event_id"}
 

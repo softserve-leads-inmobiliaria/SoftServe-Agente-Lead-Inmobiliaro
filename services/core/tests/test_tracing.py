@@ -6,6 +6,7 @@ import uuid
 import boto3
 import pytest
 from botocore.stub import Stubber
+from catalog_stub import stub_call
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import StatusCode
@@ -22,7 +23,7 @@ CARD = "4111 1111 1111 1111"
 
 class StubCatalog:
     async def call(self, tool, arguments=None):
-        return {"properties": [{"title": "Casa de prueba"}]}
+        return stub_call(tool, arguments)
 
 
 @pytest.fixture

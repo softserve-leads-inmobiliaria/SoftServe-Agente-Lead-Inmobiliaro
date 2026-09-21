@@ -96,7 +96,11 @@ def test_a_real_turn_exports_its_trace_over_otlp(traced_stack, tmp_path):
     time.sleep(0.6)
     # Revisada la primera traza real: salen exactamente los spans manuales. El instrumentador de MCP
     # solo propaga el contexto y no añade ninguno; si eso cambia, esta línea avisa.
-    assert sorted(collector.names()) == ["catalog.search_properties", "fsm.advance", "guardrail.input", "turn"]
+    # A-4 añade una consulta de disponibilidad por cada propiedad que el listado da por disponible.
+    names = collector.names()
+    assert sorted(set(names)) == ["catalog.get_availability", "catalog.search_properties", "fsm.advance",
+                                  "guardrail.input", "turn"]
+    assert [names.count(n) for n in ("catalog.search_properties", "fsm.advance", "guardrail.input", "turn")] == [1] * 4
     assert {"service.name": "core", "openinference.project.name": "lead-agent"}.items() <= collector.resources[0].items()
 
 

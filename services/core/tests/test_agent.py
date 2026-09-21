@@ -43,7 +43,7 @@ def test_a_normal_turn_classifies_calls_the_catalog_and_answers():
     result = run(agent_for(client).run(turn(), catalog))
     assert (result.text, result.intent) == ("Encontré una casa en Providencia.", "busqueda_propiedad")
     assert result.raw_signal["budget_hint"] == "3 millones"
-    assert result.tool_results == {"search_properties": {"properties": [{"id": "p1", "title": "Casa de prueba"}]}}
+    assert result.tool_results == {"search_properties": {"properties": [{"id": "p1", "title": "Casa de prueba", "status": "disponible"}]}}
     assert result.tool_calls == [{"name": "search_properties", "is_error": False}] and result.llm_error is None
     assert catalog.calls == [("search_properties", {"zone": "Providencia"})]
 

@@ -53,7 +53,7 @@ class FakeCatalog:
 
     def __init__(self, properties: list[dict[str, Any]] | None = None, error: dict[str, Any] | None = None) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
-        self.properties = properties if properties is not None else [{"id": "p1", "title": "Casa de prueba"}]
+        self.properties = properties if properties is not None else [{"id": "p1", "title": "Casa de prueba", "status": "disponible"}]
         self.error = error
 
     async def tool_specs(self) -> list[dict[str, Any]]:
@@ -67,4 +67,7 @@ class FakeCatalog:
             raise CatalogToolError(self.error)
         if tool == "search_properties":
             return {"properties": self.properties}
+        if tool == "get_availability":
+            return {"property_id": (arguments or {})["property_id"], "status": "disponible",
+                    "checked_at": "2026-01-01T00:00:00+00:00"}
         return {"id": (arguments or {}).get("property_id"), "address_approx": "Providencia"}
