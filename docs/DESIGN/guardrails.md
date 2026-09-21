@@ -61,7 +61,7 @@ existir) — se actualiza en el mismo PR que cierra la historia correspondiente.
 | Factualidad | `A-5` | Pendiente |
 | Dirección reservada | `A-6` | Pendiente |
 | Promesas no autorizadas (8 *claims*) | `A-7` | Pendiente |
-| Entrada (PII/*jailbreak*/OOD/`/stop`/categoría protegida) | `A-8` | Pendiente |
+| Entrada (PII/*jailbreak*/OOD/`/stop`/categoría protegida) | `A-8` | Implementado: los 5 detectores (`services/core/app/input_guard.py`). Pendiente dentro de `/stop`: cancelar *jobs* del lead, que no existen hasta que haya *scheduler*; el reingreso tras la baja es de `B-2` |
 | Fair housing | `A-11` | Pendiente |
 
 ## 4. Mapa guardrail → prueba
