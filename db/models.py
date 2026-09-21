@@ -110,6 +110,7 @@ class FsmContext(Base):
     """Contexto de la FSM de una conversación (1:1). El estado en sí vive en Conversation."""
 
     __tablename__ = "fsm_context"
+    __table_args__ = (CheckConstraint("unresolved_streak >= 0", name="ck_fsm_context_unresolved_streak_non_negative"),)
 
     conversation_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("conversations.id", ondelete="CASCADE"), primary_key=True)
@@ -124,6 +125,8 @@ class FsmContext(Base):
             """'{"budget_hint": null, "decision_maker": "no_declarado", "urgency": "no_declarada", """
             """"matching_properties": 0, "meets_requirements": null}'::jsonb"""),
         nullable=False)
+    # Turnos seguidos sin resolver (intención `otro`): proxy de frustración (A-13). Lo lleva el código.
+    unresolved_streak: Mapped[int] = mapped_column(Integer, server_default=text("0"), nullable=False)
     updated_at: Mapped[datetime] = _now()
 
 

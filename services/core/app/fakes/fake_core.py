@@ -20,14 +20,18 @@ class FakeCore:
     def __init__(self, llm: FakeLLM | None = None) -> None:
         self._llm = llm or FakeLLM()
 
-    def handle_event(self, event: Mapping[str, Any]) -> dict[str, Any]:
+    def validate(self, event: Mapping[str, Any]) -> None:
         missing = [field for field in _REQUIRED if field not in event]
         if missing:
             raise ValueError(f"evento incompleto, faltan: {missing}")
         if event["direction"] != "inbound":
             raise ValueError("el core solo procesa eventos inbound")
 
-        intent = self._llm.classify_intent(event["text"])
+    def handle_event(self, event: Mapping[str, Any], intent: str | None = None,
+                     text: str | None = None) -> dict[str, Any]:
+        """`intent` y `text` los fuerza quien ya decidió la respuesta (p. ej. el guardrail de entrada)."""
+        self.validate(event)
+        intent = intent or self._llm.classify_intent(event["text"])
         return {
             "schema_version": event["schema_version"],
             "event_id": str(uuid.uuid5(_OUTBOUND_NAMESPACE, str(event["event_id"]))),
@@ -35,6 +39,6 @@ class FakeCore:
             "lead_id": event["lead_id"],
             "channel": event["channel"],
             "direction": "outbound",
-            "text": self._llm.generate_reply(intent),
+            "text": self._llm.generate_reply(intent) if text is None else text,
             "timestamp": event["timestamp"],
         }

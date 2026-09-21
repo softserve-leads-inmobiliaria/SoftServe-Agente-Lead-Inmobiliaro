@@ -51,6 +51,8 @@ stateDiagram-v2
 
 Enum: `GREETING | DISCOVERY | QUALIFY | RECOMMEND | SCHEDULE | HANDOFF | HUMAN_HANDOFF | NURTURE | LOST`.
 `HUMAN_HANDOFF` es alcanzable desde **cualquier** estado — no es exclusivo del final del funnel.
+Se llega por tres caminos: petición explícita del lead, una intención fuera del alcance del agente, o una
+racha de 3 turnos seguidos sin resolver (proxy de frustración); el detalle está en `decisions.md` (DT-16).
 
 ## 3. Calificación de leads — BANT-E
 

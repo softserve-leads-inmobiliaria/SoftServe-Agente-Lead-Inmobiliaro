@@ -283,3 +283,172 @@ llamada al catálogo — descartada: bloquea la fila mientras se espera por red.
 provisional (`telegram_user_id` = id del lead): el canal (`B-3`) debe crear al lead con su id real
 antes de que su primer evento llegue al core. La intención `otro` nunca dispara `HUMAN_HANDOFF`
 hasta que `A-2`/`A-13` revisen el criterio.
+
+
+## DT-13 — Cliente MCP del catálogo: descubrimiento de tools, sin nombres cableados
+
+**Estado:** aceptada
+
+**Contexto.** `core` debe usar el mismo cliente contra el catálogo falso (`CT-8`) y contra el real
+(`C-1`), sin ramas de código por entorno (`A-3`). Si el cliente conociera los nombres o los esquemas
+de las tools, cada cambio del catálogo obligaría a tocar `core`.
+
+**Decisión.**
+- `CatalogClient` (`services/core/app/catalog_client.py`) descubre las tools con `tools/list` en la
+  primera conexión y las guarda en memoria (`ToolSpec`: nombre, descripción, esquema de entrada y de
+  salida). No contiene nombres de tools ni distingue entornos: lo único que cambia es
+  `CATALOG_SERVICE_URL`.
+- `call` rechaza con `UnknownTool`, sin tocar la red, una tool que el catálogo no publica. Si el
+  nombre no está en el caché, vuelve a descubrir una vez (el catálogo pudo publicar una tool después
+  de que `core` arrancara) antes de rechazar.
+- `tool_specs()` entrega lo descubierto (`name`, `description`, `input_schema`) para que `A-2`/`A-4`
+  se lo pasen al LLM como tools disponibles.
+- La validación de los argumentos sigue siendo del servidor (`catalog_error` con `INVALID_INPUT`); el
+  cliente no la duplica.
+
+**Alternativas.** Lista fija de las 5 tools en `core` — descartada: acopla `core` al catálogo.
+Sesión MCP persistente entre llamadas — descartada por ahora: cada llamada abre su sesión y el coste
+extra es un viaje de ida y vuelta local; se reevalúa si la latencia del turno lo exige.
+
+**Consecuencias.** Que el catálogo publique exactamente las 5 tools de `contracts/mcp` se verifica en
+las pruebas de extremo a extremo (`tests/harness`), no en el cliente. El caché no se invalida solo si
+una tool desaparece; una llamada a ella fallará con el error del catálogo.
+
+
+## DT-14 — Score BANT-E integrado en el turno: señal acumulada en Postgres
+
+**Estado:** aceptada
+
+**Contexto.** `C-4` dejó las reglas del score como función pura. `A-9` tiene que acumularlo turno a
+turno y persistirlo desde el primer commit (mismo criterio que `A-1`), sin que el LLM emita el número.
+
+**Decisión.**
+- Cada turno, dentro de la misma transacción que mueve la FSM y bajo el mismo bloqueo de la
+  conversación, se acumula la señal y se recalcula el score (`app/lead_scoring.py`); el estado y el
+  score se guardan juntos o no se guarda nada.
+- Reparto del contrato `ScoreSignal`: el LLM emite solo `budget_hint`, `decision_maker` y `urgency`;
+  `matching_properties` (conteo de `search_properties`) y `meets_requirements` (`check_requirements`)
+  los deriva el código de los resultados de las tools del turno.
+- Acumulación: lo declarado se conserva; un campo que el mensaje no menciona, o que el LLM devuelve
+  inválido, **no** pisa lo ya declarado (se ignora antes que inventar); lo declarado más
+  recientemente gana. Los campos que no son del contrato (p. ej. una categoría protegida) no llegan a
+  la señal.
+- Se persisten la señal acumulada en `fsm_context.score_signal`, los resultados de tools del último
+  turno en `fsm_context.last_tool_results` (se sobrescriben cada turno) y el score en `lead_scores`
+  (una fila por lead, con *upsert*).
+- Se puntúa en todos los estados, también en los terminales: el asesor ve el último score.
+- El score no condiciona las transiciones de la FSM. La banda mínima para recomendar es de `A-4`.
+
+**Alternativas.** Recalcular el score desde el historial completo cada turno — descartada: cuesta más
+y obliga a guardar todo el texto. Puntuar fuera de la transacción de la FSM — descartada: podría
+quedar un score sin el estado que lo produjo.
+
+**Consecuencias.** Con el fake LLM la extracción es por palabras clave; el LLM real (`A-2`) debe
+devolver el mismo formato de tres campos y `merge_signal` descarta lo que no cumpla. `check_requirements`
+aún no se invoca en ningún turno, así que `eligibility` queda en 0 hasta que `A-4`/`A-12` lo llamen.
+`decision_maker` distingue `pareja` y `familia`; su tratamiento frente a fair housing lo resuelven
+`A-11`/`C-6`.
+
+
+## DT-15 — Guardrail de entrada: reglas deterministas antes de la FSM y el LLM
+
+**Estado:** aceptada
+
+**Contexto.** `A-8` cubre los 5 detectores de `docs/DESIGN/guardrails.md` §1. El detalle de qué hace
+cada acción al detectar, y qué pasa con un lead dado de baja, no estaba fijado.
+
+**Decisión.**
+- Los detectores son reglas (`services/core/app/input_guard.py`, función pura); ninguno usa LLM. El
+  turno los aplica antes de responder (`app/turn.py`).
+- **`/stop`** (comando o frases como "dame de baja", "no me escribas"): marca
+  `leads.consent_status=withdrawn`, lo audita y confirma con un texto fijo. Manda sobre todo lo demás
+  y no toca la FSM, el score, el catálogo ni el LLM. Un lead ya dado de baja recibe siempre un aviso
+  fijo y ningún otro flujo. Una frase con negación ("no dejen de mandarme opciones") no cuenta.
+- **Anti-*jailbreak*:** se contesta como una pregunta de dominio cualquiera (intención `otro`), sin
+  reflejar la instrucción y sin efectos: no dispara traspaso a humano ni búsquedas, y no aporta señal
+  al score. Se audita.
+- **PII no solicitada** (tarjeta con dígito verificador válido, CURP, RFC, INE/pasaporte/licencia con su
+  número): se sustituye por `[dato omitido]` antes de que el texto llegue a la FSM, el LLM o la base, y
+  la respuesta recuerda qué datos sí hacen falta. La auditoría guarda el tipo, nunca el valor.
+- **Fuera de dominio:** respuesta acotada, sin mover la FSM. Un dictamen legal, fiscal o crediticio se
+  declina siempre; un tema ajeno solo si el mensaje no habla de propiedades. Al segundo mensaje fuera de
+  dominio de la conversación la respuesta ofrece un asesor; la oferta no fuerza `HUMAN_HANDOFF`, lo
+  pide el lead. El conteo sale de `audit_log`.
+- **Categoría protegida:** el mensaje se responde con normalidad y se audita **sin** decir cuál. La señal
+  del score se extrae de una copia del texto sin esos fragmentos, de modo que mencionarla no cambia el
+  score: descartar solo el campo afectado lo habría bajado.
+
+**Alternativas.** Clasificar con el LLM — descartada: no es determinista ni auditable, y `/stop` no puede
+depender de un modelo. Bloquear el mensaje ante *jailbreak* o PII — descartada: la regla general es
+degradar, no cortar. Contar el fuera de dominio en `fsm_context` — descartada: exigía una migración.
+
+**Consecuencias.** Las listas de palabras del detector son una primera versión y se afinan con casos
+reales; los falsos positivos se cubren en `services/core/tests/test_input_guard.py`. Tras la baja no hay
+reingreso hasta que `B-2` defina el consentimiento. `decision_maker` sigue distinguiendo `pareja` y
+`familia` en el contrato: su revisión frente a fair housing sigue en `A-11`/`C-6`.
+
+
+
+## DT-16 — Traspaso a un humano: tres caminos y el criterio del cajón de sastre
+
+**Estado:** aceptada
+
+**Contexto.** `HUMAN_HANDOFF` debe ser alcanzable desde cualquier estado (`design.md` §2). `A-13` pide
+tres caminos y que se revise, contra el criterio anotado en `A-2`, si la intención `otro` (cajón de
+sastre del clasificador) es segura para disparar esa transición.
+
+**Decisión.**
+- **Petición explícita:** intención `solicitud_humano` (incluye "supervisor", "gerente", "hablar con una persona").
+- **Fuera de alcance:** intención nueva `fuera_de_alcance` (quejas, reclamos, contratos o depósitos ya
+  existentes): lo atiende una persona. Es distinta del fuera de dominio del guardrail de entrada
+  (`A-8`, DT-15), que declina con una respuesta acotada y solo ofrece un asesor.
+- **Frustración (proxy):** 3 turnos seguidos con intención `otro` (`FRUSTRATION_STREAK`). Se guarda en
+  `fsm_context.unresolved_streak` (migración `0002`), se reinicia al resolverse un turno y tras el
+  traspaso. La respuesta de ese turno avisa al lead ("te comunico con un asesor").
+- **Cajón de sastre:** un `otro` suelto **no** dispara el traspaso: un "ok" o un "gracias" caen ahí y
+  darle efecto real sería un traspaso por ruido. Solo cuenta repetido. Los turnos que fuerza el guardrail
+  de entrada (*jailbreak*, fuera de dominio) **no suman ni reinician** la racha: nadie puede provocar un
+  traspaso con mensajes adversariales, ni evitarlo intercalándolos.
+- Los estados terminales no cuentan racha.
+
+**Alternativas.** Que `otro` dispare el traspaso directamente — descartada por lo anterior. Guardar la
+racha en `audit_log` o en la señal del score — descartada: mezcla responsabilidades. Contar mensajes
+repetidos en vez de `otro` — descartada: necesita el historial completo (`A-2`).
+
+**Consecuencias.** Con el clasificador falso, tres "ok" o "gracias" seguidos dejan un traspaso: es el
+riesgo de usar `otro` como proxy y `A-2` debe revisarlo con el clasificador real y su taxonomía. La
+respuesta de aviso se decide con la racha leída antes de la transacción; si dos mensajes de la misma
+conversación llegan a la vez, el texto puede no coincidir con el estado (el estado siempre es el correcto).
+
+
+## DT-17 — Métricas del funnel: una fila por transición real, escrita al guardar el estado
+
+**Estado:** aceptada
+
+**Contexto.** `OBS-2` pide `funnel_events` *append-only* con una fila por transición real de
+`fsm_state`, no por turno. La tabla y el *trigger* que impide UPDATE/DELETE ya existían (`C-3`, DT-11).
+
+**Decisión.**
+- El evento se escribe en `StateStore.save_state`, en la misma transacción que el cambio de estado, con
+  un `UPDATE ... WHERE fsm_state <> :nuevo RETURNING lead_id`: si el estado no cambió no hay fila, y
+  toda transición (mensaje, *scheduler*) queda registrada sin que quien la provoque tenga que acordarse.
+- `event_type` es `state.<ESTADO>` (`state.QUALIFY`): el estado al que **entra** la conversación. El
+  prefijo deja sitio a otros tipos de evento sin que choquen con los nombres de estado.
+- No hay cambios de esquema: la tabla sigue con `id, lead_id, event_type, created_at`.
+- La entrada inicial a `GREETING` no es una transición y no se registra: el total de leads que empezaron
+  sale de `leads`/`conversations`.
+
+**Consulta para `B-9`** (leads distintos que alcanzaron cada etapa, en orden de primera aparición):
+
+    SELECT event_type, count(DISTINCT lead_id) AS leads
+    FROM funnel_events GROUP BY event_type ORDER BY min(id);
+
+**Alternativas.** Una fila por turno — descartada: es lo que la historia excluye. Registrar el evento
+desde `advance` — descartada: el *scheduler* (`NO_RESPONSE`) cambia el estado sin pasar por ahí. Añadir
+`conversation_id`, `from_state` a la tabla — descartada por ahora: `B-9` no los necesita (la etapa
+anterior se deduce del orden) y exigiría otra migración.
+
+**Consecuencias.** Un lead que vuelve de `NURTURE` a `DISCOVERY` genera otra fila `state.DISCOVERY`: la
+consulta de arriba lo cuenta una vez, pero quien quiera medir reentradas puede contar filas. Si `B-9`
+necesita saber de qué estado se venía, hay que añadir `from_state` con una migración.
+

@@ -85,6 +85,8 @@ EXPECTED_FINAL_STATE = {
     "saludo_y_busqueda": "RECOMMEND",
     "deep_link_y_visita": "HUMAN_HANDOFF",
     "flujo_completo_hasta_handoff": "HANDOFF",
+    "lead_que_declara_todo": "QUALIFY",
+    "queja_a_humano": "HUMAN_HANDOFF",
 }
 
 
@@ -105,6 +107,97 @@ def test_fsm_state_is_persisted_in_postgres(stack, database_url, name, expected)
     assert state == expected
 
 
+# Score BANT-E que dejó cada guion en Postgres (A-9): (total, banda). El lead que declara presupuesto,
+# que decide solo y que tiene urgencia, con propiedades que coinciden, es HOT; sin señales es COLD.
+EXPECTED_FINAL_SCORE = {
+    "saludo_y_busqueda": (20, "COLD"),
+    "lead_que_declara_todo": (80, "HOT"),
+}
+
+
+@pytest.mark.parametrize("name,expected", EXPECTED_FINAL_SCORE.items())
+def test_score_is_persisted_in_postgres(stack, database_url, name, expected):
+    from sqlalchemy import create_engine, text
+
+    replay(ROOT / "harness" / "fixtures" / f"{name}.jsonl", http_responder(stack))
+    lead_id = build_events(name, [{"text": "x"}])[0]["lead_id"]
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            row = connection.execute(text("SELECT total, band FROM lead_scores WHERE lead_id = :l"),
+                                     {"l": lead_id}).one()
+    finally:
+        engine.dispose()
+    assert (row.total, row.band) == expected
+
+
+def test_stop_withdraws_consent_in_postgres(stack, database_url, tmp_path):
+    """A-8: tras `/stop` el lead queda dado de baja y se audita, sin que el LLM intervenga.
+
+    Guion temporal y no de `harness/fixtures`: una baja es persistente y solo existe contra el core real.
+    """
+    from sqlalchemy import create_engine, text
+
+    script = tmp_path / "baja_del_lead.jsonl"
+    turns = ({"text": "Hola, buenas tardes", "expect_reply_contains": "asistente"},
+             {"text": "/stop", "expect_reply_contains": "baja"},
+             {"text": "Busco un departamento", "expect_reply_contains": "baja"})
+    script.write_text("".join(json.dumps(turn) + chr(10) for turn in turns), encoding="utf-8")
+    replay(script, http_responder(stack))
+    lead_id = build_events("baja_del_lead", [{"text": "x"}])[0]["lead_id"]
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            consent = connection.execute(text("SELECT consent_status FROM leads WHERE id = :l"),
+                                         {"l": lead_id}).scalar()
+            audited = connection.execute(text("SELECT count(*) FROM audit_log WHERE action = 'input.opt_out' "
+                                              "AND payload->>'lead_id' = :l"), {"l": lead_id}).scalar()
+            state = connection.execute(text("SELECT fsm_state FROM conversations WHERE lead_id = :l"),
+                                       {"l": lead_id}).scalar()
+    finally:
+        engine.dispose()
+    assert (consent, audited, state) == ("withdrawn", 1, "DISCOVERY")
+
+
+def test_a_streak_of_unresolved_turns_hands_off_to_a_human(stack, database_url, tmp_path):
+    """A-13: tres turnos seguidos sin resolver dejan la conversación en HUMAN_HANDOFF."""
+    from sqlalchemy import create_engine, text
+
+    script = tmp_path / "frustracion.jsonl"
+    turns = ({"text": "Hola, buenas tardes", "expect_reply_contains": "asistente"},
+             {"text": "ok", "expect_reply_contains": "propiedad"},
+             {"text": "ok", "expect_reply_contains": "propiedad"},
+             {"text": "ok", "expect_reply_contains": "asesor"})
+    script.write_text("".join(json.dumps(turn) + chr(10) for turn in turns), encoding="utf-8")
+    replay(script, http_responder(stack))
+    conversation_id = build_events("frustracion", [{"text": "x"}])[0]["conversation_id"]
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            state = connection.execute(text("SELECT fsm_state FROM conversations WHERE id = :c"),
+                                       {"c": conversation_id}).scalar()
+    finally:
+        engine.dispose()
+    assert state == "HUMAN_HANDOFF"
+
+
+def test_funnel_events_are_written_once_per_transition(stack, database_url):
+    """OBS-2: el flujo completo deja una fila por etapa alcanzada, en orden, y no una por turno."""
+    from sqlalchemy import create_engine, text
+
+    name = "flujo_completo_hasta_handoff"
+    replay(ROOT / "harness" / "fixtures" / f"{name}.jsonl", http_responder(stack))
+    lead_id = build_events(name, [{"text": "x"}])[0]["lead_id"]
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            events = [r.event_type for r in connection.execute(
+                text("SELECT event_type FROM funnel_events WHERE lead_id = :l ORDER BY id"), {"l": lead_id})]
+    finally:
+        engine.dispose()
+    assert events == ["state.DISCOVERY", "state.QUALIFY", "state.RECOMMEND", "state.SCHEDULE", "state.HANDOFF"]
+
+
 def test_every_fixture_has_a_declared_final_state():
     assert {p.stem for p in run_all.discover()} == set(EXPECTED_FINAL_STATE)
 
@@ -121,3 +214,29 @@ def test_core_answers_503_when_the_catalog_is_down(database_url):
     finally:
         core.terminate()
         core.wait(timeout=10)
+
+
+# A-3: el cliente de core descubre las tools del catálogo por MCP, sin nombres cableados.
+def test_core_client_discovers_the_contract_tools_from_the_catalog():
+    import asyncio
+
+    sys.path.insert(0, str(ROOT / "services" / "core"))
+    from app.catalog_client import CatalogClient
+
+    port = _free_port()
+    catalog = _start("catalog", port)
+    try:
+        tools = asyncio.run(CatalogClient(f"http://127.0.0.1:{port}").discover())
+    finally:
+        catalog.terminate()
+        catalog.wait(timeout=10)
+
+    contracts = {}
+    for path in (ROOT / "contracts" / "mcp").glob("*.schema.json"):
+        contract = json.loads(path.read_text(encoding="utf-8"))
+        if "inputSchema" in contract:
+            contracts[contract["name"]] = contract
+    assert len(contracts) == 5 and sorted(tools) == sorted(contracts)
+    for name, contract in contracts.items():
+        # Lo que publica el catálogo exige lo mismo que el contrato.
+        assert set(tools[name].input_schema.get("required", [])) == set(contract["inputSchema"].get("required", []))

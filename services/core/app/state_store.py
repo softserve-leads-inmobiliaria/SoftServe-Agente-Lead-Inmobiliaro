@@ -7,13 +7,19 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping
 
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from db.models import Conversation, FsmContext, Lead, LeadScore
+from app.scoring import Score
+from db.models import AuditLog, Conversation, FsmContext, FunnelEvent, Lead, LeadScore
+
+
+def funnel_event_type(fsm_state: str) -> str:
+    """Nombre del evento del funnel cuando una conversación entra a `fsm_state`."""
+    return f"state.{fsm_state}"
 
 
 class ConversationMismatch(ValueError):
@@ -29,6 +35,7 @@ class ConversationState:
     last_tool_results: dict[str, Any]
     score_signal: dict[str, Any]
     score: dict[str, Any] | None
+    unresolved_streak: int = 0  # interno (A-13): no forma parte del contrato FsmState
 
     def to_contract(self) -> dict[str, Any]:
         """El estado tal como lo describe el contrato FsmState (CT-3)."""
@@ -41,6 +48,16 @@ class ConversationState:
             "score_signal": self.score_signal,
             "score": self.score,
         }
+
+
+@dataclass(frozen=True)
+class GuardContext:
+    """Lo que el guardrail de entrada necesita saber antes de responder."""
+
+    consent_status: str
+    out_of_domain_count: int
+    fsm_state: str
+    unresolved_streak: int
 
 
 class StateStore:
@@ -72,6 +89,7 @@ class StateStore:
             fsm_state=conversation.fsm_state,
             lead_qualified=context.lead_qualified,
             last_tool_results=context.last_tool_results,
+            unresolved_streak=context.unresolved_streak,
             score_signal=context.score_signal,
             score=None if score is None else {
                 "lead_id": str(score.lead_id), "need_fit": score.need_fit, "budget": score.budget,
@@ -81,9 +99,60 @@ class StateStore:
             },
         )
 
-    def save_state(self, conversation_id: uuid.UUID, fsm_state: str) -> None:
-        self._session.execute(update(Conversation).where(Conversation.id == conversation_id)
-                              .values(fsm_state=fsm_state))
+    def save_streak(self, conversation_id: uuid.UUID, streak: int) -> None:
+        self._session.execute(update(FsmContext).where(FsmContext.conversation_id == conversation_id)
+                              .values(unresolved_streak=streak))
+
+    def save_state(self, conversation_id: uuid.UUID, fsm_state: str) -> bool:
+        """Guarda el estado y, si de verdad cambió, registra la transición en `funnel_events` (OBS-2).
+
+        Una fila por transición real, no por turno: guardar el mismo estado no escribe nada. Todo
+        pasa por aquí, así que ninguna transición (mensaje, *scheduler*) se queda sin registrar, y el
+        evento va en la misma transacción que el cambio: o se guardan los dos o ninguno.
+        """
+        lead_id = self._session.execute(
+            update(Conversation)
+            .where(Conversation.id == conversation_id, Conversation.fsm_state != fsm_state)
+            .values(fsm_state=fsm_state).returning(Conversation.lead_id)).scalar()
+        if lead_id is None:
+            return False
+        self._session.add(FunnelEvent(lead_id=lead_id, event_type=funnel_event_type(fsm_state)))
+        return True
+
+    def save_scoring(self, conversation_id: uuid.UUID, lead_id: uuid.UUID, signal: Mapping[str, Any],
+                     tool_results: Mapping[str, Any], score: Score) -> None:
+        """Guarda la señal acumulada, los resultados de tools del turno y el score (una fila por lead)."""
+        self._session.execute(update(FsmContext).where(FsmContext.conversation_id == conversation_id)
+                              .values(score_signal=dict(signal), last_tool_results=dict(tool_results)))
+        values = {"need_fit": score.need_fit, "budget": score.budget, "authority": score.authority,
+                  "timing": score.timing, "eligibility": score.eligibility, "total": score.total,
+                  "band": score.band, "reasons": list(score.reasons)}
+        self._session.execute(insert(LeadScore).values(lead_id=lead_id, **values)
+                              .on_conflict_do_update(index_elements=[LeadScore.lead_id],
+                                                     set_=values | {"updated_at": func.now()}))
+
+    def guard_context(self, conversation_id: uuid.UUID, lead_id: uuid.UUID) -> GuardContext:
+        """Consentimiento del lead y cuántos mensajes fuera de dominio lleva la conversación."""
+        consent = self._session.execute(select(Lead.consent_status).where(Lead.id == lead_id)).scalar()
+        out_of_domain = self._session.execute(
+            select(func.count()).select_from(AuditLog)
+            .where(AuditLog.action == "input.out_of_domain",
+                   AuditLog.payload["conversation_id"].astext == str(conversation_id))).scalar()
+        state = self._session.execute(
+            select(Conversation.fsm_state, FsmContext.unresolved_streak)
+            .join(FsmContext, FsmContext.conversation_id == Conversation.id)
+            .where(Conversation.id == conversation_id)).one_or_none()
+        return GuardContext(consent_status=consent or "pending", out_of_domain_count=out_of_domain or 0,
+                            fsm_state=state.fsm_state if state else "GREETING",
+                            unresolved_streak=state.unresolved_streak if state else 0)
+
+    def withdraw_consent(self, lead_id: uuid.UUID) -> None:
+        self._session.execute(update(Lead).where(Lead.id == lead_id)
+                              .values(consent_status="withdrawn", updated_at=func.now()))
+
+    def audit(self, action: str, payload: Mapping[str, Any]) -> None:
+        """Registra una detección del guardrail. El `payload` no debe llevar el contenido del mensaje."""
+        self._session.add(AuditLog(actor="input_guard", action=action, payload=dict(payload)))
 
     def touch(self, conversation_id: uuid.UUID) -> None:
         """Marca actividad: `last_message_at` en la conversación y `updated_at` en su contexto."""
