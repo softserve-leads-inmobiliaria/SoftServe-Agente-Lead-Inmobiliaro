@@ -14,7 +14,12 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.scoring import Score
-from db.models import AuditLog, Conversation, FsmContext, Lead, LeadScore
+from db.models import AuditLog, Conversation, FsmContext, FunnelEvent, Lead, LeadScore
+
+
+def funnel_event_type(fsm_state: str) -> str:
+    """Nombre del evento del funnel cuando una conversación entra a `fsm_state`."""
+    return f"state.{fsm_state}"
 
 
 class ConversationMismatch(ValueError):
@@ -98,9 +103,21 @@ class StateStore:
         self._session.execute(update(FsmContext).where(FsmContext.conversation_id == conversation_id)
                               .values(unresolved_streak=streak))
 
-    def save_state(self, conversation_id: uuid.UUID, fsm_state: str) -> None:
-        self._session.execute(update(Conversation).where(Conversation.id == conversation_id)
-                              .values(fsm_state=fsm_state))
+    def save_state(self, conversation_id: uuid.UUID, fsm_state: str) -> bool:
+        """Guarda el estado y, si de verdad cambió, registra la transición en `funnel_events` (OBS-2).
+
+        Una fila por transición real, no por turno: guardar el mismo estado no escribe nada. Todo
+        pasa por aquí, así que ninguna transición (mensaje, *scheduler*) se queda sin registrar, y el
+        evento va en la misma transacción que el cambio: o se guardan los dos o ninguno.
+        """
+        lead_id = self._session.execute(
+            update(Conversation)
+            .where(Conversation.id == conversation_id, Conversation.fsm_state != fsm_state)
+            .values(fsm_state=fsm_state).returning(Conversation.lead_id)).scalar()
+        if lead_id is None:
+            return False
+        self._session.add(FunnelEvent(lead_id=lead_id, event_type=funnel_event_type(fsm_state)))
+        return True
 
     def save_scoring(self, conversation_id: uuid.UUID, lead_id: uuid.UUID, signal: Mapping[str, Any],
                      tool_results: Mapping[str, Any], score: Score) -> None:
