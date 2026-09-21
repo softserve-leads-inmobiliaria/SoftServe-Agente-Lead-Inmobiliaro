@@ -121,3 +121,29 @@ def test_core_answers_503_when_the_catalog_is_down(database_url):
     finally:
         core.terminate()
         core.wait(timeout=10)
+
+
+# A-3: el cliente de core descubre las tools del catálogo por MCP, sin nombres cableados.
+def test_core_client_discovers_the_contract_tools_from_the_catalog():
+    import asyncio
+
+    sys.path.insert(0, str(ROOT / "services" / "core"))
+    from app.catalog_client import CatalogClient
+
+    port = _free_port()
+    catalog = _start("catalog", port)
+    try:
+        tools = asyncio.run(CatalogClient(f"http://127.0.0.1:{port}").discover())
+    finally:
+        catalog.terminate()
+        catalog.wait(timeout=10)
+
+    contracts = {}
+    for path in (ROOT / "contracts" / "mcp").glob("*.schema.json"):
+        contract = json.loads(path.read_text(encoding="utf-8"))
+        if "inputSchema" in contract:
+            contracts[contract["name"]] = contract
+    assert len(contracts) == 5 and sorted(tools) == sorted(contracts)
+    for name, contract in contracts.items():
+        # Lo que publica el catálogo exige lo mismo que el contrato.
+        assert set(tools[name].input_schema.get("required", [])) == set(contract["inputSchema"].get("required", []))

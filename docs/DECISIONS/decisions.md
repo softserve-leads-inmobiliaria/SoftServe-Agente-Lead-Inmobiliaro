@@ -283,3 +283,33 @@ llamada al catálogo — descartada: bloquea la fila mientras se espera por red.
 provisional (`telegram_user_id` = id del lead): el canal (`B-3`) debe crear al lead con su id real
 antes de que su primer evento llegue al core. La intención `otro` nunca dispara `HUMAN_HANDOFF`
 hasta que `A-2`/`A-13` revisen el criterio.
+
+
+## DT-13 — Cliente MCP del catálogo: descubrimiento de tools, sin nombres cableados
+
+**Estado:** aceptada
+
+**Contexto.** `core` debe usar el mismo cliente contra el catálogo falso (`CT-8`) y contra el real
+(`C-1`), sin ramas de código por entorno (`A-3`). Si el cliente conociera los nombres o los esquemas
+de las tools, cada cambio del catálogo obligaría a tocar `core`.
+
+**Decisión.**
+- `CatalogClient` (`services/core/app/catalog_client.py`) descubre las tools con `tools/list` en la
+  primera conexión y las guarda en memoria (`ToolSpec`: nombre, descripción, esquema de entrada y de
+  salida). No contiene nombres de tools ni distingue entornos: lo único que cambia es
+  `CATALOG_SERVICE_URL`.
+- `call` rechaza con `UnknownTool`, sin tocar la red, una tool que el catálogo no publica. Si el
+  nombre no está en el caché, vuelve a descubrir una vez (el catálogo pudo publicar una tool después
+  de que `core` arrancara) antes de rechazar.
+- `tool_specs()` entrega lo descubierto (`name`, `description`, `input_schema`) para que `A-2`/`A-4`
+  se lo pasen al LLM como tools disponibles.
+- La validación de los argumentos sigue siendo del servidor (`catalog_error` con `INVALID_INPUT`); el
+  cliente no la duplica.
+
+**Alternativas.** Lista fija de las 5 tools en `core` — descartada: acopla `core` al catálogo.
+Sesión MCP persistente entre llamadas — descartada por ahora: cada llamada abre su sesión y el coste
+extra es un viaje de ida y vuelta local; se reevalúa si la latencia del turno lo exige.
+
+**Consecuencias.** Que el catálogo publique exactamente las 5 tools de `contracts/mcp` se verifica en
+las pruebas de extremo a extremo (`tests/harness`), no en el cliente. El caché no se invalida solo si
+una tool desaparece; una llamada a ella fallará con el error del catálogo.
