@@ -33,6 +33,7 @@ from app.scoring import Score
 from app.skeleton import Catalog, respond
 from app.state_store import GuardContext, StateStore
 from app.tracing import SPAN_KIND, get_tracer
+from app.transcript import record_turn
 from db.session import session_scope
 
 Audit = tuple[str, Mapping[str, Any]]
@@ -75,11 +76,13 @@ def read_guard_context(engine: Engine, event: Mapping[str, Any]) -> GuardContext
 
 def advance(engine: Engine, event: Mapping[str, Any], intent: str,
             evidence: TurnEvidence | None = None, audits: Sequence[Audit] = (),
-            counts_as_unresolved: bool = True) -> Transition:
+            counts_as_unresolved: bool = True, inbound_text: str = "",
+            outbound_text: str = "") -> Transition:
     """Carga y bloquea el estado, aplica el trigger, puntúa, audita y guarda, en una transacción.
 
     `counts_as_unresolved=False` para los turnos que fuerza el guardrail de entrada: no suman a la
-    racha de frustración.
+    racha de frustración. `inbound_text`/`outbound_text` son el texto ya saneado por el guardrail
+    (B-5): se guardan como transcripción en la misma transacción que el estado.
     """
     conversation_id, lead_id = _ids(event)
     with get_tracer().start_as_current_span("fsm.advance") as span, session_scope(engine) as session:
@@ -98,6 +101,7 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         signal, score = score_turn(state.score_signal, evidence)
         store.save_scoring(conversation_id, lead_id, signal, dict(evidence.tool_results), score)
         _write_audits(store, event, audits)
+        record_turn(session, conversation_id, inbound_text=inbound_text, outbound_text=outbound_text)
         store.touch(conversation_id)
         transition = Transition(before=state.fsm_state, after=after, trigger=trigger, score=score,
                                 unresolved_streak=streak)
@@ -108,7 +112,8 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         return transition
 
 
-def withdraw(engine: Engine, event: Mapping[str, Any], audits: Sequence[Audit]) -> None:
+def withdraw(engine: Engine, event: Mapping[str, Any], audits: Sequence[Audit],
+             inbound_text: str = "", outbound_text: str = "") -> None:
     """Baja del lead (`/stop`): marca `consent_status=withdrawn` y lo audita. Sin FSM ni score."""
     conversation_id, lead_id = _ids(event)
     with session_scope(engine) as session:
@@ -116,6 +121,7 @@ def withdraw(engine: Engine, event: Mapping[str, Any], audits: Sequence[Audit]) 
         store.lock(conversation_id, lead_id)
         store.withdraw_consent(lead_id)
         _write_audits(store, event, audits)
+        record_turn(session, conversation_id, inbound_text=inbound_text, outbound_text=outbound_text)
         store.touch(conversation_id)
 
 
@@ -149,7 +155,7 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     # /stop: determinista, sin LLM. Un lead ya dado de baja tampoco recibe más flujo.
     if verdict.opt_out:
         span.set_attribute("turn.outcome", "opt_out")
-        await run_in_threadpool(withdraw, engine, event, audits)
+        await run_in_threadpool(withdraw, engine, event, audits, verdict.clean_text, OPT_OUT_REPLY)
         return (await respond(event, catalog, intent="otro", text=OPT_OUT_REPLY)).outbound
     if context.consent_status == "withdrawn":
         span.set_attribute("turn.outcome", "withdrawn")
@@ -177,7 +183,8 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     evidence = TurnEvidence(raw_signal=_raw_signal(verdict), tool_results=reply.tool_results)
     span.set_attribute("turn.intent", reply.intent)
     span.set_attribute("turn.tools", sorted(reply.tool_results))
-    transition = await run_in_threadpool(advance, engine, event, reply.intent, evidence, audits, counts)
+    transition = await run_in_threadpool(advance, engine, event, reply.intent, evidence, audits,
+                                         counts, verdict.clean_text, outbound["text"])
     _describe(span, transition)
     return outbound
 
