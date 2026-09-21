@@ -50,6 +50,20 @@ docker compose exec postgres psql -U leads -d leads -c "select lead_id, need_fit
 `migrate` aplica las migraciones de Alembic (`db/migrations`) sobre Postgres y termina; los
 servicios que usen la base dependerán de él.
 
+### Ver la traza de cada turno (Phoenix)
+
+Con el stack arriba, `core` envía una traza por turno a Phoenix (OBS-1, DT-18). Tras correr el arnés
+(`docker compose run --rm --build harness`), abre http://localhost:6006 y entra al proyecto
+`lead-agent`. Cada turno es una traza `turn` con:
+
+- `guardrail.input`: qué detectó el guardrail de entrada (`jailbreak`, tipos de PII, fuera de dominio…);
+- `catalog.<tool>`: cada llamada al catálogo, con su duración y si falló;
+- `fsm.advance`: estado antes y después, *trigger*, motivo del traspaso a humano y score.
+
+Las trazas **no llevan el texto de los mensajes**. Para depurar en local con datos de prueba,
+arranca con `TRACE_CONTENT=1`. Si Phoenix no está levantado, `core` responde igual y las trazas se
+pierden. Sin `OTEL_EXPORTER_OTLP_ENDPOINT` (p. ej. al correr `uvicorn` a mano) las trazas están apagadas.
+
 Esto es el esqueleto end-to-end de CT-4: arnés → core → catálogo por MCP → respuesta. Todo el
 contenido es *fake*, a propósito. Para probar un mensaje a mano con el stack arriba:
 

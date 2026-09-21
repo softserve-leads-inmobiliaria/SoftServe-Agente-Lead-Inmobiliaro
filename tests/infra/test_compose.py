@@ -86,3 +86,16 @@ def test_core_waits_for_the_migrations_and_can_reach_postgres():
     core = SERVICES["core"]
     assert core["depends_on"]["migrate"]["condition"] == "service_completed_successfully"
     assert core["environment"]["POSTGRES_HOST"] == "postgres"
+
+
+def test_core_sends_its_traces_to_phoenix_without_depending_on_it():
+    """OBS-1: las trazas van a Phoenix por OTLP, pero un Phoenix caído no debe tumbar al bot."""
+    core = SERVICES["core"]
+    assert core["environment"]["OTEL_EXPORTER_OTLP_ENDPOINT"] == "http://phoenix:6006"
+    assert "phoenix" not in core["depends_on"]
+    assert "phoenix" in SERVICES
+
+
+def test_message_content_is_kept_out_of_the_traces_by_default():
+    assert SERVICES["core"]["environment"]["TRACE_CONTENT"] == "${TRACE_CONTENT:-}"
+

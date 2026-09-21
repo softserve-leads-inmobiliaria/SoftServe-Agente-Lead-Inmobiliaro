@@ -452,3 +452,44 @@ anterior se deduce del orden) y exigiría otra migración.
 consulta de arriba lo cuenta una vez, pero quien quiera medir reentradas puede contar filas. Si `B-9`
 necesita saber de qué estado se venía, hay que añadir `from_state` con una migración.
 
+
+
+## DT-18 — Trazas por turno: OpenTelemetry hacia Phoenix, sin datos de los leads
+
+**Estado:** aceptada
+
+**Contexto.** `OBS-1` pide una traza por turno (estado de la FSM, tools, guardrails, latencia, costo),
+con auto-instrumentación del SDK del proveedor de LLM (DT-6) y *spans* manuales. Phoenix ya está en el
+compose (DT-9). Al probar la auto-instrumentación de Bedrock se vio que **graba por defecto el texto
+completo de los mensajes** (`input.value`, contenido de cada mensaje), es decir, datos de los leads.
+
+**Decisión.**
+- `services/core/app/tracing.py` configura OpenTelemetry y exporta por OTLP/HTTP. Sin
+  `OTEL_EXPORTER_OTLP_ENDPOINT` las trazas quedan apagadas y los *spans* son no-op. En el compose,
+  `core` apunta a `http://phoenix:6006` y **no** depende de Phoenix: si cae, se pierden trazas pero el
+  bot sigue (el exportador corre en segundo plano y sus fallos no llegan al turno).
+- *Spans* manuales: `turn` (raíz, con estado de la FSM antes y después, *trigger*, motivo del traspaso,
+  score, intención, tools usadas, resultado —`normal`/`jailbreak`/`out_of_domain`/`opt_out`/`withdrawn`—
+  y latencia), `guardrail.input` (qué detectó), `fsm.advance` (la transacción de estado) y
+  `catalog.<tool>` por cada llamada al catálogo.
+- Auto-instrumentación: `openinference-instrumentation-bedrock` (modelo, tokens y tiempo de cada llamada)
+  y `openinference-instrumentation-mcp`. `boto3` se añade a `core` porque el instrumentador lo necesita
+  para activarse; `A-2` lo usará para llamar a Bedrock.
+- **Privacidad:** las trazas nunca llevan el texto de los mensajes ni datos de contacto. Los *spans*
+  manuales solo guardan identificadores, banderas y contadores; de las llamadas al catálogo solo los
+  **nombres** de los argumentos, no sus valores. Al instrumentador de Bedrock se le configura ocultar
+  el contenido y conservar tokens, modelo y tiempos. `TRACE_CONTENT=1` lo desoculta solo para depurar
+  en local.
+- Revisada la primera traza real (`tests/harness/test_traces_e2e.py`): un turno de búsqueda exporta
+  exactamente `turn`, `guardrail.input`, `fsm.advance` y `catalog.search_properties`; el instrumentador
+  de MCP solo propaga contexto y no añade *spans*. El test fija esa lista para notar si cambia.
+
+**Alternativas.** Dejar el contenido visible en las trazas — descartada: mezcla datos de leads con la
+herramienta de depuración. Exigir Phoenix para arrancar (`depends_on`) — descartada: la observabilidad no
+debe poder tumbar el servicio.
+
+**Consecuencias.** El costo por llamada al LLM sale de los tokens que registra el instrumentador
+(`llm.token_count.*`) y lo calcula Phoenix a partir del modelo; falta verificarlo con una llamada real a
+Bedrock (`A-2`). El fake LLM no genera *spans* de LLM. El catálogo no está instrumentado del lado del
+servidor: su parte se ve como la duración del *span* `catalog.<tool>` en `core`. La imagen de `core`
+crece unos 70 MB por `boto3`; encaja con `#65` (optimizar Dockerfiles).

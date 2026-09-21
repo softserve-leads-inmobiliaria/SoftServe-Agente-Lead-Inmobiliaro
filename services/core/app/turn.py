@@ -5,6 +5,7 @@ auditar en una sola transacción (A-1, A-9).
 """
 from __future__ import annotations
 
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
@@ -31,6 +32,7 @@ from app.lead_scoring import TurnEvidence, score_turn
 from app.scoring import Score
 from app.skeleton import Catalog, respond
 from app.state_store import GuardContext, StateStore
+from app.tracing import SPAN_KIND, get_tracer
 from db.session import session_scope
 
 Audit = tuple[str, Mapping[str, Any]]
@@ -43,6 +45,16 @@ class Transition:
     trigger: str | None
     score: Score
     unresolved_streak: int = 0
+
+
+def _describe(span: Any, transition: "Transition") -> None:
+    """Estado de la FSM y score de un turno, como atributos del span (sin ningún dato del lead)."""
+    span.set_attributes({
+        "fsm.state_before": transition.before, "fsm.state_after": transition.after,
+        "fsm.transitioned": transition.before != transition.after, "fsm.trigger": transition.trigger or "",
+        "fsm.unresolved_streak": transition.unresolved_streak,
+        "score.total": transition.score.total, "score.band": transition.score.band,
+    })
 
 
 def _ids(event: Mapping[str, Any]) -> tuple[uuid.UUID, uuid.UUID]:
@@ -70,7 +82,8 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
     racha de frustración.
     """
     conversation_id, lead_id = _ids(event)
-    with session_scope(engine) as session:
+    with get_tracer().start_as_current_span("fsm.advance") as span, session_scope(engine) as session:
+        span.set_attribute(SPAN_KIND, "CHAIN")
         store = StateStore(session)
         state = store.lock(conversation_id, lead_id)
         streak = next_streak(state.unresolved_streak, intent, counts_as_unresolved)
@@ -86,8 +99,13 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         store.save_scoring(conversation_id, lead_id, signal, dict(evidence.tool_results), score)
         _write_audits(store, event, audits)
         store.touch(conversation_id)
-        return Transition(before=state.fsm_state, after=after, trigger=trigger, score=score,
-                          unresolved_streak=streak)
+        transition = Transition(before=state.fsm_state, after=after, trigger=trigger, score=score,
+                                unresolved_streak=streak)
+        _describe(span, transition)
+        if trigger == HUMAN_REQUESTED:
+            span.set_attribute("fsm.handoff_reason", intent if intent in HUMAN_INTENTS else "frustration")
+        span.set_attribute("guardrail.audits", [action for action, _ in audits])
+        return transition
 
 
 def withdraw(engine: Engine, event: Mapping[str, Any], audits: Sequence[Audit]) -> None:
@@ -116,19 +134,29 @@ def _raw_signal(verdict: InputVerdict) -> dict[str, Any]:
     return raw
 
 
-async def process_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog) -> dict[str, Any]:
+async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, span: Any) -> dict[str, Any]:
     FakeCore().validate(event)  # evento incompleto o no inbound -> ValueError (422)
-    verdict = inspect_input(event["text"])
+    with get_tracer().start_as_current_span("guardrail.input") as guard:
+        verdict = inspect_input(event["text"])
+        guard.set_attributes({
+            SPAN_KIND: "GUARDRAIL", "guardrail.opt_out": verdict.opt_out, "guardrail.jailbreak": verdict.jailbreak,
+            "guardrail.pii_types": list(verdict.pii), "guardrail.out_of_domain": verdict.out_of_domain,
+            "guardrail.protected_category": verdict.protected_category,
+        })
     context = await run_in_threadpool(read_guard_context, engine, event)
     audits = verdict.audit_kinds()
 
     # /stop: determinista, sin LLM. Un lead ya dado de baja tampoco recibe más flujo.
     if verdict.opt_out:
+        span.set_attribute("turn.outcome", "opt_out")
         await run_in_threadpool(withdraw, engine, event, audits)
         return (await respond(event, catalog, intent="otro", text=OPT_OUT_REPLY)).outbound
     if context.consent_status == "withdrawn":
+        span.set_attribute("turn.outcome", "withdrawn")
         return (await respond(event, catalog, intent="otro", text=WITHDRAWN_REPLY)).outbound
 
+    span.set_attribute("turn.outcome", "out_of_domain" if verdict.out_of_domain
+                       else "jailbreak" if verdict.jailbreak else "normal")
     clean_event = {**event, "text": verdict.clean_text}
     if verdict.out_of_domain:
         reply = await respond(clean_event, catalog, intent="otro", text=_out_of_domain_reply(context))
@@ -147,5 +175,23 @@ async def process_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalo
         outbound["text"] = FRUSTRATION_REPLY  # esta racha dispara el traspaso: se le avisa al lead
 
     evidence = TurnEvidence(raw_signal=_raw_signal(verdict), tool_results=reply.tool_results)
-    await run_in_threadpool(advance, engine, event, reply.intent, evidence, audits, counts)
+    span.set_attribute("turn.intent", reply.intent)
+    span.set_attribute("turn.tools", sorted(reply.tool_results))
+    transition = await run_in_threadpool(advance, engine, event, reply.intent, evidence, audits, counts)
+    _describe(span, transition)
     return outbound
+
+
+async def process_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog) -> dict[str, Any]:
+    """Un turno completo dentro de un span `turn`. El span no lleva el texto del mensaje."""
+    with get_tracer().start_as_current_span("turn") as span:
+        span.set_attributes({
+            SPAN_KIND: "CHAIN", "conversation.id": str(event.get("conversation_id", "")),
+            "lead.id": str(event.get("lead_id", "")), "event.id": str(event.get("event_id", "")),
+            "channel": str(event.get("channel", "")),
+        })
+        started = time.perf_counter()
+        try:
+            return await _run_turn(engine, event, catalog, span)
+        finally:
+            span.set_attribute("turn.latency_ms", round((time.perf_counter() - started) * 1000, 1))

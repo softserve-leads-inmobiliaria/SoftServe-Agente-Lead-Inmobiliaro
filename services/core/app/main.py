@@ -6,11 +6,13 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 
+from app import tracing
 from app.catalog_client import CatalogClient
 from app.turn import process_turn
 from db.session import get_engine
 
 logger = logging.getLogger("core")
+tracing.configure()  # sin OTEL_EXPORTER_OTLP_ENDPOINT queda apagado
 app = FastAPI(title="core (fake)")
 catalog = CatalogClient()
 
