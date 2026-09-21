@@ -15,10 +15,11 @@ No hace falta crear un `.env`: `docker-compose.yml` trae defaults de desarrollo.
 | :--- | :--- | :--- |
 | `postgres` | `localhost:5432` (usuario/clave/BD: ver `.env.example`) | Postgres 16 con `pgvector` |
 | `phoenix` | http://localhost:6006 (OTLP/HTTP `/v1/traces`, OTLP/gRPC en `4317`) | Observabilidad (DT-9) |
-| `panel` | http://localhost:8080/health | Panel de asesores (por ahora solo el esqueleto) |
+| `panel` | http://localhost:8080/panel/<token> (`/health` para el estado) | Panel de asesores: lista de leads de su zona y ficha con score y transcripción (B-5, DT-5) |
 | `migrate` | — (termina al acabar) | Aplica `alembic upgrade head` (esquema completo, C-3) |
+| `seed` | — (termina al acabar) | Siembra los 3 asesores de demo, idempotente, e imprime la URL del panel de cada uno (B-5) |
 | `catalog` | solo dentro de la red de Docker (`http://catalog:8000`, MCP en `/mcp`) | Catálogo *fake* como servidor MCP (CT-8) |
-| `core` | http://localhost:8000/health (`POST /events`) | Core *fake* (CT-7 + CT-4) |
+| `core` | http://localhost:8000/health (`POST /events`) | Core: turno completo (FSM, guardrails, scoring) con agente *fake* por defecto o LLM real (`LLM_PROVIDER`); arranca el bot de Telegram si hay `TELEGRAM_BOT_TOKEN` |
 | `harness` | — (termina al acabar) | Reproduce `harness/fixtures/*.jsonl` contra el core |
 
 El arnés corre solo al levantar el stack: al final imprime `N/N guiones en verde` y termina, sin
@@ -50,6 +51,24 @@ docker compose exec postgres psql -U leads -d leads -c "select lead_id, need_fit
 `migrate` aplica las migraciones de Alembic (`db/migrations`) sobre Postgres y termina; los
 servicios que usen la base dependerán de él.
 
+### Probar el bot de Telegram (B-1..B-4)
+
+Con un bot creado en @BotFather: poner `TELEGRAM_BOT_TOKEN` en el `.env` y `docker compose up -d --build core`
+(*long polling*, no hace falta URL pública). Sin token, `core` arranca igual y no levanta el bot. Comprobar:
+
+1. Un saludo → aviso de privacidad más la respuesta del agente.
+2. `https://t.me/<bot>?start=prop_00231` → el `property_id` llega en el evento.
+3. `STOP` y `/stop` → `consent_status=withdrawn` y `status=closed_lost` en `leads`, sin pasar por el LLM.
+4. Un segundo `getUpdates` externo devuelve `409 Conflict`: confirma que el *polling* corre de verdad.
+
+### Ver el panel de asesores (B-5)
+
+`docker compose up -d --build` ejecuta `seed`, que imprime una línea por asesor con su URL:
+`docker compose logs seed` → `adv_001  Valeria Ortiz  Providencia  /panel/<token>`. Abrir
+`http://localhost:8080/panel/<token>`. El panel filtra por `Lead.zone`, y hoy el core no rellena esa columna
+(llegará con A-10): para verlo con datos, asignar la zona a mano
+(`update leads set zone='Providencia' where ...`). Un token inventado y un lead de otra zona dan el mismo 404.
+
 ### Usar el LLM real (Bedrock)
 
 Por defecto el agente es el *fake* (`LLM_PROVIDER=fake`): respuestas fijas y sin credenciales. Para
@@ -62,10 +81,14 @@ BEDROCK_MODEL_ID_CLASSIFIER=<modelo liviano>
 AWS_ACCESS_KEY_ID=...   AWS_SECRET_ACCESS_KEY=...   (o AWS_PROFILE fuera de Docker)
 ```
 
-Antes de darlos por buenos, probar **una llamada real de un token** con cada ID: algunos modelos de
+Con inferencia entre regiones el ID lleva prefijo (p. ej. `us.anthropic.claude-haiku-4-5-20251001-v1:0`) y
+`BEDROCK_REGION` debe ser una región de EE. UU. Antes de darlos por buenos, probar **una llamada real de un token** con cada ID: algunos modelos de
 Bedrock exigen un *inference profile* y el error solo aparece en la primera llamada. Sin los dos IDs,
 `core` no arranca (falla con un mensaje claro). Si Bedrock falla o el cupo (10 por minuto y modelo) se
-agota, el turno responde con un texto seguro en vez de dejar al lead esperando. Ver DT-19: **con el LLM
+agota, el turno responde con un texto seguro en vez de dejar al lead esperando. Una cuenta con cuota baja
+recibe `ThrottlingException` de Bedrock tras pocas llamadas seguidas (el limitador local no lo evita): el
+reintento con espera exponencial es la historia A-14, todavía pendiente, y hasta entonces ese error no
+queda en el log. Ver DT-19: **con el LLM
 real todavía no hay guardrails de salida** (A-5, A-6, A-7), así que no usarlo con leads reales.
 
 El historial de cada conversación se guarda en `messages` (solo el texto ya filtrado, sin PII ni

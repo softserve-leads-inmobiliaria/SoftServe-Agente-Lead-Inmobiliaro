@@ -629,3 +629,67 @@ cambiar lo que se ofrece.
 (`catalog.get_availability`), visibles en la traza. Un catálogo real con muchos resultados por búsqueda
 puede pedir limitar el número de propiedades que se revalidan; `A-5` comparará contra estos mismos datos.
 
+
+## DT-22 — Orquestación sin framework agéntico (LangGraph descartado)
+
+**Estado:** aceptada
+
+**Contexto.** Se evaluó adoptar LangGraph, aunque fuera solo para el bucle agente + tools. Hoy la
+orquestación es código propio: la FSM es una tabla `(estado, trigger) -> estado` (`app/fsm.py`, DT-12),
+el estado vive en Postgres (DT-1, DT-11), los guardrails son deterministas y corren antes de la FSM y del
+LLM (DT-15, DT-21) y el bucle de tool calling son ~25 líneas en `BedrockLLM.chat` (DT-19). La pregunta
+era si un framework simplificaría algo de eso o si solo añadiría una capa.
+
+**Decisión.** No se adopta ningún framework agéntico. Se mantiene el enfoque actual: FSM en tabla, estado
+transaccional en Postgres, bucle de tools propio detrás del `Protocol` `Agent` (`app/agent.py`). La
+orquestación no depende de ningún proveedor de nube; la única dependencia de proveedor es el LLM
+(`BedrockLLM`, DT-6), aislada detrás de ese mismo `Protocol`.
+
+**Análisis por pieza.**
+
+| Pieza | Con LangGraph | Veredicto |
+|---|---|---|
+| `fsm.py` (89 líneas, función pura) | Un `StateGraph` equivalente es más largo y deja de ser testeable sin el framework | Empeora |
+| Estado en Postgres con bloqueo por conversación | El *checkpointer* de LangGraph sería una segunda fuente de verdad; ignorarlo deja el grafo como decoración | Choca con DT-1 |
+| `advance()`: bloqueo, transición, score, auditoría y mensajes en una transacción | Un grafo por nodos fragmenta esa atomicidad | Riesgo |
+| Guardrails de entrada (opt-out, jailbreak, fuera de dominio) | Serían aristas condicionales: mismas reglas, más maquinaria | Neutro |
+| Bucle de tools de `BedrockLLM.chat` | Es lo único que reemplazaría; se pierde el control fino de `CODE_CONTROLLED_ARGUMENTS` (`lead_qualified`, A-6), del limitador por modelo y del fallback ante `LLMError` | Neutro a negativo |
+| Trazas a Phoenix (DT-18) | Habría que sumar otro instrumentador y revisar spans duplicados | Neutro a negativo |
+
+**Ventajas de omitirlo.**
+- Se conserva una sola fuente de verdad del estado y la atomicidad del turno.
+- Las garantías que protegen a la agencia (argumentos fijados por código, fallo cerrado de
+  disponibilidad, guardrails antes del LLM) quedan a la vista, no dentro de nodos de un grafo.
+- Menos dependencias y una imagen de `core` más pequeña; sin acople a la API de un framework que evoluciona.
+- Sin migración ni riesgo de regresión en historias cerradas (`A-2`, `A-3`, `A-4`, `OBS-1`) ni en las
+  abiertas que tocan el bucle (`A-14`, `A-5`, `A-6`, `A-7`).
+- Cambiar de proveedor de LLM sigue siendo escribir otro `Agent`, sin tocar la FSM.
+
+**Desventajas aceptadas.**
+- Se mantiene código propio que un framework daría hecho: el bucle de tools, los reintentos (`A-14`) y la
+  gestión del historial.
+- `_run_turn` (`app/turn.py`) concentra muchas ramas y es la función más difícil de leer. Se atiende
+  partiéndola en funciones, no con un framework.
+- No hay soporte incorporado para *streaming*, interrupciones de *human-in-the-loop* ni ejecución
+  paralela de tools. Nada de eso está en el alcance actual.
+- Un equipo que ya conozca un framework tendría menos que aprender.
+- Si la consigna del curso exige un framework agéntico con nombre, esta decisión no la cumpliría a la
+  letra (ver condición de revisión).
+
+**Alternativas.**
+- *LangGraph en el bucle agente + tools, dejando FSM y guardrails como están* — descartada por ahora: su
+  impacto es bajo (cambia `BedrockLLM.chat` y `BedrockAgent`, y roza `A-14`, `A-5`, `A-6` y `A-7`) pero
+  no aporta capacidad que hoy se necesite. Es el plan de contingencia si la consigna lo exige.
+- *LangGraph para toda la orquestación (FSM incluida)* — descartada: choca con DT-1 y DT-12.
+- *Pydantic AI, CrewAI, DeepAgents, Strands Agents* — descartadas. Los tres últimos están pensados para
+  varios agentes colaborando o atan a un proveedor; este flujo es un agente con una FSM.
+
+**Consecuencias.**
+- La costura para un cambio futuro es el `Protocol` `Agent`: un framework, si se adopta, entra dentro de
+  `BedrockAgent` sin tocar `turn.py`, la FSM ni `advance()`.
+- `A-14` (reintentos con backoff) se implementa en `BedrockLLM._converse`, sin depender de ningún framework.
+
+**Condición de revisión.** Reabrir esta decisión si (a) la consigna del curso exige un framework agéntico
+concreto, o (b) el flujo pasa a tener varios agentes, *streaming* o interrupciones humanas. En el caso (a),
+el alcance mínimo es un `StateGraph` de dos nodos (llamar al modelo ⇄ ejecutar tools) que siga usando
+`BedrockLLM._converse`, con una entrada nueva que reemplace a esta.
