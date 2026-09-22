@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol
 
-from app import factuality
+from app import address_guard, factuality
 from app.bedrock_llm import BedrockLLM, LLMError, LLMFormatError
 from app.fakes.fake_llm import FakeLLM
 from app.fsm import HUMAN_INTENTS
@@ -105,15 +105,15 @@ class BedrockAgent:
             if not chat.text:
                 raise LLMFormatError("respuesta vacía")
             guard_audits: list[tuple[str, dict[str, Any]]] = []
-            violations = factuality.check(chat.text, chat.tool_results, turn.text)
+            violations = _output_violations(chat.text, chat.tool_results, turn.text, turn.lead_qualified)
             if violations:
                 # Una oportunidad de corregirse con lo que ya sabe, antes de degradar la conversación (A-5).
                 retry = await self._llm.regenerate(turn.history, turn.text, chat.text, violations, visible, run_tool)
                 chat.tool_results.update(retry.tool_results)
                 chat.tool_calls += retry.tool_calls
                 guard_audits.append(("output.factuality_regenerated", {"violations": len(violations)}))
-                violations = (factuality.check(retry.text, chat.tool_results, turn.text) if retry.text.strip()
-                             else violations)
+                violations = (_output_violations(retry.text, chat.tool_results, turn.text, turn.lead_qualified)
+                             if retry.text.strip() else violations)
                 if violations:
                     guard_audits.append(("output.factuality_degraded", {"violations": len(violations)}))
                     return AgentResult(text=FACTUALITY_DEGRADE_REPLY, intent="otro",
@@ -125,6 +125,12 @@ class BedrockAgent:
             return AgentResult(text=LLM_FALLBACK_REPLY, intent="otro", llm_error=type(exc).__name__)
         return AgentResult(text=chat.text, intent=classification.intent, raw_signal=classification.signal,
                            tool_results=chat.tool_results, tool_calls=chat.tool_calls, guard_audits=guard_audits)
+
+
+def _output_violations(text: str, tool_results: Mapping[str, Any], lead_text: str,
+                       lead_qualified: bool) -> list[factuality.Violation]:
+    """Guardrails de salida combinados: factualidad (A-5) y dirección reservada (A-6, DT-23)."""
+    return factuality.check(text, tool_results, lead_text) + address_guard.check(text, lead_qualified, lead_text)
 
 
 def _visible(spec: Mapping[str, Any]) -> dict[str, Any]:
