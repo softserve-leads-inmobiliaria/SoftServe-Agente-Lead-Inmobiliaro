@@ -741,3 +741,42 @@ de donde sacó cada dato (grounding estructurado) — mejor a largo plazo, pero 
 (la regeneración) cuando falla la primera vez; con cuota baja de Bedrock, eso se suma al problema que
 ya cubre `A-14`. `A-6` (dirección reservada) y `A-7` (promesas no autorizadas) reutilizan `check()`
 para sus propias listas de valores prohibidos/reservados.
+
+## DT-24 — Lead calificado: la banda del score, marcado en `leads.status`, avisado una sola vez
+
+**Estado:** aceptada
+
+**Contexto.** `B-7` pide notificar al asesor "en el turno exacto en que el lead pasa a calificado". Esa
+señal no existía: `FsmContext.lead_qualified` nunca se escribía, `Lead.status` tampoco, y DT-14 decidió
+que el score BANT-E no condiciona las transiciones de la FSM. Hacía falta decidir qué cuenta como
+"calificado", cómo se garantiza que el aviso llegue una sola vez, y a quién.
+
+**Decisión.**
+- **Calificado = la banda del score cruza a WARM o HOT** (total ≥ 41). Es el significado de negocio de
+  BANT-E: vale la pena que un asesor lo llame. Es independiente del estado de la FSM y no contradice
+  DT-14 — solo *lee* la banda que ya se calcula, no mueve estados. La detección vive en
+  `services/core/app/qualification.py`, comparando la banda anterior (`state.score`) con la nueva.
+- **La guarda de idempotencia es la propia fila:** `UPDATE leads SET status='mql' WHERE id=:id AND
+  status='nuevo' RETURNING id` en la misma transacción del turno (`StateStore.qualify`). El segundo turno
+  que cruce la banda no devuelve fila y no notifica. De paso reviven `Lead.status` (nuevo → mql) y
+  `FsmContext.lead_qualified`, que el agente ya usa para decidir si puede revelar la dirección exacta.
+- **El aviso sale del canal, después del commit:** `process_turn` recibe un `on_qualified` opcional y lo
+  invoca solo cuando `Transition.qualified` es verdadero. Lo pasa el canal de Telegram; el `POST /events`
+  del arnés no, así los E2E nunca escriben a nadie. Un fallo del aviso se registra y no toca el turno.
+- **A quién:** el asesor de la misma `Lead.zone` que ya abrió el bot; si no hay, cualquiera registrado
+  (cola general, patrón de v1). Queda escrito en `leads.advisor_id` (migración `0003`).
+- **Registro del asesor por deep-link:** `t.me/<bot>?start=adv_<access_token>` liga el chat al asesor
+  dueño del token (`advisors.telegram_chat_id`, migración `0003`). Se usa el token y no el `advisor_id`
+  a propósito: `adv_001` es adivinable. Un chat pertenece a un solo asesor.
+
+**Alternativas.** Usar la transición de FSM a `RECOMMEND` como "calificado" — descartada: hoy la dispara
+la intención del LLM (`consulta_precio`), no la calidad del lead. Idempotencia por `AuditLog` o por la
+banda anterior — descartadas: una fila de estado es más simple, atómica y además le da sentido a un
+campo que ya existía. Notificar desde dentro de `advance` — descartada: mandaría el mensaje con la
+transacción todavía abierta.
+
+**Consecuencias.** `Lead.status` pasa a tener escritor: `nuevo` → `mql` al calificar; `B-6` lo mueve a
+`sql` cuando el asesor lo toma. La propiedad de interés va en la tarjeta **solo si el turno que califica
+la miró**: `FsmContext.last_tool_results` se sobrescribe cada turno (A-9) y la propiedad concreta no se
+persiste en otro lado (la zona sí, #81). Cerrar eso pide una columna nueva, y no la justifica todavía.
+La tarjeta no lleva datos de contacto: esos los ve el asesor en el panel, con su token.

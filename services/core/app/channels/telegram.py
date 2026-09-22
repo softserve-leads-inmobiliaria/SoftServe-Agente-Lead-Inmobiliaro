@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime
-from typing import Any
+from typing import Any, Mapping
 
 from sqlalchemy import Engine
 from starlette.concurrency import run_in_threadpool
@@ -17,10 +17,11 @@ from telegram import Bot, Update
 from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageHandler, filters
 
 from app.agent import Agent
-from app.channels import canonical, consent
+from app.channels import advisor_registration, canonical, consent, notifications
 from app.channels.identity import resolve_identity
+from app.channels.notifications import Sender
 from app.skeleton import Catalog
-from app.turn import process_turn
+from app.turn import Transition, process_turn
 
 logger = logging.getLogger("core.channels.telegram")
 
@@ -113,8 +114,15 @@ async def _on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 async def reply_to(engine: Engine, catalog: Catalog, *, telegram_user_id: str, text: str,
                    deep_link: str | None = None, timestamp: datetime | None = None,
-                   agent: Agent | None = None) -> str:
+                   agent: Agent | None = None, bot: Sender | None = None) -> str:
     """Un turno completo del canal, sin tipos de Telegram: es el punto de prueba del bot."""
+    # B-7: un asesor abriendo su enlace de registro no es un lead; no genera turno ni score.
+    token = canonical.advisor_token(deep_link)
+    if token is not None:
+        advisor = await run_in_threadpool(advisor_registration.register, engine,
+                                          access_token=token, chat_id=telegram_user_id)
+        return advisor_registration.reply_for(advisor)
+
     identity = await run_in_threadpool(resolve_identity, engine, telegram_user_id)
 
     # B-2: la baja es determinista y corta antes del LLM.
@@ -132,6 +140,11 @@ async def reply_to(engine: Engine, catalog: Catalog, *, telegram_user_id: str, t
         timestamp=timestamp,
         **canonical.parse_deep_link(deep_link),
     )
-    outbound = await process_turn(engine, event, catalog, agent)
+    async def on_qualified(qualified_event: Mapping[str, Any], transition: Transition) -> None:
+        await notifications.notify_advisor(
+            engine, qualified_event, transition.score.to_lead_score(str(identity.lead_id)),
+            bot if bot is not None else get_bot())
+
+    outbound = await process_turn(engine, event, catalog, agent, on_qualified)
     reply = canonical.from_canonical(outbound)
     return consent.with_privacy_notice(reply) if first_turn else reply

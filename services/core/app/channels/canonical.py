@@ -14,6 +14,14 @@ CHANNEL = "telegram"
 SCHEMA_VERSION = 1
 
 _DEEP_LINK_PREFIXES = {"prop_": "property_id", "camp_": "utm_campaign"}
+ADVISOR_PREFIX = "adv_"
+
+
+def advisor_token(payload: str | None) -> str | None:
+    """`?start=adv_<access_token>` -> el token, o None. Es el registro del asesor (B-7), no un lead."""
+    if payload and payload.startswith(ADVISOR_PREFIX) and len(payload) > len(ADVISOR_PREFIX):
+        return payload[len(ADVISOR_PREFIX):]
+    return None
 
 
 def parse_deep_link(payload: str | None) -> dict[str, str]:

@@ -88,6 +88,8 @@ class Lead(Base):
     consent_status: Mapped[str] = mapped_column(String, server_default="pending", nullable=False)
     status: Mapped[str] = mapped_column(String, server_default="nuevo", nullable=False)
     zone: Mapped[str | None] = mapped_column(String)
+    # Quién recibió la tarjeta al calificar (B-7). Null hasta entonces.
+    advisor_id: Mapped[str | None] = mapped_column(ForeignKey("advisors.id"), index=True)
     budget: Mapped[str | None] = mapped_column(Text)  # texto libre, como budget_hint (design.md §3)
     timing: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = _now()
@@ -218,6 +220,8 @@ class Advisor(Base):
     language: Mapped[str] = mapped_column(String, server_default="es", nullable=False)
     # Auth del panel (DT-5): token estático por asesor.
     access_token: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    # A dónde llega la tarjeta del lead calificado (B-7). Lo completa el asesor al abrir el bot.
+    telegram_chat_id: Mapped[str | None] = mapped_column(String, unique=True)
 
 
 class Visit(Base):
