@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol
 
-from app import address_guard, factuality
+from app import address_guard, factuality, promise_guard
 from app.bedrock_llm import BedrockLLM, LLMError, LLMFormatError
 from app.fakes.fake_llm import FakeLLM
 from app.fsm import HUMAN_INTENTS
@@ -129,8 +129,11 @@ class BedrockAgent:
 
 def _output_violations(text: str, tool_results: Mapping[str, Any], lead_text: str,
                        lead_qualified: bool) -> list[factuality.Violation]:
-    """Guardrails de salida combinados: factualidad (A-5) y dirección reservada (A-6, DT-23)."""
-    return factuality.check(text, tool_results, lead_text) + address_guard.check(text, lead_qualified, lead_text)
+    """Guardrails de salida combinados: factualidad (A-5), dirección reservada (A-6) y promesas no
+    autorizadas (A-7) — los tres comparten el mismo *pipeline* de regenerar/degradar (DT-23)."""
+    return (factuality.check(text, tool_results, lead_text)
+            + address_guard.check(text, lead_qualified, lead_text)
+            + promise_guard.check(text, tool_results, lead_text))
 
 
 def _visible(spec: Mapping[str, Any]) -> dict[str, Any]:
