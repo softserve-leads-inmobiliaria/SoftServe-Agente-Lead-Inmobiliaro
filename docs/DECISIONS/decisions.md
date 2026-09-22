@@ -630,9 +630,119 @@ cambiar lo que se ofrece.
 puede pedir limitar el número de propiedades que se revalidan; `A-5` comparará contra estos mismos datos.
 
 
+## DT-22 — Orquestación sin framework agéntico (LangGraph descartado)
 
+**Estado:** aceptada
 
-## DT-22 — Lead calificado: la banda del score, marcado en `leads.status`, avisado una sola vez
+**Contexto.** Se evaluó adoptar LangGraph, aunque fuera solo para el bucle agente + tools. Hoy la
+orquestación es código propio: la FSM es una tabla `(estado, trigger) -> estado` (`app/fsm.py`, DT-12),
+el estado vive en Postgres (DT-1, DT-11), los guardrails son deterministas y corren antes de la FSM y del
+LLM (DT-15, DT-21) y el bucle de tool calling son ~25 líneas en `BedrockLLM.chat` (DT-19). La pregunta
+era si un framework simplificaría algo de eso o si solo añadiría una capa.
+
+**Decisión.** No se adopta ningún framework agéntico. Se mantiene el enfoque actual: FSM en tabla, estado
+transaccional en Postgres, bucle de tools propio detrás del `Protocol` `Agent` (`app/agent.py`). La
+orquestación no depende de ningún proveedor de nube; la única dependencia de proveedor es el LLM
+(`BedrockLLM`, DT-6), aislada detrás de ese mismo `Protocol`.
+
+**Análisis por pieza.**
+
+| Pieza | Con LangGraph | Veredicto |
+|---|---|---|
+| `fsm.py` (89 líneas, función pura) | Un `StateGraph` equivalente es más largo y deja de ser testeable sin el framework | Empeora |
+| Estado en Postgres con bloqueo por conversación | El *checkpointer* de LangGraph sería una segunda fuente de verdad; ignorarlo deja el grafo como decoración | Choca con DT-1 |
+| `advance()`: bloqueo, transición, score, auditoría y mensajes en una transacción | Un grafo por nodos fragmenta esa atomicidad | Riesgo |
+| Guardrails de entrada (opt-out, jailbreak, fuera de dominio) | Serían aristas condicionales: mismas reglas, más maquinaria | Neutro |
+| Bucle de tools de `BedrockLLM.chat` | Es lo único que reemplazaría; se pierde el control fino de `CODE_CONTROLLED_ARGUMENTS` (`lead_qualified`, A-6), del limitador por modelo y del fallback ante `LLMError` | Neutro a negativo |
+| Trazas a Phoenix (DT-18) | Habría que sumar otro instrumentador y revisar spans duplicados | Neutro a negativo |
+
+**Ventajas de omitirlo.**
+- Se conserva una sola fuente de verdad del estado y la atomicidad del turno.
+- Las garantías que protegen a la agencia (argumentos fijados por código, fallo cerrado de
+  disponibilidad, guardrails antes del LLM) quedan a la vista, no dentro de nodos de un grafo.
+- Menos dependencias y una imagen de `core` más pequeña; sin acople a la API de un framework que evoluciona.
+- Sin migración ni riesgo de regresión en historias cerradas (`A-2`, `A-3`, `A-4`, `OBS-1`) ni en las
+  abiertas que tocan el bucle (`A-14`, `A-5`, `A-6`, `A-7`).
+- Cambiar de proveedor de LLM sigue siendo escribir otro `Agent`, sin tocar la FSM.
+
+**Desventajas aceptadas.**
+- Se mantiene código propio que un framework daría hecho: el bucle de tools, los reintentos (`A-14`) y la
+  gestión del historial.
+- `_run_turn` (`app/turn.py`) concentra muchas ramas y es la función más difícil de leer. Se atiende
+  partiéndola en funciones, no con un framework.
+- No hay soporte incorporado para *streaming*, interrupciones de *human-in-the-loop* ni ejecución
+  paralela de tools. Nada de eso está en el alcance actual.
+- Un equipo que ya conozca un framework tendría menos que aprender.
+- Si la consigna del curso exige un framework agéntico con nombre, esta decisión no la cumpliría a la
+  letra (ver condición de revisión).
+
+**Alternativas.**
+- *LangGraph en el bucle agente + tools, dejando FSM y guardrails como están* — descartada por ahora: su
+  impacto es bajo (cambia `BedrockLLM.chat` y `BedrockAgent`, y roza `A-14`, `A-5`, `A-6` y `A-7`) pero
+  no aporta capacidad que hoy se necesite. Es el plan de contingencia si la consigna lo exige.
+- *LangGraph para toda la orquestación (FSM incluida)* — descartada: choca con DT-1 y DT-12.
+- *Pydantic AI, CrewAI, DeepAgents, Strands Agents* — descartadas. Los tres últimos están pensados para
+  varios agentes colaborando o atan a un proveedor; este flujo es un agente con una FSM.
+
+**Consecuencias.**
+- La costura para un cambio futuro es el `Protocol` `Agent`: un framework, si se adopta, entra dentro de
+  `BedrockAgent` sin tocar `turn.py`, la FSM ni `advance()`.
+- `A-14` (reintentos con backoff) se implementa en `BedrockLLM._converse`, sin depender de ningún framework.
+
+**Condición de revisión.** Reabrir esta decisión si (a) la consigna del curso exige un framework agéntico
+concreto, o (b) el flujo pasa a tener varios agentes, *streaming* o interrupciones humanas. En el caso (a),
+el alcance mínimo es un `StateGraph` de dos nodos (llamar al modelo ⇄ ejecutar tools) que siga usando
+`BedrockLLM._converse`, con una entrada nueva que reemplace a esta.
+
+## DT-23 — Factualidad de salida: comparación literal, sin comprensión semántica
+
+**Contexto.** El LLM real (`A-2`, DT-19) puede inventar un precio, un tamaño o un estado que suenen
+plausibles pero que no vengan de ninguna tool. `A-5` exige que eso nunca llegue al lead: todo número
+o estado de la respuesta candidata tiene que existir en `last_tool_results` de ese mismo turno.
+
+**Decisión.**
+- `app/factuality.py` extrae los números y los estados de propiedad (`disponible`/`apartado`/`cerrado`/
+  `sin_verificar`, en cualquier forma gramatical) tanto de la respuesta candidata como de
+  `last_tool_results` del turno, y compara por **igualdad literal de texto** — sin NLP, sin mapear
+  qué número pertenece a qué campo. Es deliberadamente simple: la garantía que necesita la agencia es
+  "esto no se lo inventó", no "esto es coherente".
+- Un número también se admite si viene del propio mensaje del lead (repetir su presupuesto no es
+  inventar). El tamaño de una lista cuenta como número legítimo solo para `properties` y
+  `promotions` — no para metadata como `unavailable` (A-4) o `amenities`, que casi siempre tienen 1
+  o 2 elementos y volverían inútil la protección contra una "urgencia falsa" (`solo queda 1`, A-7).
+- `BedrockAgent.run` (`app/agent.py`) aplica el guardrail después de `BedrockLLM.chat`: si hay
+  violaciones, `BedrockLLM.regenerate` repite la conversación con la respuesta candidata y una
+  instrucción explícita de qué no se pudo verificar — sigue teniendo las tools disponibles, así que
+  puede corregirse consultando de nuevo. Si la respuesta regenerada también falla, se degrada a un
+  texto fijo que ofrece un asesor, con `intent="otro"` (no fuerza `HUMAN_HANDOFF`: si el guardrail
+  degrada varias veces seguidas, la racha de turnos sin resolver que ya existía, `app/handoff.py`,
+  lo hace transicionar sola — sin una segunda máquina de estados para "fallos del guardrail").
+- Cada regeneración y cada degradación quedan en `AuditLog` (`output.factuality_regenerated`,
+  `output.factuality_degraded`) con el conteo de violaciones, nunca el número o estado inventado, y
+  en la traza del turno (`turn.output_guard`).
+- El gold set de la historia (≥30 casos, `tests/test_factuality_gold_set.py`) no llama a ningún LLM:
+  prueba `factuality.check()` directamente contra pares (respuesta candidata, `tool_results`) fijos,
+  así corre en CI sin credenciales y en milisegundos. Cubre tanto respuestas correctas que no deben
+  bloquearse como respuestas inventadas que sí, y dos límites conocidos del enfoque literal.
+
+**Límite conocido, aceptado.** La comparación no sabe DE QUÉ propiedad habla el texto: si un número es
+real en cualquier resultado de este turno (p. ej. el título de una propiedad no ofrecida, que
+menciona sus recámaras en prosa), se admite aunque la respuesta lo esté atribuyendo a otra. Cerrar
+esto exigiría atar cada claim a la propiedad que menciona el texto (NLP o al menos un LLM juez), que
+es justamente la complejidad que esta decisión evita. Documentado con un caso propio en el gold set
+(`numero_real_de_otra_propiedad_del_turno`) para que no se pierda de vista.
+
+**Alternativas.** Un segundo LLM como juez de factualidad — descartada: otra llamada por turno, otro
+punto de fallo, y su propio veredicto también podría alucinar. Exigir que el LLM cite el campo exacto
+de donde sacó cada dato (grounding estructurado) — mejor a largo plazo, pero exige rediseñar
+`CHAT_SYSTEM` y el formato de respuesta; queda para si el límite conocido resulta ser un problema real.
+
+**Consecuencias.** Cada respuesta con datos de propiedades cuesta hasta una llamada más al modelo
+(la regeneración) cuando falla la primera vez; con cuota baja de Bedrock, eso se suma al problema que
+ya cubre `A-14`. `A-6` (dirección reservada) y `A-7` (promesas no autorizadas) reutilizan `check()`
+para sus propias listas de valores prohibidos/reservados.
+
+## DT-24 — Lead calificado: la banda del score, marcado en `leads.status`, avisado una sola vez
 
 **Estado:** aceptada
 
