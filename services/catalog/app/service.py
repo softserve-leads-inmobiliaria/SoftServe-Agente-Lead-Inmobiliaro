@@ -97,12 +97,12 @@ class CatalogService:
                 prop_dict = {
                     "id": prop.id,
                     "title": prop.title,
-                    "price": float(prop.price),
+                    "price": float(prop.price) if prop.price is not None else None,
                     "type": prop.type,
                     "zone": prop.zone,
-                    "m2": prop.area_built_m2,
+                    "m2": float(prop.m2) if prop.m2 is not None else None,
                     "bedrooms": prop.bedrooms,
-                    "bathrooms": prop.bathrooms,
+                    "bathrooms": float(prop.bathrooms) if prop.bathrooms is not None else None,
                     "amenities": prop.amenities,
                     "status": prop.status,
                     "address_approx": prop.address_approx
@@ -122,12 +122,12 @@ class CatalogService:
         result = {
             "id": prop.id,
             "title": prop.title,
-            "price": float(prop.price),
+            "price": float(prop.price) if prop.price is not None else None,
             "type": prop.type,
             "zone": prop.zone,
-            "m2": prop.area_built_m2,
+            "m2": float(prop.m2) if prop.m2 is not None else None,
             "bedrooms": prop.bedrooms,
-            "bathrooms": prop.bathrooms,
+            "bathrooms": float(prop.bathrooms) if prop.bathrooms is not None else None,
             "amenities": prop.amenities,
             "status": prop.status,
             "address_approx": prop.address_approx
