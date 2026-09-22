@@ -693,3 +693,51 @@ orquestación no depende de ningún proveedor de nube; la única dependencia de 
 concreto, o (b) el flujo pasa a tener varios agentes, *streaming* o interrupciones humanas. En el caso (a),
 el alcance mínimo es un `StateGraph` de dos nodos (llamar al modelo ⇄ ejecutar tools) que siga usando
 `BedrockLLM._converse`, con una entrada nueva que reemplace a esta.
+
+## DT-23 — Factualidad de salida: comparación literal, sin comprensión semántica
+
+**Contexto.** El LLM real (`A-2`, DT-19) puede inventar un precio, un tamaño o un estado que suenen
+plausibles pero que no vengan de ninguna tool. `A-5` exige que eso nunca llegue al lead: todo número
+o estado de la respuesta candidata tiene que existir en `last_tool_results` de ese mismo turno.
+
+**Decisión.**
+- `app/factuality.py` extrae los números y los estados de propiedad (`disponible`/`apartado`/`cerrado`/
+  `sin_verificar`, en cualquier forma gramatical) tanto de la respuesta candidata como de
+  `last_tool_results` del turno, y compara por **igualdad literal de texto** — sin NLP, sin mapear
+  qué número pertenece a qué campo. Es deliberadamente simple: la garantía que necesita la agencia es
+  "esto no se lo inventó", no "esto es coherente".
+- Un número también se admite si viene del propio mensaje del lead (repetir su presupuesto no es
+  inventar). El tamaño de una lista cuenta como número legítimo solo para `properties` y
+  `promotions` — no para metadata como `unavailable` (A-4) o `amenities`, que casi siempre tienen 1
+  o 2 elementos y volverían inútil la protección contra una "urgencia falsa" (`solo queda 1`, A-7).
+- `BedrockAgent.run` (`app/agent.py`) aplica el guardrail después de `BedrockLLM.chat`: si hay
+  violaciones, `BedrockLLM.regenerate` repite la conversación con la respuesta candidata y una
+  instrucción explícita de qué no se pudo verificar — sigue teniendo las tools disponibles, así que
+  puede corregirse consultando de nuevo. Si la respuesta regenerada también falla, se degrada a un
+  texto fijo que ofrece un asesor, con `intent="otro"` (no fuerza `HUMAN_HANDOFF`: si el guardrail
+  degrada varias veces seguidas, la racha de turnos sin resolver que ya existía, `app/handoff.py`,
+  lo hace transicionar sola — sin una segunda máquina de estados para "fallos del guardrail").
+- Cada regeneración y cada degradación quedan en `AuditLog` (`output.factuality_regenerated`,
+  `output.factuality_degraded`) con el conteo de violaciones, nunca el número o estado inventado, y
+  en la traza del turno (`turn.output_guard`).
+- El gold set de la historia (≥30 casos, `tests/test_factuality_gold_set.py`) no llama a ningún LLM:
+  prueba `factuality.check()` directamente contra pares (respuesta candidata, `tool_results`) fijos,
+  así corre en CI sin credenciales y en milisegundos. Cubre tanto respuestas correctas que no deben
+  bloquearse como respuestas inventadas que sí, y dos límites conocidos del enfoque literal.
+
+**Límite conocido, aceptado.** La comparación no sabe DE QUÉ propiedad habla el texto: si un número es
+real en cualquier resultado de este turno (p. ej. el título de una propiedad no ofrecida, que
+menciona sus recámaras en prosa), se admite aunque la respuesta lo esté atribuyendo a otra. Cerrar
+esto exigiría atar cada claim a la propiedad que menciona el texto (NLP o al menos un LLM juez), que
+es justamente la complejidad que esta decisión evita. Documentado con un caso propio en el gold set
+(`numero_real_de_otra_propiedad_del_turno`) para que no se pierda de vista.
+
+**Alternativas.** Un segundo LLM como juez de factualidad — descartada: otra llamada por turno, otro
+punto de fallo, y su propio veredicto también podría alucinar. Exigir que el LLM cite el campo exacto
+de donde sacó cada dato (grounding estructurado) — mejor a largo plazo, pero exige rediseñar
+`CHAT_SYSTEM` y el formato de respuesta; queda para si el límite conocido resulta ser un problema real.
+
+**Consecuencias.** Cada respuesta con datos de propiedades cuesta hasta una llamada más al modelo
+(la regeneración) cuando falla la primera vez; con cuota baja de Bedrock, eso se suma al problema que
+ya cubre `A-14`. `A-6` (dirección reservada) y `A-7` (promesas no autorizadas) reutilizan `check()`
+para sus propias listas de valores prohibidos/reservados.

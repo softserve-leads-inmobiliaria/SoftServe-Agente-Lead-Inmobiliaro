@@ -150,7 +150,24 @@ class BedrockLLM:
     async def chat(self, history: Sequence[tuple[str, str]], current: str,
                    specs: Sequence[Mapping[str, Any]], run_tool: ToolRunner) -> ChatResult:
         """Responde al lead. Si el modelo pide tools, las ejecuta y le devuelve los resultados."""
+        return await self._converse_loop(to_messages(history, current), specs, run_tool)
+
+    async def regenerate(self, history: Sequence[tuple[str, str]], current: str, previous_reply: str,
+                         violations: Sequence[Any], specs: Sequence[Mapping[str, Any]],
+                         run_tool: ToolRunner) -> ChatResult:
+        """Repite la conversación con la respuesta candidata y una instrucción de corregirla (A-5).
+
+        Se le muestra al modelo su propia respuesta y qué de ella no se pudo verificar, para que la
+        rehaga con lo que ya sabe de las herramientas — no para regañarlo, para darle la oportunidad
+        de arreglarlo con datos reales antes de degradar la conversación.
+        """
         messages = to_messages(history, current)
+        messages.append({"role": "assistant", "content": [{"text": previous_reply}]})
+        messages.append({"role": "user", "content": [{"text": _correction_prompt(violations)}]})
+        return await self._converse_loop(messages, specs, run_tool)
+
+    async def _converse_loop(self, messages: list[dict[str, Any]], specs: Sequence[Mapping[str, Any]],
+                             run_tool: ToolRunner) -> ChatResult:
         result = ChatResult(text="")
         for _ in range(MAX_TOOL_ROUNDS + 1):
             request: dict[str, Any] = {"system": [{"text": CHAT_SYSTEM}], "messages": messages,
@@ -180,6 +197,16 @@ class BedrockLLM:
         result.tool_results[name] = payload
         result.tool_calls.append({"name": name, "is_error": False})
         return {"toolResult": {"toolUseId": use["toolUseId"], "status": "success", "content": [{"json": payload}]}}
+
+
+def _correction_prompt(violations: Sequence[Any]) -> str:
+    detected = "; ".join(f"{v.kind} '{v.value}'" for v in violations)
+    return (
+        f"Tu respuesta anterior mencionó esto sin que viniera de ninguna herramienta consultada: "
+        f"{detected}. No lo repitas: responde de nuevo usando solo los datos que ya tienes de las "
+        "herramientas. Si te falta un dato, dilo o vuelve a consultar la herramienta correspondiente "
+        "en vez de inventarlo."
+    )
 
 
 def _text_of(response: Mapping[str, Any]) -> str:

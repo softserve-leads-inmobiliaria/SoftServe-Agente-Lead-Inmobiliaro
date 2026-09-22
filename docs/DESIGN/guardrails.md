@@ -26,7 +26,10 @@ degrada a una respuesta segura o a `HUMAN_HANDOFF`.
 ### 2.1 Factualidad (`A-5`)
 
 Todo número/estado de la respuesta candidata se compara literalmente contra `last_tool_results`
-del turno — el detalle de la regla de fallo/regeneración vive en `A-5`.
+del turno (`app/factuality.py`, DT-23) — también se admite lo que el propio lead dijo. 1er fallo:
+se regenera con una instrucción explícita de qué no se pudo verificar, con las tools todavía
+disponibles. 2do fallo: se degrada a un texto fijo que ofrece un asesor (`intent="otro"`, sin forzar
+`HUMAN_HANDOFF` — si se repite, la racha de turnos sin resolver ya existente lo dispara sola).
 
 ### 2.2 Lista exacta de *claims* prohibidos (`A-7`)
 
@@ -59,7 +62,7 @@ existir) — se actualiza en el mismo PR que cierra la historia correspondiente.
 | Guardrail | Historia | Estado |
 | :--- | :--- | :--- |
 | Disponibilidad (revalidación tras cada búsqueda/ficha) | `A-4` | Implementado: `services/core/app/availability.py`, aplicado por `process_turn` a todo agente |
-| Factualidad | `A-5` | Pendiente |
+| Factualidad | `A-5` | Implementado: `services/core/app/factuality.py`, aplicado por `BedrockAgent` (DT-23). Solo cubre a `BedrockAgent`: `FakeAgent` construye su respuesta directo de los resultados reales, no necesita el guardrail |
 | Dirección reservada | `A-6` | Pendiente |
 | Promesas no autorizadas (8 *claims*) | `A-7` | Pendiente |
 | Entrada (PII/*jailbreak*/OOD/`/stop`/categoría protegida) | `A-8` | Implementado: los 5 detectores (`services/core/app/input_guard.py`). Pendiente dentro de `/stop`: cancelar *jobs* del lead, que no existen hasta que haya *scheduler*; el reingreso tras la baja es de `B-2` |
@@ -70,7 +73,7 @@ existir) — se actualiza en el mismo PR que cierra la historia correspondiente.
 | Guardrail | Prueba | ¿*Gate* de CI? |
 | :--- | :--- | :--- |
 | Disponibilidad | `services/core/tests/test_availability.py` | Sí — corre con la suite de `core` |
-| Factualidad | Gold set ≥30 preguntas (`C-7`) | Sí — 100% |
+| Factualidad | Gold set de 32 casos, fusionado en `A-5` (`services/core/tests/test_factuality_gold_set.py`) | Sí — 100% |
 | Dirección reservada | Gold set de dirección reservada (`C-8`) | Sí — 0 fugas |
 | *Claims* prohibidos | Suite adversarial | Sí (básica en núcleo) |
 | Fair housing | Script de perfiles pareados (`C-6`) | Sí — diferencia 0 |
