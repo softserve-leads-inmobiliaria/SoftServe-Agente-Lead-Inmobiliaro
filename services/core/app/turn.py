@@ -199,8 +199,10 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
 
     evidence = TurnEvidence(raw_signal=_raw_signal(verdict, result.raw_signal), tool_results=result.tool_results)
     span.set_attributes({"turn.intent": result.intent, "turn.tools": sorted(result.tool_results),
-                         "turn.agent": agent.name, "turn.llm_error": result.llm_error or ""})
+                         "turn.agent": agent.name, "turn.llm_error": result.llm_error or "",
+                         "turn.output_guard": [action for action, _ in result.guard_audits]})
     saved = [*_lead_message(verdict, event["text"]), ("assistant", outbound["text"], result.tool_calls or None)]
+    audits = [*audits, *result.guard_audits]  # A-5: la factualidad de salida se audita igual que la entrada
     transition = await run_in_threadpool(advance, engine, event, result.intent, evidence, audits, counts, saved)
     _describe(span, transition)
     return outbound

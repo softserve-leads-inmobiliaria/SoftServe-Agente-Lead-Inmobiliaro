@@ -9,15 +9,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol
 
+from app import factuality
 from app.bedrock_llm import BedrockLLM, LLMError, LLMFormatError
 from app.fakes.fake_llm import FakeLLM
 from app.fsm import HUMAN_INTENTS
-from app.input_guard import OMITTED_MESSAGE
+from app.input_guard import HANDOFF_OFFER, OMITTED_MESSAGE
 from app.skeleton import respond
 
 HISTORY_LIMIT = 20  # mensajes previos que se le dan al LLM
 
 LLM_FALLBACK_REPLY = "Disculpa, tuve un problema para procesar tu mensaje. ¿Me lo puedes repetir?"
+# A-5: ni el primer intento ni la regeneración pasaron la factualidad. Nunca se manda el dato dudoso.
+FACTUALITY_DEGRADE_REPLY = "No tengo un dato verificado para responder eso con seguridad." + HANDOFF_OFFER
 
 # El LLM no decide esto: lo fija el código a partir del estado del lead (A-6, dirección reservada).
 CODE_CONTROLLED_ARGUMENTS = ("lead_qualified",)
@@ -39,6 +42,8 @@ class AgentResult:
     tool_results: dict[str, Any] = field(default_factory=dict)
     tool_calls: list[dict[str, Any]] = field(default_factory=list)  # solo nombre y si falló
     llm_error: str | None = None
+    # (acción, detalle) del guardrail de salida (A-5); nunca lleva el número/estado inventado, solo el conteo.
+    guard_audits: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
 
 
 class ToolCatalog(Protocol):
@@ -95,14 +100,31 @@ class BedrockAgent:
                     arguments[argument] = getattr(turn, argument)
                 return await catalog.call(name, arguments)
 
-            chat = await self._llm.chat(turn.history, turn.text, [_visible(s) for s in specs], run_tool)
+            visible = [_visible(s) for s in specs]
+            chat = await self._llm.chat(turn.history, turn.text, visible, run_tool)
             if not chat.text:
                 raise LLMFormatError("respuesta vacía")
+            guard_audits: list[tuple[str, dict[str, Any]]] = []
+            violations = factuality.check(chat.text, chat.tool_results, turn.text)
+            if violations:
+                # Una oportunidad de corregirse con lo que ya sabe, antes de degradar la conversación (A-5).
+                retry = await self._llm.regenerate(turn.history, turn.text, chat.text, violations, visible, run_tool)
+                chat.tool_results.update(retry.tool_results)
+                chat.tool_calls += retry.tool_calls
+                guard_audits.append(("output.factuality_regenerated", {"violations": len(violations)}))
+                violations = (factuality.check(retry.text, chat.tool_results, turn.text) if retry.text.strip()
+                             else violations)
+                if violations:
+                    guard_audits.append(("output.factuality_degraded", {"violations": len(violations)}))
+                    return AgentResult(text=FACTUALITY_DEGRADE_REPLY, intent="otro",
+                                       raw_signal=classification.signal, tool_results=chat.tool_results,
+                                       tool_calls=chat.tool_calls, guard_audits=guard_audits)
+                chat.text = retry.text
         except LLMError as exc:
             # Sin LLM no se inventa nada: texto seguro, y el turno cuenta como "sin resolver" (A-13).
             return AgentResult(text=LLM_FALLBACK_REPLY, intent="otro", llm_error=type(exc).__name__)
         return AgentResult(text=chat.text, intent=classification.intent, raw_signal=classification.signal,
-                           tool_results=chat.tool_results, tool_calls=chat.tool_calls)
+                           tool_results=chat.tool_results, tool_calls=chat.tool_calls, guard_audits=guard_audits)
 
 
 def _visible(spec: Mapping[str, Any]) -> dict[str, Any]:
