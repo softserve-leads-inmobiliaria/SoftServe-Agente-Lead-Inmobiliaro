@@ -102,6 +102,24 @@ def test_sin_hook_el_turno_marca_pero_no_notifica(engine):
     assert chat.lead() == ("mql", True)
 
 
+def test_un_lead_reclamado_antes_de_calificar_igual_notifica_y_no_pierde_su_status(engine):
+    """#89: B-6 puede mover `status` a 'sql' (reclamado a mano) antes de que el score cruce a
+    WARM/HOT. La guarda de `qualify()` no puede depender de `status='nuevo'` para eso, ni pisar
+    el `sql` ya ganado por B-6 al marcar calificado."""
+    chat = Chat(engine)
+    chat.say("Hola")
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE leads SET status = 'sql' WHERE id = :l"), {"l": chat.lead_id})
+
+    chat.say(CALIFICA)
+    assert len(chat.notified) == 1
+    assert chat.notified[0].qualified is True
+    assert chat.lead() == ("sql", True)
+
+    chat.say("¿Y tienen algo más grande?")
+    assert len(chat.notified) == 1  # no se repite aunque status se haya quedado fijo en 'sql'
+
+
 def test_un_hook_que_falla_no_rompe_el_turno(engine):
     class Explota(Chat):
         async def _on_qualified(self, event, transition):

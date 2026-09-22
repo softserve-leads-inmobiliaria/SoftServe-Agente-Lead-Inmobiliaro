@@ -9,7 +9,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-from sqlalchemy import func, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -168,14 +168,18 @@ class StateStore:
                                       tool_calls=tool_calls or None, created_at=func.clock_timestamp()))
 
     def qualify(self, conversation_id: uuid.UUID, lead_id: uuid.UUID) -> bool:
-        """Marca al lead como calificado (`status=mql`, `lead_qualified=true`) una sola vez (B-7).
+        """Marca al lead como calificado (`qualified_at`, `lead_qualified=true`) una sola vez (B-7).
 
-        La guarda de idempotencia es la propia fila: `WHERE status = 'nuevo'` hace que el segundo
-        turno que cruce la banda no devuelva nada, y por lo tanto no vuelva a notificar al asesor.
+        La guarda de idempotencia es `qualified_at IS NULL`, no `status` (#89): B-6 puede mover
+        `status` a `sql` (lead reclamado a mano) antes de que el score cruce a WARM/HOT, y una
+        guarda sobre `status='nuevo'` dejaría de disparar para siempre en ese caso. `status` solo
+        avanza a `mql` si seguía en `nuevo`; si ya está en `sql` (o más adelante), se respeta.
         """
         claimed = self._session.execute(
-            update(Lead).where(Lead.id == lead_id, Lead.status == "nuevo")
-            .values(status="mql", updated_at=func.now()).returning(Lead.id)).scalar()
+            update(Lead).where(Lead.id == lead_id, Lead.qualified_at.is_(None))
+            .values(status=case((Lead.status == "nuevo", "mql"), else_=Lead.status),
+                   qualified_at=func.now(), updated_at=func.now())
+            .returning(Lead.id)).scalar()
         if claimed is None:
             return False
         self._session.execute(update(FsmContext).where(FsmContext.conversation_id == conversation_id)

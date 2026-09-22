@@ -90,6 +90,9 @@ class Lead(Base):
     zone: Mapped[str | None] = mapped_column(String)
     # Quién recibió la tarjeta al calificar (B-7). Null hasta entonces.
     advisor_id: Mapped[str | None] = mapped_column(ForeignKey("advisors.id"), index=True)
+    # Cuándo cruzó a calificado (#89): guarda de idempotencia de StateStore.qualify(), independiente
+    # de `status` — B-6 puede mover `status` a `sql` antes de que el score llegue a calificar.
+    qualified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     budget: Mapped[str | None] = mapped_column(Text)  # texto libre, como budget_hint (design.md §3)
     timing: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = _now()
