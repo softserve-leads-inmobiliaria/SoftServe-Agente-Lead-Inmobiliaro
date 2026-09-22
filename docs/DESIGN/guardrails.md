@@ -63,7 +63,7 @@ existir) — se actualiza en el mismo PR que cierra la historia correspondiente.
 | :--- | :--- | :--- |
 | Disponibilidad (revalidación tras cada búsqueda/ficha) | `A-4` | Implementado: `services/core/app/availability.py`, aplicado por `process_turn` a todo agente |
 | Factualidad | `A-5` | Implementado: `services/core/app/factuality.py`, aplicado por `BedrockAgent` (DT-23). Solo cubre a `BedrockAgent`: `FakeAgent` construye su respuesta directo de los resultados reales, no necesita el guardrail |
-| Dirección reservada | `A-6` | Pendiente |
+| Dirección reservada | `A-6` | Implementado: `services/core/app/address_guard.py`, aplicado por `BedrockAgent` en el mismo *pipeline* de regenerar/degradar que A-5 (DT-23). No es literal como A-5: detecta la forma de una dirección exacta (tipo de vía + nombre + número) en prosa, porque el catálogo nunca devuelve `address_exact` sin `lead_qualified=true` y no hay valor real contra el que comparar. Solo cubre a `BedrockAgent`: `FakeAgent` nunca ve `address_exact` (el catálogo la redacta antes de que llegue) |
 | Promesas no autorizadas (8 *claims*) | `A-7` | Pendiente |
 | Entrada (PII/*jailbreak*/OOD/`/stop`/categoría protegida) | `A-8` | Implementado: los 5 detectores (`services/core/app/input_guard.py`). Pendiente dentro de `/stop`: cancelar *jobs* del lead, que no existen hasta que haya *scheduler*; el reingreso tras la baja es de `B-2` |
 | Fair housing | `A-11` | Pendiente |
@@ -74,7 +74,7 @@ existir) — se actualiza en el mismo PR que cierra la historia correspondiente.
 | :--- | :--- | :--- |
 | Disponibilidad | `services/core/tests/test_availability.py` | Sí — corre con la suite de `core` |
 | Factualidad | Gold set de 32 casos, fusionado en `A-5` (`services/core/tests/test_factuality_gold_set.py`) | Sí — 100% |
-| Dirección reservada | Gold set de dirección reservada (`C-8`) | Sí — 0 fugas |
+| Dirección reservada | Gold set de dirección reservada, fusionado en `A-6` (`services/core/tests/test_address_guard_gold_set.py`) — antes iba a ser `C-8`, ver notas de `A-06.md` | Sí — 0 fugas |
 | *Claims* prohibidos | Suite adversarial | Sí (básica en núcleo) |
 | Fair housing | Script de perfiles pareados (`C-6`) | Sí — diferencia 0 |
 | PII/consentimiento | Test de privacidad + `/stop` | Manual (E2E) |

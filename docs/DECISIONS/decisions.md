@@ -780,3 +780,49 @@ transacción todavía abierta.
 la miró**: `FsmContext.last_tool_results` se sobrescribe cada turno (A-9) y la propiedad concreta no se
 persiste en otro lado (la zona sí, #81). Cerrar eso pide una columna nueva, y no la justifica todavía.
 La tarjeta no lleva datos de contacto: esos los ve el asesor en el panel, con su token.
+
+## DT-25 — Dirección reservada: se detecta la FORMA de una dirección exacta, no un valor real
+
+**Estado:** aceptada
+
+**Contexto.** `A-6` pide bloquear una dirección exacta mencionada en prosa cuando el lead no está
+calificado, aunque no venga de un campo estructurado. `DT-23` anticipaba que `A-6` reutilizaría
+`factuality.check()` con "sus propias listas de valores prohibidos". Al implementarla resultó que eso
+no es posible: `get_property`/`search_properties` (`services/catalog/app/service.py`) nunca devuelven
+`address_exact` salvo con `lead_qualified=true` — mientras el lead no está calificado, `core` no tiene
+ningún valor real de dirección contra el que comparar. Una comparación literal como la de A-5 no tiene
+nada que comparar; hacía falta otro enfoque.
+
+**Decisión.**
+- `app/address_guard.py` detecta la **forma** de una dirección exacta — tipo de vía (calle, avenida,
+  circuito, blvd...) seguido de un nombre y un número — no si coincide con un dato real. Es lo mismo
+  que distingue `address_exact` de `address_approx` en el propio catálogo: la referencia aproximada
+  ("cerca de Av. Vallarta") nunca lleva número: el número es la señal.
+- Como no depende de si el número "está permitido" por las tools de este turno, cubre un caso que A-5
+  no puede: un número de calle que coincide por casualidad con otro dato real del turno (precio, m²)
+  y que A-5 dejaría pasar por estar "respaldado" — la dirección sigue siendo una dirección.
+- Se integra en el mismo *pipeline* de `BedrockAgent` que A-5 (`app/agent.py::_output_violations`):
+  ambos guardrails devuelven `factuality.Violation` y comparten regenerar (1er fallo) y degradar (2do
+  fallo, `FACTUALITY_DEGRADE_REPLY`). No hay una acción de auditoría separada para A-6: la mismas
+  `output.factuality_regenerated`/`output.factuality_degraded` ya describen lo que pasó (el turno se
+  rehizo o se degradó), sin importar cuál de los dos guardrails lo disparó.
+- Como A-5, se exime lo que el propio lead ya escribió (su propia dirección, para preguntar cerca de
+  dónde busca no es una fuga de la propiedad).
+- Como A-5, solo aplica a `BedrockAgent`: `FakeAgent` nunca ve `address_exact` porque el catálogo la
+  redacta antes de que llegue a cualquier agente.
+
+**Límite conocido, aceptado.** Un patrón de texto, no NLP (mismo espíritu que DT-23): una distancia
+("a 5 minutos de Av. Vallarta") podría confundirse con una dirección si el número cae pegado al
+nombre de la calle — se acota con una salvedad para palabras de unidad (minutos, cuadras, km) justo
+después del número, cubierta en el gold set (`test_address_guard_gold_set.py`), pero no es una prueba
+exhaustiva de lenguaje natural.
+
+**Alternativas.** Reutilizar `factuality.check()` literalmente, con la dirección real como "valor
+prohibido" — descartada: exigiría que `core` consultara el catálogo con `lead_qualified=true` solo
+para el guardrail (una llamada extra, y una ruta que ve el dato que se supone debe ocultar). Un
+guardrail que solo mire si el texto contiene el *approx* — descartada: no detecta un número inventado
+ni uno real que se cuele en prosa.
+
+**Consecuencias.** Una dirección con número casi siempre también dispara A-5 (el número no viene de
+ninguna tool mientras el lead no está calificado): las dos redes coinciden a propósito, no es
+redundancia — ver `test_an_address_in_prose_gets_one_chance_to_regenerate_and_the_fix_is_used`.
