@@ -5,12 +5,13 @@ el `outputSchema` de contracts/mcp/<tool>.schema.json o lanza `CatalogError` con
 del contrato (NOT_FOUND, INVALID_INPUT, UPSTREAM_UNAVAILABLE).
 """
 from __future__ import annotations
-from sqlalchemy.engine.result import ResultInternal
 
 from datetime import date, datetime
 from typing import Any, Callable
+
 from sqlalchemy.orm import Session
-from db.models import Property, Promotion
+
+from db.models import Promotion, Property
 
 from . import data
 
