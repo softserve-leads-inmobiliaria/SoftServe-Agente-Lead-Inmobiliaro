@@ -161,6 +161,26 @@ mismo resultado ya revalidado. Los tests que pasan por `process_turn` usan `test
 catálogo con `id`, `status` y `get_availability`. Para verlo en vivo: en la traza de un turno con
 búsqueda aparecen `catalog.get_availability` además de `catalog.search_properties`.
 
+### Factualidad de la respuesta (A-5)
+
+`services/core/app/factuality.py` compara todo número/estado de la respuesta candidata contra
+`last_tool_results` de ese turno (más lo que el propio lead dijo). Solo aplica al agente real
+(`BedrockAgent`): el falso construye su respuesta directo de los resultados, sin margen para inventar.
+
+- `services/core/tests/test_factuality.py`: la regla en sí (extracción de números y estados, qué
+  cuenta como literal — campos numéricos, números dentro de una nota, tamaño de `properties`).
+- `services/core/tests/test_agent.py` (sección A-5): la integración completa — regenerar con la
+  instrucción explícita, degradar tras el segundo fallo, fusión de `tool_results` cuando la
+  regeneración vuelve a llamar una tool, y qué pasa si Bedrock falla durante la regeneración.
+- `services/core/tests/test_factuality_gold_set.py`: el gold set de la historia (≥30 casos, DoD "100%
+  en CI"). No llama a ningún LLM: prueba `factuality.check()` contra pares fijos de (respuesta,
+  `tool_results`), así que corre sin credenciales. Un caso nuevo (una redacción real que rompió el
+  guardrail) se agrega ahí, nunca se borra uno viejo salvo que deje de aplicar.
+- Para verlo en vivo con Bedrock real: forzar una respuesta con un número fuera de lo que devolvió la
+  tool es difícil de reproducir a propósito (el modelo no suele hacerlo); lo verificable en vivo es que
+  `AuditLog` nunca tiene entradas `output.factuality_*` en una sesión normal, y sí las tiene si el
+  modelo alucina (ver DT-23 para el detalle de qué se audita).
+
 ### Suite de transiciones de la FSM
 
 `services/core/tests/test_fsm_edges.py` (necesita Postgres, como el resto de `core`) protege la FSM
