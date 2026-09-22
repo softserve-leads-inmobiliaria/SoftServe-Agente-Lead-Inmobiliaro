@@ -289,6 +289,28 @@ def test_an_address_that_survives_regeneration_degrades_to_an_advisor_offer():
     assert [a for a, _ in result.guard_audits] == ["output.factuality_regenerated", "output.factuality_degraded"]
 
 
+# --- A-7: promesas no autorizadas ---------------------------------------------------------------------------------
+
+def test_an_unauthorized_promise_gets_one_chance_to_regenerate_and_the_fix_is_used():
+    client = ScriptedBedrock(classification("consulta_precio"),
+                             tool_use("get_property", {"property_id": "p1", "lead_qualified": False}),
+                             text("Tu crédito ya está aprobado, podemos avanzar."),
+                             text("Voy a confirmar tu situación con un asesor."))
+    result = run(agent_for(client).run(turn(lead_qualified=False), FakeCatalog()))
+    assert result.text == "Voy a confirmar tu situación con un asesor."
+    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1})]
+
+
+def test_an_unauthorized_promise_that_survives_regeneration_degrades_to_an_advisor_offer():
+    client = ScriptedBedrock(classification("consulta_precio"),
+                             tool_use("get_property", {"property_id": "p1", "lead_qualified": False}),
+                             text("Tu crédito ya está aprobado, podemos avanzar."),
+                             text("Tu crédito ya está aprobado, así que podemos avanzar con la compra."))
+    result = run(agent_for(client).run(turn(lead_qualified=False), FakeCatalog()))
+    assert result.text == FACTUALITY_DEGRADE_REPLY and result.intent == "otro"
+    assert [a for a, _ in result.guard_audits] == ["output.factuality_regenerated", "output.factuality_degraded"]
+
+
 def test_a_throttling_error_during_the_regeneration_still_falls_back_to_the_safe_reply():
     client = ScriptedBedrock(classification("busqueda_propiedad"), tool_use("search_properties", {"zone": "Prov."}),
                              text("Tengo una en $9,999,999."), throttled())

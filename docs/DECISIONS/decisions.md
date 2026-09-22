@@ -826,3 +826,44 @@ ni uno real que se cuele en prosa.
 **Consecuencias.** Una dirección con número casi siempre también dispara A-5 (el número no viene de
 ninguna tool mientras el lead no está calificado): las dos redes coinciden a propósito, no es
 redundancia — ver `test_an_address_in_prose_gets_one_chance_to_regenerate_and_the_fix_is_used`.
+
+## DT-26 — Promesas no autorizadas: frases siempre prohibidas + amenidad literal, 6/8 con código
+
+**Estado:** aceptada
+
+**Contexto.** `A-7` pide bloquear 8 *claims* de `docs/DESIGN/guardrails.md` §2.2 que comprometen a la
+agencia con algo que el sistema no garantiza. La historia no exige cubrir los 8 desde el día 1 (v1
+cubrió 6/8 sin dejarlo documentado — la lección explícita de v1 es que la tabla de `guardrails.md`
+refleje el estado real de cada uno, cubierto o no, no solo la lista de qué debería existir).
+
+**Decisión.**
+- **Frases siempre prohibidas** (*claims* 1 crédito, 2 mascotas, 3 negociación, 4 apartar, 7 garantía
+  de cierre): ninguna tool ni dato del sistema las respalda hoy — no existe una tool de negociar
+  precio ni de "apartar" una propiedad, y el catálogo no tiene ningún campo de política de mascotas
+  (`services/catalog/app/data.py`). Se bloquean por frase, sin mirar `last_tool_results`, mismo estilo
+  que el guardrail de entrada (`app/input_guard.py`).
+- **Amenidad no respaldada** (*claim* 5): comparación literal contra `amenities` del turno, acotada al
+  vocabulario real del catálogo (mismo principio que A-5, DT-23) — no NLP.
+- Ambos mecanismos comparten una salvedad: negarlo o dudarlo ("no aceptamos mascotas", "voy a
+  confirmar si...") no es prometerlo — una palabra de negación/duda hasta 3 palabras antes de la frase
+  la excluye (`promise_guard._unhedged`).
+- Se integra en el mismo *pipeline* de `BedrockAgent` que A-5/A-6 (`app/agent.py::_output_violations`):
+  los tres devuelven `factuality.Violation` y comparten regenerar/degradar y la misma auditoría.
+- **Claim 8 (urgencia falsa) no necesita código nuevo**: ya lo cubre A-5 — un número sin respaldo en
+  `last_tool_results` bloquea, con o sin la palabra "urgencia" (`test_factuality_gold_set.py::
+  urgencia_falsa_con_numero`, escrito en A-5 antes de que A-7 existiera).
+- **Claim 6 (promoción no vigente) queda parcial, documentado, no oculto**: con número (un descuento o
+  porcentaje inventado) ya lo bloquea A-5 igual que cualquier otro dato inventado. Una promoción
+  genérica sin número ("tenemos una promoción especial para ti") no se cubre: comparar texto libre
+  contra el título/descripción real de una promoción es la misma clase de problema que un guardrail de
+  patrones no puede resolver de forma confiable sin subir el riesgo de falsos positivos/negativos muy
+  por encima del resto de esta historia.
+
+**Alternativas.** Un juez con LLM para las 8 — descartada: mismo motivo que A-5 (DT-23), otro punto de
+fallo que también puede alucinar. Exigir los 8 con código en esta historia — descartada: la propia
+historia lo permite explícitamente a cambio de documentar la brecha, y forzar el 6 (promoción
+genérica) a un patrón simple habría sido una protección débil disfrazada de completa.
+
+**Consecuencias.** El estado real de cada uno de los 8 *claims* vive en `docs/DESIGN/guardrails.md`
+§2.2 y §3, no solo en el docstring de `promise_guard.py` — se actualiza en este mismo PR, como pide la
+retrospectiva de v1. Cerrar el *claim* 6 por completo es trabajo futuro sin historia asignada todavía.
