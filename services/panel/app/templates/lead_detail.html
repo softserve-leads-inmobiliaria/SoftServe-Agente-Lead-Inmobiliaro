@@ -9,7 +9,18 @@
 <div class="card">
   <dl>
     <dt>Etapa</dt><dd>{{ fsm_state or "—" }}</dd>
-    <dt>Estado</dt><dd>{{ lead.status }}</dd>
+    <dt>Estado</dt>
+    <dd>
+      <span class="pill pill-{{ lead.status }}">
+        {% if lead.status == "sql" %}en gestión{% elif lead.status == "mql" %}calificado{% else %}{{ lead.status }}{% endif %}
+      </span>
+      {% if lead.status in ("nuevo", "mql") %}
+      <form class="inline" method="post" action="/panel/{{ token }}/leads/{{ lead.id }}/gestionar">
+        <button type="submit">Marcar en gestión</button>
+      </form>
+      {% endif %}
+    </dd>
+    <dt>Asesor</dt><dd>{{ lead.advisor_id or "sin asignar" }}</dd>
     <dt>Zona</dt><dd>{{ lead.zone or "—" }}</dd>
     <dt>Presupuesto</dt><dd>{{ lead.budget or "—" }}</dd>
     <dt>Plazo</dt><dd>{{ lead.timing or "—" }}</dd>

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Mis leads — {{ advisor.name }}{% endblock %}
 {% block heading %}Mis leads{% endblock %}
-{% block subheading %}{{ advisor.name }} · zona {{ advisor.zone }}{% endblock %}
+{% block subheading %}{{ advisor.name }} · zona {{ advisor.zone }} · ordenados por calidad{% endblock %}
 
 {% block content %}
 <div class="card">
@@ -9,23 +9,34 @@
   <table>
     <thead>
       <tr>
-        <th>Lead</th><th>Etapa</th><th>Score</th><th>Estado</th><th>Último mensaje</th>
+        <th>Lead</th><th>Score</th><th>Etapa</th><th>Estado</th><th>Último mensaje</th><th></th>
       </tr>
     </thead>
     <tbody>
       {% for lead in leads %}
       <tr>
         <td><a href="/panel/{{ token }}/leads/{{ lead.id }}">{{ lead.telegram_user_id }}</a></td>
-        <td>{{ lead.fsm_state or "—" }}</td>
         <td>
           {% if lead.score_band %}
             <span class="band band-{{ lead.score_band }}">{{ lead.score_band }}</span>
             <span class="muted">{{ lead.score_total }}</span>
           {% else %}<span class="muted">sin calificar</span>{% endif %}
         </td>
-        <td>{{ lead.status }}</td>
+        <td>{{ lead.fsm_state or "—" }}</td>
+        <td>
+          <span class="pill pill-{{ lead.status }}">
+            {% if lead.status == "sql" %}en gestión{% elif lead.status == "mql" %}calificado{% else %}{{ lead.status }}{% endif %}
+          </span>
+        </td>
         <td class="muted">
           {{ lead.last_message_at.strftime("%d/%m %H:%M") if lead.last_message_at else "—" }}
+        </td>
+        <td>
+          {% if lead.status in ("nuevo", "mql") %}
+          <form class="inline" method="post" action="/panel/{{ token }}/leads/{{ lead.id }}/gestionar">
+            <button type="submit">Marcar en gestión</button>
+          </form>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}

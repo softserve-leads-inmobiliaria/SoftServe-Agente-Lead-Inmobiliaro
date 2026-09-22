@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import Session
 
 from db.models import Conversation, Lead, LeadScore, Message, Visit
@@ -23,6 +23,7 @@ class LeadSummary:
     score_total: int | None
     score_band: str | None
     last_message_at: datetime | None
+    advisor_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -34,15 +35,33 @@ class LeadDetail:
     messages: list[Message]
 
 
+# Orden de la cola (B-6): primero por calidad del lead, no por fecha de llegada.
+_BAND_RANK = case((LeadScore.band == "HOT", 0), (LeadScore.band == "WARM", 1),
+                  (LeadScore.band == "COLD", 2), else_=3)
+
+
 def leads_for_advisor(session: Session, advisor) -> list[LeadSummary]:
-    """Leads de la zona del asesor, con su estado de FSM y su score si ya lo tienen."""
+    """Cola del asesor: los leads de su zona, los mejores arriba.
+
+    HOT > WARM > COLD > sin calificar; dentro de la banda, mayor `total` primero y el más antiguo
+    desempata. Un lead puede tener varias conversaciones (se abre una nueva tras un estado
+    terminal, DT-20): se muestra la más reciente, y el lead una sola vez.
+    """
+    latest_conversation = (
+        select(Conversation.id)
+        .where(Conversation.lead_id == Lead.id)
+        .order_by(Conversation.started_at.desc())
+        .limit(1)
+        .correlate(Lead)
+        .scalar_subquery()
+    )
     rows = session.execute(
         select(Lead, Conversation, LeadScore)
-        .outerjoin(Conversation, Conversation.lead_id == Lead.id)
+        .outerjoin(Conversation, Conversation.id == latest_conversation)
         # outerjoin, no join: un lead sin score todavía tiene que aparecer en la lista.
         .outerjoin(LeadScore, LeadScore.lead_id == Lead.id)
         .where(Lead.zone == advisor.zone)
-        .order_by(Lead.created_at.desc())
+        .order_by(_BAND_RANK, LeadScore.total.desc().nulls_last(), Lead.created_at.asc())
     ).all()
     return [
         LeadSummary(
@@ -52,9 +71,29 @@ def leads_for_advisor(session: Session, advisor) -> list[LeadSummary]:
             score_total=score.total if score else None,
             score_band=score.band if score else None,
             last_message_at=conversation.last_message_at if conversation else None,
+            advisor_id=lead.advisor_id,
         )
         for lead, conversation, score in rows
     ]
+
+
+def claim_lead(session: Session, advisor, lead_id: uuid.UUID) -> bool:
+    """"Marcar en gestión" (B-6): el asesor toma el lead. `Lead.status` pasa a `sql`.
+
+    Devuelve False si el lead no existe o es de otra zona (mismo 404 uniforme que la ficha).
+    Idempotente: marcarlo dos veces no cambia nada. Si nadie lo tenía asignado, queda con quien
+    lo tomó; si B-7 ya lo asignó a otro, se respeta esa asignación.
+    """
+    exists = session.execute(
+        select(Lead.id).where(Lead.id == lead_id, Lead.zone == advisor.zone)).scalar_one_or_none()
+    if exists is None:
+        return False
+    session.execute(
+        update(Lead)
+        .where(Lead.id == lead_id, Lead.status.in_(("nuevo", "mql")))
+        .values(status="sql", advisor_id=func.coalesce(Lead.advisor_id, advisor.id),
+                updated_at=func.now()))
+    return True
 
 
 def lead_detail(session: Session, advisor, lead_id: uuid.UUID) -> LeadDetail | None:
