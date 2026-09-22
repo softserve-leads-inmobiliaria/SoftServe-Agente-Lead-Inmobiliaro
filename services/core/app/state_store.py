@@ -167,6 +167,15 @@ class StateStore:
             self._session.add(Message(conversation_id=conversation_id, role=role, content=content,
                                       tool_calls=tool_calls or None, created_at=func.clock_timestamp()))
 
+    def set_zone_if_unknown(self, lead_id: uuid.UUID, zone: str) -> None:
+        """Completa `Lead.zone` la primera vez que se sabe, y no la pisa después (#81).
+
+        Es lo que hace que el lead aparezca en la cola de un asesor: el panel filtra por esta
+        columna. `WHERE zone IS NULL` deja la decisión en la base, sin leer antes de escribir.
+        """
+        self._session.execute(update(Lead).where(Lead.id == lead_id, Lead.zone.is_(None))
+                              .values(zone=zone, updated_at=func.now()))
+
     def withdraw_consent(self, lead_id: uuid.UUID) -> None:
         self._session.execute(update(Lead).where(Lead.id == lead_id)
                               .values(consent_status="withdrawn", updated_at=func.now()))
