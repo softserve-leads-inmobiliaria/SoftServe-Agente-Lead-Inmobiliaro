@@ -867,3 +867,41 @@ genérica) a un patrón simple habría sido una protección débil disfrazada de
 **Consecuencias.** El estado real de cada uno de los 8 *claims* vive en `docs/DESIGN/guardrails.md`
 §2.2 y §3, no solo en el docstring de `promise_guard.py` — se actualiza en este mismo PR, como pide la
 retrospectiva de v1. Cerrar el *claim* 6 por completo es trabajo futuro sin historia asignada todavía.
+
+## DT-27 — Logging JSON centralizado, incluidos los loggers propios de uvicorn; sin caso real de PII en logs
+
+**Estado:** aceptada
+
+**Contexto.** `OBS-7` pide logs en JSON en los 3 servicios (`core`, `panel`, `catalog`), incluyendo
+los *handlers* propios del servidor ASGI elegido — no solo el *root logger*, porque `uvicorn`
+configura sus propios loggers (`uvicorn`, `uvicorn.access`) antes de que la app arranque, y 2 de ellos
+tienen `propagate=False` (`uvicorn.config.LOGGING_CONFIG`), así que reconfigurar solo `root` no los
+alcanza. La historia también pide una decisión explícita sobre PII en logs, incluso si la conclusión
+es que no hay caso real que enmascarar (v1 llegó a esa misma conclusión, pero sin documentarla).
+
+**Decisión.**
+- `db/logging_config.py::configure_json_logging()`, llamado a nivel de módulo en la primera línea
+  ejecutable después de los imports de cada `main.py` (`services/{core,panel,catalog}/app/main.py`),
+  antes de construir `FastAPI(...)`. Los 3 servicios arrancan vía `uvicorn app.main:app` por CLI sin
+  `--log-config`; `Config.__init__` de uvicorn corre su propio `configure_logging()` (texto plano)
+  antes de `Config.load()`, que es quien importa `app.main` — así que este segundo `dictConfig`
+  corre después y gana, sin condición de carrera ni necesidad de tocar el `CMD` de ningún Dockerfile.
+- Un único `JsonFormatter` (una línea de JSON por registro: `timestamp`, `level`, `logger`, `message`,
+  `exc_info` si aplica) aplicado a `root` y, explícitamente, a `uvicorn`/`uvicorn.error`/
+  `uvicorn.access` — nombrarlos aparte es lo que cierra el hueco de `propagate=False`.
+- `db/` ya es el paquete compartido por los 3 servicios (`docs/ESTRUCTURA-DEL-PROYECTO.md` §2), así
+  que no hace falta duplicar el módulo ni tocar `PYTHONPATH`/Docker.
+- PII: sin caso real hoy — ningún `logger.*` en `core`/`panel`/`catalog` imprime texto del lead, solo
+  mensajes fijos y metadata. Documentado explícitamente en `docs/DESIGN/guardrails.md` §3 (no en
+  silencio, como pide la nota de v2 de la propia historia).
+
+**Alternativas.** `structlog`/`python-json-logger` — descartadas: dependencia nueva en los 3
+`requirements.txt` para algo que un `logging.Formatter` de ~25 líneas sin dependencias resuelve. Pasar
+`--log-config` en el `CMD` del Dockerfile — descartada: exige un archivo de configuración separado por
+servicio (JSON/YAML) para algo que un `dictConfig` en Python, versionado y testeable con `pytest`
+junto al resto del código, resuelve con menos superficie.
+
+**Consecuencias.** Cualquier log nuevo que quiera llevar datos del lead debe redactarlo antes de
+loguear (mismo principio que `input_guard.py`/`InputVerdict.audit_kinds()`: tipos, nunca contenido).
+Si en el futuro aparece un caso real de PII en logs, se actualiza `docs/DESIGN/guardrails.md` §3 y
+esta entrada en el mismo PR que lo introduce, no después.

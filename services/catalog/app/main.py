@@ -6,6 +6,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.server import create_mcp
+from db.logging_config import configure_json_logging
+
+configure_json_logging()
 
 mcp = create_mcp()
 mcp_app = mcp.streamable_http_app()
