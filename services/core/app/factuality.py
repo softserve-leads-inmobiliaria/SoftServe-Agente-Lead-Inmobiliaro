@@ -31,7 +31,7 @@ _STATUS = re.compile(r"\b(" + "|".join(sorted(_STATUS_WORDS, key=len, reverse=Tr
 
 @dataclass(frozen=True)
 class Violation:
-    kind: str  # "number" | "status"
+    kind: str  # "number" | "status" | "address" (app/address_guard.py, A-6)
     value: str  # tal como se detectó, normalizado — nunca el mensaje completo
 
 
