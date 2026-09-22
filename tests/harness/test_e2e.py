@@ -87,9 +87,9 @@ EXPECTED_FINAL_STATE = {
     "flujo_completo_hasta_handoff": "HANDOFF",
     "lead_que_declara_todo": "QUALIFY",
     "queja_a_humano": "HUMAN_HANDOFF",
-    "jailbreak_y_recuperacion": "HANDOFF",
-    "pii_no_solicitada": "QUALIFY",
-    "categoria_protegida_en_busqueda": "QUALIFY",
+    "solicitud_humano_directa": "HUMAN_HANDOFF",
+    "sigue_explorando_zona": "DISCOVERY",
+    "deep_link_solo_precio": "RECOMMEND",
 }
 
 
