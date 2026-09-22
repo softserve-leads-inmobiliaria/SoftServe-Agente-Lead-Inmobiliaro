@@ -265,6 +265,30 @@ def test_the_correction_prompt_shows_the_model_its_own_reply_and_what_was_wrong(
     assert "9999999" in correction_text
 
 
+# --- A-6: dirección reservada en prosa ----------------------------------------------------------------------------
+
+def test_an_address_in_prose_gets_one_chance_to_regenerate_and_the_fix_is_used():
+    """El número de la dirección tampoco viene de ninguna tool: A-5 y A-6 la marcan las dos
+    (violations=2) — la doble red que describe DT-23, no una casualidad del gold set."""
+    client = ScriptedBedrock(classification("consulta_precio"),
+                             tool_use("get_property", {"property_id": "p1", "lead_qualified": False}),
+                             text("Está en Calle Lerdo 1204, Providencia."),
+                             text("Está en Providencia, cerca de Av. Vallarta."))
+    result = run(agent_for(client).run(turn(lead_qualified=False), FakeCatalog()))
+    assert result.text == "Está en Providencia, cerca de Av. Vallarta."
+    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 2})]
+
+
+def test_an_address_that_survives_regeneration_degrades_to_an_advisor_offer():
+    client = ScriptedBedrock(classification("consulta_precio"),
+                             tool_use("get_property", {"property_id": "p1", "lead_qualified": False}),
+                             text("Está en Calle Lerdo 1204, Providencia."),
+                             text("Sigue en Calle Lerdo 1204, Providencia."))
+    result = run(agent_for(client).run(turn(lead_qualified=False), FakeCatalog()))
+    assert result.text == FACTUALITY_DEGRADE_REPLY and result.intent == "otro"
+    assert [a for a, _ in result.guard_audits] == ["output.factuality_regenerated", "output.factuality_degraded"]
+
+
 def test_a_throttling_error_during_the_regeneration_still_falls_back_to_the_safe_reply():
     client = ScriptedBedrock(classification("busqueda_propiedad"), tool_use("search_properties", {"zone": "Prov."}),
                              text("Tengo una en $9,999,999."), throttled())
