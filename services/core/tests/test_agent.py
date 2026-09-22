@@ -6,7 +6,13 @@ import pytest
 from bedrock_fakes import FakeCatalog, ScriptedBedrock, classification, text, tool_use
 from botocore.exceptions import ClientError
 
-from app.agent import LLM_FALLBACK_REPLY, BedrockAgent, FakeAgent, TurnInput
+from app.agent import (
+    FACTUALITY_DEGRADE_REPLY,
+    LLM_FALLBACK_REPLY,
+    BedrockAgent,
+    FakeAgent,
+    TurnInput,
+)
 from app.bedrock_llm import BedrockLLM
 from app.fakes.fake_llm import REPLIES
 from app.input_guard import OMITTED_MESSAGE
@@ -194,3 +200,74 @@ def test_the_fake_agent_extracts_the_raw_signal_from_the_filtered_text():
 
 def test_the_agents_have_names_for_the_traces():
     assert FakeAgent.name == "fake" and BedrockAgent.name == "bedrock"
+
+
+# --- A-5: factualidad de la respuesta -----------------------------------------------------------------------------
+
+def test_a_factual_reply_never_triggers_a_regeneration_call():
+    """Una llamada de más al modelo haría fallar el test con `IndexError` (`ScriptedBedrock`)."""
+    client = ScriptedBedrock(classification("busqueda_propiedad"), tool_use("search_properties", {"zone": "Prov."}),
+                             text("Tengo una en $2,350,000."))
+    catalog = FakeCatalog(properties=[{"id": "p1", "title": "Casa", "price": 2350000, "status": "disponible"}])
+    result = run(agent_for(client).run(turn(), catalog))
+    assert result.text == "Tengo una en $2,350,000." and result.guard_audits == []
+
+
+def test_an_invented_price_gets_one_chance_to_regenerate_and_the_fix_is_used():
+    client = ScriptedBedrock(classification("busqueda_propiedad"), tool_use("search_properties", {"zone": "Prov."}),
+                             text("Tengo una en $9,999,999."), text("Tengo una en $2,350,000."))
+    catalog = FakeCatalog(properties=[{"id": "p1", "title": "Casa", "price": 2350000, "status": "disponible"}])
+    result = run(agent_for(client).run(turn(), catalog))
+    assert result.text == "Tengo una en $2,350,000." and result.intent == "busqueda_propiedad"
+    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1})]
+    assert result.tool_results == {"search_properties": {"properties": catalog.properties}}
+
+
+def test_an_invented_price_that_survives_the_regeneration_degrades_to_an_advisor_offer():
+    client = ScriptedBedrock(classification("busqueda_propiedad"), tool_use("search_properties", {"zone": "Prov."}),
+                             text("Tengo una en $9,999,999."), text("Sigue costando $9,999,999."))
+    catalog = FakeCatalog(properties=[{"id": "p1", "title": "Casa", "price": 2350000, "status": "disponible"}])
+    result = run(agent_for(client).run(turn(), catalog))
+    assert result.text == FACTUALITY_DEGRADE_REPLY and result.intent == "otro"
+    assert [a for a, _ in result.guard_audits] == ["output.factuality_regenerated", "output.factuality_degraded"]
+
+
+def test_the_lead_qualified_flag_never_changes_after_a_regeneration():
+    """El código sigue controlando `lead_qualified` (A-6) también en la respuesta regenerada."""
+    client = ScriptedBedrock(classification("consulta_precio"),
+                             tool_use("get_property", {"property_id": "p1", "lead_qualified": True}),
+                             text("Cuesta $9,999,999."), text("Cuesta lo que diga la ficha."))
+    result = run(agent_for(client).run(turn(lead_qualified=False), FakeCatalog()))
+    assert result.text == "Cuesta lo que diga la ficha."
+    assert "lead_qualified" not in json.dumps(client.requests[1]["toolConfig"])
+
+
+def test_the_regeneration_can_call_a_tool_again_and_the_calls_are_all_kept():
+    client = ScriptedBedrock(classification("busqueda_propiedad"), tool_use("search_properties", {"zone": "Prov."}),
+                             text("Tengo una en $9,999,999."),
+                             tool_use("search_properties", {"zone": "Prov."}, tool_use_id="tool-2"),
+                             text("Tengo una en $2,350,000."))
+    catalog = FakeCatalog(properties=[{"id": "p1", "title": "Casa", "price": 2350000, "status": "disponible"}])
+    result = run(agent_for(client).run(turn(), catalog))
+    assert result.text == "Tengo una en $2,350,000."
+    assert result.tool_calls == [{"name": "search_properties", "is_error": False}] * 2
+    assert catalog.calls == [("search_properties", {"zone": "Prov."})] * 2
+
+
+def test_the_correction_prompt_shows_the_model_its_own_reply_and_what_was_wrong():
+    client = ScriptedBedrock(classification("busqueda_propiedad"), tool_use("search_properties", {"zone": "Prov."}),
+                             text("Tengo una en $9,999,999."), text("Tengo una en $2,350,000."))
+    catalog = FakeCatalog(properties=[{"id": "p1", "title": "Casa", "price": 2350000, "status": "disponible"}])
+    run(agent_for(client).run(turn(), catalog))
+    correction_request = client.calls_to(CHAT)[-1]
+    assert correction_request["messages"][-2] == {"role": "assistant", "content": [{"text": "Tengo una en $9,999,999."}]}
+    correction_text = correction_request["messages"][-1]["content"][0]["text"]
+    assert "9999999" in correction_text
+
+
+def test_a_throttling_error_during_the_regeneration_still_falls_back_to_the_safe_reply():
+    client = ScriptedBedrock(classification("busqueda_propiedad"), tool_use("search_properties", {"zone": "Prov."}),
+                             text("Tengo una en $9,999,999."), throttled())
+    catalog = FakeCatalog(properties=[{"id": "p1", "title": "Casa", "price": 2350000, "status": "disponible"}])
+    result = run(agent_for(client).run(turn(), catalog))
+    assert result.text == LLM_FALLBACK_REPLY and result.intent == "otro" and result.llm_error == "LLMError"

@@ -1,4 +1,4 @@
-"""Tarjeta del lead calificado al asesor, por Telegram (B-7, DT-22).
+"""Tarjeta del lead calificado al asesor, por Telegram (B-7, DT-24).
 
 Se dispara desde `process_turn` vía `on_qualified`, después del commit del turno y solo en el turno
 exacto en que la banda del score cruza a WARM/HOT. Reusa el `Bot` del canal (`get_bot()`), no crea un
