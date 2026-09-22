@@ -1,0 +1,2 @@
+{"text": "Hola, buenas tardes", "expect_reply_contains": "asistente"}
+{"text": "Busco un departamento, soy católica y busco cerca de mi iglesia", "expect_reply_contains": "zona"}

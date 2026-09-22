@@ -87,6 +87,9 @@ EXPECTED_FINAL_STATE = {
     "flujo_completo_hasta_handoff": "HANDOFF",
     "lead_que_declara_todo": "QUALIFY",
     "queja_a_humano": "HUMAN_HANDOFF",
+    "jailbreak_y_recuperacion": "HANDOFF",
+    "pii_no_solicitada": "QUALIFY",
+    "categoria_protegida_en_busqueda": "QUALIFY",
 }
 
 
@@ -160,7 +163,17 @@ def test_stop_withdraws_consent_in_postgres(stack, database_url, tmp_path):
 
 
 def test_a_streak_of_unresolved_turns_hands_off_to_a_human(stack, database_url, tmp_path):
-    """A-13: tres turnos seguidos sin resolver dejan la conversación en HUMAN_HANDOFF."""
+    """A-13: tres turnos seguidos sin resolver dejan la conversación en HUMAN_HANDOFF.
+
+    Guion temporal y no de `harness/fixtures`: la respuesta de este camino depende del guardrail de
+    entrada y de la racha ya acumulada en la conversación, ninguno de los dos existe en el *fake*
+    responder de `test_replay.py` (CT-9) — un guion compartido fallaría ahí. Además, si este guion
+    reprodujera dos veces la misma conversación (como pasa con todo lo que entra a
+    `harness/fixtures/`, vía `test_every_script_passes_end_to_end` y
+    `test_fsm_state_is_persisted_in_postgres`), la segunda vuelta ya empieza en `HUMAN_HANDOFF`
+    (terminal) y el guardrail de frustración nunca se vuelve a activar, rompiendo la aserción del
+    último turno.
+    """
     from sqlalchemy import create_engine, text
 
     script = tmp_path / "frustracion.jsonl"
