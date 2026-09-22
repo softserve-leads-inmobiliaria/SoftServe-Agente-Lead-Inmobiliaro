@@ -1,4 +1,4 @@
-"""Cuándo un lead pasa a "calificado" (B-7, DT-22).
+"""Cuándo un lead pasa a "calificado" (B-7, DT-24).
 
 Lógica pura: la banda del score BANT-E (A-9) cruza a WARM o HOT. Es el significado de negocio de
 "vale la pena que un asesor lo llame", y es independiente del estado de la FSM: DT-14 decidió que el
