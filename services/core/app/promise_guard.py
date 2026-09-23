@@ -74,7 +74,8 @@ _ALWAYS_PROHIBITED: dict[str, tuple[str, ...]] = {
 _PROHIBITED = {kind: re.compile("|".join(patterns)) for kind, patterns in _ALWAYS_PROHIBITED.items()}
 
 # --- claim 5: amenidad no respaldada por `amenities` de este turno ---------------------------------
-# Vocabulario cerrado: los valores que de verdad usa el catálogo falso (services/catalog/app/data.py).
+# Vocabulario cerrado: los valores que usa el catálogo de demo (services/catalog/app/data.py). Cuando C-9
+# cargue el inventario real en Postgres, este vocabulario debe cubrir sus `amenities`.
 _AMENITY_SYNONYMS: dict[str, tuple[str, ...]] = {
     "alberca": ("alberca", "piscina"), "gimnasio": ("gimnasio",), "jardin": ("jardin",),
     "cochera": ("cochera",), "estacionamiento": ("estacionamiento",), "terraza": ("terraza",),

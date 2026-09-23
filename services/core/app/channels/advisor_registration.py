@@ -17,7 +17,7 @@ from db.session import session_scope
 logger = logging.getLogger("core.channels.advisor_registration")
 
 REGISTERED_REPLY: Final = (
-    "Listo, {name}: te voy a avisar por acá cada vez que un lead de {zone} quede calificado."
+    "Listo, {name}: te voy a avisar por acá cada vez que un lead de {zone} quede calificado o pase a atención humana."
 )
 UNKNOWN_TOKEN_REPLY: Final = "Ese enlace de registro no es válido. Pedile al equipo uno nuevo."
 
