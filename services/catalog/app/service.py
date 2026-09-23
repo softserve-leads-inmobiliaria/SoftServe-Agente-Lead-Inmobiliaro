@@ -161,7 +161,7 @@ class CatalogService:
 
             today_date = self._today()
 
-            query = db.query(Promotion).filter(Promotion.valid_to >= today_date)
+            query = db.query(Promotion).filter(Promotion.valid_until >= today_date)
 
             if property_id is not None:
                 query = query.filter(Promotion.property_id == property_id)
@@ -174,10 +174,9 @@ class CatalogService:
                 promotions_list.append({
                     "id": str(promo.id),
                     "property_id": str(promo.property_id) if promo.property_id else None,
-                    "type": promo.type,
-                    "conditions": promo.conditions,
-                    "valid_from": promo.valid_from.isoformat() if promo.valid_from else None,
-                    "valid_until": promo.valid_to.isoformat()
+                    "title": promo.title,
+                    "description": promo.description,
+                    "valid_until": promo.valid_until.isoformat()
                 })
 
             return {"promotions": promotions_list}
