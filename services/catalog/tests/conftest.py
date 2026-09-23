@@ -1,45 +1,64 @@
 import os
+import uuid
 from datetime import date
 
 import pytest
+from alembic import command
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 
 from app import data
 from db.models import Promotion, Property
-from db.settings import database_url
+from db.settings import database_url as default_url
+from db.testing import _admin_engine, alembic_config
 
+_temp_db_url = None
+
+def pytest_configure(config):
+    """Crea la base de datos temporal ANTES de recolectar los tests y exporta DATABASE_URL."""
+    global _temp_db_url
+    
+    admin = _admin_engine()
+    try:
+        with admin.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as exc:
+        admin.dispose()
+        if os.environ.get("REQUIRE_DB") == "1":
+            raise
+        return  # Setup database will skip properly later
+
+    name = f"leads_test_cat_{uuid.uuid4().hex[:10]}"
+    with admin.connect() as conn:
+        conn.execute(text(f'CREATE DATABASE "{name}"'))
+    
+    url = make_url(default_url()).set(database=name).render_as_string(hide_password=False)
+    command.upgrade(alembic_config(url), "head")
+    
+    _temp_db_url = url
+    os.environ["DATABASE_URL"] = url
+    admin.dispose()
+
+def pytest_unconfigure(config):
+    """Limpia la base temporal al terminar."""
+    if _temp_db_url:
+        admin = _admin_engine()
+        name = make_url(_temp_db_url).database
+        with admin.connect() as conn:
+            conn.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+        admin.dispose()
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_database():
-    """Siembra la BD PostgreSQL con el catálogo de pruebas para toda la suite (Historia C-1).
+    """Siembra la BD temporal con el catálogo de pruebas."""
+    if not _temp_db_url:
+        pytest.skip("Postgres no disponible")
 
-    Usa TRUNCATE ... CASCADE para limpiar sin depender del orden de las FK.
-    Hace flush() tras insertar propiedades para que el FK de promociones se satisfaga.
-    """
-    engine = create_engine(database_url())
-
-    # Comprobamos conectividad; sin Postgres disponible saltamos (igual que db/testing.py).
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-    except Exception as exc:
-        engine.dispose()
-        if os.environ.get("REQUIRE_DB") == "1":
-            raise
-        pytest.skip(
-            f"Postgres no disponible ({type(exc).__name__}); levantarlo con "
-            "`docker compose up -d postgres`"
-        )
-
+    engine = create_engine(_temp_db_url)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     with SessionLocal() as db:
-        # TRUNCATE CASCADE limpia en un solo paso respetando el orden de FK.
-        db.execute(text("TRUNCATE promotions, properties RESTART IDENTITY CASCADE"))
-        db.commit()
-
-        # Insertamos propiedades primero y hacemos flush para que las FK de promociones se satisfagan.
         for prop_data in data.PROPERTIES:
             db.add(Property(**prop_data))
         db.flush()
@@ -53,9 +72,4 @@ def setup_test_database():
         db.commit()
 
     yield
-
-    with SessionLocal() as db:
-        db.execute(text("TRUNCATE promotions, properties RESTART IDENTITY CASCADE"))
-        db.commit()
-
     engine.dispose()
