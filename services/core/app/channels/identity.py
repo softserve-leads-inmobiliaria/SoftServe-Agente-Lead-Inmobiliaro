@@ -42,6 +42,12 @@ def resolve_lead(session: Session, telegram_user_id: str) -> uuid.UUID:
 def resolve_conversation(session: Session, lead_id: uuid.UUID) -> uuid.UUID:
     """Reusa la conversación viva del lead; abre una nueva si la última quedó en estado terminal.
 
+    La conversación nueva hereda del contexto anterior lo que es del lead y no de la conversación:
+    la señal del score (`score_signal`, #84) y si ya está calificado (`lead_qualified`). El score
+    (`lead_scores`) y la calificación (`Lead.qualified_at`) son por lead; si el contexto arrancara
+    vacío, el primer turno recalcularía el score desde cero y lo sobreescribiría, y el agente dejaría
+    de saber que puede revelar la dirección exacta.
+
     Se bloquea la fila del `Lead` (`FOR UPDATE`) para que dos mensajes simultáneos de un lead nuevo
     no abran dos conversaciones: la segunda transacción espera y encuentra la ya creada.
     """
@@ -57,7 +63,10 @@ def resolve_conversation(session: Session, lead_id: uuid.UUID) -> uuid.UUID:
 
     conversation_id = uuid.uuid4()
     session.execute(insert(Conversation).values(id=conversation_id, lead_id=lead_id))
-    session.execute(insert(FsmContext).values(conversation_id=conversation_id))
+    previous = session.get(FsmContext, latest.id) if latest is not None else None
+    inherited = {} if previous is None else {"score_signal": previous.score_signal,
+                                             "lead_qualified": previous.lead_qualified}
+    session.execute(insert(FsmContext).values(conversation_id=conversation_id, **inherited))
     return conversation_id
 
 
