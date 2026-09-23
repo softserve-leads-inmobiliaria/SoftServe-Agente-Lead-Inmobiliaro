@@ -905,3 +905,48 @@ junto al resto del código, resuelve con menos superficie.
 loguear (mismo principio que `input_guard.py`/`InputVerdict.audit_kinds()`: tipos, nunca contenido).
 Si en el futuro aparece un caso real de PII en logs, se actualiza `docs/DESIGN/guardrails.md` §3 y
 esta entrada en el mismo PR que lo introduce, no después.
+
+## DT-28 — Ficha de traspaso: en `HANDOFF` y `HUMAN_HANDOFF`, con la transcripción completa y una sola notificación por turno
+
+**Estado:** aceptada
+
+**Contexto.** `A-12` pide que el asesor reciba una ficha completa (score, propiedad de interés, visita,
+transcripción) cuando el lead pasa a traspaso. El título habla de `HANDOFF`, pero el criterio de
+aceptación dice `HUMAN_HANDOFF`: son dos estados distintos de la FSM (DT-12). `HANDOFF` es el traspaso
+normal, tras agendar la visita; `HUMAN_HANDOFF`, el que provoca una petición explícita, una consulta fuera
+de alcance o la frustración (DT-16). Además ya existe la tarjeta de calificación de `B-7` (DT-24): había
+que evitar que un mismo turno mandara dos avisos y que un lead cambiara de asesor a mitad del camino.
+
+**Decisión.**
+- **Se dispara al llegar a cualquiera de los dos estados**, en el turno exacto de la transición. Ambos
+  significan "una persona toma el lead" y el asesor necesita la misma ficha. `handoff.handoff_reason()`
+  devuelve el motivo (`solicitud_humano`, `fuera_de_alcance`, `frustration`, `visit_scheduled`) solo en
+  ese turno: los estados de traspaso son terminales, así que el mensaje siguiente no vuelve a disparar.
+- **Mismo mecanismo que `B-7`:** `process_turn` recibe un `on_handoff` opcional, que invoca después del
+  commit cuando `Transition.handoff_reason` no es nulo. Lo pasa el canal de Telegram; el `POST /events`
+  del arnés no. Un fallo al enviar se registra y no toca el turno del lead.
+- **Contenido:** motivo, banda y total del score con sus razones, zona, propiedad de interés, visita y
+  enlace al panel, más la **transcripción completa** de la conversación (lead y agente, en orden,
+  incluido el turno del traspaso). Sin datos de contacto, igual que la tarjeta de calificación.
+- **La transcripción se parte, no se recorta:** Telegram limita cada mensaje a 4096 caracteres, así que
+  el resumen va en el primer mensaje y la transcripción en los siguientes, cortada por líneas
+  (`split_lines`); una línea más larga que el tope se corta a la fuerza. Ninguna parte se pierde.
+- **Qué texto ve el asesor:** el mismo que ya guarda la base (`messages`): el mensaje del lead pasó por
+  el guardrail de entrada (PII y categorías protegidas ya redactadas, DT-15) y la respuesta es la que se
+  le envió. La ficha no introduce ningún dato nuevo.
+- **A quién:** el asesor que ya tenía el lead (`Lead.advisor_id`) si sigue registrado en Telegram; si no,
+  el de su zona o la cola general, que queda asignado. Un lead ya calificado no cambia de asesor en el
+  traspaso.
+- **Una sola notificación por turno:** si el mismo turno califica al lead y lo traspasa, se manda solo la
+  ficha de traspaso (ya lleva el score). El lead queda marcado como calificado igual (`qualified_at`,
+  DT-24).
+
+**Alternativas.** Mandar la transcripción como archivo adjunto — descartada: `Sender` solo tiene
+`send_message` y añadir documentos abre una superficie nueva por algo que el texto en varios mensajes
+resuelve. Recortar la transcripción a los últimos N mensajes — descartada: el criterio de aceptación pide
+la transcripción completa.
+
+**Consecuencias.** La entrega es de mejor esfuerzo y una sola vez, como en `B-7`: si Telegram falla en
+ese turno, la ficha no se reintenta (el asesor sigue viendo al lead y su transcripción en el panel,
+`B-5`). Una cola con reintentos pertenece a una historia aparte, no a esta. Una conversación muy larga
+genera varios mensajes seguidos al asesor; es el costo aceptado de no perder nada.
