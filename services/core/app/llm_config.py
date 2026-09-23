@@ -6,11 +6,14 @@ from typing import Any, Mapping
 
 from app.agent import Agent, BedrockAgent, FakeAgent
 from app.bedrock_llm import BedrockLLM
+from app.llm_retry import Retrier, RetryPolicy
 from app.rate_limit import RateLimits
 
 DEFAULT_REGION = "us-east-1"
 DEFAULT_RATE_LIMIT = 10  # solicitudes por minuto y por modelo (DT-6)
 DEFAULT_MAX_WAIT = 15.0  # segundos que un turno espera cupo antes de responder con el texto seguro
+# Reintentos ante errores transitorios de Bedrock (A-14, DT-30). Los defaults son los de `RetryPolicy`.
+DEFAULT_RETRY = RetryPolicy()
 
 
 class ConfigError(ValueError):
@@ -27,6 +30,18 @@ def _bedrock_client(env: Mapping[str, str]) -> Any:
 
     return boto3.client("bedrock-runtime", region_name=_get(env, "BEDROCK_REGION", DEFAULT_REGION),
                         config=Config(connect_timeout=5, read_timeout=20, retries={"max_attempts": 1}))
+
+
+def _retry_policy(env: Mapping[str, str]) -> RetryPolicy:
+    """Los límites de los reintentos, validados al arrancar: un valor inválido falla acá, no en el primer 429."""
+    try:
+        return RetryPolicy(
+            max_attempts=int(_get(env, "LLM_RETRY_MAX_ATTEMPTS", str(DEFAULT_RETRY.max_attempts))),
+            base_delay=float(_get(env, "LLM_RETRY_BASE_DELAY_SECONDS", str(DEFAULT_RETRY.base_delay))),
+            max_delay=float(_get(env, "LLM_RETRY_MAX_DELAY_SECONDS", str(DEFAULT_RETRY.max_delay))),
+            max_total_seconds=float(_get(env, "LLM_RETRY_MAX_TOTAL_SECONDS", str(DEFAULT_RETRY.max_total_seconds))))
+    except ValueError as exc:
+        raise ConfigError(f"reintentos del LLM inválidos: {exc}") from exc
 
 
 def build_agent(env: Mapping[str, str] | None = None, client: Any = None) -> Agent:
@@ -48,4 +63,6 @@ def build_agent(env: Mapping[str, str] | None = None, client: Any = None) -> Age
         limits = RateLimits(per_minute, 60.0)
     except ValueError as exc:
         raise ConfigError(f"límite de tasa inválido: {exc}") from exc
-    return BedrockAgent(BedrockLLM(client or _bedrock_client(env), chat, classifier, limits, max_wait=max_wait))
+    retrier = Retrier(_retry_policy(env))
+    return BedrockAgent(BedrockLLM(client or _bedrock_client(env), chat, classifier, limits,
+                                   max_wait=max_wait, retrier=retrier))

@@ -79,6 +79,10 @@ class BedrockAgent:
         self._llm = llm
 
     async def run(self, turn: TurnInput, catalog: ToolCatalog) -> AgentResult:
+        with self._llm.turn():  # las llamadas del turno comparten el tiempo de reintentos (A-14)
+            return await self._run(turn, catalog)
+
+    async def _run(self, turn: TurnInput, catalog: ToolCatalog) -> AgentResult:
         if not turn.text.strip():  # p. ej. un deep-link sin texto: el lead acaba de llegar
             return AgentResult(text=FakeLLM().generate_reply("saludo"), intent="saludo")
         if turn.text == OMITTED_MESSAGE:  # no quedó nada utilizable: no se gasta una llamada
