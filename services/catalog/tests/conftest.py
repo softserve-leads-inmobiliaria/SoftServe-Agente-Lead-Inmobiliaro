@@ -23,7 +23,7 @@ def pytest_configure(config):
     try:
         with admin.connect() as conn:
             conn.execute(text("SELECT 1"))
-    except Exception as exc:
+    except Exception:
         admin.dispose()
         if os.environ.get("REQUIRE_DB") == "1":
             raise
