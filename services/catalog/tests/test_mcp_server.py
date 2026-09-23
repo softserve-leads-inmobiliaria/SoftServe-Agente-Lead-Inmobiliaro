@@ -15,13 +15,6 @@ from mcp.client.streamable_http import streamable_http_client
 from app.main import app
 from db.repo_root import repo_root
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from db.models import Base, Property, Promotion
-from db.settings import database_url
-from app import data
-from datetime import date
-
 CONTRACTS = repo_root() / "contracts"
 TOOLS = ["search_properties", "get_property", "get_availability", "get_promotions", "check_requirements"]
 

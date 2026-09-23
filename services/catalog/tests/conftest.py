@@ -1,12 +1,13 @@
 import os
-import pytest
 from datetime import date
+
+import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-from db.models import Property, Promotion
-from db.settings import database_url
 from app import data
+from db.models import Promotion, Property
+from db.settings import database_url
 
 
 @pytest.fixture(scope="session", autouse=True)

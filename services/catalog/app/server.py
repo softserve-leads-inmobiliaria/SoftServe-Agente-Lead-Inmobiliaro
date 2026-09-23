@@ -6,7 +6,6 @@ cliente de `core` se conecta con el mismo protocolo que usará contra el catálo
 from __future__ import annotations
 
 import json
-import os
 from typing import Any, Literal
 
 from jsonschema import Draft202012Validator
@@ -19,20 +18,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from db.repo_root import repo_root
+from db.settings import database_url as _database_url
 
 from .service import CatalogError, CatalogService
 
 PropertyType = Literal["venta", "renta", "preventa"]
 
-POSTGRES_USER = os.getenv("POSTGRES_USER", "leads")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "leads_dev_password")
-POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
-POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
-POSTGRES_DB = os.getenv("POSTGRES_DB", "leads")
-
-DATABASE_URL = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
-
-engine = create_engine(DATABASE_URL)
+engine = create_engine(_database_url())
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def _error_result(error: CatalogError) -> CallToolResult:

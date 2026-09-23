@@ -3,14 +3,14 @@ import json
 from datetime import date, datetime, timezone
 
 import pytest
+from jsonschema import Draft202012Validator, FormatChecker
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from jsonschema import Draft202012Validator, FormatChecker
 
 from app import data
 from app.service import CatalogError, CatalogService
-from db.settings import database_url
 from db.repo_root import repo_root
+from db.settings import database_url
 
 CONTRACTS = repo_root() / "contracts" / "mcp"
 TODAY = date(2026, 9, 14)
