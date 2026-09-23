@@ -82,7 +82,7 @@ class CatalogService:
             if type is not None:
                 query = query.filter(Property.type == type)
             if bedrooms is not None:
-                query = query.filter(Property.bedrooms >= bedrooms)
+                query = query.filter(Property.bedrooms == bedrooms)
             if budget_range is not None:
                 query = query.filter(
                     Property.price >= budget_range["min"],
@@ -195,7 +195,7 @@ class CatalogService:
             multiple = rules["income_multiple"]
 
             down_ok = ratio is None or lead_profile.get("down_payment", 0) >= real_price * ratio
-            income_ok = multiple is None or lead_profile["monthly_income"] >= real_price * multiple
+            income_ok = multiple is None or lead_profile.get("monthly_income", 0) >= real_price * multiple
 
             references_ok = (not rules["references"]) or lead_profile.get("has_references", False)
 
