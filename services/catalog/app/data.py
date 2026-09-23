@@ -1,4 +1,8 @@
-"""Datos en memoria del catálogo falso (CT-8): ~10 propiedades, 3 asesores, promociones y requisitos.
+"""Datos de demo del catálogo (CT-8): ~10 propiedades, 3 asesores, promociones y requisitos.
+
+Desde C-1 el servicio lee las propiedades y promociones de Postgres: aquí quedan como semilla de los
+tests y del arnés, y `REQUIREMENTS` como las reglas de `check_requirements`. El inventario de demo
+real en la base es C-9.
 
 Son datos ficticios y estables: los tests y el arnés dependen de ellos. Incluyen casos `apartado` y
 `cerrado`, una propiedad sin promociones y una promoción vencida (para probar que nunca se devuelve).
