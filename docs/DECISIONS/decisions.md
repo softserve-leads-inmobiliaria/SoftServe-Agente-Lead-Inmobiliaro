@@ -1027,6 +1027,21 @@ con reloj inyectable (~140 líneas con su documentación), que es lo que permite
 **Consecuencias.** En el peor caso un turno tarda `max_total` (20 s) más la duración de una llamada antes
 de caer al texto seguro; con el límite de 15 s de cola de A-2 eso sigue acotado. El tiempo se cuenta
 desde el primer fallo transitorio, no desde el inicio del turno: las llamadas que van bien antes del primer
-fallo no consumen el tope. Falta la verificación en vivo que pide la historia (una ráfaga de turnos contra una
-cuenta con cuota baja): los tests usan `botocore.stub.Stubber`, que valida contra el modelo de servicio pero
-no reproduce el comportamiento real de la cuota.
+fallo no consumen el tope.
+
+**Verificación en vivo (2026-09-23, Haiku 4.5 en `us-east-1`, cuota de ~10 solicitudes por minuto y modelo).**
+Ráfaga de 8 turnos seguidos con el limitador local apagado (`LLM_RATE_LIMIT_PER_MINUTE=1000`), para que
+respondiera la cuota real: Bedrock devolvió 36 `ThrottlingException`, todos reintentados, ninguno terminó
+en fallo definitivo y los 8 turnos respondieron con el modelo, ninguno con el texto de respaldo. El turno
+más lento tardó 19 s, cerca del tope de 20 s. Bedrock no mandó `Retry-After` en ninguno: se usó la espera
+calculada (la ruta con cabecera solo está cubierta por los tests).
+
+**Interacción con el limitador local (A-2).** Con la configuración por defecto (`LLM_RATE_LIMIT_PER_MINUTE=10`,
+igual a la cuota de Bedrock) el limitador local actúa antes que Bedrock: en la misma ráfaga solo 2 de 8
+turnos respondieron y el resto cayó al texto de respaldo por `RateLimited`, sin un solo throttling de
+Bedrock y sin reintentos, porque un cupo local agotado no es un error transitorio y no se reintenta. Es el
+comportamiento de A-2, sin cambios. Además, cada reintento consume un cupo local (lo pide la historia),
+así que con el limitador activo los reintentos también lo agotan. Para que una ráfaga la absorba el
+*backoff* y no el texto de respaldo, `LLM_RATE_LIMIT_PER_MINUTE` debe ser mayor que la cuota real de
+Bedrock, y el precio son turnos de hasta ~20 s. Es una decisión de despliegue (protección de costo contra
+latencia) que este PR no toma: deja el valor por defecto en 10.

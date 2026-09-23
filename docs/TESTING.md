@@ -90,7 +90,10 @@ recibe `ThrottlingException` de Bedrock tras pocas llamadas seguidas (el limitad
 errores transitorios (throttling, servicio no disponible, timeout, error interno, fallos de conexión) se
 reintentan con espera exponencial y *jitter* (A-14, DT-30; límites en `LLM_RETRY_*`, ver `.env.example`).
 Cada reintento y el fallo definitivo quedan en el log como `warning` con el código del error y el número
-de intento, y el fallo definitivo también en la traza del turno. Ver DT-19: **con el LLM
+de intento, y el fallo definitivo también en la traza del turno. Ojo: con `LLM_RATE_LIMIT_PER_MINUTE=10`
+(igual a la cuota de Bedrock) el limitador local corta las ráfagas antes de que Bedrock haga *throttling*
+y esos turnos caen al texto de respaldo sin reintentar; para que las ráfagas las absorba el reintento hay
+que subir ese límite por encima de la cuota real (medición en el DT-30). Ver DT-19: **con el LLM
 real todavía no hay guardrails de salida** (A-5, A-6, A-7), así que no usarlo con leads reales.
 
 El historial de cada conversación se guarda en `messages` (solo el texto ya filtrado, sin PII ni
