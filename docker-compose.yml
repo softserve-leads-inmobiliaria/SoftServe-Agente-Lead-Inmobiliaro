@@ -100,6 +100,12 @@ services:
     build:
       context: .
       dockerfile: services/catalog/Dockerfile
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-leads}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-leads_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-leads}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 5s

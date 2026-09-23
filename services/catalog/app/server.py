@@ -14,12 +14,17 @@ from mcp.server.fastmcp.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import CallToolResult, TextContent
 from pydantic import ValidationError
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from app.service import CatalogError, CatalogService
 from db.repo_root import repo_root
+from db.settings import database_url as _database_url
 
 PropertyType = Literal["venta", "renta", "preventa"]
 
+engine = create_engine(_database_url())
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def _error_result(error: CatalogError) -> CallToolResult:
     """Un error viaja como isError=true con el cuerpo de contracts/mcp/catalog_error.schema.json."""
@@ -60,7 +65,8 @@ class _CatalogMCP(FastMCP):
 
 
 def create_mcp(service: CatalogService | None = None) -> FastMCP:
-    service = service or CatalogService()
+    # Inyectamos la fábrica de sesiones obligatoria que exige CatalogService
+    service = service or CatalogService(db_session_factory=SessionLocal)
     mcp = _CatalogMCP(
         "catalog",
         streamable_http_path="/mcp",

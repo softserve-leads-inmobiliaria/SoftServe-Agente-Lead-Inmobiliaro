@@ -69,10 +69,13 @@ class Collector:
 
 @pytest.fixture(scope="module")
 def traced_stack():
+    from test_e2e import _seed_catalog
+
     collector = Collector()
     with temporary_database() as database_url:
+        _seed_catalog(database_url)
         catalog_port, core_port = _free_port(), _free_port()
-        catalog = _start("catalog", catalog_port)
+        catalog = _start("catalog", catalog_port, {"DATABASE_URL": database_url})
         core = _start("core", core_port, {
             "CATALOG_SERVICE_URL": f"http://127.0.0.1:{catalog_port}", "DATABASE_URL": database_url,
             "OTEL_EXPORTER_OTLP_ENDPOINT": f"http://127.0.0.1:{collector.port}",

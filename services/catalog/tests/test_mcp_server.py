@@ -22,7 +22,6 @@ TOOLS = ["search_properties", "get_property", "get_availability", "get_promotion
 def _load(path):
     return json.loads(path.read_text(encoding="utf-8"))
 
-
 @pytest.fixture(scope="module")
 def base_url():
     with socket.socket() as probe:
@@ -89,14 +88,17 @@ def test_not_found_travels_as_a_contract_error(base_url):
     assert result.isError
     assert json.loads(result.content[0].text)["error_code"] == "NOT_FOUND"
 
-
 def test_apartado_case_is_served(base_url):
     result = call(base_url, "get_availability", {"property_id": "prop_00234"})
+    assert not result.isError, f"El servidor MCP devolvió un error inesperado: {result.content}"
     assert result.structuredContent["status"] == "apartado"
-
 
 def test_exact_address_needs_a_qualified_lead(base_url):
     hidden = call(base_url, "get_property", {"property_id": "prop_00231", "lead_qualified": False})
     shown = call(base_url, "get_property", {"property_id": "prop_00231", "lead_qualified": True})
+    
+    assert not hidden.isError, f"Falló al obtener propiedad (oculta): {hidden.content}"
+    assert not shown.isError, f"Falló al obtener propiedad (visible): {shown.content}"
+    
     assert hidden.structuredContent["address_exact"] is None
-    assert shown.structuredContent["address_exact"]
+    assert shown.structuredContent["address_exact"] is not None

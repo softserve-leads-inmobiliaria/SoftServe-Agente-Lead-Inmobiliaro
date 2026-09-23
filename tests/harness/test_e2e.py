@@ -50,16 +50,46 @@ def _start(service, port, extra_env=None):
     raise AssertionError(f"{service} no arrancó")
 
 
+def _seed_catalog(url: str):
+    import importlib.util
+    from datetime import date
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from db.models import Promotion, Property
+
+    data_path = ROOT / "services" / "catalog" / "app" / "data.py"
+    spec = importlib.util.spec_from_file_location("catalog_seed_data", data_path)
+    catalog_data = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(catalog_data)
+
+    engine = create_engine(url)
+    Session = sessionmaker(bind=engine)
+    with Session() as db:
+        for p in catalog_data.PROPERTIES:
+            db.add(Property(**p))
+        db.flush()
+        for promo in catalog_data.PROMOTIONS:
+            promo_copy = promo.copy()
+            valid_until_str = promo_copy.pop("valid_until")
+            promo_copy["valid_until"] = date.fromisoformat(valid_until_str)
+            db.add(Promotion(**promo_copy))
+        db.commit()
+    engine.dispose()
+
+
 @pytest.fixture(scope="module")
 def database_url():
     with temporary_database() as url:
+        _seed_catalog(url)
         yield url
 
 
 @pytest.fixture(scope="module")
 def stack(database_url):
     catalog_port, core_port = _free_port(), _free_port()
-    catalog = _start("catalog", catalog_port)
+    catalog = _start("catalog", catalog_port, {"DATABASE_URL": database_url})
     core = _start("core", core_port, {"CATALOG_SERVICE_URL": f"http://127.0.0.1:{catalog_port}",
                                       "DATABASE_URL": database_url})
     yield f"http://127.0.0.1:{core_port}"
