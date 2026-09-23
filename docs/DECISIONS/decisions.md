@@ -950,3 +950,33 @@ la transcripción completa.
 ese turno, la ficha no se reintenta (el asesor sigue viendo al lead y su transcripción en el panel,
 `B-5`). Una cola con reintentos pertenece a una historia aparte, no a esta. Una conversación muy larga
 genera varios mensajes seguidos al asesor; es el costo aceptado de no perder nada.
+
+## DT-29 — La conversación nueva de un lead existente hereda la señal del score y la calificación
+
+**Estado:** aceptada
+
+**Contexto.** DT-20 abre una conversación nueva cuando la última quedó en estado terminal, con un
+`FsmContext` vacío. Pero el score (`lead_scores`) y la calificación (`Lead.qualified_at`, DT-24) son **por
+lead**, mientras que `score_signal` y `lead_qualified` vivían solo en el contexto de la conversación.
+Visto en vivo (#84): un lead en WARM 60 que fue traspasado y escribió una vez más quedó en COLD 0 en
+`lead_scores` y en la cola del panel, porque el primer turno recalculó el score desde una señal vacía y
+`save_scoring` lo sobreescribió. Lo mismo pasaba con `lead_qualified`: `StateStore.qualify` solo lo
+escribe al reclamar `qualified_at`, que ya no está libre, así que la conversación nueva nunca volvía a
+saber que el lead estaba calificado y el agente dejaba de poder revelarle la dirección exacta (A-6).
+
+**Decisión.**
+- Al abrir una conversación nueva para un lead que ya tuvo otra, `resolve_conversation`
+  (`channels/identity.py`) copia `score_signal` y `lead_qualified` del `FsmContext` de la **última**
+  conversación. Lo que declaró el lead (presupuesto, quién decide, urgencia) sigue siendo cierto.
+- Lo que es de la conversación arranca limpio: racha de frustración, resultados de tools del último turno,
+  historial de mensajes.
+- Es la opción 1 del issue #84. No se cambia el esquema ni el contrato `FsmState` (CT-3).
+
+**Alternativas.** Que `save_scoring` nunca baje el `total` — descartada: esconde que la señal se perdió
+y no arregla `lead_qualified`. Mover `score_signal` a nivel de lead — descartada: migración y cambio de
+contrato para un problema que se resuelve al abrir la conversación.
+
+**Consecuencias.** Un lead que vuelve tras un traspaso conserva su banda; si su interés cambió, el score
+lo refleja turno a turno como siempre. Los eventos de un lead desconocido que entran por el arnés
+(`StateStore._ensure_rows`) no pasan por aquí y siguen creando el contexto vacío; cada guion del arnés
+usa una sola conversación fija (ids derivados del nombre del guion) y nunca abre una segunda.
