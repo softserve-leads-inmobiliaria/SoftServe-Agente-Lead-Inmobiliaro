@@ -19,7 +19,7 @@ from app.availability import AvailabilityGuard
 from app.fakes.fake_core import FakeCore
 from app.fakes.fake_llm import FakeLLM
 from app.fsm import HUMAN_INTENTS, HUMAN_REQUESTED, TERMINAL_STATES, next_state, trigger_for
-from app.handoff import FRUSTRATION_REPLY, is_frustrated, next_streak
+from app.handoff import FRUSTRATION_REPLY, handoff_reason, is_frustrated, next_streak
 from app.input_guard import (
     HANDOFF_OFFER,
     OMITTED_MESSAGE,
@@ -57,9 +57,11 @@ class Transition:
     score: Score
     unresolved_streak: int = 0
     qualified: bool = False  # True solo en el turno en que el lead pasó a calificado (B-7)
+    handoff_reason: str | None = None  # solo en el turno en que llegó a HANDOFF/HUMAN_HANDOFF (A-12)
 
 
 OnQualified = Callable[[Mapping[str, Any], "Transition"], Awaitable[None]]
+OnHandoff = Callable[[Mapping[str, Any], "Transition"], Awaitable[None]]
 
 
 def _describe(span: Any, transition: "Transition") -> None:
@@ -123,11 +125,12 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         _write_audits(store, event, audits)
         store.add_messages(conversation_id, messages)
         store.touch(conversation_id)
+        reason = handoff_reason(after, trigger, intent)
         transition = Transition(before=state.fsm_state, after=after, trigger=trigger, score=score,
-                                unresolved_streak=streak, qualified=qualified)
+                                unresolved_streak=streak, qualified=qualified, handoff_reason=reason)
         _describe(span, transition)
-        if trigger == HUMAN_REQUESTED:
-            span.set_attribute("fsm.handoff_reason", intent if intent in HUMAN_INTENTS else "frustration")
+        if reason:
+            span.set_attribute("fsm.handoff_reason", reason)
         span.set_attribute("guardrail.audits", [action for action, _ in audits])
         return transition
 
@@ -169,7 +172,8 @@ def _lead_message(verdict: InputVerdict, original: str) -> list[SavedMessage]:
 
 
 async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, span: Any,
-                    agent: Agent, on_qualified: OnQualified | None = None) -> dict[str, Any]:
+                    agent: Agent, on_qualified: OnQualified | None = None,
+                    on_handoff: OnHandoff | None = None) -> dict[str, Any]:
     FakeCore().validate(event)  # evento incompleto o no inbound -> ValueError (422)
     with get_tracer().start_as_current_span("guardrail.input") as guard:
         verdict = inspect_input(event["text"])
@@ -226,15 +230,23 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
             await on_qualified(event, transition)
         except Exception:
             logger.exception("fallo al notificar la calificación del lead")
+    span.set_attribute("lead.handoff_now", transition.handoff_reason is not None)
+    if transition.handoff_reason and on_handoff is not None:
+        try:
+            await on_handoff(event, transition)
+        except Exception:
+            logger.exception("fallo al enviar la ficha del traspaso")
     return outbound
 
 
 async def process_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog,
-                       agent: Agent | None = None, on_qualified: OnQualified | None = None) -> dict[str, Any]:
+                       agent: Agent | None = None, on_qualified: OnQualified | None = None,
+                       on_handoff: OnHandoff | None = None) -> dict[str, Any]:
     """Un turno completo dentro de un span `turn`. El span no lleva el texto del mensaje.
 
     `on_qualified` se invoca, después del commit, solo en el turno en que el lead pasa a calificado
-    (B-7). Lo pasa el canal; el `POST /events` del arnés no, así los E2E nunca notifican a nadie.
+    (B-7); `on_handoff`, solo en el turno en que la FSM llega a `HANDOFF`/`HUMAN_HANDOFF` (A-12).
+    Los pasa el canal; el `POST /events` del arnés no, así los E2E nunca notifican a nadie.
     """
     with get_tracer().start_as_current_span("turn") as span:
         span.set_attributes({
@@ -244,6 +256,7 @@ async def process_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalo
         })
         started = time.perf_counter()
         try:
-            return await _run_turn(engine, event, catalog, span, agent or DEFAULT_AGENT, on_qualified)
+            return await _run_turn(engine, event, catalog, span, agent or DEFAULT_AGENT, on_qualified,
+                                   on_handoff)
         finally:
             span.set_attribute("turn.latency_ms", round((time.perf_counter() - started) * 1000, 1))

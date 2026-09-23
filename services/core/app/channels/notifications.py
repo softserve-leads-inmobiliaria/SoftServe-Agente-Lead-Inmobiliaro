@@ -9,15 +9,25 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
-from typing import Any, Mapping, Protocol
+from typing import Any, Mapping, Protocol, Sequence
 
 from sqlalchemy import Engine, func, select, update
 
 from app.interest import property_of_interest
-from db.models import Advisor, FsmContext, Lead, Visit
+from db.models import Advisor, FsmContext, Lead, Message, Visit
 from db.session import session_scope
 
 logger = logging.getLogger("core.channels.notifications")
+
+TELEGRAM_MAX_CHARS = 4096  # tope de un mensaje de Telegram; la transcripción se parte en varios
+
+HANDOFF_REASONS = {
+    "solicitud_humano": "el lead pidió hablar con una persona",
+    "fuera_de_alcance": "consulta fuera del alcance del agente",
+    "frustration": "varios turnos seguidos sin resolver (frustración)",
+    "visit_scheduled": "visita agendada, el lead pasa al asesor",
+}
+_ROLE_LABELS = {"user": "Lead", "assistant": "Agente"}
 
 
 class Sender(Protocol):
@@ -90,6 +100,129 @@ def render(card: LeadCard) -> str:
         lines.append("Por qué: " + "; ".join(card.reasons))
     lines.append(f"Ficha: /panel/<tu token>/leads/{card.lead_id}")
     return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class HandoffFile:
+    """Ficha de traspaso (A-12): la tarjeta del lead más el motivo y la transcripción completa."""
+
+    card: LeadCard
+    fsm_state: str
+    reason: str
+    transcript: tuple[tuple[str, str], ...]  # (rol, contenido) en orden cronológico
+
+
+def transcript_of(session, conversation_id: uuid.UUID) -> tuple[tuple[str, str], ...]:
+    """Todos los mensajes del lead y del agente de la conversación, sin tope (el historial del LLM sí lo tiene)."""
+    rows = session.execute(
+        select(Message.role, Message.content)
+        .where(Message.conversation_id == conversation_id, Message.role.in_(tuple(_ROLE_LABELS)))
+        .order_by(Message.created_at, Message.id)).all()
+    return tuple((row.role, row.content) for row in rows)
+
+
+def build_handoff_file(session, lead_id: uuid.UUID, conversation_id: uuid.UUID, score: Mapping[str, Any],
+                       fsm_state: str, reason: str) -> HandoffFile:
+    return HandoffFile(card=build_card(session, lead_id, conversation_id, score), fsm_state=fsm_state,
+                       reason=reason, transcript=transcript_of(session, conversation_id))
+
+
+def render_handoff(handoff: HandoffFile) -> list[str]:
+    """Los mensajes de la ficha: el resumen primero y la transcripción completa después.
+
+    La transcripción se parte por líneas en trozos de a lo sumo `TELEGRAM_MAX_CHARS`; una línea
+    más larga que el tope (un mensaje enorme) se corta a la fuerza. Ninguna parte se pierde.
+    """
+    card = handoff.card
+    lines = [
+        f"Traspaso de lead ({handoff.fsm_state}): {HANDOFF_REASONS.get(handoff.reason, handoff.reason)}",
+        f"Score: {card.score_band} · {card.score_total}/100",
+        f"Zona: {card.zone or 'sin definir'}",
+    ]
+    if card.property_title:
+        lines.append(f"Propiedad de interés: {card.property_title} ({card.property_id})")
+    if card.visit_at:
+        lines.append(f"Visita agendada: {card.visit_at}")
+    if card.reasons:
+        lines.append("Por qué el score: " + "; ".join(card.reasons))
+    lines.append(f"Ficha: /panel/<tu token>/leads/{card.lead_id}")
+    messages = ["\n".join(lines)]
+
+    if not handoff.transcript:
+        return messages + ["Transcripción: sin mensajes."]
+    transcript = ["Transcripción:", *(f"{_ROLE_LABELS.get(role, role)}: {content}"
+                                       for role, content in handoff.transcript)]
+    return messages + split_lines(transcript, TELEGRAM_MAX_CHARS)
+
+
+def split_lines(lines: Sequence[str], limit: int) -> list[str]:
+    """Junta líneas en textos de a lo sumo `limit` caracteres, sin perder ninguna. Una línea más larga
+    que el tope se corta a la fuerza."""
+    parts: list[str] = []
+    current = ""
+    for line in lines:
+        while len(line) > limit:
+            if current:
+                parts.append(current)
+                current = ""
+            parts.append(line[:limit])
+            line = line[limit:]
+        if current and len(current) + 1 + len(line) > limit:
+            parts.append(current)
+            current = line
+        else:
+            current = f"{current}\n{line}" if current else line
+    if current:
+        parts.append(current)
+    return parts
+
+
+def _advisor_for_handoff(session, lead_id: uuid.UUID) -> Advisor | None:
+    """El asesor que ya recibió la tarjeta de calificación, si sigue registrado; si no, uno nuevo."""
+    lead = session.get(Lead, lead_id)
+    if lead is not None and lead.advisor_id:
+        current = session.get(Advisor, lead.advisor_id)
+        if current is not None and current.telegram_chat_id:
+            return current
+    advisor = pick_advisor(session, lead.zone if lead else None)
+    if advisor is not None:
+        assign(session, lead_id, advisor)
+    return advisor
+
+
+async def notify_handoff(engine: Engine, event: Mapping[str, Any], score: Mapping[str, Any],
+                         fsm_state: str, reason: str, bot: Sender | None) -> Advisor | None:
+    """Manda la ficha del traspaso (resumen + transcripción completa) al asesor del lead.
+
+    Es el mismo asesor que ya recibió la tarjeta de calificación si la hubo; si no, el de su zona
+    (o la cola general) queda asignado en `Lead.advisor_id`. Devuelve el asesor, o None si no había
+    bot ni asesor registrado. Nunca lanza.
+    """
+    lead_id = uuid.UUID(str(event["lead_id"]))
+    conversation_id = uuid.UUID(str(event["conversation_id"]))
+    try:
+        with session_scope(engine) as session:
+            advisor = _advisor_for_handoff(session, lead_id)
+            if advisor is None:
+                logger.warning("traspaso sin ningún asesor registrado en Telegram",
+                               extra={"lead_id": str(lead_id), "fsm_state": fsm_state})
+                return None
+            handoff = build_handoff_file(session, lead_id, conversation_id, score, fsm_state, reason)
+            chat_id = advisor.telegram_chat_id
+            name = advisor.name
+        if bot is None:
+            logger.warning("traspaso pero el bot de Telegram no está arrancado",
+                           extra={"lead_id": str(lead_id), "advisor_id": advisor.id})
+            return advisor
+        parts = render_handoff(handoff)
+        for part in parts:
+            await bot.send_message(chat_id=chat_id, text=part)
+        logger.info("ficha de traspaso enviada al asesor",
+                    extra={"lead_id": str(lead_id), "advisor": name, "parts": len(parts)})
+        return advisor
+    except Exception:
+        logger.exception("no se pudo enviar la ficha de traspaso", extra={"lead_id": str(lead_id)})
+        return None
 
 
 async def notify_advisor(engine: Engine, event: Mapping[str, Any], score: Mapping[str, Any],
