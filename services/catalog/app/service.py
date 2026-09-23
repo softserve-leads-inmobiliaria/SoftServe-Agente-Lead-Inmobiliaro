@@ -11,9 +11,8 @@ from typing import Any, Callable
 
 from sqlalchemy.orm import Session
 
+from app import data
 from db.models import Promotion, Property
-
-from . import data
 
 # Campos públicos: `address_exact` nunca sale de aquí salvo en get_property con lead_qualified=true.
 _SUMMARY_FIELDS = ("id", "title", "price", "type", "zone", "m2", "bedrooms", "bathrooms",
@@ -70,7 +69,7 @@ class CatalogService:
         """Busca propiedades en PostgreSQL aplicando filtros y devolviendo los campos de resumen."""
         self._check_upstream()
 
-        # Validamos el rango de presupuesto según las reglas de negocio[cite: 3]
+        # Validamos el rango de presupuesto según las reglas de negocio
         if budget_range is not None and budget_range["min"] > budget_range["max"]:
             raise CatalogError("INVALID_INPUT", "budget_range.min no puede ser mayor que max.")
 

@@ -17,10 +17,9 @@ from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.service import CatalogError, CatalogService
 from db.repo_root import repo_root
 from db.settings import database_url as _database_url
-
-from .service import CatalogError, CatalogService
 
 PropertyType = Literal["venta", "renta", "preventa"]
 
