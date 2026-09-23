@@ -86,9 +86,11 @@ Con inferencia entre regiones el ID lleva prefijo (p. ej. `us.anthropic.claude-h
 Bedrock exigen un *inference profile* y el error solo aparece en la primera llamada. Sin los dos IDs,
 `core` no arranca (falla con un mensaje claro). Si Bedrock falla o el cupo (10 por minuto y modelo) se
 agota, el turno responde con un texto seguro en vez de dejar al lead esperando. Una cuenta con cuota baja
-recibe `ThrottlingException` de Bedrock tras pocas llamadas seguidas (el limitador local no lo evita): el
-reintento con espera exponencial es la historia A-14, todavía pendiente, y hasta entonces ese error no
-queda en el log. Ver DT-19: **con el LLM
+recibe `ThrottlingException` de Bedrock tras pocas llamadas seguidas (el limitador local no lo evita): los
+errores transitorios (throttling, servicio no disponible, timeout, error interno, fallos de conexión) se
+reintentan con espera exponencial y *jitter* (A-14, DT-30; límites en `LLM_RETRY_*`, ver `.env.example`).
+Cada reintento y el fallo definitivo quedan en el log como `warning` con el código del error y el número
+de intento, y el fallo definitivo también en la traza del turno. Ver DT-19: **con el LLM
 real todavía no hay guardrails de salida** (A-5, A-6, A-7), así que no usarlo con leads reales.
 
 El historial de cada conversación se guarda en `messages` (solo el texto ya filtrado, sin PII ni

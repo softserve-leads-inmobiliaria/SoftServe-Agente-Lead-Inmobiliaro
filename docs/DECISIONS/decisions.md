@@ -980,3 +980,53 @@ contrato para un problema que se resuelve al abrir la conversación.
 lo refleja turno a turno como siempre. Los eventos de un lead desconocido que entran por el arnés
 (`StateStore._ensure_rows`) no pasan por aquí y siguen creando el contexto vacío; cada guion del arnés
 usa una sola conversación fija (ids derivados del nombre del guion) y nunca abre una segunda.
+
+## DT-30 — Reintentos de Bedrock: solo errores transitorios, espera exponencial con jitter y un tope de tiempo por turno
+
+**Estado:** aceptada
+
+**Contexto.** Con una cuota baja, Bedrock responde `ThrottlingException` a pocas llamadas seguidas (una por
+el clasificador y una o más por el chat con herramientas) aunque el limitador local (DT-6, por minuto) no
+esté lleno. Hasta ahora cualquier error del proveedor terminaba en el texto de respaldo, y el lead veía
+"tuve un problema para procesar tu mensaje" por algo que esperar un segundo resolvía (`A-14`). DT-22 ya
+dejó dicho que los reintentos son código propio, dentro de `BedrockLLM._converse`.
+
+**Decisión.**
+- **Solo se reintenta lo transitorio:** `ThrottlingException`, `ServiceUnavailableException`,
+  `ModelTimeoutException`, `InternalServerException` y, entre los errores de conexión de botocore,
+  `EndpointConnectionError`, `ConnectTimeoutError`, `ReadTimeoutError` y `ConnectionClosedError`. Es una
+  lista explícita y no la jerarquía de botocore: `ReadTimeoutError` y `ConnectionClosedError` no heredan de
+  `ConnectionError`, y un error de SSL o de proxy es de configuración. Todo lo demás (`AccessDenied`,
+  `Validation`, modelo inexistente, credenciales) falla al primer intento.
+- **Espera:** `base * 2^(intento-1)` con tope `max_delay`, mitad fija y mitad al azar (*jitter*): así
+  turnos concurrentes que fallaron a la vez no reintentan en el mismo instante y siempre hay una espera
+  mínima. Si Bedrock manda `Retry-After` (segundos), se espera eso en lugar de lo calculado; un valor que
+  no es un número se ignora.
+- **Tope de tiempo por turno, no por llamada:** la ventana (`LLM_RETRY_MAX_TOTAL_SECONDS`) se abre con el
+  primer fallo transitorio del turno y la comparten el clasificador, el chat y la regeneración de A-5
+  (`BedrockLLM.turn()`, una `ContextVar` que abre `BedrockAgent.run`). Una espera que no cabe en lo que
+  queda no se hace: el turno cae a `LLM_FALLBACK_REPLY`. Vale también para el `Retry-After`: esperar menos
+  de lo que pide el proveedor no sirve.
+- **Cada intento pasa por el limitador de A-2:** un reintento no se salta el cupo por minuto. Y la espera
+  de cupo de un reintento se recorta a lo que le queda al turno, para que el tope sea real.
+- **Configuración:** `LLM_RETRY_MAX_ATTEMPTS` (4), `LLM_RETRY_BASE_DELAY_SECONDS` (0.5),
+  `LLM_RETRY_MAX_DELAY_SECONDS` (8) y `LLM_RETRY_MAX_TOTAL_SECONDS` (20), validadas al arrancar
+  (`ConfigError`). `MAX_ATTEMPTS=1` los desactiva. Un `BedrockLLM` construido sin `Retrier` no reintenta:
+  los límites reales los pone `llm_config.build_agent`. Los reintentos propios de botocore siguen
+  apagados (`max_attempts=1`): hay un solo dueño de la política.
+- **Observabilidad:** cada reintento y el fallo definitivo salen como `warning` con el código del error,
+  el número de intento y el motivo de rendirse; nunca el texto del lead ni el mensaje de la excepción. El
+  fallo definitivo, además, queda como atributos y evento del *span* del turno (`llm.error_code`,
+  `llm.attempts`, `llm.give_up_reason`).
+
+**Alternativas.** Dejar que botocore reintente (`retries={"mode": "adaptive"}`) — descartada: no comparte
+el tope de tiempo entre las llamadas de un turno, no pasa por el limitador y sus reintentos no quedan en
+nuestro log ni en la traza. `tenacity` u otra librería — descartada: una dependencia nueva para un módulo pequeño
+con reloj inyectable (~140 líneas con su documentación), que es lo que permite probarlo sin esperas reales.
+
+**Consecuencias.** En el peor caso un turno tarda `max_total` (20 s) más la duración de una llamada antes
+de caer al texto seguro; con el límite de 15 s de cola de A-2 eso sigue acotado. El tiempo se cuenta
+desde el primer fallo transitorio, no desde el inicio del turno: las llamadas que van bien antes del primer
+fallo no consumen el tope. Falta la verificación en vivo que pide la historia (una ráfaga de turnos contra una
+cuenta con cuota baja): los tests usan `botocore.stub.Stubber`, que valida contra el modelo de servicio pero
+no reproduce el comportamiento real de la cuota.
