@@ -18,7 +18,7 @@ No hace falta crear un `.env`: `docker-compose.yml` trae defaults de desarrollo.
 | `panel` | http://localhost:8080/panel/<token> (`/health` para el estado) | Panel de asesores: lista de leads de su zona y ficha con score y transcripción (B-5, DT-5) |
 | `migrate` | — (termina al acabar) | Aplica `alembic upgrade head` (esquema completo, C-3) |
 | `seed` | — (termina al acabar) | Siembra los 3 asesores de demo, idempotente, e imprime la URL del panel de cada uno (B-5) |
-| `catalog` | solo dentro de la red de Docker (`http://catalog:8000`, MCP en `/mcp`) | Catálogo *fake* como servidor MCP (CT-8) |
+| `catalog` | solo dentro de la red de Docker (`http://catalog:8000`, MCP en `/mcp`) | Catalog Service como servidor MCP sobre Postgres (C-1). La base del stack no trae propiedades hasta el inventario de demo (C-9): las búsquedas devuelven vacío; los tests siembran las suyas |
 | `core` | http://localhost:8000/health (`POST /events`) | Core: turno completo (FSM, guardrails, scoring) con agente *fake* por defecto o LLM real (`LLM_PROVIDER`); arranca el bot de Telegram si hay `TELEGRAM_BOT_TOKEN` |
 | `harness` | — (termina al acabar) | Reproduce `harness/fixtures/*.jsonl` contra el core |
 
@@ -65,9 +65,28 @@ Con un bot creado en @BotFather: poner `TELEGRAM_BOT_TOKEN` en el `.env` y `dock
 
 `docker compose up -d --build` ejecuta `seed`, que imprime una línea por asesor con su URL:
 `docker compose logs seed` → `adv_001  Valeria Ortiz  Providencia  /panel/<token>`. Abrir
-`http://localhost:8080/panel/<token>`. El panel filtra por `Lead.zone`, y hoy el core no rellena esa columna
-(llegará con A-10): para verlo con datos, asignar la zona a mano
-(`update leads set zone='Providencia' where ...`). Un token inventado y un lead de otra zona dan el mismo 404.
+`http://localhost:8080/panel/<token>`. El panel filtra por `Lead.zone`, que el core rellena con la zona de la
+primera propiedad que el lead consulta (#81; el ruteo por zona al asesor es A-10). Para verlo con datos sin
+pasar por una búsqueda, asignar la zona a mano (`update leads set zone='Providencia' where ...`). Un token
+inventado y un lead de otra zona dan el mismo 404.
+
+### Avisos al asesor por Telegram (B-7, A-12)
+
+Con `TELEGRAM_BOT_TOKEN` puesto, cada asesor se registra una vez abriendo su enlace
+`https://t.me/<bot>?start=adv_<token>` (el `<token>` es el de su URL del panel: `docker compose logs seed`).
+El bot responde "te voy a avisar…" y guarda su chat en `advisors.telegram_chat_id`; un enlace inválido no
+registra a nadie y no dice por qué. Registrado, recibe dos avisos, cada uno una sola vez por lead y en el
+turno exacto de la transición:
+
+- **Lead calificado (B-7, DT-24):** la banda del score cruza a WARM/HOT. Tarjeta con score, zona, propiedad
+  de interés y visita. El lead queda asignado al asesor de su zona (o a cualquiera registrado si no hay).
+- **Traspaso (A-12, DT-28):** la conversación llega a `HANDOFF` (visita agendada) o `HUMAN_HANDOFF` (pidió una
+  persona, consulta fuera de alcance o frustración). Ficha con el motivo, el score, la propiedad, la visita y
+  la **transcripción completa** (en varios mensajes si excede el tope de Telegram). Va al mismo asesor que
+  ya tenía el lead; si el mismo turno califica y traspasa, llega solo la ficha.
+
+Para verlo: registrar un asesor, escribirle al bot como lead y pedir "quiero hablar con un asesor". Si no
+hay asesor registrado, el turno sigue igual y solo queda un `warning` en el log del core.
 
 ### Usar el LLM real (Bedrock)
 
@@ -93,8 +112,10 @@ Cada reintento y el fallo definitivo quedan en el log como `warning` con el cód
 de intento, y el fallo definitivo también en la traza del turno. Ojo: con `LLM_RATE_LIMIT_PER_MINUTE=10`
 (igual a la cuota de Bedrock) el limitador local corta las ráfagas antes de que Bedrock haga *throttling*
 y esos turnos caen al texto de respaldo sin reintentar; para que las ráfagas las absorba el reintento hay
-que subir ese límite por encima de la cuota real (medición en el DT-30). Ver DT-19: **con el LLM
-real todavía no hay guardrails de salida** (A-5, A-6, A-7), así que no usarlo con leads reales.
+que subir ese límite por encima de la cuota real (medición en el DT-30). Con el LLM real aplican los
+guardrails de salida de factualidad (A-5), dirección reservada (A-6) y promesas no autorizadas (A-7); el
+estado de cada uno está en `docs/DESIGN/guardrails.md` §3. Sigue pendiente fair housing (A-11), así que no
+usarlo con leads reales sin revisar ese punto.
 
 El historial de cada conversación se guarda en `messages` (solo el texto ya filtrado, sin PII ni
 categorías protegidas):
@@ -117,8 +138,9 @@ Las trazas **no llevan el texto de los mensajes**. Para depurar en local con dat
 arranca con `TRACE_CONTENT=1`. Si Phoenix no está levantado, `core` responde igual y las trazas se
 pierden. Sin `OTEL_EXPORTER_OTLP_ENDPOINT` (p. ej. al correr `uvicorn` a mano) las trazas están apagadas.
 
-Esto es el esqueleto end-to-end de CT-4: arnés → core → catálogo por MCP → respuesta. Todo el
-contenido es *fake*, a propósito. Para probar un mensaje a mano con el stack arriba:
+Esto es el esqueleto end-to-end de CT-4: arnés → core → catálogo por MCP (sobre Postgres desde C-1) →
+respuesta. El agente es el *fake* por defecto y el catálogo del stack está vacío hasta C-9: el arnés
+comprueba que los servicios se hablan, no el inventario. Para probar un mensaje a mano con el stack arriba:
 
 ```
 curl -X POST localhost:8000/events -H "Content-Type: application/json" -d @contracts/examples/event.valid.json

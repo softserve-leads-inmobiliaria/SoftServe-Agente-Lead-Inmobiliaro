@@ -2,7 +2,7 @@
 # Sin nube y sin Redis (DT-3, DT-4). Todos los valores tienen un default de desarrollo, así que
 # `docker compose up` funciona sin crear un .env; copiá .env.example a .env solo para cambiarlos.
 #
-# Esqueleto end-to-end (CT-4): `harness` -> `core` (fake) -> `catalog` (fake, MCP en /mcp). Al hacer
+# Esqueleto end-to-end (CT-4): `harness` -> `core` -> `catalog` (MCP en /mcp, sobre Postgres desde C-1). Al hacer
 # `docker compose up --build` el arnés reproduce todos los guiones de harness/fixtures contra el core
 # y termina. Para que el comando devuelva el resultado del arnés (0 = todo en verde):
 #   docker compose run --rm --build harness
