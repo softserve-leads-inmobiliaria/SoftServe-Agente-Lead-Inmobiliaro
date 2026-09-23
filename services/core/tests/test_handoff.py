@@ -3,7 +3,13 @@ import pytest
 
 from app.fakes.fake_llm import INTENTS, FakeLLM
 from app.fsm import HUMAN_INTENTS, HUMAN_REQUESTED, TERMINAL_STATES, next_state, trigger_for
-from app.handoff import FRUSTRATION_STREAK, UNRESOLVED_INTENT, is_frustrated, next_streak
+from app.handoff import (
+    FRUSTRATION_STREAK,
+    UNRESOLVED_INTENT,
+    handoff_reason,
+    is_frustrated,
+    next_streak,
+)
 from db.models import FSM_STATES
 
 NON_TERMINAL = [s for s in FSM_STATES if s not in TERMINAL_STATES]
@@ -95,3 +101,28 @@ def test_ordinary_property_questions_do_not_reach_a_person(text):
 
 def test_out_of_scope_has_a_reply_that_announces_the_handoff():
     assert "asesor" in FakeLLM().generate_reply("fuera_de_alcance")
+
+
+# --- A-12: el motivo del traspaso ---------------------------------------------------------------
+
+@pytest.mark.parametrize("intent", sorted(HUMAN_INTENTS))
+def test_the_reason_of_an_explicit_handoff_is_the_intent(intent):
+    assert handoff_reason("HUMAN_HANDOFF", HUMAN_REQUESTED, intent) == intent
+
+
+def test_a_human_request_without_a_human_intent_is_frustration():
+    assert handoff_reason("HUMAN_HANDOFF", HUMAN_REQUESTED, UNRESOLVED_INTENT) == "frustration"
+
+
+def test_a_scheduled_visit_hands_the_lead_over_with_its_trigger_as_the_reason():
+    assert handoff_reason("HANDOFF", "visit_scheduled", "agendar_visita") == "visit_scheduled"
+
+
+@pytest.mark.parametrize("state", NON_TERMINAL)
+def test_moving_between_ordinary_states_is_not_a_handoff(state):
+    assert handoff_reason(state, "greeted", "saludo") is None
+
+
+def test_a_turn_without_a_trigger_is_not_a_handoff_even_in_a_terminal_state():
+    """Ya en HUMAN_HANDOFF los mensajes siguientes no mueven la FSM: no hay un segundo traspaso."""
+    assert handoff_reason("HUMAN_HANDOFF", None, "saludo") is None
