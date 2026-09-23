@@ -17,8 +17,11 @@ from sqlalchemy.orm import Session
 from app.auth import resolve_advisor
 from app.funnel import funnel_report
 from app.repo import as_context, claim_lead, lead_detail, leads_for_advisor
+from db.logging_config import configure_json_logging
 from db.models import Advisor
 from db.session import get_engine, session_scope
+
+configure_json_logging()
 
 app = FastAPI(title="Panel de asesores")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))

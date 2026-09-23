@@ -67,6 +67,7 @@ existir) — se actualiza en el mismo PR que cierra la historia correspondiente.
 | Promesas no autorizadas (8 *claims*) | `A-7` | Implementado 6/8 con código: `services/core/app/promise_guard.py`, aplicado por `BedrockAgent` en el mismo *pipeline* que A-5/A-6 (DT-26). El 8 ya lo cubría A-5 sin cambios; el 6 queda parcial (ver §2.2). Detalle de cuál cubre cada uno en §2.2 |
 | Entrada (PII/*jailbreak*/OOD/`/stop`/categoría protegida) | `A-8` | Implementado: los 5 detectores (`services/core/app/input_guard.py`). Pendiente dentro de `/stop`: cancelar *jobs* del lead, que no existen hasta que haya *scheduler*; el reingreso tras la baja es de `B-2` |
 | Fair housing | `A-11` | Pendiente |
+| PII en logs (no en el mensaje al LLM — eso ya es `A-8`) | `OBS-7` | **Sin caso real que enmascarar**: ningún logger de `core`/`panel`/`catalog` imprime hoy texto del lead (mensaje, historial, `clean_text`/`signal_text`) — los `logger.*` existentes solo llevan mensajes fijos o metadata (ids, nombres de excepción). `db/logging_config.py::JsonFormatter` no enmascara nada por diseño (DT-27); si algún día un log necesita llevar texto del lead, la regla es la misma que `InputVerdict.audit_kinds()`: pasar por `input_guard._redact_pii`/tipos-no-valores antes de loguear, nunca el texto crudo |
 
 ## 4. Mapa guardrail → prueba
 

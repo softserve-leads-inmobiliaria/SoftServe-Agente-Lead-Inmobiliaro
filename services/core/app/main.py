@@ -16,8 +16,10 @@ from app.catalog_client import CatalogClient
 from app.channels.telegram import start_bot, stop_bot
 from app.llm_config import build_agent
 from app.turn import process_turn
+from db.logging_config import configure_json_logging
 from db.session import get_engine
 
+configure_json_logging()
 logger = logging.getLogger("core")
 tracing.configure()  # sin OTEL_EXPORTER_OTLP_ENDPOINT queda apagado
 catalog = CatalogClient()
