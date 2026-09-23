@@ -12,6 +12,10 @@ from __future__ import annotations
 
 from typing import Final
 
+from app.fsm import HUMAN_INTENTS, HUMAN_REQUESTED
+
+HANDOFF_STATES: Final = frozenset({"HANDOFF", "HUMAN_HANDOFF"})  # estados en los que un asesor toma el lead
+
 UNRESOLVED_INTENT: Final = "otro"
 FRUSTRATION_STREAK: Final = 3  # turnos seguidos sin resolver que se leen como frustración
 
@@ -31,3 +35,16 @@ def next_streak(current: int, intent: str, counts: bool = True) -> int:
 
 def is_frustrated(streak: int) -> bool:
     return streak >= FRUSTRATION_STREAK
+
+
+def handoff_reason(after: str, trigger: str | None, intent: str) -> str | None:
+    """Por qué la conversación llegó a un traspaso en este turno; None si no hubo traspaso (A-12).
+
+    Los estados de traspaso son terminales, así que un trigger que termina en uno es siempre la
+    transición de este turno: no hace falta comparar con el estado anterior.
+    """
+    if after not in HANDOFF_STATES or trigger is None:
+        return None
+    if trigger == HUMAN_REQUESTED:
+        return intent if intent in HUMAN_INTENTS else "frustration"
+    return trigger

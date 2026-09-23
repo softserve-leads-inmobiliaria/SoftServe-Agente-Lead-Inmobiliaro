@@ -141,10 +141,17 @@ async def reply_to(engine: Engine, catalog: Catalog, *, telegram_user_id: str, t
         **canonical.parse_deep_link(deep_link),
     )
     async def on_qualified(qualified_event: Mapping[str, Any], transition: Transition) -> None:
+        if transition.handoff_reason:
+            return  # la ficha del traspaso de este mismo turno ya lleva el score: una sola notificación
         await notifications.notify_advisor(
             engine, qualified_event, transition.score.to_lead_score(str(identity.lead_id)),
             bot if bot is not None else get_bot())
 
-    outbound = await process_turn(engine, event, catalog, agent, on_qualified)
+    async def on_handoff(handoff_event: Mapping[str, Any], transition: Transition) -> None:
+        await notifications.notify_handoff(
+            engine, handoff_event, transition.score.to_lead_score(str(identity.lead_id)),
+            transition.after, transition.handoff_reason or "", bot if bot is not None else get_bot())
+
+    outbound = await process_turn(engine, event, catalog, agent, on_qualified, on_handoff)
     reply = canonical.from_canonical(outbound)
     return consent.with_privacy_notice(reply) if first_turn else reply
