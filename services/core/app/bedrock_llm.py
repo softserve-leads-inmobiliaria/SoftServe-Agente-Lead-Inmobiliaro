@@ -1,25 +1,38 @@
 """LLM en AWS Bedrock (A-2, DT-6): un modelo liviano clasifica y extrae señal, otro conversa con tools.
 
 Usa la API Converse de Bedrock. El cliente de `boto3` es síncrono, así que las llamadas corren en un
-hilo. Cada modelo tiene su propio límite de tasa (`app/rate_limit.py`). Nada de lo que devuelve el
+hilo. Cada modelo tiene su propio límite de tasa (`app/rate_limit.py`) y los errores transitorios del
+proveedor se reintentan con espera exponencial (`app/llm_retry.py`, A-14). Nada de lo que devuelve el
 LLM se toma como cierto sin validar: la intención debe ser una de `INTENTS` y la señal se acota
 después en `merge_signal`.
 """
 from __future__ import annotations
 
 import json
+import logging
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Mapping, Sequence
 
 from botocore.exceptions import BotoCoreError, ClientError
+from opentelemetry import trace
 from starlette.concurrency import run_in_threadpool
 
 from app.fakes.fake_llm import INTENTS
+from app.llm_retry import RETRY, Retrier, RetryBudget, RetryPolicy, error_code
 from app.rate_limit import RateLimited, RateLimits
+
+logger = logging.getLogger("core.bedrock_llm")
 
 MAX_TOOL_ROUNDS = 3
 MAX_REPLY_TOKENS = 400
+
+# Tiempo de reintentos del turno en curso (A-14): lo abre `BedrockLLM.turn()` y lo comparten todas las
+# llamadas del turno. Sin turno abierto, cada llamada tiene el suyo.
+_TURN_BUDGET: ContextVar[RetryBudget | None] = ContextVar("llm_turn_retry_budget", default=None)
 
 CLASSIFIER_SYSTEM = (
     "Eres un clasificador para el asistente de una inmobiliaria. Lees el MENSAJE ACTUAL de un lead y "
@@ -117,21 +130,49 @@ def tool_config(specs: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 
 class BedrockLLM:
     def __init__(self, client: Any, chat_model_id: str, classifier_model_id: str, limits: RateLimits,
-                 *, max_wait: float = 15.0) -> None:
+                 *, max_wait: float = 15.0, retrier: Retrier | None = None) -> None:
         self._client = client
         self.chat_model_id = chat_model_id
         self.classifier_model_id = classifier_model_id
         self._limits = limits
         self._max_wait = max_wait
+        # Sin `retrier` no se reintenta: los límites reales los pone `llm_config.build_agent` desde el entorno.
+        self._retrier = retrier or Retrier()
+
+    @property
+    def retry_policy(self) -> RetryPolicy:
+        return self._retrier.policy
+
+    @contextmanager
+    def turn(self) -> Iterator[None]:
+        """Abre el tiempo de reintentos de un turno: las llamadas que se hagan dentro lo comparten."""
+        token = _TURN_BUDGET.set(RetryBudget())
+        try:
+            yield
+        finally:
+            _TURN_BUDGET.reset(token)
 
     async def _converse(self, model_id: str, **request: Any) -> dict[str, Any]:
-        try:
-            await self._limits.for_model(model_id).acquire(self._max_wait)
-            return await run_in_threadpool(self._client.converse, modelId=model_id, **request)
-        except RateLimited as exc:
-            raise LLMError(str(exc)) from exc
-        except (ClientError, BotoCoreError) as exc:
-            raise LLMError(f"Bedrock: {type(exc).__name__}") from exc
+        """Una llamada a Converse. Cada intento pasa por el limitador (A-2): un reintento no se salta el cupo."""
+        budget = _TURN_BUDGET.get() or RetryBudget()
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                # Un reintento no espera cupo más de lo que le queda al turno para reintentar.
+                wait = self._max_wait if attempt == 1 else min(self._max_wait, self._retrier.remaining(budget))
+                await self._limits.for_model(model_id).acquire(wait)
+                return await run_in_threadpool(self._client.converse, modelId=model_id, **request)
+            except RateLimited as exc:
+                raise LLMError(str(exc)) from exc
+            except (ClientError, BotoCoreError) as exc:
+                decision = self._retrier.decide(exc, attempt, budget)
+                code = error_code(exc)
+                if decision.reason != RETRY:
+                    _report_failure(code, attempt, decision.reason)
+                    raise LLMError(f"Bedrock: {type(exc).__name__}") from exc
+                _report_retry(code, attempt, decision.delay or 0.0, decision.provider_delay)
+                await self._retrier.sleep(decision.delay or 0.0)
 
     async def classify(self, text: str, last_assistant: str | None = None) -> Classification:
         """Intención y señal cruda del mensaje actual. El contexto es solo la última respuesta del asistente."""
@@ -197,6 +238,23 @@ class BedrockLLM:
         result.tool_results[name] = payload
         result.tool_calls.append({"name": name, "is_error": False})
         return {"toolResult": {"toolUseId": use["toolUseId"], "status": "success", "content": [{"json": payload}]}}
+
+
+def _report_retry(code: str, attempt: int, delay: float, provider_delay: bool) -> None:
+    """Un reintento queda en el log y en la traza del turno: solo el código del error, nunca el texto del lead."""
+    logger.warning("Bedrock: %s en el intento %d, se reintenta en %.2fs", code, attempt, delay,
+                   extra={"llm_error_code": code, "llm_attempt": attempt, "llm_retry_delay_s": round(delay, 3),
+                          "llm_retry_after_from_provider": provider_delay})
+    trace.get_current_span().add_event("llm.retry", {"llm.error_code": code, "llm.attempt": attempt,
+                                                     "llm.retry_delay_s": round(delay, 3)})
+
+
+def _report_failure(code: str, attempt: int, reason: str) -> None:
+    logger.warning("Bedrock: %s en el intento %d, fallo definitivo (%s)", code, attempt, reason,
+                   extra={"llm_error_code": code, "llm_attempt": attempt, "llm_give_up_reason": reason})
+    span = trace.get_current_span()
+    span.set_attributes({"llm.error_code": code, "llm.attempts": attempt, "llm.give_up_reason": reason})
+    span.add_event("llm.failed", {"llm.error_code": code, "llm.attempt": attempt, "llm.give_up_reason": reason})
 
 
 def _correction_prompt(violations: Sequence[Any]) -> str:
