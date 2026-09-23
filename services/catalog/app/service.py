@@ -1,6 +1,6 @@
-"""Lógica del catálogo falso (CT-8): las 5 tools `catalog.*` sobre los datos en memoria.
+"""Lógica del catálogo (C-1): las 5 tools `catalog.*` sobre Postgres (`properties` y `promotions`).
 
-Puro Python, sin MCP ni red: `server.py` lo expone por MCP. Cada método devuelve un dict que cumple
+Sin MCP ni red: `server.py` lo expone por MCP. Las reglas de `check_requirements` siguen en `app/data.py`. Cada método devuelve un dict que cumple
 el `outputSchema` de contracts/mcp/<tool>.schema.json o lanza `CatalogError` con uno de los códigos
 del contrato (NOT_FOUND, INVALID_INPUT, UPSTREAM_UNAVAILABLE).
 """

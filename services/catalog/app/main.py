@@ -1,4 +1,4 @@
-"""Catalog fake (CT-8): FastAPI con /health y el servidor MCP montado en /mcp (DT-2)."""
+"""Catalog Service: FastAPI con /health y el servidor MCP montado en /mcp (DT-2), sobre Postgres (C-1)."""
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
@@ -21,7 +21,7 @@ async def lifespan(_: FastAPI):
         yield
 
 
-app = FastAPI(title="catalog (fake)", lifespan=lifespan)
+app = FastAPI(title="catalog", lifespan=lifespan)
 
 
 @app.get("/health")
