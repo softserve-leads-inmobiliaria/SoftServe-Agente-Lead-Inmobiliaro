@@ -12,7 +12,10 @@ WORKDIR /app
 
 COPY db/requirements.txt db/requirements.txt
 COPY services/catalog/requirements.txt services/catalog/requirements.txt
-RUN pip install --no-cache-dir -r services/catalog/requirements.txt
+# pip solo hace falta para instalar: se quita de la imagen final (#104). Trae sus propias
+# vulnerabilidades y nada lo usa en ejecución.
+RUN pip install --no-cache-dir -r services/catalog/requirements.txt \
+    && pip uninstall --yes pip
 
 COPY db/ db/
 COPY contracts/ contracts/
