@@ -228,6 +228,22 @@ python -m pytest services/core/tests/test_fsm_edges.py
 Al cambiar la FSM hay que tocar los tres sitios a la vez: el diagrama, `fsm.py` y `EDGE_MESSAGES` en
 este archivo.
 
+### Imágenes endurecidas (#65)
+
+Las imágenes propias (`core`, `catalog`, `panel`, `harness` y la de `db`, que usan `migrate` y `seed`)
+parten de la misma base con versión exacta, corren con un usuario sin privilegios (`app`, uid 10001) y
+no llevan tests. `core`, `catalog` y `panel` traen su `HEALTHCHECK` en la imagen; el compose no lo
+repite. `tests/infra/test_dockerfiles.py` lo comprueba leyendo los Dockerfiles, porque CI no construye
+las imágenes. Para verlo en las imágenes construidas:
+
+```
+docker compose run --rm --build harness
+docker compose exec core id
+```
+
+`id` tiene que devolver `uid=10001(app)`, nunca `uid=0(root)`. Ningún servicio escribe en disco: si
+alguno empieza a hacerlo, necesita un directorio propio del usuario `app` o un volumen.
+
 ## Caveats de Docker conocidos
 
 Se agregan aquí apenas se descubren.

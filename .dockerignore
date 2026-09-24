@@ -2,11 +2,16 @@
 .github
 .venv
 .env
-__pycache__/
-*.pyc
-.pytest_cache/
-.ruff_cache/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.ruff_cache/
 docs/
 scripts/
 # Excepción: el seed de demo sí va a la imagen de db/ (servicio `seed` del compose, B-5).
 !scripts/seed_advisors.py
+# Los tests no van a ninguna imagen (#65): corren en CI y en local, no dentro del contenedor.
+tests/
+**/tests/
+**/conftest.py
+db/testing.py
