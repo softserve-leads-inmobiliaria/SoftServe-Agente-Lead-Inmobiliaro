@@ -16,6 +16,7 @@ segundo árbol de documentación.
 | [`STORIES/README.md`](STORIES/README.md) | Índice de historias de usuario, prioridades y dependencias |
 | [`STORIES/ROADMAP.md`](STORIES/ROADMAP.md) | Orden recomendado y reparto entre las 3 personas |
 | [`STORIES/EPICAS.md`](STORIES/EPICAS.md) | Objetivo de cada épica |
+| [`presentations/2026-09-24-revision-de-avance.md`](presentations/2026-09-24-revision-de-avance.md) | Presentación de avance del equipo: objetivo, arquitectura, backlog, próxima semana y guion de demo |
 
 El estado de cada historia (To Do / In Progress / Done) vive solo en GitHub Issues y en el
 [Project](https://github.com/orgs/softserve-leads-inmobiliaria/projects/1), nunca en estos
