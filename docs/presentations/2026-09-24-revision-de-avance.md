@@ -224,10 +224,10 @@ flowchart LR
     OBS6[OBS-6<br/>E2E contra el bot real]:::x --> Z2[Z-2<br/>demo en vivo]:::x
     C9 --> Z2
 
-    classDef c fill:#fde2c8,stroke:#c46a1b
-    classDef a fill:#d6e8ff,stroke:#2f6db5
-    classDef b fill:#dff3dc,stroke:#3a8a33
-    classDef x fill:#eee,stroke:#777
+    classDef c fill:#b35c00,stroke:#7a3e00,color:#ffffff
+    classDef a fill:#1f5fa8,stroke:#123b6b,color:#ffffff
+    classDef b fill:#2e7d32,stroke:#1b4d1e,color:#ffffff
+    classDef x fill:#555555,stroke:#333333,color:#ffffff
 ```
 
 Colores: naranja = track C · azul = track A · verde = track B · gris = transversal.
