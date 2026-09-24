@@ -1,5 +1,7 @@
 # Roadmap — secuenciación con 3 personas en paralelo
 
+> **Plan de partida.** Los lotes, semanas y horas de esta página son la estimación inicial del equipo y no se actualizan con el avance: el estado real está en el [Project](https://github.com/orgs/softserve-leads-inmobiliaria/projects/1) y qué está construido, en [`design.md` §5](../DESIGN/design.md#5-estado-real-del-sistema). Reparto real: Persona 1 = `dbarretol` (track A), Persona 2 = `SantiagoMartinez22` (track B), Persona 3 = `miguelvelezsk` (track C).
+
 Este documento responde dos preguntas que `README.md` (contenido y prioridad de cada historia) y GitHub Issues/Project (estado) no responden: **en qué orden conviene avanzar las historias** y **quién debería tomar cada una** para que 3 personas trabajando a la vez choquen lo menos posible — tanto por *conflictos de merge* (dos personas tocando el mismo archivo) como por *tiempo bloqueado* (esperando una dependencia).
 
 No repite estado (eso vive solo en GitHub Issues/Project — ver `docs/ESTRUCTURA-DEL-PROYECTO.md` §5) ni las historias en sí (eso vive en `README.md` y en cada `<ID>.md`). Si el plan cambia de forma real, este archivo se edita vía PR como cualquier otro doc versionado — no es un tracker que haya que mantener sincronizado a mano turno a turno.
@@ -18,7 +20,7 @@ Con la fórmula de `README.md` (`horas = puntos × 2`):
 
 **Conclusión práctica:** a esta dedicación, el "piso absoluto" que ya define `EPICAS.md` no es una lista de emergencia — es, con los números reales, el alcance que el equipo puede completar con margen de maniobra cercano a cero. Todo lo que sea P0-pero-no-piso es alcance que compite por el mismo tiempo, y P1/P2 son estrictamente oportunistas (solo si la velocidad real termina siendo mejor que la estimación, o si se reduce algo del resto de P0).
 
-Esto no es una recomendación de recortar alcance por mi cuenta — la prioridad y el "piso absoluto" ya los definió el equipo en `README.md`/`EPICAS.md`. Es la traducción a horas de esa decisión, para que quede explícito *antes* de la semana 6 y no se descubra en la semana 6.
+Esto no es una recomendación de recortar alcance: la prioridad y el "piso absoluto" ya los definió el equipo en `README.md`/`EPICAS.md`. Es la traducción a horas de esa decisión, para que quede explícito *antes* de la semana 6 y no se descubra en la semana 6.
 
 ## 2. Hallazgo: el piso absoluto listado en `EPICAS.md` tiene dos dependencias implícitas sin listar
 
@@ -27,7 +29,7 @@ La lista de `EPICAS.md`/`README.md` (`CT-1..CT-9, A-1, A-4, A-5, A-6, A-9, A-12,
 - **`A-3`** (Cliente MCP para tools de catálogo, 3 pts) — pero `A-4` depende explícitamente de `A-3` en la tabla de `README.md`. Sin `A-3`, `A-4` no se puede construir.
 - **`C-3`** (Esquema de datos completo con migraciones, 5 pts) — pero tanto `B-5` como `C-9` (ambas en el piso absoluto) dependen de `C-3`.
 
-El piso absoluto *efectivo* (el mínimo que realmente se puede construir de punta a punta) son 26 historias / 86 puntos, no 24/78. Vale la pena que el equipo confirme esto y actualice `EPICAS.md` en un PR aparte — no lo cambio aquí porque es una decisión de alcance, no de secuenciación.
+El piso absoluto *efectivo* (el mínimo que realmente se puede construir de punta a punta) son 26 historias / 86 puntos, no 24/78. `EPICAS.md` ya incluye A-3 y C-3 en la lista.
 
 ## 3. Asignación por persona — ownership de archivos, no solo de historias
 

@@ -5,7 +5,7 @@ Manual de historias de usuario del proyecto: un archivo por historia (no una tab
 ## Cómo se usa esto
 
 - **Este directorio es el contenido de cada historia** (historia de usuario, criterios de aceptación, Definition of Done) — es la fuente de verdad de *qué* se va a construir y *cómo* se sabe que está terminado.
-- **GitHub Issues + Project v2 es la única fuente de verdad de *estado*** (To Do / In Progress / Done). Cada archivo puede enlazar a su Issue una vez creado, pero nunca repite ni cachea su estado aquí — evita el problema de v1 de mantener sincronizados a mano 6+ documentos distintos (ver `docs/ESTRUCTURA-DEL-PROYECTO.md` §5).
+- **GitHub Issues + Project es la única fuente de verdad de *estado*** (To Do / In Progress / Done). Cada archivo puede enlazar a su Issue una vez creado, pero nunca repite ni cachea su estado aquí (ver `docs/ESTRUCTURA-DEL-PROYECTO.md` §5).
 - Cuando una historia cambie de alcance de forma real (no solo de estado), el archivo se edita vía PR como cualquier otro documento versionado.
 - **Definition of Done común a toda historia** (repetida en cada archivo, no se repite aquí para no duplicarla en dos lugares):
   1. Código en `main` vía PR revisado por al menos otra persona del equipo.
@@ -116,4 +116,4 @@ El orden recomendado para avanzar las historias con 3 personas en paralelo, mini
 
 ## Piso absoluto
 
-**CT-1..CT-9, A-1, A-4, A-5, A-6, A-9, A-12, B-1, B-5, B-7, C-1, C-1a, C-1b, C-4, C-7, C-9.** Ver `EPICAS.md` para el detalle de por qué esta lista se fija ahora y no al final.
+El mínimo que aprueba el proyecto está en [`EPICAS.md`](EPICAS.md#piso-absoluto-referencia).

@@ -22,6 +22,6 @@ Como equipo, quiero logs en JSON con cualquier PII enmascarada desde el principi
 - [ ] Estado de la historia actualizado en GitHub Issues/Project — nunca en este archivo (ver `docs/ESTRUCTURA-DEL-PROYECTO.md` §5).
 - [ ] Si la historia introduce o cambia una decisión de arquitectura, tiene su entrada correspondiente en `docs/DECISIONS/decisions.md`.
 
-## Notas para v2 (aprendido en v1)
+## Notas de diseño
 
-V1 partió esto en logs (sí construido) y PII (nunca, sin caso real que enmascarar). Para v2 es válido llegar a la misma conclusión, pero la decisión debe tomarse explícitamente en esta historia, no heredarse en silencio.
+Es válido concluir que en los logs no hay PII real que enmascarar, pero la decisión se toma explícitamente en esta historia, no se hereda en silencio.

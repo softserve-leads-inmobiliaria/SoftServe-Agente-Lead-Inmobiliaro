@@ -21,6 +21,6 @@ Como equipo, quiero un conjunto de conversaciones E2E ejecutables de principio a
 - [ ] Estado de la historia actualizado en GitHub Issues/Project — nunca en este archivo (ver `docs/ESTRUCTURA-DEL-PROYECTO.md` §5).
 - [ ] Si la historia introduce o cambia una decisión de arquitectura, tiene su entrada correspondiente en `docs/DECISIONS/decisions.md`.
 
-## Notas para v2 (aprendido en v1)
+## Notas de diseño
 
-En v1, un test unitario mockeado de la propia herramienta de arnés estaba en verde mientras la herramienta tenía 2 bugs reales (timeout insuficiente, excepción no capturada) que solo aparecieron corriendo contra la red real (lecciones v1 §2, última entrada). "Correr una vez de verdad" es parte de la Definition of Done aquí, no un paso opcional.
+Un test unitario mockeado de la herramienta de arnés puede estar en verde mientras la herramienta tiene bugs reales (timeouts insuficientes, excepciones no capturadas) que solo aparecen contra la red real. "Correr una vez de verdad" es parte de la Definition of Done aquí, no un paso opcional.
