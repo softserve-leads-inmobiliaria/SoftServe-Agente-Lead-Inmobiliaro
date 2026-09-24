@@ -2,8 +2,6 @@
 
 Este documento define, antes de escribir la primera línea de código de la v2, qué directorios y archivos existen, qué responsabilidad tiene cada uno, y qué convención sigue. El objetivo es que cualquier persona (o agente de IA) que se incorpore sepa, sin preguntar, dónde va cada cosa nueva.
 
-Cada decisión de estructura de este documento enlaza a la lección de la v1 que la motiva — ver [`../../FINAL-PROJECT/docs-local/RETROSPECTIVA-Y-RECOMENDACIONES-V2.md`](../../FINAL-PROJECT/docs-local/RETROSPECTIVA-Y-RECOMENDACIONES-V2.md) (referenciado aquí como **"la retrospectiva"**) y [`../../FINAL-PROJECT/docs-local/LESSONS-LEARNED.md`](../../FINAL-PROJECT/docs-local/LESSONS-LEARNED.md) (referenciado como **"lecciones v1"**).
-
 ## 0. Principio rector
 
 **Un solo lugar para cada tipo de información, nunca dos.** La v1 terminó con 2 árboles de documentación de arquitectura, 6+ superficies de estado sincronizadas a mano, y un mismo bug copiado 3 veces antes de compartirse en un módulo común (retrospectiva §3). Cada regla de este documento existe para que ese tipo de duplicación sea difícil de cometer por accidente, no solo "recordada".

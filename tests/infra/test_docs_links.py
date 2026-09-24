@@ -20,8 +20,11 @@ def relative_links(path):
 
 
 def test_no_relative_link_is_broken():
+    """Un enlace que sale del repositorio cuenta como roto aunque exista en la máquina de quien lo corre:
+    en CI y en GitHub no existe."""
     broken = [f"{p.relative_to(ROOT)} -> {target}"
-              for p in markdown_files() for target, resolved in relative_links(p) if not resolved.exists()]
+              for p in markdown_files() for target, resolved in relative_links(p)
+              if not resolved.is_relative_to(ROOT) or not resolved.exists()]
     assert broken == []
 
 
