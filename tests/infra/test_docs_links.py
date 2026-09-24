@@ -45,3 +45,18 @@ def test_the_docs_index_is_linked_from_the_first_section_of_the_root_readme():
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     first_section = text.split("\n## ")[1]
     assert "](docs/README.md)" in first_section
+
+
+# decisions.md solo se amplía, no se reescribe; CONTRIBUTING.md enuncia la regla y cita los ejemplos.
+PAST_PROJECT_EXEMPT = {ROOT / "docs" / "DECISIONS" / "decisions.md", ROOT / "CONTRIBUTING.md"}
+# "v1"/"v2" sueltos, no los de "/v1/traces", "stateDiagram-v2" o un ID de modelo "...-v1:0".
+PAST_PROJECT = re.compile(r"(?<![\w/-])v[12]\b(?![/:])|retrospectiva|FINAL-PROJECT|proyecto anterior", re.IGNORECASE)
+
+
+def test_documentation_does_not_reference_previous_projects():
+    """CONTRIBUTING.md: cada documento se justifica por sí mismo, sin compararse con un proyecto previo."""
+    hits = [f"{p.relative_to(ROOT)}:{n}: {line.strip()[:80]}"
+            for p in markdown_files() if p not in PAST_PROJECT_EXEMPT
+            for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
+            if PAST_PROJECT.search(line)]
+    assert hits == []

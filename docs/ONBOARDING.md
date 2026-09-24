@@ -137,8 +137,13 @@ la web (o `gh pr merge` desde la terminal). El Issue se cierra solo si se puso `
 ```
 git checkout main
 git pull
-git branch -d core/ct-1-contrato-evento-canonico
+git branch -D core/ct-1-contrato-evento-canonico
 ```
+
+Los PR se mergean con *squash* (todos los commits de la rama quedan en uno solo en `main`), así que
+Git no reconoce la rama como mergeada y `git branch -d` se niega a borrarla: por eso `-D`. Si el
+PR se mergeó con `--delete-branch`, la rama remota ya no existe; `git fetch --prune` limpia la
+referencia local.
 
 Y se arranca de nuevo desde el paso 3.1 con la siguiente historia.
 

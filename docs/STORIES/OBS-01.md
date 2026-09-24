@@ -21,6 +21,6 @@ Como equipo, quiero una traza completa de cada turno (estado FSM, tools, guardra
 - [ ] Estado de la historia actualizado en GitHub Issues/Project — nunca en este archivo (ver `docs/ESTRUCTURA-DEL-PROYECTO.md` §5).
 - [ ] Si la historia introduce o cambia una decisión de arquitectura, tiene su entrada correspondiente en `docs/DECISIONS/decisions.md`.
 
-## Notas para v2 (aprendido en v1)
+## Notas de diseño
 
-Una vez instrumentado, revisar la primera traza real completa antes de asumir que solo se ve lo que se instrumentó a mano — el SDK del protocolo (MCP u otro) puede traer instrumentación nativa dormida hasta que algo active un *provider* real (lecciones v1 §2).
+Una vez instrumentado, revisar la primera traza real completa antes de asumir que solo se ve lo que se instrumentó a mano: el SDK del protocolo (MCP u otro) puede traer instrumentación nativa dormida hasta que algo active un *provider* real.

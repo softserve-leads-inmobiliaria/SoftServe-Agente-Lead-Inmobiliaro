@@ -71,12 +71,12 @@ olvida bajo presión de entrega:
   se edita el `.md` vía PR, no solo el Issue.
 - Si dudás dónde poner algo nuevo, es más probable que ya exista un lugar (`docs/DECISIONS/`,
   `docs/DESIGN/`) que necesite un archivo nuevo.
-- **Contenido nuevo no referencia proyectos anteriores** ("v1", "FINAL-PROJECT", "en el proyecto
+- **La documentación no referencia proyectos anteriores** ("v1", "FINAL-PROJECT", "en el proyecto
   anterior..."). Este repo se documenta y se justifica por sí mismo — cada regla, decisión o
   historia nueva lleva su propia razón, autocontenida, no una comparación con algo previo. Esto
-  es hacia adelante, **no retroactivo**: lo que ya existe con ese tipo de referencia (algunas
-  secciones de `docs/STORIES/*.md` y `docs/ESTRUCTURA-DEL-PROYECTO.md`) se deja como está — no
-  hay que "arreglarlo" al pasar por ahí.
+  vale para toda la documentación de `docs/` salvo `docs/DECISIONS/decisions.md`, que solo se
+  amplía y no se reescribe. `tests/infra/test_docs_links.py` falla si vuelve a aparecer una
+  referencia.
 
 ## Secretos y configuración
 
@@ -96,8 +96,8 @@ chequeo es obligatorio, no opcional:
   en `docs/DECISIONS/decisions.md`, enlazando al Issue/PR — ya está en la Definition of Done común.
 - **¿Algo salió distinto de lo esperado, se pisó un supuesto equivocado, o se encontró un
   *gotcha* que le va a ahorrar tiempo a la próxima persona (o a nosotros mismos en 2 semanas)?**
-  Agregar una entrada corta en `docs/LESSONS-LEARNED.md` — esto es lo que en v1 evitó (o no)
-  repetir el mismo error 3 veces (ver `docs/ESTRUCTURA-DEL-PROYECTO.md` §0). No hace falta para
+  Agregar una entrada corta en `docs/LESSONS-LEARNED.md`, para que el mismo error no se repita en
+  otra historia. No hace falta para
   historias que salieron exactamente como estaban planeadas; sí para cualquier `[gap]`,
   `[tech-debt]`, o sorpresa real.
 

@@ -34,18 +34,12 @@ python -m venv .venv
 pip install -r requirements-dev.txt
 ruff check .
 python -m pytest tests/contracts
-python -m pytest tests/infra
-python -m pytest db/tests
-python -m pytest services/core/tests
-python -m pytest services/catalog/tests
-python -m pytest services/panel/tests
-python -m pytest tests/harness
 ```
 
-Cada suite va en su propio comando: los servicios comparten el nombre de paquete `app` y juntas en una
-sola corrida chocan. Varias necesitan Postgres; qué pide cada una está en
-[`docs/TESTING.md`](docs/TESTING.md). CI (`.github/workflows/ci.yml`) corre las mismas suites en cada
-Pull Request.
+Son 7 suites y cada una va en su propio comando, porque los servicios comparten el nombre de paquete
+`app`. La lista completa y qué necesita cada una (varias piden Postgres) están en
+[`docs/TESTING.md`](docs/TESTING.md#pruebas-automáticas). CI (`.github/workflows/ci.yml`) corre las
+mismas suites en cada Pull Request.
 
 Para levantar el stack completo y reproducir los guiones E2E contra los contenedores:
 
