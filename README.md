@@ -6,7 +6,9 @@ propiedades con datos reales del catálogo y pasa el lead a un asesor humano.
 ## Documentación
 
 **Empezá por [`docs/README.md`](docs/README.md)** — es el único índice de la documentación
-(arquitectura, decisiones, historias de usuario, guía de onboarding).
+(arquitectura, decisiones, historias de usuario, guía de onboarding). Qué está construido de verdad
+y qué no: [`docs/DESIGN/design.md`](docs/DESIGN/design.md) §5. Cómo levantarlo y probarlo:
+[`docs/TESTING.md`](docs/TESTING.md).
 
 Reglas de trabajo del equipo: [`CONTRIBUTING.md`](CONTRIBUTING.md). Primera vez con Git/GitHub en
 equipo: [`docs/ONBOARDING.md`](docs/ONBOARDING.md).
@@ -21,7 +23,7 @@ equipo: [`docs/ONBOARDING.md`](docs/ONBOARDING.md).
 | `services/catalog/` | Catalog Service (MCP + REST sobre Postgres) |
 | `services/panel/` | Panel interno de asesores |
 | `harness/` | Arnés de conversaciones E2E |
-| `tests/` | Contract tests y pruebas del arnés |
+| `tests/` | Contract tests, pruebas del arnés E2E y validación del compose y los Dockerfiles |
 | `docs/` | Único árbol de documentación |
 
 ## Correr los tests
@@ -32,8 +34,21 @@ python -m venv .venv
 pip install -r requirements-dev.txt
 ruff check .
 python -m pytest tests/contracts
+python -m pytest tests/infra
 python -m pytest db/tests
 python -m pytest services/core/tests
+python -m pytest services/catalog/tests
+python -m pytest services/panel/tests
+python -m pytest tests/harness
 ```
 
-CI (`.github/workflows/ci.yml`) corre lo mismo en cada Pull Request.
+Cada suite va en su propio comando: los servicios comparten el nombre de paquete `app` y juntas en una
+sola corrida chocan. Varias necesitan Postgres; qué pide cada una está en
+[`docs/TESTING.md`](docs/TESTING.md). CI (`.github/workflows/ci.yml`) corre las mismas suites en cada
+Pull Request.
+
+Para levantar el stack completo y reproducir los guiones E2E contra los contenedores:
+
+```
+docker compose run --rm --build harness
+```
