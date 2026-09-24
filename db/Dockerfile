@@ -1,8 +1,12 @@
 # build.context = raíz del repo (ver docker-compose.yml). Aplica las migraciones y termina.
-FROM python:3.12-slim
+FROM python:3.12.14-slim-trixie
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
+
+# Usuario sin privilegios (#65): el proceso no corre como root. El código queda de root y solo
+# se lee; ningún servicio escribe en disco.
+RUN useradd --system --uid 10001 --user-group --no-create-home app
 
 WORKDIR /app
 
@@ -17,4 +21,5 @@ COPY scripts/ scripts/
 
 ENV PYTHONPATH=/app
 
+USER app
 CMD ["alembic", "upgrade", "head"]
