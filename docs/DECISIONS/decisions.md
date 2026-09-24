@@ -1045,3 +1045,53 @@ así que con el limitador activo los reintentos también lo agotan. Para que una
 *backoff* y no el texto de respaldo, `LLM_RATE_LIMIT_PER_MINUTE` debe ser mayor que la cuota real de
 Bedrock, y el precio son turnos de hasta ~20 s. Es una decisión de despliegue (protección de costo contra
 latencia) que este PR no toma: deja el valor por defecto en 10.
+
+## DT-31 — Plan B de observabilidad: Jaeger por OTLP, y sin trazas si tampoco hay Jaeger
+
+**Estado:** aceptada — documentada, no implementada
+
+**Contexto.** `OBS-8` pide una alternativa concreta por si Phoenix (DT-9) falla, sin implementarla a
+menos que haga falta. Fallar puede ser que la imagen deje de arrancar, que una versión nueva rompa la
+recepción de trazas o que consuma más recursos de los que la máquina de la demo tiene. Dos decisiones
+anteriores acotan el problema. Las trazas son OpenTelemetry estándar por OTLP/HTTP, así que no están
+atadas a Phoenix (DT-9, DT-18). Y `core` no depende de Phoenix para arrancar: si cae, se pierden las
+trazas pero el bot sigue respondiendo (DT-18).
+
+**Decisión.** Dos niveles, del más completo al más simple.
+
+- **Nivel 1: Jaeger en lugar de Phoenix.** Jaeger v2 (`jaegertracing/jaeger:2.21.0`) es un solo
+  contenedor, sin Redis ni otros servicios (DT-3), que recibe OTLP/HTTP en el puerto `4318`. El cambio
+  es solo del compose:
+  1. Agregar el servicio `jaeger` con esa imagen y la UI publicada en `16686`.
+  2. En `core`, cambiar `OTEL_EXPORTER_OTLP_ENDPOINT` de `http://phoenix:6006` a `http://jaeger:4318`.
+  3. Quitar o dejar parado `phoenix`.
+
+  No cambia código: `tracing.py` usa el exportador OTLP estándar, que agrega `/v1/traces` a la URL.
+- **Nivel 2: sin trazas.** Quitar `OTEL_EXPORTER_OTLP_ENDPOINT` del compose. Las trazas se apagan y
+  los *spans* pasan a ser no-op (DT-18). Lo que sigue funcionando sin ninguna herramienta extra:
+  - Los logs JSON de los tres servicios (DT-27), incluidos los avisos de reintento y fallo de Bedrock
+    (DT-30).
+  - `funnel_events` y el dashboard del funnel del panel (DT-17, `B-9`).
+  - `audit_log`, con los guardrails que se dispararon (DT-15, DT-23).
+
+**Verificado (2026-09-24).** Con un Jaeger 2.21.0 desechable en la red del compose y `core` cambiando
+solo `OTEL_EXPORTER_OTLP_ENDPOINT`, un turno real por `POST /events` llegó a Jaeger con los mismos cuatro
+*spans* que DT-18 fija para Phoenix: `turn`, `guardrail.input`, `fsm.advance` y
+`catalog.search_properties`. La API de Jaeger (`/api/v3/traces`) los devolvió con sus atributos. La
+prueba no dejó nada en el repo.
+
+**Qué se pierde con Jaeger.** Las vistas propias de LLM de Phoenix: el costo por llamada calculado a
+partir del modelo y la presentación de cada *span* según su tipo (`openinference.span.kind`). Los
+atributos siguen en la traza (`llm.token_count.*`, modelo, tiempos), pero se leen como atributos
+sueltos. Con el almacenamiento en memoria por defecto, las trazas se pierden al reiniciar el
+contenedor. Para depurar un turno alcanza; para comparar entre días, no.
+
+**Alternativas.** Langfuse autoalojado, descartada por lo mismo que en DT-9: exige Redis y varios
+servicios. Grafana Tempo, descartada: necesita Grafana aparte para ver las trazas, dos contenedores
+donde Jaeger usa uno. Exportar las trazas a archivo o a consola, descartada como plan B: no hay forma
+cómoda de ver un turno completo, y para eso ya están los logs JSON del nivel 2.
+
+**Consecuencias.** El plan B no toca `services/`, así que no hay nada que mantener mientras no se use.
+Los tests no dependen de Phoenix: `test_tracing.py` exporta en memoria y `tests/harness/test_traces_e2e.py`
+usa un receptor OTLP propio. Si se activa el nivel 1, hay que actualizar `tests/infra/test_compose.py`,
+que hoy exige `http://phoenix:6006`, y fijar la versión de Jaeger igual que la de Phoenix (DT-9).
