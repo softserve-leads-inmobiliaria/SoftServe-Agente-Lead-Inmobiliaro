@@ -96,3 +96,105 @@ conecta apuntando a `${CATALOG_SERVICE_URL}/mcp`. Ver `decisions.md` para el det
 Las 5 tools (`search_properties`, `get_property`, `get_availability`, `get_promotions`,
 `check_requirements`) y sus schemas de input/output son responsabilidad de `CT-2` — este
 documento solo fija el transporte, no el contenido de cada tool.
+
+## 5. Estado real del sistema
+
+Las secciones 1-4 son el plan compartido y no se reescriben. Esta sección solo agrega qué existe de
+verdad, para no tener que cruzar el backlog con el código. Es una foto del sistema, no el estado de
+las historias: ese vive en GitHub Issues/Project. Se actualiza en el PR que cambie algo de lo que dice.
+
+**Corte:** 2026-09-24, `main` en `0cccd76`.
+
+Tres niveles, de más a menos evidencia:
+
+- **Verificado en vivo:** probado a mano contra el sistema real (bot de Telegram de @BotFather,
+  Bedrock, Postgres del stack). La evidencia está en la entrada de `decisions.md` o en el PR citado.
+- **Construido y probado con tests:** en `main`, cubierto por la suite de su servicio en CI y, cuando
+  aplica, por el arnés E2E en Docker (`docker compose run --rm --build harness`). Nadie lo ha visto
+  funcionar contra el sistema real.
+- **Diseñado pero no construido:** está en las secciones 1-4, en `decisions.md` o en una historia,
+  pero no hay código que lo haga.
+
+```mermaid
+flowchart LR
+    TG[Telegram<br/>long polling] --> CORE
+    H[Arnés E2E<br/>POST /events] --> CORE
+    CORE[core<br/>FSM, guardrails,<br/>score, agente] -- MCP streamable HTTP --> CAT[catalog<br/>sobre Postgres]
+    CORE --> BR[Bedrock<br/>LLM_PROVIDER=bedrock]
+    CORE --> PG[(Postgres<br/>+ pgvector)]
+    CAT --> PG
+    PANEL[panel<br/>de asesores] --> PG
+    CORE -. OTLP .-> PHX[Phoenix]
+    CORE -- avisos --> ADV[Asesor<br/>por Telegram]
+    SCHED[scheduler<br/>de nurturing]:::nobuilt -.-> CORE
+    CAL[proveedor de<br/>calendario]:::nobuilt -.-> CORE
+    FAQ[FAQ con<br/>embeddings]:::nobuilt -.-> PG
+    classDef nobuilt stroke-dasharray: 5 5
+```
+
+Las cajas con borde punteado no están construidas.
+
+### 5.1 Verificado en vivo
+
+| Qué | Evidencia |
+| :--- | :--- |
+| Bot de Telegram por *long polling*: aviso de privacidad en el primer turno, *deep-link* `?start=prop_<id>`, baja con `STOP` | DT-20 |
+| Tarjeta de lead calificado al asesor (`B-7`): una sola al cruzar a WARM, ninguna en los turnos siguientes; registro del asesor con `?start=adv_<token>` | PR #83 |
+| `Lead.zone` derivada de la propiedad que consulta el lead: el lead aparece en la cola del asesor de su zona y no en las demás | PR #82 |
+| Cola del panel priorizada por score (HOT arriba) y "tomar lead" que lo deja en `sql` (`B-6`) | PR #85 |
+| Dashboard del funnel (`B-9`): los conteos por etapa coinciden con la consulta de DT-17 en `psql` | PR #86 |
+| Llamadas reales a Bedrock con reintentos (`A-14`): ráfaga de 8 turnos, 36 `ThrottlingException` reintentadas, ningún turno cayó al texto de respaldo (Haiku 4.5, `us-east-1`) | DT-30 |
+| La conversación nueva tras un traspaso conserva el score del lead (#84): el caso se vio en vivo y quedó cubierto por un test | DT-29 |
+
+### 5.2 Construido y probado con tests, sin verificar en vivo
+
+- **FSM** con los 9 estados y todas las aristas de la sección 2, `HUMAN_HANDOFF` desde cualquier estado
+  no terminal por sus tres caminos (DT-12, DT-16). La suite de transiciones cubre cada arista (`OBS-3`).
+- **Score BANT-E** acumulado turno a turno en Postgres, en la misma transacción que la FSM (DT-14).
+- **Guardrail de entrada**: los 5 detectores de `guardrails.md` §1 (DT-15).
+- **Guardrails de salida** con el agente de Bedrock: disponibilidad revalidada (`A-4`, DT-21),
+  factualidad (`A-5`, DT-23), dirección reservada (`A-6`, DT-25) y 6 de los 8 *claims* prohibidos (`A-7`,
+  DT-26). Sus gold sets corren con la suite de `core` en CI. Ninguno se ha visto dispararse contra
+  Bedrock: el modelo no suele inventar a propósito y los casos se prueban con respuestas fijas.
+- **Ficha de traspaso** al asesor en `HANDOFF` y `HUMAN_HANDOFF`, con la transcripción completa partida
+  en varios mensajes (`A-12`, DT-28). Usa el mismo envío que la tarjeta de `B-7`, que sí se verificó en
+  vivo.
+- **Catálogo sobre Postgres** con las 5 tools por MCP (`C-1`). El arnés E2E recorre `core` → `catalog`
+  por red.
+- **Panel de asesores** con ficha, etapa y transcripción (`B-5`), autenticado por token (DT-5).
+- **Trazas por turno** hacia Phoenix sin texto de los leads (DT-18) y **logs JSON** en los 3 servicios
+  (DT-27).
+- **Métricas del funnel**: una fila de `funnel_events` por transición real (DT-17).
+- **Límite de tasa local** por modelo (DT-19). Con el valor por defecto (10 por minuto) corta las ráfagas
+  antes que los reintentos de DT-30: ver el final de esa entrada.
+
+### 5.3 Diseñado pero no construido
+
+| Qué | Dónde está diseñado | Qué pasa hoy |
+| :--- | :--- | :--- |
+| Agendar la visita de verdad (`get_slots`, `book`, proveedor de calendario) | `C-2`, `B-8`; entidad `Visit` en §1 | `SCHEDULE -> HANDOFF` lo dispara la intención `agendar_visita` del lead. Nadie escribe en `visits`, así que la ficha de traspaso nunca muestra una visita |
+| *Scheduler* de *nurturing* (`DISCOVERY -> NURTURE -> LOST`) | DT-3, DT-12 | Las aristas `no_response` existen en la FSM y en sus tests, pero nada las dispara: ningún lead llega a `NURTURE` ni a `LOST` |
+| Fair housing en el scoring | §3, `guardrails.md` §2.4, `A-11`, `C-6` | La garantía estructural sí existe: `ScoreSignal` no tiene campo para categorías protegidas y el guardrail de entrada las quita del texto (DT-15). Falta la prueba de perfiles pareados y revisar `decision_maker` (`pareja`/`familia`) |
+| FAQ con embeddings | `FaqEntry` en §1, DT-7, `C-5` | La tabla y `pgvector` existen; no hay modelo de embeddings ni búsqueda |
+| Inventario de demo | `C-9` | El catálogo del stack arranca vacío: toda búsqueda devuelve cero propiedades. Los tests siembran las suyas |
+| Ruteo por zona al asesor | `A-10`, `C-2` (`assign_advisor`) | Parcial: la tarjeta de `B-7` ya va al asesor de la zona del lead, o a cualquiera registrado si no hay. No hay `assign_advisor` en el catálogo |
+| Cancelar los *jobs* de un lead en `/stop` | `guardrails.md` §1 | No hay *jobs* que cancelar hasta que exista el *scheduler* |
+| *Claim* 6 completo (promoción genérica sin número) | `guardrails.md` §2.2, DT-26 | Solo se bloquea si trae un número inventado |
+| Gold sets y *contract tests* como *gate* de merge | `guardrails.md` §4, `OBS-4`, `OBS-5` | Corren en CI y un fallo deja el PR en rojo, pero nada impide hacer merge igual: ver §5.4 |
+| Conversaciones E2E contra el bot real | `OBS-6` | El arnés corre 8 guiones contra los servicios en Docker con el agente *fake*. Falta la corrida contra Telegram y Bedrock |
+| Plan B de observabilidad | `OBS-8`, DT-9 | Solo la base: las trazas son OpenTelemetry estándar |
+
+### 5.4 Límites conocidos de lo construido
+
+- **CI no bloquea el merge.** `main` no exige ningún *status check* (`scripts/github/protect_main.sh`),
+  y en un repositorio privado del plan gratuito GitHub no permite exigirlo. Un PR en rojo se puede
+  mergear: el *gate* de `guardrails.md` §4 depende de que el equipo no lo haga.
+- **CI no construye las imágenes de Docker.** Instala `requirements-dev.txt`, así que una dependencia que
+  falta en el `requirements.txt` de un servicio solo aparece con `docker compose run --rm --build harness`.
+- **Con el agente *fake* (el valor por defecto) no hay LLM:** las respuestas salen de plantillas y los
+  guardrails de salida no aplican, porque el *fake* arma el texto directo de los resultados reales.
+- **El límite de tasa es por proceso** (DT-19): con varios *workers* se multiplica. El compose corre uno.
+- **Los avisos al asesor son de mejor esfuerzo:** si Telegram falla en ese turno no se reintentan
+  (DT-24, DT-28). El asesor sigue viendo al lead en el panel.
+- **Factualidad literal:** no sabe de qué propiedad habla un número si es real en otro resultado del
+  mismo turno (DT-23).
