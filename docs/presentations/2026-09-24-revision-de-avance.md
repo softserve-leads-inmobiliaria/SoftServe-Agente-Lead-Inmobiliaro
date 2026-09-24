@@ -245,34 +245,48 @@ Mientras tanto, los tracks A y B apoyan al C con pares y revisiones, en lugar de
 
 ## 6. Funcionalidad funcionando (demo)
 
-Lo que sigue **ya está verificado en vivo** contra Telegram, Bedrock y Postgres
-([`design.md` §5.1](../DESIGN/design.md#51-verificado-en-vivo)).
+Esto **no es la demo final**. La demo de punta a punta es Z-2 y necesita las historias que faltan (§5).
+Lo que sí se puede mostrar hoy son las piezas que ya funcionan por separado.
 
-**Guion de la demo (unos 2 minutos):**
+**Qué se puede mostrar y con qué evidencia** ([`design.md` §5](../DESIGN/design.md#5-estado-real-del-sistema)):
 
-1. **Arnés E2E.** `docker compose run --rm --build harness` levanta todo el stack y reproduce 8
-   conversaciones guionadas. Resultado esperado: `8/8 guiones en verde`.
-2. **Bot de Telegram.** Saludar al bot, recibir el aviso de privacidad y la respuesta del agente
-   (con Bedrock).
-3. **Pedir un asesor.** Escribir "quiero hablar con un asesor". La conversación pasa a `HUMAN_HANDOFF` y el
-   asesor recibe por Telegram la ficha con el motivo, el score y la transcripción completa.
-4. **Panel del asesor.** Abrir `http://localhost:8080/panel/<token>`: cola ordenada por score (HOT arriba),
-   ficha del lead, transcripción y botón "tomar lead".
-5. **Dashboard del funnel.** Cuántos leads llegaron a cada etapa.
-6. **Traza del turno en Phoenix** (`http://localhost:6006`): cada paso del turno con su duración, sin texto
-   del lead.
+| Qué | Historias | Estado |
+| :--- | :--- | :--- |
+| Arnés E2E: 8 conversaciones guionadas contra el stack en Docker | CT-9 | Corre con un comando, sin depender de nada externo |
+| Bot por *long polling*, aviso de privacidad, baja con `STOP` | B-1, B-2 | Verificado en vivo |
+| Tarjeta al asesor por Telegram cuando el lead pasa a WARM | B-7 | Verificado en vivo |
+| Cola del panel por score y "tomar lead" | B-5, B-6 | Verificado en vivo |
+| Dashboard del funnel | B-9, OBS-2 | Verificado en vivo |
+| Bedrock con reintentos ante *throttling* (36 reintentos en una ráfaga, 0 turnos perdidos) | A-14 | Verificado en vivo |
+| Ficha con la transcripción al pedir un asesor | A-12, A-13 | Solo con tests: **ensayarla antes de presentar** |
+| Traza del turno en Phoenix | OBS-1 | Solo con tests: **ensayarla antes de presentar** |
 
-| Qué se ve | Historias |
-| :--- | :--- |
-| Bot por *long polling*, aviso de privacidad, baja con `STOP` | B-1, B-2 |
-| Tarjeta al asesor al calificar y ficha al traspasar | B-7, A-12, A-13 |
-| Cola del panel por score y "tomar lead" | B-5, B-6 |
-| Dashboard del funnel | B-9, OBS-2 |
-| Bedrock con reintentos ante *throttling* (36 reintentos en una ráfaga, 0 turnos perdidos) | A-14 |
-| Trazas por turno | OBS-1 |
+**Qué no se puede mostrar todavía:**
+
+- **Recomendar propiedades.** El catálogo arranca vacío (falta C-9), así que el agente no encuentra nada.
+- **Que el lead llegue solo al panel de su asesor.** La zona del lead sale de la primera propiedad que
+  consulta. Sin propiedades, hay que asignarla a mano en la base antes de mostrar el panel.
+- **Agendar la visita** (C-2, B-8) ni el ruteo por zona (A-10).
+
+**Guion propuesto (unos 2 minutos):**
+
+1. **Arnés E2E.** `docker compose run --rm --build harness`. Resultado esperado: `8/8 guiones en verde`.
+2. **Bot de Telegram con Bedrock.** Saludar y recibir el aviso de privacidad y la respuesta del agente.
+   Después dar presupuesto, quién decide y cuándo: con eso el score llega a WARM sin necesitar propiedades,
+   y el asesor recibe la tarjeta.
+3. **Pedir un asesor.** Escribir "quiero hablar con un asesor". El asesor recibe la ficha con la
+   transcripción.
+4. **Panel y dashboard.** Mostrar la cola ordenada por score, la ficha del lead y el funnel.
+
+**Preparación antes de presentar:**
+
+- `.env` con `TELEGRAM_BOT_TOKEN`, las credenciales de Bedrock y `LLM_PROVIDER=bedrock`.
+- Un asesor registrado con `https://t.me/<bot>?start=adv_<token>` (el token sale de `docker compose logs seed`).
+- Asignarle la zona al lead de la demo: `update leads set zone='Providencia' where ...`.
+- Ensayar los pasos 2 y 3 completos una vez.
 
 **Plan B si algo falla en vivo:** el arnés no depende de Telegram ni de Bedrock, porque usa el agente
-*fake*. Si la red falla, se muestra el arnés, el panel y el funnel.
+*fake*. Si la red falla, se muestran el arnés, el panel y el funnel.
 
 ## 7. Otros puntos clave
 
