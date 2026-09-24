@@ -7,7 +7,23 @@
 # y termina. Para que el comando devuelva el resultado del arnés (0 = todo en verde):
 #   docker compose run --rm --build harness
 # (no usar `up --exit-code-from`: `migrate` también termina y apagaría todo antes de tiempo).
+#
+# Los puertos se publican solo en 127.0.0.1 (#104): nadie más en la red local llega a la base, al
+# core ni al panel. Para abrir el panel desde otro equipo (p. ej. un celular en una demo), poner
+# BIND_ADDRESS=0.0.0.0 en .env a propósito.
 # Los healthchecks de core, catalog y panel viven en su Dockerfile (#65): el compose no los repite.
+
+# Endurecimiento de los contenedores propios (#104). Ningún servicio escribe en disco salvo en /tmp,
+# ninguno necesita capacidades del kernel y ninguno debe poder ganar privilegios (setuid). postgres y
+# phoenix quedan fuera: son imágenes de terceros que arrancan como root y cambian de usuario.
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  read_only: true
+  tmpfs:
+    - /tmp
 
 services:
   postgres:
@@ -17,7 +33,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-leads_dev_password}
       POSTGRES_DB: ${POSTGRES_DB:-leads}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -30,14 +46,15 @@ services:
     image: arizephoenix/phoenix:version-20.14.0
     ports:
       # UI y receptor OTLP/HTTP (/v1/traces) en 6006; OTLP/gRPC en 4317.
-      - "${PHOENIX_UI_PORT:-6006}:6006"
-      - "${PHOENIX_OTLP_GRPC_PORT:-4317}:4317"
+      - "${BIND_ADDRESS:-127.0.0.1}:${PHOENIX_UI_PORT:-6006}:6006"
+      - "${BIND_ADDRESS:-127.0.0.1}:${PHOENIX_OTLP_GRPC_PORT:-4317}:4317"
     environment:
       PHOENIX_WORKING_DIR: /mnt/data
     volumes:
       - phoenixdata:/mnt/data
 
   panel:
+    <<: *hardening
     build:
       # Contexto en la raíz del repo para poder copiar db/ y contracts/ (patrón de todos los servicios).
       context: .
@@ -51,7 +68,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-leads}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
-      - "${PANEL_PORT:-8080}:8080"
+      - "${BIND_ADDRESS:-127.0.0.1}:${PANEL_PORT:-8080}:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -61,6 +78,7 @@ services:
   # Aplica las migraciones de Alembic (db/migrations) y termina. Los servicios que usen la base
   # (core, panel) dependen de que este paso termine bien.
   migrate:
+    <<: *hardening
     build:
       context: .
       dockerfile: db/Dockerfile
@@ -78,6 +96,7 @@ services:
   # Siembra los asesores de demo y termina (B-5): sin ellos el panel no se puede abrir. Idempotente,
   # así que corre en cada `up` sin duplicar. El inventario de propiedades es de C-9, no de acá.
   seed:
+    <<: *hardening
     build:
       context: .
       dockerfile: db/Dockerfile
@@ -94,6 +113,7 @@ services:
     restart: "no"
 
   catalog:
+    <<: *hardening
     build:
       context: .
       dockerfile: services/catalog/Dockerfile
@@ -106,6 +126,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
 
   core:
+    <<: *hardening
     build:
       context: .
       dockerfile: services/core/Dockerfile
@@ -141,7 +162,7 @@ services:
       AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
-      - "${CORE_PORT:-8000}:8000"
+      - "${BIND_ADDRESS:-127.0.0.1}:${CORE_PORT:-8000}:8000"
     depends_on:
       catalog:
         condition: service_healthy
@@ -149,6 +170,7 @@ services:
         condition: service_completed_successfully
 
   harness:
+    <<: *hardening
     build:
       context: .
       dockerfile: harness/Dockerfile

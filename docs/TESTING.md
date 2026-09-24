@@ -241,8 +241,16 @@ docker compose run --rm --build harness
 docker compose exec core id
 ```
 
-`id` tiene que devolver `uid=10001(app)`, nunca `uid=0(root)`. Ningún servicio escribe en disco: si
-alguno empieza a hacerlo, necesita un directorio propio del usuario `app` o un volumen.
+`id` tiene que devolver `uid=10001(app)`, nunca `uid=0(root)`.
+
+Además, el compose corre esos contenedores sin capacidades del kernel (`cap_drop: [ALL]`), sin poder
+ganar privilegios (`no-new-privileges`) y con el sistema de archivos de solo lectura, salvo `/tmp`
+(#104). Si un servicio empieza a escribir en disco va a fallar con `Read-only file system`: necesita
+escribir en `/tmp` o un volumen propio.
+
+Los puertos se publican solo en `127.0.0.1` (`BIND_ADDRESS`): desde otro equipo de la red no se llega a la
+base, al core ni al panel. Para abrir el panel desde un celular en una demo, poner `BIND_ADDRESS=0.0.0.0`
+en `.env`, sabiendo que eso también expone Postgres con la contraseña de desarrollo.
 
 ## Caveats de Docker conocidos
 
