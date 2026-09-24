@@ -11,7 +11,10 @@ RUN useradd --system --uid 10001 --user-group --no-create-home app
 WORKDIR /app
 
 COPY harness/requirements.txt harness/requirements.txt
-RUN pip install --no-cache-dir -r harness/requirements.txt
+# pip solo hace falta para instalar: se quita de la imagen final (#104). Trae sus propias
+# vulnerabilidades y nada lo usa en ejecución.
+RUN pip install --no-cache-dir -r harness/requirements.txt \
+    && pip uninstall --yes pip
 
 COPY contracts/ contracts/
 COPY harness/ harness/

@@ -50,6 +50,17 @@ def test_the_process_does_not_run_as_root(dockerfile):
     assert last_user < max(n for n, i in enumerate(lines) if i.startswith("CMD "))
 
 
+@pytest.mark.parametrize("dockerfile", DOCKERFILES)
+def test_pip_is_removed_after_installing(dockerfile):
+    """#104: pip no se usa en ejecución y es lo único de Python con vulnerabilidades conocidas (Trivy)."""
+    installs = [i for i in instructions(dockerfile) if i.startswith("RUN ") and "pip install" in i]
+    assert len(installs) == 1
+    assert installs[0].rstrip().endswith("&& pip uninstall --yes pip"), installs[0]
+    # La continuación tiene que ser una barra al final de la línea física, no un "\n" escrito a mano.
+    lines = (ROOT / dockerfile).read_text(encoding="utf-8").splitlines()
+    assert any(line.strip() == "&& pip uninstall --yes pip" for line in lines)
+
+
 @pytest.mark.parametrize("dockerfile, port", SERVERS.items())
 def test_servers_carry_their_own_healthcheck(dockerfile, port):
     checks = [i for i in instructions(dockerfile) if i.startswith("HEALTHCHECK ")]
