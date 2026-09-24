@@ -108,3 +108,28 @@ def test_core_uses_the_fake_llm_unless_told_otherwise():
     for name in ("BEDROCK_MODEL_ID_CHAT", "BEDROCK_MODEL_ID_CLASSIFIER", "AWS_ACCESS_KEY_ID"):
         assert env[name].endswith(":-}")  # sin valor por defecto: nunca hay un ID ni una credencial en el repo
 
+
+
+OWN_SERVICES = ["panel", "migrate", "seed", "catalog", "core", "harness"]
+
+
+@pytest.mark.parametrize("name", [n for n, svc in SERVICES.items() if "ports" in svc])
+def test_ports_are_published_only_on_the_bind_address(name):
+    """#104: por defecto solo esta máquina llega a la base, al core y al panel, no toda la red local."""
+    for port in SERVICES[name]["ports"]:
+        assert port.startswith("${BIND_ADDRESS:-127.0.0.1}:"), port
+
+
+@pytest.mark.parametrize("name", OWN_SERVICES)
+def test_own_containers_run_with_least_privilege(name):
+    """#104: sin capacidades del kernel, sin ganar privilegios y con el sistema de archivos de solo lectura."""
+    svc = SERVICES[name]
+    assert "build" in svc
+    assert svc["cap_drop"] == ["ALL"]
+    assert "no-new-privileges:true" in svc["security_opt"]
+    assert svc["read_only"] is True
+    assert "/tmp" in svc["tmpfs"]
+
+
+def test_every_image_built_here_is_hardened():
+    assert sorted(n for n, svc in SERVICES.items() if "build" in svc) == sorted(OWN_SERVICES)
