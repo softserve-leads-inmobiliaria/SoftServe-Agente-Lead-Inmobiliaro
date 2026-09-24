@@ -184,7 +184,7 @@ hace lo mismo en `.github/workflows/ci.yml`.
 `services/core/tests/test_availability.py` prueba `AvailabilityGuard` con un catálogo cuyo listado dice
 `disponible` para todo pero cuya disponibilidad vigente es otra: una apartada o cerrada nunca se ofrece,
 un error al verificar deja la propiedad `sin_verificar`, y el LLM recibe (y `tool_results` guarda) el
-mismo resultado ya revalidado. Los tests que pasan por `process_turn` usan `tests/catalog_stub.py`, un
+mismo resultado ya revalidado. Los tests que pasan por `process_turn` usan `services/core/tests/catalog_stub.py`, un
 catálogo con `id`, `status` y `get_availability`. Para verlo en vivo: en la traza de un turno con
 búsqueda aparecen `catalog.get_availability` además de `catalog.search_properties`.
 

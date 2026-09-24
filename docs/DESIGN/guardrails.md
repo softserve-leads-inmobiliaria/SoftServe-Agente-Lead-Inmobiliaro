@@ -77,8 +77,8 @@ existir) — se actualiza en el mismo PR que cierra la historia correspondiente.
 | Factualidad | Gold set de 32 casos, fusionado en `A-5` (`services/core/tests/test_factuality_gold_set.py`) | Sí — 100% |
 | Dirección reservada | Gold set de dirección reservada, fusionado en `A-6` (`services/core/tests/test_address_guard_gold_set.py`) — antes iba a ser `C-8`, ver notas de `A-06.md` | Sí — 0 fugas |
 | *Claims* prohibidos | Suite adversarial de A-7 (`services/core/tests/test_promise_guard.py`) — los 6 cubiertos con código, en positivo y negativo | Sí — corre con la suite de `core` |
-| Fair housing | Script de perfiles pareados (`C-6`) | Sí — diferencia 0 |
+| Fair housing | Script de perfiles pareados (`C-6`) | Pendiente: todavía no existe. Cuando exista, diferencia 0 |
 | PII/consentimiento | Test de privacidad + `/stop` | Manual (E2E) |
 | Contrato MCP del Catalog Service | *Contract test* dedicado | Sí |
 
-Todo guardrail marcado como *gate* de CI bloquea el `merge` a `main`.
+"Sí" significa que corre en CI y deja el PR en rojo si falla. Nada impide mergear un PR en rojo (ver `design.md` §5.4): el *gate* depende de que el equipo no lo haga.
