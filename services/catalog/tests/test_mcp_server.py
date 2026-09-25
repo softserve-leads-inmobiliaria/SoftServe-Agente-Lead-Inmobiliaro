@@ -1,4 +1,8 @@
-"""Tests de CT-8: el catálogo falso como servidor MCP real, hablado con el cliente MCP por HTTP."""
+"""Tests de C-1b: el catálogo real como servidor MCP, hablado por streamable HTTP.
+
+El mismo cliente MCP de `core` (CT-8) y el mismo transporte, pero contra la fuente real: desde
+C-1 la lógica vive en Postgres. Se levanta el servidor de verdad sobre un puerto libre.
+"""
 import asyncio
 import json
 import socket

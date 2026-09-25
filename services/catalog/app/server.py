@@ -1,7 +1,8 @@
-"""Servidor MCP del catálogo falso (CT-8): las 5 tools catalog.* por streamable HTTP en /mcp (DT-2).
+"""Servidor MCP del catálogo (C-1b): las 5 tools catalog.* por streamable HTTP en /mcp (DT-2).
 
-Es un servidor MCP real (SDK `mcp`, versión fijada en requirements.txt), no un mock genérico: el
-cliente de `core` se conecta con el mismo protocolo que usará contra el catálogo real.
+Mismo transporte y mismo código cliente que el catálogo falso de CT-8: lo único que cambió al
+migrar el catálogo a Postgres (C-1) fue la fuente de datos detrás de `CatalogService`, nunca el
+protocolo. Es un servidor MCP real (SDK `mcp`, versión fijada en requirements.txt).
 """
 from __future__ import annotations
 
