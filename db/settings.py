@@ -9,13 +9,17 @@ def database_url() -> str:
 
     Los defaults son los de docker-compose.yml, así que contra `docker compose up` funciona sin
     configurar nada. Dentro de Docker, POSTGRES_HOST=postgres (lo define el compose).
+
+    El host por defecto es 127.0.0.1 y no `localhost`: el compose publica Postgres solo en IPv4
+    (#104), y en Windows `localhost` prueba primero `::1` y cada conexión espera a que venza antes
+    de pasar a IPv4, así que las suites parecen colgadas.
     """
     explicit = os.environ.get("DATABASE_URL")
     if explicit:
         return explicit
     user = os.environ.get("POSTGRES_USER", "leads")
     password = os.environ.get("POSTGRES_PASSWORD", "leads_dev_password")
-    host = os.environ.get("POSTGRES_HOST", "localhost")
+    host = os.environ.get("POSTGRES_HOST", "127.0.0.1")
     port = os.environ.get("POSTGRES_PORT", "5432")
     name = os.environ.get("POSTGRES_DB", "leads")
     return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{name}"
