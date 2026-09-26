@@ -62,6 +62,7 @@ SoftServe-Agente-Lead-Inmobiliaro/
 │   └── README.md                # Formato de los guiones
 ├── scripts/
 │   ├── seed_advisors.py         # Asesores de demo (servicio seed)
+│   ├── seed_catalog.py          # Inventario de demo: propiedades y promociones (C-9)
 │   └── github/                  # Labels, Issues desde las historias, Project, protección de main
 ├── tests/
 │   ├── contracts/               # Un test por contrato; corre sin ningún servicio levantado

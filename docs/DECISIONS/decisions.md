@@ -1188,3 +1188,62 @@ registrado la mitad de los leads calificados quedaría sin aviso.
 - Los tests de `core` no levantan el catálogo. Un fixture de `services/core/tests/conftest.py` simula la
   agenda caída, así que los tests de `B-7` y `A-12` prueban el respaldo. Los de `A-10`
   (`test_advisor_routing.py`) inyectan su propia agenda.
+
+## DT-34 — Inventario de demo sintético, en México, sembrado desde el catálogo
+
+**Estado:** aceptada
+
+**Contexto.** `C-9` (#35) pide un inventario de demo con casos borde a propósito. Hasta ahora el
+servicio `seed` solo sembraba asesores, así que el catálogo del stack arrancaba vacío y toda búsqueda
+devolvía cero propiedades.
+
+**Decisión.** El catálogo del stack se siembra con 12 propiedades y 3 promociones **ficticias** de
+`services/catalog/app/data.py`, en un inventario con zonas de Guadalajara (Providencia, Chapalita,
+Zapopan, Andares, Tlaquepaque) y precios en pesos mexicanos. `scripts/seed_catalog.py` las baja a
+Postgres; ese archivo es la única fuente y el seed la importa, no la copia. Los asesores siguen
+sembrándose con `scripts/seed_advisors.py` (B-5).
+
+**Por qué datos sintéticos y no scraping.** Se evaluó armar el inventario con un script de scraping contra
+el sitio de una inmobiliaria de Medellín. Descartado por tres razones, en orden de peso:
+
+1. **La historia pide cosas que un scraping no puede dar.** C-9 exige casos borde *deliberados*: una
+   promoción vencida a propósito, un terreno sin recámaras. Un portal vivo esconde lo vencido y no publica
+   lo raro, así que esos casos hay que construirlos a mano igual — el scraping solo servía de andamiaje.
+2. **Datos personales.** Los avisos reales llevan nombre y teléfono de los asesores: datos personales bajo
+   la Ley 1581 de 2012 (habeas data) en Colombia, y la mayoría de los portales prohíbe el scraping en sus
+   términos. El paso irreversible es el `git push` — una vez la semilla está en el repo la ve el equipo y
+   la organización del curso, y eso no se deshace.
+3. **No coincide con el dominio del proyecto.** El catálogo, el guardrail y el FAQ ya hablan mexicano
+   (*apartado*, *preventa*, *enganche*, *alberca*, *salón de eventos*). Una semilla de Medellín obligaba a
+   renormear precios y zonas y a dejar el sistema internamente inconsistente.
+
+**Por qué México y no Colombia.** Los docs están en español, así que el país no estaba escrito en ningún
+lado: era una decisión implícita que se iba a volver a discutir. Se fija México porque el dominio *técnico*
+ya es mexicano — el vocabulario cerrado de amenidades de DT-26, las reglas BANT-E de DT-14 y
+`REQUIREMENTS` (`down_payment_ratio` 0.10 en venta y 0.20 en preventa, `income_multiple` 3 en renta) están
+calibrados contra ese mercado. Cambiar de país no agrega nada a una demo que se evalúa por coherencia
+interna, y sí obliga a rehacer trabajo de otras historias.
+
+**Consecuencias.** El proyecto no tiene cliente, así que esto se decide pensando solo en la demo. El seed
+es un `INSERT` idempotente sobre la forma de filas ya existente, así que un cliente real con su propio
+inventario no obliga a cambiar nada de lo decidido acá.
+
+**Lo que NO quedaría resuelto si el cliente fuera colombiano.** El cambio **no es de vocabulario**:
+`zone` es un string que se filtra con `ilike` (`services/catalog/app/service.py`) y `price` se guarda
+crudo, sin formateador de moneda en código de producción — son filas nuevas, no código. Lo que sí hay que
+recalibrar:
+
+- **El scoring.** Los presupuestos en COP son ~200x más grandes en número que en MXN (2,350,000 MXN ≈
+  500,000,000 COP). Las bandas de BANT-E de DT-14 y el umbral `1.5M-2.5M MXN` de
+  `services/core/tests/test_scoring.py` están calibrados contra millones de MXN: sin ajustarlos, un lead
+  Medellín con presupuesto de 500 millones cae en COLD.
+- **La extracción de presupuesto.** El patrón de `services/core/app/fakes/fake_llm.py` matchea
+  `mil|millones|k`; allá se dice "mil millones".
+- **El vocabulario de amenidades** (DT-26): cuatro sinónimos más, del orden de veinte minutos.
+- **El FAQ y el conocimiento de negocio**: normas de financiamiento y contexto del mercado colombiano. Eso
+  es contenido, no código.
+
+**Alternativas.** (a) Scraping de un portal público: descartado arriba. (b) Datos sintéticos en Colombia:
+descartado por el costo de recalibrar el resto del dominio sin un cliente que lo pida. (c) Datos sintéticos
+de un cliente real cuando exista: es lo que se haría si el proyecto deja de ser capstone, y no obliga a
+cambiar nada de lo decidido acá.
