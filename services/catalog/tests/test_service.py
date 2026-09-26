@@ -27,13 +27,23 @@ def real_db_session_factory():
     return sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 @pytest.fixture
-def service(real_db_session_factory):
+def make_service(real_db_session_factory):
+    """Construye un CatalogService sobre la BD real con el reloj que se le pase.
+
+    Permite fijar `today` para probar el filtro de vigencia de promociones (#26).
+    """
+    def _make(today=TODAY, now=datetime(2026, 9, 14, 15, 0, tzinfo=timezone.utc)):
+        return CatalogService(
+            db_session_factory=real_db_session_factory,
+            today=lambda: today,
+            now=lambda: now,
+        )
+    return _make
+
+@pytest.fixture
+def service(make_service):
     """Instancia el servicio usando la BD real, eliminando los mocks."""
-    return CatalogService(
-        db_session_factory=real_db_session_factory,
-        today=lambda: TODAY,
-        now=lambda: datetime(2026, 9, 14, 15, 0, tzinfo=timezone.utc)
-    )
+    return make_service()
 
 def test_dataset_size_and_status_mix():
     assert 8 <= len(data.PROPERTIES) <= 12
@@ -52,6 +62,13 @@ def test_search_without_filters_returns_everything_without_exact_address(service
     output_validator("search_properties").validate(result)
     assert all("address_exact" not in p for p in result["properties"])
 
+def test_search_filters_combine(service):
+    # Los cuatro filtros a la vez: solo prop_00231 cumple zona + tipo + recámaras + precio.
+    result = service.search_properties(zone="providencia", type="venta", bedrooms=2,
+                                      budget_range={"min": 1500000, "max": 2500000})
+    output_validator("search_properties").validate(result)
+    assert {p["id"] for p in result["properties"]} == {"prop_00231"}
+
 def test_search_without_matches_is_empty_not_an_error(service):
     # En la BD real no existe la zona 'Narnia'
     assert service.search_properties(zone="Narnia") == {"properties": []}
@@ -65,6 +82,17 @@ def test_address_exact_only_when_lead_is_qualified(service):
     assert service.get_property("prop_00231", lead_qualified=False)["address_exact"] is None
     assert service.get_property("prop_00231", lead_qualified=True)["address_exact"]
 
+@pytest.mark.parametrize("call", [
+    lambda s: s.get_property("nope", False),
+    lambda s: s.get_availability("nope"),
+    lambda s: s.get_promotions("nope"),
+    lambda s: s.check_requirements("nope", PROFILE),
+])
+def test_unknown_property_is_not_found(service, call):
+    with pytest.raises(CatalogError) as exc:
+        call(service)
+    assert exc.value.error_code == "NOT_FOUND"
+
 def test_availability_reports_apartado_and_uses_the_clock(service):
     # prop_00234 ya está insertada como 'apartado' gracias al conftest.py
     result = service.get_availability("prop_00234")
@@ -72,9 +100,36 @@ def test_availability_reports_apartado_and_uses_the_clock(service):
     assert result["status"] == "apartado"
     assert result["checked_at"] == "2026-09-14T15:00:00+00:00"
 
-def test_check_requirements(service):
-    result = service.check_requirements("prop_00231", PROFILE)
+def test_promotions_only_include_current_ones(service):
+    # Criterio de aceptación de C-1a: get_promotions filtra por vigencia.
+    result = service.get_promotions()
+    output_validator("get_promotions").validate(result)
+    ids = {p["id"] for p in result["promotions"]}
+    assert "promo_001" in ids and "promo_003" not in ids  # promo_003 está vencida
+
+def test_promotions_for_property_without_any_current_one_is_empty(service):
+    assert service.get_promotions("prop_00232") == {"promotions": []}
+    assert service.get_promotions("prop_00233") == {"promotions": []}  # solo tenía una vencida
+
+def test_promotion_is_valid_through_its_last_day(make_service):
+    # `valid_until` es inclusivo: la promoción sigue viva el mismo día que vence.
+    on_last_day = make_service(today=date(2099, 12, 31)).get_promotions("prop_00231")
+    the_next_day = make_service(today=date(2100, 1, 1)).get_promotions("prop_00231")
+    assert [p["id"] for p in on_last_day["promotions"]] == ["promo_001"]
+    assert the_next_day == {"promotions": []}
+
+@pytest.mark.parametrize("prop,profile,expected", [
+    ("prop_00231", {"down_payment": 500000, "monthly_income": 60000, "has_references": False}, True),
+    ("prop_00231", {"down_payment": 1000, "monthly_income": 60000, "has_references": True}, False),
+    ("prop_00237", {"down_payment": 500000, "monthly_income": 60000, "has_references": True}, False),
+    ("prop_00235", {"down_payment": 0, "monthly_income": 60000, "has_references": True}, True),
+    ("prop_00235", {"down_payment": 0, "monthly_income": 20000, "has_references": True}, False),
+    ("prop_00235", {"down_payment": 0, "monthly_income": 60000, "has_references": False}, False),
+])
+def test_check_requirements(service, prop, profile, expected):
+    result = service.check_requirements(prop, profile)
     output_validator("check_requirements").validate(result)
+    assert result["meets_requirements"] is expected
 
 def test_upstream_unavailable_on_every_tool(real_db_session_factory):
     # Simulamos la caída del servicio inyectando False en _available
