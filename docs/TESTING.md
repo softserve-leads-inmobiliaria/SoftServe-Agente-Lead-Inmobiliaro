@@ -13,7 +13,7 @@ No hace falta crear un `.env`: `docker-compose.yml` trae defaults de desarrollo.
 
 | Servicio | URL / puerto | Qué es |
 | :--- | :--- | :--- |
-| `postgres` | `localhost:5432` (usuario/clave/BD: ver `.env.example`) | Postgres 16 con `pgvector` |
+| `postgres` | `127.0.0.1:5432` (usuario/clave/BD: ver `.env.example`; desde el host, mejor `127.0.0.1` que `localhost`, ver `db/settings.py`) | Postgres 16 con `pgvector` |
 | `phoenix` | http://localhost:6006 (OTLP/HTTP `/v1/traces`, OTLP/gRPC en `4317`) | Observabilidad (DT-9) |
 | `panel` | http://localhost:8080/panel/<token> (`/health` para el estado) | Panel de asesores: lista de leads de su zona y ficha con score y transcripción (B-5, DT-5) |
 | `migrate` | — (termina al acabar) | Aplica `alembic upgrade head` (esquema completo, C-3) |
