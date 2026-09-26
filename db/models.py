@@ -232,6 +232,8 @@ class Visit(Base):
     __table_args__ = (
         # Idempotencia: un reintento de webhook con la misma clave no crea una visita duplicada.
         UniqueConstraint("idempotency_key", name="uq_visits_idempotency_key"),
+        # Un asesor no puede tener dos visitas a la misma hora, ni con dos reservas simultáneas (C-2).
+        UniqueConstraint("advisor_id", "scheduled_at", name="uq_visits_advisor_id_scheduled_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), **_UUID_PK)
