@@ -1148,3 +1148,43 @@ reservar visitas o elegir asesor por su cuenta.
 - `book` no cambia `leads.status` ni escribe `funnel_events`: la transición a `visit_scheduled` la sigue
   marcando `core` (DT-17).
 - Cancelar o mover una visita queda fuera de esta historia.
+
+
+## DT-33 — Ruteo del lead al asesor: lo decide la agenda del catálogo, solo entre asesores con Telegram
+
+**Estado:** aceptada
+
+**Contexto.** `A-10` (#12) pide asignar el lead por zona, reparto por turnos e idioma, con una cola
+general si no hay asesor en la zona. Hasta ahora lo hacía `pick_advisor` en `core`, al mandar la
+tarjeta de `B-7`: el primer asesor registrado de la zona, siempre el mismo, sin idioma ni reparto.
+`C-2` ya implementa esa regla en `assign_advisor` (DT-32), pero sin mirar Telegram. Un asesor que nunca
+abrió el bot no recibe la tarjeta. Si la agenda pudiera elegirlo, en una demo con un solo asesor
+registrado la mitad de los leads calificados quedaría sin aviso.
+
+**Decisión.**
+- `notify_advisor` y `notify_handoff` (`services/core/app/channels/notifications.py`) piden el asesor a
+  `POST /scheduling/assign_advisor` con `registered_only=true`. Ese parámetro nuevo es opcional en el
+  contrato, así que no rompe a nadie. La tarjeta y la ficha de traspaso van al asesor que la agenda
+  devuelve, y la agenda deja escrito `leads.advisor_id`.
+- Si no hay ningún asesor con Telegram registrado (`NOT_FOUND`), no se asigna a nadie y no se manda
+  nada, igual que antes.
+- Si la agenda falla por cualquier otro motivo (catálogo caído, respuesta inesperada), se usa la regla
+  local `pick_advisor` y queda un aviso en el log. El aviso al asesor no depende de que el catálogo
+  responda.
+- El idioma es siempre `es`: es el único en que conversa el agente.
+- El cliente es `services/core/app/scheduling_client.py`, con `httpx` y la misma `CATALOG_SERVICE_URL`
+  que el cliente MCP.
+
+**Alternativas.**
+- Llamar a `assign_advisor` sin filtro, descartada por el caso de la demo que describe el contexto.
+- Dejar que la agenda reasigne cuando el asesor asignado pierde su chat de Telegram, descartada: rompe
+  la garantía de DT-32 de que un lead asignado no cambia de asesor. Ese caso queda en el log.
+- Sin respaldo local, con el aviso perdido si el catálogo no responde, descartada: la regla local ya
+  existía y estaba probada, y quitarla hace más frágil una parte que hoy funciona.
+
+**Consecuencias.**
+- Hay dos lugares con reglas de asignación: la agenda, que es la principal, y `pick_advisor`, el
+  respaldo. Si cambia la regla, la que manda es la de la agenda.
+- Los tests de `core` no levantan el catálogo. Un fixture de `services/core/tests/conftest.py` simula la
+  agenda caída, así que los tests de `B-7` y `A-12` prueban el respaldo. Los de `A-10`
+  (`test_advisor_routing.py`) inyectan su propia agenda.
