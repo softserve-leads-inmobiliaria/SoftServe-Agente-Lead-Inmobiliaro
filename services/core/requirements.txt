@@ -2,6 +2,9 @@ fastapi==0.141.1
 uvicorn==0.53.0
 mcp==1.30.0
 python-telegram-bot==21.11.1
+# Cliente de la agenda del catálogo (A-10, DT-33). Ya venía con mcp y python-telegram-bot; se fija
+# porque ahora core lo usa directo.
+httpx==0.28.1
 # Trazas por turno (OBS-1, DT-9, DT-18). boto3 es el SDK de Bedrock (DT-6): el instrumentador
 # necesita instalarlo para poder auto-instrumentar las llamadas al LLM.
 opentelemetry-sdk==1.44.0
