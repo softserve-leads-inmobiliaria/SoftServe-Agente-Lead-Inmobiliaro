@@ -161,6 +161,9 @@ Las cajas con borde punteado no están construidas.
   vivo.
 - **Catálogo sobre Postgres** con las 5 tools por MCP (`C-1`). El arnés E2E recorre `core` → `catalog`
   por red.
+- **Agenda en el catálogo** (`C-2`, DT-32): `assign_advisor`, `get_slots` y `book` por HTTP en
+  `/scheduling`, fuera de MCP para que el LLM no las vea. `book` es idempotente, y la base impide dos
+  visitas del mismo asesor a la misma hora. Todavía nadie las llama desde `core`: ver §5.3.
 - **Panel de asesores** con ficha, etapa y transcripción (`B-5`), autenticado por token (DT-5).
 - **Trazas por turno** hacia Phoenix sin texto de los leads (DT-18) y **logs JSON** en los 3 servicios
   (DT-27).
@@ -172,12 +175,12 @@ Las cajas con borde punteado no están construidas.
 
 | Qué | Dónde está diseñado | Qué pasa hoy |
 | :--- | :--- | :--- |
-| Agendar la visita de verdad (`get_slots`, `book`, proveedor de calendario) | `C-2`, `B-8`; entidad `Visit` en §1 | `SCHEDULE -> HANDOFF` lo dispara la intención `agendar_visita` del lead. Nadie escribe en `visits`, así que la ficha de traspaso nunca muestra una visita |
+| Agendar la visita de verdad (proveedor de calendario, reserva desde la conversación) | `B-8`; entidad `Visit` en §1 | `get_slots` y `book` ya existen en el catálogo (`C-2`, DT-32), pero `core` no los llama: `SCHEDULE -> HANDOFF` lo dispara la intención `agendar_visita` del lead sin reservar nada, así que la ficha de traspaso nunca muestra una visita |
 | *Scheduler* de *nurturing* (`DISCOVERY -> NURTURE -> LOST`) | DT-3, DT-12 | Las aristas `no_response` existen en la FSM y en sus tests, pero nada las dispara: ningún lead llega a `NURTURE` ni a `LOST` |
 | Fair housing en el scoring | §3, `guardrails.md` §2.4, `A-11`, `C-6` | La garantía estructural sí existe: `ScoreSignal` no tiene campo para categorías protegidas y el guardrail de entrada las quita del texto (DT-15). Falta la prueba de perfiles pareados y revisar `decision_maker` (`pareja`/`familia`) |
 | FAQ con embeddings | `FaqEntry` en §1, DT-7, `C-5` | La tabla y `pgvector` existen; no hay modelo de embeddings ni búsqueda |
 | Inventario de demo | `C-9` | El catálogo del stack arranca vacío: toda búsqueda devuelve cero propiedades. Los tests siembran las suyas |
-| Ruteo por zona al asesor | `A-10`, `C-2` (`assign_advisor`) | Parcial: la tarjeta de `B-7` ya va al asesor de la zona del lead, o a cualquiera registrado si no hay. No hay `assign_advisor` en el catálogo |
+| Ruteo por zona al asesor | `A-10`, `C-2` (`assign_advisor`) | Parcial: la tarjeta de `B-7` ya va al asesor de la zona del lead, o a cualquiera registrado si no hay. `assign_advisor` ya reparte por zona, idioma y carga (DT-32), pero `core` todavía no lo usa |
 | Cancelar los *jobs* de un lead en `/stop` | `guardrails.md` §1 | No hay *jobs* que cancelar hasta que exista el *scheduler* |
 | *Claim* 6 completo (promoción genérica sin número) | `guardrails.md` §2.2, DT-26 | Solo se bloquea si trae un número inventado |
 | Gold sets y *contract tests* como *gate* de merge | `guardrails.md` §4, `OBS-4`, `OBS-5` | Corren en CI y un fallo deja el PR en rojo, pero nada impide hacer merge igual: ver §5.4 |

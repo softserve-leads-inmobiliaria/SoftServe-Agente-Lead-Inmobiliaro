@@ -1095,3 +1095,56 @@ cómoda de ver un turno completo, y para eso ya están los logs JSON del nivel 2
 Los tests no dependen de Phoenix: `test_tracing.py` exporta en memoria y `tests/harness/test_traces_e2e.py`
 usa un receptor OTLP propio. Si se activa el nivel 1, hay que actualizar `tests/infra/test_compose.py`,
 que hoy exige `http://phoenix:6006`, y fijar la versión de Jaeger igual que la de Phoenix (DT-9).
+
+
+## DT-32 — Agenda (asesor, horarios y reservas): por HTTP en el catálogo, no como tools MCP
+
+**Estado:** aceptada
+
+**Contexto.** `C-2` (#28) pide `assign_advisor`, `get_slots` y `book`. Las necesitan `A-10` (ruteo
+por zona) y `B-8` (agendar la visita). Hasta ahora nadie escribía en `visits`, y el lead se asignaba
+solo en `core` al mandar la tarjeta de `B-7`. Todo lo que el catálogo publica por MCP, `core` lo
+descubre y se lo da al LLM como tool (DT-13). Con `book` y `assign_advisor` por MCP, el modelo podría
+reservar visitas o elegir asesor por su cuenta.
+
+**Decisión.**
+- **HTTP, no MCP.** Las tres operaciones viven en el Catalog Service como `POST /scheduling/<operación>`
+  (`services/catalog/app/scheduling_api.py`). Sus contratos están en `contracts/scheduling/`, no en
+  `contracts/mcp/`, así que el servidor MCP sigue publicando solo las 5 tools de lectura. Las llama el
+  código de `core`, nunca el modelo. El cuerpo se valida contra el `inputSchema` del contrato, igual que
+  en MCP. Los errores usan los códigos de `catalog_error` más `SLOT_TAKEN`, con estado HTTP 404, 422,
+  409 y 503.
+- **`assign_advisor`** deja escrito `leads.advisor_id` y es idempotente: si el lead ya tiene asesor (por
+  ejemplo, el que le asignó `B-7`), devuelve ese. El orden de preferencia es zona e idioma, solo zona,
+  solo idioma, y por último cualquiera. Dentro de cada grupo gana quien tiene menos leads asignados,
+  con desempate por id: los leads de una zona se reparten por turnos. La escritura es condicional
+  (`WHERE advisor_id IS NULL`), así que dos llamadas simultáneas dejan un solo asesor.
+- **`get_slots`** calcula los horarios a partir de un horario de atención fijo: lunes a sábado, de 9:00
+  a 18:00, en bloques de una hora, hora de Guadalajara (UTC-6). Quita los bloques ya empezados y los que
+  tienen una visita. No hay tabla de disponibilidad por asesor.
+- **`book`** es idempotente por `idempotency_key`. El reintento se resuelve antes que cualquier otra
+  regla: devuelve la misma visita con `created=false`, aunque el horario ya haya pasado. Reusar la clave
+  con otros datos es `INVALID_INPUT`. Solo acepta el inicio de un bloque futuro y una propiedad
+  `disponible`. La migración 0005 agrega `UNIQUE (advisor_id, scheduled_at)` en `visits`: con dos
+  reservas simultáneas, la base deja pasar una y la otra recibe `SLOT_TAKEN`.
+
+**Alternativas.**
+- Publicarlas como tools MCP y ocultarlas del LLM en `core`, descartada: obliga a `core` a conocer
+  nombres de tools, lo que DT-13 evita.
+- Integrar ya un proveedor de calendario real, descartada para esta historia: lo elige `B-8`.
+  `get_slots` es el punto donde se conecta: la forma de su respuesta no cambia.
+- Guardar la zona horaria como `America/Mexico_City` con `zoneinfo`, descartada: exige la base tzdata
+  en la imagen y en Windows. México no tiene horario de verano desde 2022, así que el desfase fijo da el
+  mismo resultado.
+- Round-robin con un puntero por zona, descartado: necesita estado nuevo. Contar los leads asignados
+  reparte igual y además compensa los leads que `B-7` ya asignó.
+
+**Consecuencias.**
+- `A-10` pasa a llamar `assign_advisor` en lugar de `pick_advisor`, en
+  `services/core/app/channels/notifications.py`. A diferencia de `pick_advisor`, `assign_advisor` no
+  exige que el asesor tenga el chat de Telegram registrado: `A-10` decide qué hacer con un asesor que
+  todavía no abrió el bot.
+- `B-8` usa `get_slots` y `book` con el asesor asignado.
+- `book` no cambia `leads.status` ni escribe `funnel_events`: la transición a `visit_scheduled` la sigue
+  marcando `core` (DT-17).
+- Cancelar o mover una visita queda fuera de esta historia.

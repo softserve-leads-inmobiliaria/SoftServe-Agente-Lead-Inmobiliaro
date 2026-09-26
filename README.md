@@ -17,7 +17,7 @@ equipo: [`docs/ONBOARDING.md`](docs/ONBOARDING.md).
 
 | Carpeta | Qué contiene |
 | :--- | :--- |
-| `contracts/` | Contratos congelados (evento canónico, estado de la FSM, tools MCP) y sus ejemplos |
+| `contracts/` | Contratos congelados (evento canónico, estado de la FSM, tools MCP, agenda) y sus ejemplos |
 | `db/` | Paquete Python compartido: modelos, configuración, logging, resolución de la raíz del repo |
 | `services/core/` | Orquestador, FSM, guardrails, scoring y canal Telegram |
 | `services/catalog/` | Catalog Service (MCP + REST sobre Postgres) |

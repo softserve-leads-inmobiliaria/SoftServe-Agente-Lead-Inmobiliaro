@@ -1,0 +1,4 @@
+{
+  "error_code": "CONFLICT",
+  "message": "El asesor ya tiene una visita a esa hora."
+}

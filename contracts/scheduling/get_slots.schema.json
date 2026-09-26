@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://softserve.local/contracts/scheduling/get_slots.schema.json",
+  "name": "get_slots",
+  "description": "Horarios libres de un asesor: bloques de 1 hora en su horario de atención (lunes a sábado, 9:00 a 18:00, hora de Guadalajara, UTC-6), desde date_from durante `days` días, sin los ya pasados ni los que ya tienen una visita.",
+  "http": "POST /scheduling/get_slots",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "advisor_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "date_from": {
+        "type": "string",
+        "format": "date",
+        "description": "Primer día a consultar (hora local). Un día pasado equivale a hoy."
+      },
+      "days": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 14,
+        "description": "Cuántos días consultar a partir de date_from. Por defecto 7."
+      }
+    },
+    "required": [
+      "advisor_id",
+      "date_from"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "advisor_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "slots": {
+        "type": "array",
+        "description": "Inicio de cada bloque libre, en orden, con su desfase horario (ISO 8601).",
+        "items": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "required": [
+      "advisor_id",
+      "slots"
+    ],
+    "additionalProperties": false
+  },
+  "errorSchema": "scheduling_error.schema.json",
+  "errors": {
+    "NOT_FOUND": "advisor_id no existe",
+    "INVALID_INPUT": "El input no cumple el inputSchema",
+    "UPSTREAM_UNAVAILABLE": "La base de datos no está disponible"
+  },
+  "errors_not_applicable": {
+    "SLOT_TAKEN": "Consultar horarios no reserva nada: un horario ocupado simplemente no aparece"
+  }
+}
