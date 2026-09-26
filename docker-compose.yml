@@ -93,14 +93,15 @@ services:
         condition: service_healthy
     restart: "no"
 
-  # Siembra los asesores de demo y termina (B-5): sin ellos el panel no se puede abrir. Idempotente,
-  # así que corre en cada `up` sin duplicar. El inventario de propiedades es de C-9, no de acá.
+  # Siembra el inventario de demo: asesores (B-5) y catálogo (C-9). Sin properties el catálogo
+  # devuelve cero resultados y no hay demo ni guardrails que ejercitar. Idempotente, así que corre en
+  # cada `up` sin duplicar.
   seed:
     <<: *hardening
     build:
       context: .
       dockerfile: db/Dockerfile
-    command: ["python", "scripts/seed_advisors.py"]
+    command: ["sh", "-c", "python scripts/seed_advisors.py && python scripts/seed_catalog.py"]
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432

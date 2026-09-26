@@ -1,11 +1,14 @@
-"""Datos de demo del catálogo (CT-8): ~10 propiedades, 3 asesores, promociones y requisitos.
+"""Datos de demo del catálogo (CT-8): 12 propiedades, 3 asesores, promociones y requisitos.
 
 Desde C-1 el servicio lee las propiedades y promociones de Postgres: aquí quedan como semilla de los
-tests y del arnés, y `REQUIREMENTS` como las reglas de `check_requirements`. El inventario de demo
-real en la base es C-9.
+tests y del arnés, y `REQUIREMENTS` como las reglas de `check_requirements`. Desde C-9 esta misma
+lista es la que `scripts/seed_catalog.py` baja a la base, así que es la única fuente del inventario
+de demo: los tests, el arnés y la base leen las mismas filas.
 
-Son datos ficticios y estables: los tests y el arnés dependen de ellos. Incluyen casos `apartado` y
-`cerrado`, una propiedad sin promociones y una promoción vencida (para probar que nunca se devuelve).
+Son datos ficticios y estables: los tests y el arnés dependen de ellos. Los casos borde que se
+ejercitan a propósito son: `apartado` y `cerrado`, una propiedad sin promociones, una promoción
+vencida (para probar que nunca se devuelve), y dos propiedades sin recámaras (un terreno y un local
+comercial) para probar que `bedrooms: 0` no es un dato faltante.
 """
 from __future__ import annotations
 
@@ -62,6 +65,16 @@ PROPERTIES: list[dict[str, Any]] = [
      "amenities": ["gimnasio"], "status": "disponible",
      "address_approx": "Providencia, cerca de Av. Vallarta",
      "address_exact": "Calle Gante 19, Providencia"},
+    {"id": "prop_00241", "title": "Terreno en venta en Zapopan", "price": 2100000, "type": "venta",
+     "zone": "Zapopan", "m2": 620, "bedrooms": 0, "bathrooms": 0,
+     "amenities": [], "status": "disponible",
+     "address_approx": "Zapopan, zona de crecimiento",
+     "address_exact": "Camino Real 880, Zapopan"},
+    {"id": "prop_00242", "title": "Local comercial en renta en Tlaquepaque", "price": 22000, "type": "renta",
+     "zone": "Tlaquepaque", "m2": 120, "bedrooms": 0, "bathrooms": 2,
+     "amenities": ["estacionamiento"], "status": "disponible",
+     "address_approx": "Tlaquepaque, zona comercial",
+     "address_exact": "Calle Morelos 210, Tlaquepaque"},
 ]
 
 ADVISORS: list[dict[str, Any]] = [

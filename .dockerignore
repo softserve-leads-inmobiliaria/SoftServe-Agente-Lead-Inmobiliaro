@@ -8,8 +8,9 @@
 **/.ruff_cache/
 docs/
 scripts/
-# Excepción: el seed de demo sí va a la imagen de db/ (servicio `seed` del compose, B-5).
+# Excepción: los seeds de demo sí van a la imagen de db/ (servicio `seed` del compose, B-5 y C-9).
 !scripts/seed_advisors.py
+!scripts/seed_catalog.py
 # Los tests no van a ninguna imagen (#65): corren en CI y en local, no dentro del contenedor.
 tests/
 **/tests/

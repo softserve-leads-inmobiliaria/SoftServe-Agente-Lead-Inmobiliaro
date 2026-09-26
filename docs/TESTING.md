@@ -17,8 +17,8 @@ No hace falta crear un `.env`: `docker-compose.yml` trae defaults de desarrollo.
 | `phoenix` | http://localhost:6006 (OTLP/HTTP `/v1/traces`, OTLP/gRPC en `4317`) | Observabilidad (DT-9) |
 | `panel` | http://localhost:8080/panel/<token> (`/health` para el estado) | Panel de asesores: lista de leads de su zona y ficha con score y transcripción (B-5, DT-5) |
 | `migrate` | — (termina al acabar) | Aplica `alembic upgrade head` (esquema completo, C-3) |
-| `seed` | — (termina al acabar) | Siembra los 3 asesores de demo, idempotente, e imprime la URL del panel de cada uno (B-5) |
-| `catalog` | solo dentro de la red de Docker (`http://catalog:8000`, MCP en `/mcp`, agenda en `/scheduling`) | Catalog Service como servidor MCP sobre Postgres (C-1), más la agenda de asesores y visitas por HTTP (C-2, DT-32). La base del stack no trae propiedades hasta el inventario de demo (C-9): las búsquedas devuelven vacío; los tests siembran las suyas |
+| `seed` | — (termina al acabar) | Siembra los 3 asesores de demo (B-5) y el inventario de 12 propiedades y 3 promociones (C-9), idempotente. Imprime la URL del panel de cada asesor y el resumen del catálogo |
+| `catalog` | solo dentro de la red de Docker (`http://catalog:8000`, MCP en `/mcp`, agenda en `/scheduling`) | Catalog Service como servidor MCP sobre Postgres (C-1), más la agenda de asesores y visitas por HTTP (C-2, DT-32). El inventario de demo (C-9) lo siembra el servicio `seed` al levantar el stack; los tests que necesitan otras filas siembran las suyas |
 | `core` | http://localhost:8000/health (`POST /events`) | Core: turno completo (FSM, guardrails, scoring) con agente *fake* por defecto o LLM real (`LLM_PROVIDER`); arranca el bot de Telegram si hay `TELEGRAM_BOT_TOKEN` |
 | `harness` | — (termina al acabar) | Reproduce `harness/fixtures/*.jsonl` contra el core |
 
@@ -139,8 +139,9 @@ arranca con `TRACE_CONTENT=1`. Si Phoenix no está levantado, `core` responde ig
 pierden. Sin `OTEL_EXPORTER_OTLP_ENDPOINT` (p. ej. al correr `uvicorn` a mano) las trazas están apagadas.
 
 Esto es el esqueleto end-to-end de CT-4: arnés → core → catálogo por MCP (sobre Postgres desde C-1) →
-respuesta. El agente es el *fake* por defecto y el catálogo del stack está vacío hasta C-9: el arnés
-comprueba que los servicios se hablan, no el inventario. Para probar un mensaje a mano con el stack arriba:
+respuesta. El agente es el *fake* por defecto. Desde C-9 el catálogo del stack sí trae el inventario
+de demo, así que una búsqueda a mano devuelve propiedades; el arnés comprueba que los servicios se
+hablan, no el inventario. Para probar un mensaje a mano con el stack arriba:
 
 ```
 curl -X POST localhost:8000/events -H "Content-Type: application/json" -d @contracts/examples/event.valid.json
@@ -207,6 +208,32 @@ búsqueda aparecen `catalog.get_availability` además de `catalog.search_propert
   tool es difícil de reproducir a propósito (el modelo no suele hacerlo); lo verificable en vivo es que
   `AuditLog` nunca tiene entradas `output.factuality_*` en una sesión normal, y sí las tiene si el
   modelo alucina (ver DT-23 para el detalle de qué se audita).
+
+### Casos borde del inventario de demo (C-9)
+
+El catálogo del stack no arranca vacío: el servicio `seed` baja a Postgres las 12 propiedades, 3
+asesores y 3 promociones de `services/catalog/app/data.py` (`scripts/seed_catalog.py`). Los datos son
+ficticios y estables, y ese archivo es la única fuente: la base, los tests y el arnés leen las mismas
+filas.
+
+El inventario lleva casos borde **a propósito**, para que la demo y los guardrails tengan algo real que
+ejercitar y no solo el camino feliz:
+
+| Caso | Dónde | Qué tiene que pasar |
+| :--- | :--- | :--- |
+| Propiedad en `apartado` | `prop_00234`, `prop_00236` | Se ofrece pero no se promete: no se puede afirmar que está disponible |
+| Propiedad `cerrado` | `prop_00239` | No se ofrece como opción viva |
+| Sin promociones | `prop_00235` | El agente no debe inventar ni deduplicar una que no existe |
+| Promoción vencida | `promo_003` (`valid_until: 2000-01-01`) | **Nunca se devuelve** al cliente, aunque su propiedad sí se ofrezca |
+| Sin recámaras: terreno | `prop_00241` | `bedrooms: 0` es un dato real, no uno faltante — y no tiene amenidades, así que tampoco se le atribuyen |
+| Sin recámaras: local comercial | `prop_00242` | `bedrooms: 0` con `type: renta`; los requisitos de renta igual aplican |
+
+Las amenidades de estas 12 propiedades están dentro del vocabulario cerrado de `_AMENITY_SYNONYMS`
+(`services/core/app/promise_guard.py`). Si alguna saliera de ahí, el guardrail la marcaría como
+alucinación sobre una propiedad que sí la tiene: al agregar una propiedad, agregar la amenidad al
+vocabulario en el mismo PR.
+
+`prop_00240` (estudio) también tiene `bedrooms: 0`, así que son tres propiedades sin recámaras, no dos.
 
 ### Suite de transiciones de la FSM
 

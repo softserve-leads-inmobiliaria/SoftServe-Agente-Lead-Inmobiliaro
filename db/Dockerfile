@@ -21,6 +21,13 @@ COPY db/ db/
 COPY contracts/ contracts/
 # Esta imagen corre también el seed de demo (servicio `seed` del compose, B-5).
 COPY scripts/ scripts/
+# El seed del catálogo (C-9, `scripts/seed_catalog.py`) importa el inventario desde
+# `services/catalog/app/data.py` para no mantener una segunda copia a mano. Se copian solo esos dos
+# archivos y no el paquete entero: `data.py` no importa nada del servicio, así que alcanza. Si algún
+# día `data.py` gana una dependencia, hay que copiar también lo que necesita o el seed falla en
+# docker, no en local.
+COPY services/catalog/app/__init__.py services/catalog/app/__init__.py
+COPY services/catalog/app/data.py services/catalog/app/data.py
 
 ENV PYTHONPATH=/app
 
