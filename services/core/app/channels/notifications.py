@@ -3,6 +3,10 @@
 Se dispara desde `process_turn` vía `on_qualified`, después del commit del turno y solo en el turno
 exacto en que la banda del score cruza a WARM/HOT. Reusa el `Bot` del canal (`get_bot()`), no crea un
 segundo cliente. Nada de lo que pase acá puede romper el turno del lead: todo falla en silencio.
+
+El asesor lo elige la agenda del catálogo (`assign_advisor`, A-10, DT-33): zona, idioma y reparto por
+turnos entre los asesores que ya abrieron el bot. Si la agenda no responde, se usa la regla local
+`pick_advisor` para que el aviso no se pierda.
 """
 from __future__ import annotations
 
@@ -13,7 +17,9 @@ from typing import Any, Mapping, Protocol, Sequence
 
 from sqlalchemy import Engine, func, select, update
 
+from app import scheduling_client
 from app.interest import property_of_interest
+from app.scheduling_client import SchedulingClient, SchedulingError
 from db.models import Advisor, FsmContext, Lead, Message, Visit
 from db.session import session_scope
 
@@ -46,11 +52,25 @@ class LeadCard:
     reasons: tuple[str, ...]
 
 
-def pick_advisor(session, zone: str | None) -> Advisor | None:
-    """El asesor de la zona del lead que ya abrió el bot; si no hay, cualquiera registrado.
+# `_agenda_advisor` devuelve esto cuando la agenda no respondió: se decide con `pick_advisor`.
+LOCAL_RULE = object()
 
-    Cola general de respaldo (patrón de v1): un lead calificado sin asesor en su zona no puede
-    quedarse sin aviso.
+
+async def _agenda_advisor(scheduling: SchedulingClient, lead_id: uuid.UUID) -> str | None | object:
+    """El id del asesor que la agenda asignó al lead; None si no hay ninguno con Telegram registrado."""
+    try:
+        return (await scheduling.assign_advisor(str(lead_id), registered_only=True))["advisor_id"]
+    except SchedulingError as exc:
+        if exc.code == "NOT_FOUND":
+            return None
+        logger.warning("la agenda no asignó asesor; se usa la regla local",
+                       extra={"lead_id": str(lead_id), "error_code": exc.code})
+        return LOCAL_RULE
+
+
+def pick_advisor(session, zone: str | None) -> Advisor | None:
+    """Regla local, respaldo de la agenda: el asesor de la zona que ya abrió el bot, o cualquiera
+    registrado. Un lead calificado sin asesor en su zona no puede quedarse sin aviso.
     """
     registered = Advisor.telegram_chat_id.is_not(None)
     if zone:
@@ -177,8 +197,8 @@ def split_lines(lines: Sequence[str], limit: int) -> list[str]:
     return parts
 
 
-def _advisor_for_handoff(session, lead_id: uuid.UUID) -> Advisor | None:
-    """El asesor que ya recibió la tarjeta de calificación, si sigue registrado; si no, uno nuevo."""
+def _local_advisor_for_handoff(session, lead_id: uuid.UUID) -> Advisor | None:
+    """Regla local: el asesor que ya recibió la tarjeta, si sigue registrado; si no, uno nuevo."""
     lead = session.get(Lead, lead_id)
     if lead is not None and lead.advisor_id:
         current = session.get(Advisor, lead.advisor_id)
@@ -190,8 +210,30 @@ def _advisor_for_handoff(session, lead_id: uuid.UUID) -> Advisor | None:
     return advisor
 
 
+def _local_advisor_on_qualify(session, lead_id: uuid.UUID) -> Advisor | None:
+    lead = session.get(Lead, lead_id)
+    advisor = pick_advisor(session, lead.zone if lead else None)
+    if advisor is not None:
+        assign(session, lead_id, advisor)
+    return advisor
+
+
+def _reachable(session, lead_id: uuid.UUID, chosen: str | None | object, local_rule) -> Advisor | None:
+    """El asesor elegido, si tiene a dónde recibir la tarjeta. `local_rule` decide si la agenda no respondió."""
+    if chosen is LOCAL_RULE:
+        return local_rule(session, lead_id)
+    advisor = session.get(Advisor, chosen) if chosen else None
+    if advisor is not None and advisor.telegram_chat_id is None:
+        # La agenda no cambia un asesor ya asignado, aunque después haya perdido su chat.
+        logger.warning("el asesor del lead no tiene Telegram registrado",
+                       extra={"lead_id": str(lead_id), "advisor_id": advisor.id})
+        return None
+    return advisor
+
+
 async def notify_handoff(engine: Engine, event: Mapping[str, Any], score: Mapping[str, Any],
-                         fsm_state: str, reason: str, bot: Sender | None) -> Advisor | None:
+                         fsm_state: str, reason: str, bot: Sender | None,
+                         scheduling: SchedulingClient | None = None) -> Advisor | None:
     """Manda la ficha del traspaso (resumen + transcripción completa) al asesor del lead.
 
     Es el mismo asesor que ya recibió la tarjeta de calificación si la hubo; si no, el de su zona
@@ -201,8 +243,9 @@ async def notify_handoff(engine: Engine, event: Mapping[str, Any], score: Mappin
     lead_id = uuid.UUID(str(event["lead_id"]))
     conversation_id = uuid.UUID(str(event["conversation_id"]))
     try:
+        chosen = await _agenda_advisor(scheduling or scheduling_client.get_scheduling(), lead_id)
         with session_scope(engine) as session:
-            advisor = _advisor_for_handoff(session, lead_id)
+            advisor = _reachable(session, lead_id, chosen, _local_advisor_for_handoff)
             if advisor is None:
                 logger.warning("traspaso sin ningún asesor registrado en Telegram",
                                extra={"lead_id": str(lead_id), "fsm_state": fsm_state})
@@ -226,7 +269,7 @@ async def notify_handoff(engine: Engine, event: Mapping[str, Any], score: Mappin
 
 
 async def notify_advisor(engine: Engine, event: Mapping[str, Any], score: Mapping[str, Any],
-                         bot: Sender | None) -> Advisor | None:
+                         bot: Sender | None, scheduling: SchedulingClient | None = None) -> Advisor | None:
     """Elige asesor, lo deja asignado en `Lead.advisor_id` y le manda la tarjeta.
 
     Devuelve el asesor notificado, o None si no había bot ni asesor registrado. Nunca lanza.
@@ -234,14 +277,13 @@ async def notify_advisor(engine: Engine, event: Mapping[str, Any], score: Mappin
     lead_id = uuid.UUID(str(event["lead_id"]))
     conversation_id = uuid.UUID(str(event["conversation_id"]))
     try:
+        chosen = await _agenda_advisor(scheduling or scheduling_client.get_scheduling(), lead_id)
         with session_scope(engine) as session:
-            lead = session.get(Lead, lead_id)
-            advisor = pick_advisor(session, lead.zone if lead else None)
+            advisor = _reachable(session, lead_id, chosen, _local_advisor_on_qualify)
             if advisor is None:
                 logger.warning("lead calificado sin ningún asesor registrado en Telegram",
                                extra={"lead_id": str(lead_id)})
                 return None
-            assign(session, lead_id, advisor)
             card = build_card(session, lead_id, conversation_id, score)
             chat_id = advisor.telegram_chat_id
             name = advisor.name

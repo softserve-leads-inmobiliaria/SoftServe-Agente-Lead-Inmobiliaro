@@ -76,13 +76,14 @@ class SchedulingService:
         self._db_session_factory = db_session_factory
         self._now = now
 
-    def assign_advisor(self, lead_id: str, zone: str | None = None,
-                       language: str = DEFAULT_LANGUAGE) -> dict[str, Any]:
+    def assign_advisor(self, lead_id: str, zone: str | None = None, language: str = DEFAULT_LANGUAGE,
+                       registered_only: bool = False) -> dict[str, Any]:
         """Asesor del lead. Si ya tiene uno lo devuelve; si no, elige y lo deja escrito.
 
         Preferencia: zona e idioma, solo zona, solo idioma, cualquiera. Dentro del grupo gana quien
         tiene menos leads asignados (desempate por id): así los leads se reparten por turnos entre
-        los asesores de una zona en lugar de ir todos al primero.
+        los asesores de una zona en lugar de ir todos al primero. Con `registered_only`, solo cuentan
+        los asesores que ya registraron su chat de Telegram: sin chat, la tarjeta no llega (A-10).
         """
         with self._db_session_factory() as db:
             lead = _lead(db, lead_id)
@@ -92,11 +93,14 @@ class SchedulingService:
             zone = zone or lead.zone
             load = (select(Lead.advisor_id, func.count().label("leads")).where(Lead.advisor_id.is_not(None))
                     .group_by(Lead.advisor_id).subquery())
+            candidates = select(Advisor).outerjoin(load, load.c.advisor_id == Advisor.id)
+            if registered_only:
+                candidates = candidates.where(Advisor.telegram_chat_id.is_not(None))
             advisors = db.execute(
-                select(Advisor).outerjoin(load, load.c.advisor_id == Advisor.id)
-                .order_by(func.coalesce(load.c.leads, 0), Advisor.id)).scalars().all()
+                candidates.order_by(func.coalesce(load.c.leads, 0), Advisor.id)).scalars().all()
             if not advisors:
-                raise SchedulingError("NOT_FOUND", "No hay asesores dados de alta.")
+                raise SchedulingError("NOT_FOUND", "No hay asesores con Telegram registrado." if registered_only
+                                      else "No hay asesores dados de alta.")
 
             def fits(advisor: Advisor, group: str) -> bool:
                 same_zone = zone is not None and advisor.zone.casefold() == zone.casefold()
