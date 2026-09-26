@@ -23,6 +23,10 @@
         "type": "string",
         "minLength": 2,
         "description": "Idioma de la conversación. Por defecto 'es'."
+      },
+      "registered_only": {
+        "type": "boolean",
+        "description": "Solo elige entre asesores que ya registraron su chat de Telegram (B-7), para que la tarjeta del lead tenga a dónde llegar. Por defecto false. No cambia un asesor ya asignado."
       }
     },
     "required": [
@@ -74,7 +78,7 @@
   },
   "errorSchema": "scheduling_error.schema.json",
   "errors": {
-    "NOT_FOUND": "lead_id no existe, o no hay ningún asesor dado de alta",
+    "NOT_FOUND": "lead_id no existe, o no hay ningún asesor dado de alta (con registered_only, ninguno registrado)",
     "INVALID_INPUT": "El input no cumple el inputSchema",
     "UPSTREAM_UNAVAILABLE": "La base de datos no está disponible"
   },
