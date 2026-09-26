@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://softserve.local/contracts/scheduling/book.schema.json",
+  "name": "book",
+  "description": "Reserva una visita en un horario libre del asesor y la escribe en `visits`. Idempotente por idempotency_key: repetir la misma solicitud devuelve la misma visita con created=false, aunque el horario ya haya pasado. La base impide dos visitas del mismo asesor a la misma hora, también ante solicitudes simultáneas.",
+  "http": "POST /scheduling/book",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "idempotency_key": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200,
+        "description": "Identificador de la solicitud: el mismo en cada reintento."
+      },
+      "lead_id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "property_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "advisor_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "scheduled_at": {
+        "type": "string",
+        "format": "date-time",
+        "description": "Inicio del horario, tal como lo devolvió get_slots."
+      }
+    },
+    "required": [
+      "idempotency_key",
+      "lead_id",
+      "property_id",
+      "advisor_id",
+      "scheduled_at"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "visit_id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "lead_id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "property_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "advisor_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "scheduled_at": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "created": {
+        "type": "boolean",
+        "description": "false si la visita ya existía con esta idempotency_key (reintento)."
+      }
+    },
+    "required": [
+      "visit_id",
+      "lead_id",
+      "property_id",
+      "advisor_id",
+      "scheduled_at",
+      "created"
+    ],
+    "additionalProperties": false
+  },
+  "errorSchema": "scheduling_error.schema.json",
+  "errors": {
+    "NOT_FOUND": "lead_id, property_id o advisor_id no existe",
+    "INVALID_INPUT": "El input no cumple el inputSchema; scheduled_at no es un horario de atención futuro; la propiedad no está disponible; o la idempotency_key ya se usó con otros datos",
+    "SLOT_TAKEN": "El asesor ya tiene otra visita a esa hora",
+    "UPSTREAM_UNAVAILABLE": "La base de datos no está disponible"
+  }
+}

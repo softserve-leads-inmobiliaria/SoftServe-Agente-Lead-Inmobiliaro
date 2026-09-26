@@ -1,0 +1,4 @@
+{
+  "error_code": "SLOT_TAKEN",
+  "message": "El asesor ya tiene una visita a esa hora."
+}
