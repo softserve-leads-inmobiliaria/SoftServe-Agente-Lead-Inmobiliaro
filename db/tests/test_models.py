@@ -72,7 +72,7 @@ def test_settings_build_the_compose_default_url(monkeypatch):
     for name in ("DATABASE_URL", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_HOST",
                  "POSTGRES_PORT", "POSTGRES_DB"):
         monkeypatch.delenv(name, raising=False)
-    assert database_url() == "postgresql+psycopg://leads:leads_dev_password@localhost:5432/leads"
+    assert database_url() == "postgresql+psycopg://leads:leads_dev_password@127.0.0.1:5432/leads"
     monkeypatch.setenv("POSTGRES_HOST", "postgres")
     assert "@postgres:5432/" in database_url()
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://x@y/z")
