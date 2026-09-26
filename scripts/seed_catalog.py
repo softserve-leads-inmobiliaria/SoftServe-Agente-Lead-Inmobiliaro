@@ -6,7 +6,7 @@ guardrails no tienen nada que ejercitar.
 Importa la lista de `services/catalog/app/data.py` en vez de copiarla a mano, para que la base, los
 tests y el arnés no puedan separarse: si el seed duplicara los datos, cambiar un precio en el catálogo
 dejaría la base con el valor viejo sin avisar (misma trampa que `scripts/seed_advisors.py`, que sí
-duplica — ver `docs/LESSONS-LEARNED.md`).
+duplica los asesores).
 
 Las amenidades de estas propiedades están dentro del vocabulario cerrado de
 `services/core/app/promise_guard.py`: si aparece una amenidad fuera de las canónicas, el guardrail la

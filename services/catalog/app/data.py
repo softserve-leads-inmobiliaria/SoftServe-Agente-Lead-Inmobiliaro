@@ -7,8 +7,8 @@ de demo: los tests, el arnés y la base leen las mismas filas.
 
 Son datos ficticios y estables: los tests y el arnés dependen de ellos. Los casos borde que se
 ejercitan a propósito son: `apartado` y `cerrado`, una propiedad sin promociones, una promoción
-vencida (para probar que nunca se devuelve), y dos propiedades sin recámaras (un terreno y un local
-comercial) para probar que `bedrooms: 0` no es un dato faltante.
+vencida (para probar que nunca se devuelve), y tres propiedades sin recámaras (un estudio, un terreno
+y un local comercial) para probar que `bedrooms: 0` no es un dato faltante.
 """
 from __future__ import annotations
 
