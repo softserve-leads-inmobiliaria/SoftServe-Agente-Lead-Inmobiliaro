@@ -43,10 +43,10 @@ def service(factory):
     return SchedulingService(db_session_factory=factory, now=lambda: NOW)
 
 
-def add_advisor(factory, advisor_id, zone, language="es"):
+def add_advisor(factory, advisor_id, zone, language="es", chat_id=None):
     with factory() as db:
         db.add(Advisor(id=advisor_id, name=f"Asesor {advisor_id}", zone=zone, language=language,
-                       access_token=uuid.uuid4().hex))
+                       access_token=uuid.uuid4().hex, telegram_chat_id=chat_id))
         db.commit()
 
 
@@ -145,6 +145,33 @@ def test_fallback_order(factory, service, zone, language, expected, match):
 def test_assign_errors(factory, service):
     assert error_code(lambda: service.assign_advisor(str(uuid.uuid4()))) == "NOT_FOUND"
     assert error_code(lambda: service.assign_advisor(add_lead(factory, zone="Zapopan"))) == "NOT_FOUND"
+
+
+def test_registered_only_skips_advisors_without_telegram(factory, service):
+    add_advisor(factory, "adv_a", "Providencia")                      # nunca abrió el bot
+    add_advisor(factory, "adv_b", "Zapopan", chat_id="chat-b")
+    lead_id = add_lead(factory, zone="Providencia")
+
+    result = service.assign_advisor(lead_id, registered_only=True)
+
+    assert (result["advisor_id"], result["match"]) == ("adv_b", "language")
+
+
+def test_registered_only_without_any_registered_advisor_assigns_nobody(factory, service):
+    add_advisor(factory, "adv_a", "Providencia")
+    lead_id = add_lead(factory, zone="Providencia")
+
+    assert error_code(lambda: service.assign_advisor(lead_id, registered_only=True)) == "NOT_FOUND"
+    with factory() as db:
+        assert db.get(Lead, uuid.UUID(lead_id)).advisor_id is None
+
+
+def test_registered_only_keeps_an_advisor_already_assigned(factory, service):
+    add_advisor(factory, "adv_a", "Providencia")
+    add_advisor(factory, "adv_b", "Providencia", chat_id="chat-b")
+    lead_id = add_lead(factory, zone="Providencia", advisor_id="adv_a")
+
+    assert service.assign_advisor(lead_id, registered_only=True)["advisor_id"] == "adv_a"
 
 
 # --- get_slots ------------------------------------------------------------------------------------
