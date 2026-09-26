@@ -179,8 +179,13 @@ class SchedulingService:
                 raise SchedulingError("INVALID_INPUT", f"La propiedad {property_id} no está disponible.")
             if not _is_slot_start(moment) or moment <= self._now():
                 raise SchedulingError("INVALID_INPUT", "scheduled_at no es un horario de atención futuro.")
-            if db.execute(select(Visit.id).where(Visit.advisor_id == advisor_id,
-                                                 Visit.scheduled_at == moment)).first():
+            taken = db.execute(select(Visit).where(Visit.advisor_id == advisor_id,
+                                                   Visit.scheduled_at == moment)).scalar_one_or_none()
+            if taken is not None:
+                # Puede ser esta misma solicitud: un reintento que buscó la clave justo antes de que la
+                # primera confirmara. Entonces es su visita, no un horario ocupado.
+                if taken.idempotency_key == idempotency_key:
+                    return self._retry(taken, lead.id, property_id, advisor_id, moment)
                 raise SchedulingError("SLOT_TAKEN", "El asesor ya tiene una visita a esa hora.")
 
             visit = Visit(lead_id=lead.id, property_id=property_id, advisor_id=advisor_id,

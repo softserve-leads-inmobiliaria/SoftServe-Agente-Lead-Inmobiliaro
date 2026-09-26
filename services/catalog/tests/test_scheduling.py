@@ -346,6 +346,27 @@ def test_simultaneous_assignments_of_one_lead_agree(factory, service):
         assert db.get(Lead, uuid.UUID(lead_id)).advisor_id == results[0]["advisor_id"]
 
 
+def test_a_retry_that_arrives_while_the_first_request_commits_gets_the_same_visit(factory, booking):
+    """El reintento no vio la clave (la primera solicitud aún no confirmaba) pero sí la hora ocupada: es
+    su propia visita, no SLOT_TAKEN. Se fuerza esa ventana haciendo que la primera búsqueda por clave
+    no encuentre nada."""
+    first = SchedulingService(db_session_factory=factory, now=lambda: NOW).book(**booking)
+
+    class RetryInTheWindow(SchedulingService):
+        misses = 1
+
+        def _by_key(self, db, idempotency_key):
+            if self.misses:
+                self.misses -= 1
+                return None
+            return super()._by_key(db, idempotency_key)
+
+    retry = RetryInTheWindow(db_session_factory=factory, now=lambda: NOW).book(**booking)
+
+    assert retry == first | {"created": False}
+    assert visits(factory) == 1
+
+
 # --- HTTP -----------------------------------------------------------------------------------------
 
 @pytest.fixture
