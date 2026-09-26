@@ -18,7 +18,7 @@ No hace falta crear un `.env`: `docker-compose.yml` trae defaults de desarrollo.
 | `panel` | http://localhost:8080/panel/<token> (`/health` para el estado) | Panel de asesores: lista de leads de su zona y ficha con score y transcripción (B-5, DT-5) |
 | `migrate` | — (termina al acabar) | Aplica `alembic upgrade head` (esquema completo, C-3) |
 | `seed` | — (termina al acabar) | Siembra los 3 asesores de demo, idempotente, e imprime la URL del panel de cada uno (B-5) |
-| `catalog` | solo dentro de la red de Docker (`http://catalog:8000`, MCP en `/mcp`) | Catalog Service como servidor MCP sobre Postgres (C-1). La base del stack no trae propiedades hasta el inventario de demo (C-9): las búsquedas devuelven vacío; los tests siembran las suyas |
+| `catalog` | solo dentro de la red de Docker (`http://catalog:8000`, MCP en `/mcp`, agenda en `/scheduling`) | Catalog Service como servidor MCP sobre Postgres (C-1), más la agenda de asesores y visitas por HTTP (C-2, DT-32). La base del stack no trae propiedades hasta el inventario de demo (C-9): las búsquedas devuelven vacío; los tests siembran las suyas |
 | `core` | http://localhost:8000/health (`POST /events`) | Core: turno completo (FSM, guardrails, scoring) con agente *fake* por defecto o LLM real (`LLM_PROVIDER`); arranca el bot de Telegram si hay `TELEGRAM_BOT_TOKEN` |
 | `harness` | — (termina al acabar) | Reproduce `harness/fixtures/*.jsonl` contra el core |
 

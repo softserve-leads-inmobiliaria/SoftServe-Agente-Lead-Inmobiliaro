@@ -34,6 +34,7 @@ SoftServe-Agente-Lead-Inmobiliaro/
 │   ├── event.schema.json
 │   ├── fsm_state.schema.json
 │   ├── mcp/*.schema.json        # Un schema por tool del catálogo
+│   ├── scheduling/*.schema.json # Agenda por HTTP (C-2): fuera de mcp/ para que el LLM no la vea
 │   └── examples/*.json          # Ejemplos válidos e inválidos de cada schema
 ├── db/                          # Paquete Python compartido por los 3 servicios (§2)
 │   ├── models.py                # Modelos SQLAlchemy: única fuente de verdad del esquema
@@ -47,7 +48,7 @@ SoftServe-Agente-Lead-Inmobiliaro/
 │   │   ├── app/                 # channels/ (Telegram), fakes/ (agente sin LLM), un módulo por responsabilidad
 │   │   ├── tests/
 │   │   └── Dockerfile
-│   ├── catalog/                 # Catalog Service: servidor MCP + REST sobre Postgres
+│   ├── catalog/                 # Catalog Service: servidor MCP y agenda por HTTP sobre Postgres
 │   │   ├── app/
 │   │   ├── tests/
 │   │   └── Dockerfile
