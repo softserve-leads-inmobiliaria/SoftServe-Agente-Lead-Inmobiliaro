@@ -211,10 +211,10 @@ búsqueda aparecen `catalog.get_availability` además de `catalog.search_propert
 
 ### Casos borde del inventario de demo (C-9)
 
-El catálogo del stack no arranca vacío: el servicio `seed` baja a Postgres las 12 propiedades, 3
-asesores y 3 promociones de `services/catalog/app/data.py` (`scripts/seed_catalog.py`). Los datos son
-ficticios y estables, y ese archivo es la única fuente: la base, los tests y el arnés leen las mismas
-filas.
+El catálogo del stack no arranca vacío: el servicio `seed` baja a Postgres las 12 propiedades y 3
+promociones de `services/catalog/app/data.py` (`scripts/seed_catalog.py`). Los datos son ficticios y
+estables, y ese archivo es la única fuente: la base, los tests y el arnés leen las mismas filas. Los
+asesores los siembra `scripts/seed_advisors.py` (B-5), que todavía mantiene su propia copia.
 
 El inventario lleva casos borde **a propósito**, para que la demo y los guardrails tengan algo real que
 ejercitar y no solo el camino feliz:
@@ -223,7 +223,7 @@ ejercitar y no solo el camino feliz:
 | :--- | :--- | :--- |
 | Propiedad en `apartado` | `prop_00234`, `prop_00236` | Se ofrece pero no se promete: no se puede afirmar que está disponible |
 | Propiedad `cerrado` | `prop_00239` | No se ofrece como opción viva |
-| Sin promociones | `prop_00235` | El agente no debe inventar ni deduplicar una que no existe |
+| Sin promociones | `prop_00235` | El agente no debe inventar una promoción que no existe |
 | Promoción vencida | `promo_003` (`valid_until: 2000-01-01`) | **Nunca se devuelve** al cliente, aunque su propiedad sí se ofrezca |
 | Sin recámaras: terreno | `prop_00241` | `bedrooms: 0` es un dato real, no uno faltante — y no tiene amenidades, así que tampoco se le atribuyen |
 | Sin recámaras: local comercial | `prop_00242` | `bedrooms: 0` con `type: renta`; los requisitos de renta igual aplican |

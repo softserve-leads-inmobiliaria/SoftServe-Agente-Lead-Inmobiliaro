@@ -1188,12 +1188,20 @@ registrado la mitad de los leads calificados quedaría sin aviso.
 - Los tests de `core` no levantan el catálogo. Un fixture de `services/core/tests/conftest.py` simula la
   agenda caída, así que los tests de `B-7` y `A-12` prueban el respaldo. Los de `A-10`
   (`test_advisor_routing.py`) inyectan su propia agenda.
+
 ## DT-34 — Inventario de demo sintético, en México, sembrado desde el catálogo
 
-**Decisión.** El catálogo del stack se siembra con 12 propiedades, 3 asesores y 3 promociones **ficticias**
-de `services/catalog/app/data.py`, en un inventario con zonas de Guadalajara (Providencia, Chapalita,
-Zapopan, Andares, Tlaquepaque) y precios en miles de pesos mexicanos. `scripts/seed_catalog.py` las baja a
-Postgres; ese archivo es la única fuente y el seed la importa, no la copia.
+**Estado:** aceptada
+
+**Contexto.** `C-9` (#35) pide un inventario de demo con casos borde a propósito. Hasta ahora el
+servicio `seed` solo sembraba asesores, así que el catálogo del stack arrancaba vacío y toda búsqueda
+devolvía cero propiedades.
+
+**Decisión.** El catálogo del stack se siembra con 12 propiedades y 3 promociones **ficticias** de
+`services/catalog/app/data.py`, en un inventario con zonas de Guadalajara (Providencia, Chapalita,
+Zapopan, Andares, Tlaquepaque) y precios en pesos mexicanos. `scripts/seed_catalog.py` las baja a
+Postgres; ese archivo es la única fuente y el seed la importa, no la copia. Los asesores siguen
+sembrándose con `scripts/seed_advisors.py` (B-5).
 
 **Por qué datos sintéticos y no scraping.** Se evaluó armar el inventario con un script de scraping contra
 el sitio de una inmobiliaria de Medellín. Descartado por tres razones, en orden de peso:
