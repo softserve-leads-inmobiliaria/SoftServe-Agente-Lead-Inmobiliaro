@@ -1247,3 +1247,70 @@ recalibrar:
 descartado por el costo de recalibrar el resto del dominio sin un cliente que lo pida. (c) Datos sintéticos
 de un cliente real cuando exista: es lo que se haría si el proyecto deja de ser capstone, y no obliga a
 cambiar nada de lo decidido acá.
+
+## DT-35 — El gold set de fair housing prueba el pipeline completo, y la situación familiar queda pineada
+
+**Estado:** aceptada — con 6 de los 22 pares en `xfail(strict=True)` hasta que A-11 corrija el *scoring*
+
+**Contexto.** `C-6` (#32) pide N pares de perfiles idénticos salvo una categoría protegida
+introducida incidentalmente, con diferencia de score total = 0 como *gate* de CI. `A-11` (#13) depende
+de esta prueba: sin ella no hay forma objetiva de saber que el fair housing del *scoring* funciona, y
+`design.md` §5.3 ya markaba que faltaba revisar `decision_maker` (`pareja`/`familia`). La pregunta de
+diseño era qué tan profundo probaba el gold set: `compute_score` con señales escritas a mano, o el
+pipeline real de un turno.
+
+**Decisión.** El gold set de C-6 (`services/core/tests/test_fair_housing_gold_set.py`) prueba las tres
+capas por las que un sesgo puede colarse en el score, no solo la suma: `input_guard.inspect_input().signal_text`
+→ el extractor de señales → `lead_scoring.score_turn()`. Son 22 pares de leads idénticos salvo una mención
+de categoría protegida, y el criterio de aceptación es diferencia 0 en el total, **por dimensión y también
+en la banda** (la banda ordena la cola del panel, `B-6`, y es lo que decide si el lead califica y llega a
+un asesor, `B-7`: por debajo de `COLD` 41 no califica).
+
+**Lo que encontró al escribirse.** 16 de los 22 pares dan 0. Los 6 de "con quién compras" no:
+
+| Lo que dice el lead | `decision_maker` | Total | Δ |
+| :--- | :--- | ---: | ---: |
+| decido yo | `solo` | 100 (HOT) | — |
+| con mi esposa / con mi esposo / con mi pareja | `pareja` | 92 (HOT) | −8 |
+| con mis padres / con mi familia | `familia` | 88 (HOT) | −12 |
+| con mis hijos | `None` → `no_declarado` | 80 (HOT) | −20 |
+
+Los tres siguen en `HOT`: la banda es `COLD` ≤ 40, `WARM` 41-70, `HOT` ≥ 71 (`scoring.py`), y el peor
+caso del gold set llega a 80. O sea que **la comparación de banda del gate no muerde con esta fixture** —
+no hay ninguna de las 22 fugas que la haga dispararse. Queda como red contra una fuga de 30 puntos o
+más, no como detector de estos tres deltas. Los deltas son de Authority, y son igual de reales.
+
+Son dos defectos distintos y por eso se arreglan de forma distinta:
+
+1. **La tabla de puntos.** `guardrails.md` §1 declara "situación familiar" y "estado civil" como categorías
+   protegidas y `input_guard._PROTECTED` trata `casad[oa]s?/solter[oa]s?/divorciad[oa]s?` y `tengo hijos|mis
+   hijos` como menciones protegidas; después `scoring.DECISION_MAKER_POINTS` le da 8 a `familia` y 12 a
+   `pareja` contra 20 de `solo`. El proyecto declara protegida una categoría y la puntúa. Lo arregla A-11.
+2. **La redacción.** `"con mis hijos"` → el guardrail hace bien su trabajo y borra la mención → queda
+   `"...con"` colgando → el extractor ya no encuentra quién decide → `no_declarado` → 0 de Authority. **Aplanar
+   la tabla no arregla este**: el sesgo está en que la redacción destruye una señal legítima. También es de A-11,
+   y es una decisión de scoring, no de C-6.
+
+**Por qué los 6 quedan con `xfail(strict=True)` y no con el gate estricto.** Con el gate estricto, C-6
+aterrizaría con `main` en rojo hasta que A-11 lo resuelva, y el acuerdo del equipo es nunca mergear en rojo.
+Con `strict=True` el CI queda verde, el defecto queda visible con su número, y cuando A-11 lo arregle el
+xfail se vuelve XPASS y **el test se pone rojo solo**, obligando a quitar la marca. Aterrizar C-6 no
+bloquea a nadie: es A-11 quien lo necesita, y B-8 y la agenda de C-2 no lo esperan.
+
+**Por qué el test del par "con mis hijos" no se puede resolver solo con la tabla.** Se verificó simulando los
+dos arreglos posibles: aplanando `DECISION_MAKER_POINTS` los 5 pares de la tabla pasan a 0 y `con mis hijos`
+sigue en −20. Queda anotado acá para que A-11 no reciba el PR pensando que el arreglo es de una línea.
+
+**Consecuencias.** (a) El gold set vive en `services/core/tests/`, junto a los de A-5 y A-6, aunque su
+contenido sea de C-6: `guardrails.md` §4 ya apunta a esa carpeta para los tres guardrails con gold set.
+(b) El extractor de los tests es el determinista (`fakes/fake_llm.py`), no Bedrock — mismo criterio que los
+gold sets de A-5 y A-6. Lo que el modelo real haga con una mención protegida no lo prueba este archivo:
+queda como verificación en vivo, igual que los guardrails de salida listados en `design.md` §5.2.
+(c) `DECISION_MAKER_POINTS` sigue como está. Si alguien aplana la tabla sin quitar los xfail, el CI lo avisa.
+
+**Alternativas.** (a) Gate estricto y `main` en rojo hasta A-11: más honesto en el momento, pero rompe el
+acuerdo de no mergear en rojo y deja el PR de C-6 sin poder cerrarse. (b) Gold set solo sobre `compute_score`
+con señales escritas a mano: más rápido de escribir, pero no encuentra ninguno de los dos defectos, porque
+ninguno de los dos está en la tabla de puntos. (c) No construir el gold set hasta que A-11 esté: A-11 depende
+de C-6, y sin la prueba no hay forma objetiva de saber que el arreglo funcionó.
+

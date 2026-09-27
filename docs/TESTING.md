@@ -209,6 +209,47 @@ búsqueda aparecen `catalog.get_availability` además de `catalog.search_propert
   `AuditLog` nunca tiene entradas `output.factuality_*` en una sesión normal, y sí las tiene si el
   modelo alucina (ver DT-23 para el detalle de qué se audita).
 
+### Fair housing en el scoring (C-6)
+
+`services/core/tests/test_fair_housing_gold_set.py` prueba que el score no depende de una categoría
+protegida. Son **22 pares de leads** idénticos salvo la mención, y corre el pipeline completo de un
+turno — `inspect_input().signal_text` → el extractor de señales → `score_turn()`— porque el sesgo
+puede entrar por cualquiera de las tres capas y probar solo la suma no encuentra nada. No llama a
+ningún LLM: el extractor es el determinista de `fakes/fake_llm.py`, así que corre en milisegundos y
+sin credenciales, mismo criterio que los gold sets de A-5 y A-6.
+
+El *gate* es `test_el_score_no_se_mueve_entre_el_par`: compara total, **las cinco dimensiones** y la
+banda, no solo el total, para que dos fugas que se compensen no se cuelen por el mismo número. La banda
+importa porque ordena la cola del panel (`B-6`) y porque por debajo de `COLD` 41 el lead deja de
+calificar y no llega a un asesor (`B-7`).
+
+**16 de los 22 pares están en verde; los 6 de "con quién compras" van con `xfail(strict=True)`:**
+
+| Lo que dice el lead | `decision_maker` | Total | Δ |
+| :--- | :--- | ---: | ---: |
+| decido yo | `solo` | 100 (HOT) | — |
+| con mi esposa / con mi esposo / con mi pareja | `pareja` | 92 (HOT) | −8 |
+| con mis padres / con mi familia | `familia` | 88 (HOT) | −12 |
+| con mis hijos | `None` → `no_declarado` | 80 (HOT) | −20 |
+
+Ojo con la banda: los tres siguen en `HOT` (el corte es `WARM` ≤ 70), así que la aserción de banda del
+gate es una red contra fugas de 30 puntos o más y no llega a dispararse con ninguno de los 22 pares. Los
+deltas son todos de Authority.
+
+Es el *scoring* con sesgo, y lo arregla `A-11`, no C-6 (DT-35). El caso de `con mis hijos` **no** se
+resuelve aplanando la tabla: el guardrail de entrada borra la mención, el extractor ya no ve quién
+decide y el score cae a `no_declarado`. Por eso el `strict=True`: cuando A-11 lo resuelva, los xfail
+se vuelven XPASS y el test se pone rojo solo, obligando a quitar las marcas.
+
+Un caso que parece raro y no lo es: el par `colombiano` ("soy colombiano") va con `protected_category`
+esperado en `False`, porque el regex de `input_guard._PROTECTED` lista sustantivos
+(`nacionalidad|extranjeros|migrantes|…`) y no demonónimos. El score da 0 igual, así que no es un fallo de
+este gold set, pero la mención llega intacta al LLM. Es un gap de `A-8`; cuando se arregle, se cambia ese
+`False` por `True` y no hay que tocar nada más.
+
+Para agrega un par se edita `MENCIONES` o `SITUACIONES` en el test; nunca se borra uno viejo salvo que
+deje de aplicar.
+
 ### Casos borde del inventario de demo (C-9)
 
 El catálogo del stack no arranca vacío: el servicio `seed` baja a Postgres las 12 propiedades y 3
