@@ -12,10 +12,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping, Optional
 
+# Authority mide si el lead dijo quién decide, no con quién vive (A-11, DT-38): decidir en pareja o en
+# familia vale lo mismo que decidir solo. Distinguirlos puntuaba la situación familiar y el estado civil,
+# que `guardrails.md` §1 declara categorías protegidas.
 DECISION_MAKER_POINTS: Mapping[str, int] = {
     "solo": 20,
-    "pareja": 12,
-    "familia": 8,
+    "pareja": 20,
+    "familia": 20,
     "no_declarado": 0,
 }
 URGENCY_POINTS: Mapping[str, int] = {

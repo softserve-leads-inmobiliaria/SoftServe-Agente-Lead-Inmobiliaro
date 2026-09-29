@@ -82,8 +82,13 @@ _PROTECTED = _any((
     r"\b(?:religion|catolic[oa]s?|cristian[oa]s?|musulman\w*|judi[oa]s?|ateo|atea|evangelic[oa]s?|budistas?)\b",
     r"\b(?:soy (?:mujer|hombre|gay|lesbiana|trans)|genero|orientacion sexual|embarazad[oa])\b",
     r"\b(?:casad[oa]s?|solter[oa]s?|divorciad[oa]s?|viud[oa]s?|madre soltera|padre soltero|estado civil)\b",
-    r"\b(?:tengo hijos|mis hijos)\b",
+    r"\b(?:tengo hij[oa]s|mis hij[oa]s)\b",
 ))
+# Mención protegida que además dice con quién se decide ("lo hablo con mis hijos"): se generaliza en vez de
+# borrarse. Borrarla dejaba "lo hablo con" y el lead perdía los puntos de Authority por tener hijos (A-11,
+# DT-38). "mi familia" conserva el rol sin revelar la situación familiar.
+_FAMILY_ROLE = re.compile(r"mis hij[oa]s")
+NEUTRAL_FAMILY = "mi familia"
 
 # Lo que puede quedar de un mensaje al quitar una mención protegida ("Soy ___") sin aportar contenido.
 _FILLER_WORDS = frozenset({"soy", "estoy", "somos", "estamos", "tengo", "tenemos", "y", "e", "es", "mi", "que", "con",
@@ -170,6 +175,7 @@ def strip_protected(text: str) -> str:
 
     Las reglas trabajan sobre el texto normalizado (minúsculas, sin acentos); aquí se recuerda a qué
     posición del original corresponde cada carácter normalizado para poder recortar el original.
+    Las menciones de `_FAMILY_ROLE` no se borran: se reemplazan por `NEUTRAL_FAMILY`.
     """
     normalized: list[str] = []
     origin: list[int] = []
@@ -179,12 +185,17 @@ def strip_protected(text: str) -> str:
                 normalized.append(base)
                 origin.append(index)
     keep = [True] * len(text)
+    replacement: dict[int, str] = {}
     for match in _PROTECTED.finditer("".join(normalized)):
         for position in range(match.start(), match.end()):
             keep[origin[position]] = False
+        if _FAMILY_ROLE.fullmatch(match.group()):
+            replacement[origin[match.start()]] = NEUTRAL_FAMILY
     if all(keep):
         return text
-    stripped = re.sub(r"\s{2,}", " ", "".join(c for c, kept in zip(text, keep, strict=True) if kept)).strip()
+    kept_text = "".join(replacement.get(index, "") + (char if kept else "")
+                        for index, (char, kept) in enumerate(zip(text, keep, strict=True)))
+    stripped = re.sub(r"\s{2,}", " ", kept_text).strip()
     words = re.findall(r"\w+", stripped.lower())
     # Si al quitar la mención solo queda relleno ("Soy", "Tengo y"), no queda nada utilizable.
     return "" if all(word in _FILLER_WORDS for word in words) else stripped
