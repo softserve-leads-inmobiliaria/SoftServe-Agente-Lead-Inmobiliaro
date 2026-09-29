@@ -13,8 +13,8 @@ distintas y hay que probarlas todas.
     lead_scoring.score_turn(...)         -> el score, con las reglas de C-4
 
 Probar solo `compute_score` con señales escritas a mano probaría la suma, no el camino por el que
-el sesgo llega: la diferencia que lo motivó (`con mis hijos` → −20) no existe en la tabla de puntos, está
-en la redacción del guardrail de entrada. No llama a ningún LLM —el extractor es el determinista—
+el sesgo llega: una de las diferencias que encontró (`con mis hijos` → −20) no estaba en la tabla de
+puntos sino en la redacción del guardrail de entrada. A-11 corrigió las dos (DT-38). No llama a ningún LLM —el extractor es el determinista—
 así que corre en milisegundos y sin credenciales, mismo criterio que los gold sets de A-5 y A-6.
 
 Al agregar un par nuevo se agrega en `PAIRS`, nunca se borra uno viejo salvo que deje de aplicar.
@@ -92,34 +92,28 @@ MENCIONES: tuple[tuple[str, str, str], ...] = (
 SIN_DETECTAR = {"colombiano"}
 
 # Pares de situación familiar: los dos lados son excluyentes y lo único que cambia es con quién
-# compra, dicho en el slot de autoridad. Con el control ("decido yo" → `solo` → 20 de Authority)
-# hoy dan −8, −12 o −20. van con xfail(strict) hasta que A-11 lo resuelva: cuando el score pase a
-# ser 0, el xfail se vuelve XPASS y `strict=True` rompe el test, así que nadie se olvida de quitar
-# la marca. La razón va escrita porque cada uno se arregla distinto.
+# compra, dicho en el slot de autoridad. Antes de A-11 daban −8, −12 o −20 contra el control ("decido
+# yo" → `solo` → 20 de Authority), y cada uno se arregló distinto (DT-38):
+# - pareja y familia: `DECISION_MAKER_POINTS` les da los mismos 20 que a `solo`.
+# - "con mis hijos": el guardrail de entrada generaliza la mención a "mi familia" en vez de borrarla,
+#   así que el extractor sigue viendo quién decide.
 SITUACIONES: tuple[tuple[str, str, str], ...] = (
-    ("con_esposa", "situación familiar", "con mi esposa",
-     "DECISIÓN 1 de A-11: 'pareja' vale 12 contra 20 de 'solo'."),
-    ("con_esposo", "situación familiar", "con mi esposo",
-     "DECISIÓN 1 de A-11: 'pareja' vale 12 contra 20 de 'solo'."),
-    ("con_pareja", "situación familiar", "con mi pareja",
-     "DECISIÓN 1 de A-11: 'pareja' vale 12 contra 20 de 'solo'."),
-    ("con_padres", "situación familiar", "con mis padres",
-     "DECISIÓN 1 de A-11: 'familia' vale 8 contra 20 de 'solo'."),
-    ("con_familia", "situación familiar", "con mi familia",
-     "DECISIÓN 1 de A-11: 'familia' vale 8 contra 20 de 'solo'."),
-    ("con_hijos", "situación familiar", "con mis hijos",
-     "DECISIÓN 2 de A-11: no lo arregla aplanar la tabla. El guardrail borra la mención, queda "
-     "'...con' colgando, el extractor ya no encuentra quién decide y el score cae a `no_declarado`. "
-     "El sesgo está en la redacción, no en la tabla."),
+    ("con_esposa", "situación familiar", "con mi esposa"),
+    ("con_esposo", "situación familiar", "con mi esposo"),
+    ("con_pareja", "situación familiar", "con mi pareja"),
+    ("con_padres", "situación familiar", "con mis padres"),
+    ("con_familia", "situación familiar", "con mi familia"),
+    ("con_hijos", "situación familiar", "con mis hijos"),
 )
 
-# (id, categoría protegida, texto del control, texto del par, razón del xfail o None)
+# (id, categoría protegida, texto del control, texto del par, razón del xfail o None). Hoy ningún par
+# lleva xfail: si un arreglo futuro deja uno pendiente, va con `xfail(strict=True)` y su razón.
 PAIRS: tuple[tuple[str, str, str, str, str | None], ...] = tuple(
     (case_id, categoria, CONTROL, f"{CONTROL}, {mencion}", None)
     for case_id, categoria, mencion in MENCIONES
 ) + tuple(
-    (case_id, categoria, CONTROL, f"{COMUN}, {frase}", razon)
-    for case_id, categoria, frase, razon in SITUACIONES
+    (case_id, categoria, CONTROL, f"{COMUN}, {frase}", None)
+    for case_id, categoria, frase in SITUACIONES
 )
 
 PARAMETROS = [

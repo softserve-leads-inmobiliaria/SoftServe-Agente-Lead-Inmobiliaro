@@ -53,7 +53,7 @@ def test_the_score_is_exactly_what_the_pure_rules_compute():
     signal, score = score_turn(EMPTY, turn({"budget_hint": "2 millones", "decision_maker": "pareja",
                                             "urgency": "3_meses"}, search_properties={"properties": [{}]}))
     assert score == compute_score(ScoreSignal.from_dict(signal))
-    assert (score.need_fit, score.budget, score.authority, score.timing, score.eligibility) == (10, 20, 12, 12, 0)
+    assert (score.need_fit, score.budget, score.authority, score.timing, score.eligibility) == (10, 20, 20, 12, 0)
     assert len(score.reasons) == 5
 
 

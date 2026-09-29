@@ -1250,7 +1250,7 @@ cambiar nada de lo decidido acá.
 
 ## DT-35 — El gold set de fair housing prueba el pipeline completo, y la situación familiar queda pineada
 
-**Estado:** aceptada — con 6 de los 22 pares en `xfail(strict=True)` hasta que A-11 corrija el *scoring*
+**Estado:** aceptada. Los 6 pares en `xfail(strict=True)` los resolvió A-11 (DT-38): hoy son 22 de 22 en verde
 
 **Contexto.** `C-6` (#32) pide N pares de perfiles idénticos salvo una categoría protegida
 introducida incidentalmente, con diferencia de score total = 0 como *gate* de CI. `A-11` (#13) depende
@@ -1313,7 +1313,6 @@ acuerdo de no mergear en rojo y deja el PR de C-6 sin poder cerrarse. (b) Gold s
 con señales escritas a mano: más rápido de escribir, pero no encuentra ninguno de los dos defectos, porque
 ninguno de los dos está en la tabla de puntos. (c) No construir el gold set hasta que A-11 esté: A-11 depende
 de C-6, y sin la prueba no hay forma objetiva de saber que el arreglo funcionó.
-
 
 ---
 
@@ -1427,3 +1426,51 @@ discrepar. Ese caso es justamente el que motivó A-4, así que tampoco es opcion
 `test_availability.py::test_get_property_replaces_a_stale_status_with_the_current_one` lo cubre con un
 catálogo que miente, que es la única forma de producirlo. Lo que sí se comprueba acá es que el estado que
 A-4 estampa venga de `get_availability` y no del listado.
+
+## DT-38 — Authority mide si se dijo quién decide, no con quién; "mis hijos" se generaliza en vez de borrarse
+
+**Estado:** aceptada
+
+**Contexto.** `A-11` (#13) pide que el *scoring* nunca use ni infiera una categoría protegida, con el gold
+set de perfiles pareados de `C-6` como *gate* (diferencia de score = 0). Ese gold set (DT-35) encontró dos
+defectos en la dimensión Authority, que llegaban a 6 pares con `xfail(strict=True)`:
+
+1. `DECISION_MAKER_POINTS` daba 20 a `solo`, 12 a `pareja` y 8 a `familia`. Decidir en pareja o en familia
+   es estado civil y situación familiar, que `guardrails.md` §1 declara protegidos: el proyecto los
+   puntuaba (−8 y −12).
+2. `"lo hablo con mis hijos"`: el guardrail de entrada borraba `mis hijos`, quedaba `"lo hablo con"` y el
+   extractor ya no veía quién decide. El lead caía a `no_declarado` (−20) por tener hijos. Aplanar la tabla
+   no lo arreglaba.
+
+**Decisión.**
+- **Authority vale lo mismo para cualquier forma de decidir declarada.** `solo`, `pareja` y `familia` dan
+  20; `no_declarado`, 0 (`services/core/app/scoring.py`, tabla de `design.md` §3). La dimensión mide si el
+  lead dijo cómo se toma la decisión, que es lo que le sirve al asesor, y no con quién vive.
+- **`mis hijos` / `mis hijas` se generaliza a `mi familia` en vez de borrarse**
+  (`input_guard.strip_protected`, `_FAMILY_ROLE`). El texto que ven el LLM y el historial ya no dice que
+  el lead tiene hijos, pero conserva que decide en familia. El resto de las menciones protegidas se sigue
+  borrando como antes (DT-15). `tengo hijos` también se borra: no dice nada de quién decide.
+- **El contrato no cambia.** `ScoreSignal.decision_maker` sigue siendo `solo`/`pareja`/`familia`/`no_declarado`:
+  quitar los valores es un cambio de contrato que toca a Bedrock, a los datos ya guardados y al panel, y
+  queda en #119. Mientras tanto la distinción se guarda pero no pesa en el score.
+- Los 6 pares de C-6 pierden el `xfail`. El gold set queda en 22 de 22 en verde.
+
+**Alternativas.**
+- Bajar `solo` a 12 para igualar: castiga al que decide solo sin ninguna razón de negocio. Descartada.
+- Borrar también `con mi esposa` y `con mis padres`: igualaba por abajo, con todos en `no_declarado`, y
+  el asesor perdía un dato útil. Descartada.
+- Reemplazar `mis hijos` por `[dato omitido]`: el extractor tampoco sabe leer quién decide ahí, así que
+  el sesgo seguía. Descartada.
+- Colapsar ya el enum a `declarado`/`no_declarado`: es lo más limpio, pero es un cambio de contrato que el
+  equipo tiene que acordar. Queda en #119.
+
+**Consecuencias.**
+- Un lead que decide en pareja o en familia sube 8 o 12 puntos. Puede pasar de `COLD` a `WARM` o de
+  `WARM` a `HOT` y llegar antes a un asesor (`B-7`). Es el efecto buscado: antes llegaba más tarde por su
+  situación familiar.
+- `test_input_guard.py` y `test_input_guard_turn.py` comparan ahora `con mis hijos` contra `con mis
+  padres`, que es el par correcto: mismo quién decide, distinta situación familiar. El par anterior
+  (`con mis hijos` contra no decir nada) daba igual solo porque la mención se borraba y se llevaba la
+  señal con ella.
+- La aserción de banda del gold set sigue sin morder: el control está en 100 y todos los pares también
+  (DT-35). Una fuga chica se ve en el total y en la dimensión, no en la banda.
