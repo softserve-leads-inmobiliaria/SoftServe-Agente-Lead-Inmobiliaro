@@ -209,6 +209,66 @@ búsqueda aparecen `catalog.get_availability` además de `catalog.search_propert
   `AuditLog` nunca tiene entradas `output.factuality_*` en una sesión normal, y sí las tiene si el
   modelo alucina (ver DT-23 para el detalle de qué se audita).
 
+### Factualidad sobre el catálogo de demo (C-7)
+
+`test_factuality_gold_set.py` (A-5) congela dicts escritos a mano. `test_factuality_catalogo_gold_set.py`
+(C-7) hace lo mismo sobre la **salida real** del catálogo de demo: sus fixtures las produce
+`services/core/tests/demo_catalogo.py`, que corre `CatalogService` de verdad contra la base migrada que ya
+monta el `conftest.py` de `core`, sembrada con `scripts/seed_catalog.seed()` — el mismo del compose, así que
+el inventario no está duplicado en ningún lado. **75 casos** (46 que pasan, 29 que bloquean) sobre **27
+turnos**, que cubren las 12 propiedades del inventario y las 5 tools. No llama a ningún LLM.
+
+Es el complemento de A-5, no su reemplazo: los 32 casos de A-5 no se tocan (prueban un criterio que sigue
+vivo, DT-23, y la política del repo es no borrar casos antiguos). Lo que C-7 agrega es que las fixtures
+**dejan de estar escritas a mano** y, con ellas, el gate que faltaba.
+
+- `test_la_salida_cruda_del_catalogo_cumple_el_contrato`: valida la salida de cada turno contra
+  `contracts/mcp/<tool>.schema.json` (27/27 en verde). **Este es el test nuevo**: los dicts a mano de A-5
+  nunca se contrastaron con el contrato, y cuando C-1 los dejó atrás —les faltaba `address_approx`,
+  `type`, `zone`, `address_exact` y `valid_until`— nada lo señaló. Si el catálogo deja de devolver un campo,
+  o lo devuelve con otro tipo, el CI se cae.
+- `test_a4_solo_agrega_esos_dos_campos_y_no_toca_el_resto`: el `outputSchema` tiene
+  `additionalProperties: false` y no contempla la revalidación, así que la forma post-A-4 no se valida contra
+  el contrato sino que se fija explícitamente: `search_properties` es el mismo objeto más
+  `availability_checked_at` y `unavailable` (con solo `id`, `title` y `status`), `get_property` más
+  `availability_checked_at`, y las otras tres tools pasan intactas. Además comprueba que el estado y el
+  timestamp que,A-4 estampa son los de `get_availability` y no los del listado.
+- `test_gold_set_is_100_percent_green`: el gate de los 75 casos.
+
+**El catálogo corre en un subproceso.** `core` y `catalog` comparten el nombre de paquete `app` (los dos
+`conftest.py` lo ponen en `sys.path`, y CI corre cada carpeta en un proceso distinto por eso), así que el
+generador se lanza con `PYTHONPATH=services/catalog` y devuelve el JSON por stdout. Ver DT-36 para por qué las
+fixtures se generan en cada corrida en vez de commitarse.
+
+**La capa de A-4 la corre el guardrail real, no una copia.** `AvailabilityGuard` no habla con el catálogo por
+MCP: solo necesita un objeto con `await call(tool, arguments)`. `demo_catalogo._TurnoGrabado` se lo da
+reproduciendo las salidas de la corrida, incluida la de `get_availability` de cada propiedad. Por eso el
+`last_tool_results` que come el guardrail es el de producción, y si `availability.py` cambia la forma del
+payload, el gold set se cae con él.
+
+**El reloj va fijo en los dos lados, y es por una razón concreta.** `factuality._walk` saca números de
+*cualquier* string del payload, así que el `checked_at` real del catálogo
+(`2026-09-28T11:59:35.824340-05:00`) metía `35.824340` en el set de números autorizados — y los
+microsegundos cambian en cada corrida, así que un caso que rozara ese número haría fallar el gold set al
+azar. El generador inyecta `now` fijo a `CatalogService` (el servicio ya recibe el reloj por inyección), con
+lo cual A-4 estampa `2026-01-01T00:00:00+00:00`, el mismo valor estable de `catalog_stub.py`. El test de A-4
+lo comprueba, así que si el reloj dejara de inyectarse el CI se cae en vez de volver el gold set aleatorio.
+
+**Cómo se verifica que el gate muerde.** Por mutación: se rompe `factuality.py` a propósito y el gold set
+tiene que caerse. La primera pasada detectó 7 de 8 roturas — faltaban los casos de *estado* no respaldado
+("apartado"/"cerrada" cuando el turno no lo autoriza), porque los que había solo afirmaban estados correctos y
+pasaban igual con el chequeo de estados desactivado. Con esos casos agregados se detectan las ocho. Para
+agregar un caso que no sirva, hay que comprobar que rompe algo: **un gold set que no se cae al romper el
+guardrail no está probando el guardrail.**
+
+**Los límites de DT-23 quedan fijados como casos que pasan**, con el porqué al lado, no como `xfail`: el
+guardrail no está roto, el límite es conocido y la repo no mergea en rojo. Los tres que aparecieron al
+escribirlo: el precio de una propiedad apartada (A-4 la mueve a `unavailable` guardando solo
+`{id, title, status}` y descarta el precio a propósito, así que cotizarla es inventar), un número que coincide
+con el conteo del listado (`len(properties)`, que A-5 permite a propósito), y un número real de *otra*
+propiedad del turno. Al escribir sobre datos reales esto aparece antes que con fixtures a mano, porque una
+búsqueda devuelve varias propiedades.
+
 ### Fair housing en el scoring (C-6)
 
 `services/core/tests/test_fair_housing_gold_set.py` prueba que el score no depende de una categoría
@@ -223,23 +283,23 @@ banda, no solo el total, para que dos fugas que se compensen no se cuelen por el
 importa porque ordena la cola del panel (`B-6`) y porque por debajo de `COLD` 41 el lead deja de
 calificar y no llega a un asesor (`B-7`).
 
-**16 de los 22 pares están en verde; los 6 de "con quién compras" van con `xfail(strict=True)`:**
+**Los 22 pares están en verde, sin `xfail`.** Cuando C-6 se escribió, los 6 de "con quién compras"
+daban −8 (`pareja`), −12 (`familia`) y −20 (`con mis hijos`, que el guardrail borraba y dejaba el lead en
+`no_declarado`). Los arregló `A-11` (DT-38):
 
-| Lo que dice el lead | `decision_maker` | Total | Δ |
-| :--- | :--- | ---: | ---: |
-| decido yo | `solo` | 100 (HOT) | — |
-| con mi esposa / con mi esposo / con mi pareja | `pareja` | 92 (HOT) | −8 |
-| con mis padres / con mi familia | `familia` | 88 (HOT) | −12 |
-| con mis hijos | `None` → `no_declarado` | 80 (HOT) | −20 |
+| Lo que dice el lead | `decision_maker` | Authority |
+| :--- | :--- | ---: |
+| decido yo | `solo` | 20 |
+| con mi esposa / con mi esposo / con mi pareja | `pareja` | 20 |
+| con mis padres / con mi familia | `familia` | 20 |
+| con mis hijos (el LLM ve "con mi familia") | `familia` | 20 |
 
-Ojo con la banda: los tres siguen en `HOT` (el corte es `WARM` ≤ 70), así que la aserción de banda del
-gate es una red contra fugas de 30 puntos o más y no llega a dispararse con ninguno de los 22 pares. Los
-deltas son todos de Authority.
+Ojo con la banda: el control da 100 (`HOT`) y el corte es `WARM` ≤ 70, así que la aserción de banda del
+gate es una red contra fugas de 30 puntos o más. Una fuga más chica se ve en el total y en la
+dimensión, no en la banda.
 
-Es el *scoring* con sesgo, y lo arregla `A-11`, no C-6 (DT-35). El caso de `con mis hijos` **no** se
-resuelve aplanando la tabla: el guardrail de entrada borra la mención, el extractor ya no ve quién
-decide y el score cae a `no_declarado`. Por eso el `strict=True`: cuando A-11 lo resuelva, los xfail
-se vuelven XPASS y el test se pone rojo solo, obligando a quitar las marcas.
+Si un arreglo futuro deja un par pendiente, va con `xfail(strict=True)` y su razón: cuando se arregle,
+el xfail se vuelve XPASS y el test se pone rojo solo, obligando a quitar la marca.
 
 Un caso que parece raro y no lo es: el par `colombiano` ("soy colombiano") va con `protected_category`
 esperado en `False`, porque el regex de `input_guard._PROTECTED` lista sustantivos
@@ -247,7 +307,7 @@ esperado en `False`, porque el regex de `input_guard._PROTECTED` lista sustantiv
 este gold set, pero la mención llega intacta al LLM. Es un gap de `A-8`; cuando se arregle, se cambia ese
 `False` por `True` y no hay que tocar nada más.
 
-Para agrega un par se edita `MENCIONES` o `SITUACIONES` en el test; nunca se borra uno viejo salvo que
+Para agregar un par se edita `MENCIONES` o `SITUACIONES` en el test; nunca se borra uno viejo salvo que
 deje de aplicar.
 
 ### El registro de gold sets (OBS-4)
@@ -274,9 +334,9 @@ entrada al registro con el mínimo que pida su historia. Si el archivo se llama 
 `*gold*.py`, la segunda regla no lo encuentra — por eso la lista explícita es la fuente y esa regla es la
 red.
 
-El gold set de C-7 entra con `requerido=False`: hasta que su PR aterrice en `main`, el gate avisa con un
-warning en vez de ponerse rojo, y cuando llega empieza a exigir su umbral sin que nadie toque el registro.
-Ver DT-37.
+Un gold set cuyo PR todavía no está en `main` se registra con `requerido=False`: el gate avisa con un
+warning en vez de ponerse rojo, y cuando llega empieza a exigir su umbral. Hoy todos los registrados
+están en `main`, así que ninguno lo usa. Ver DT-37.
 
 ### Casos borde del inventario de demo (C-9)
 
