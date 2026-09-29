@@ -77,7 +77,30 @@ _OFF_TOPIC = _any((
 ))
 
 # --- categoría protegida (fair housing) ---------------------------------------------------------
+# Origen dicho como lo dice un lead: gentilicios y frases de procedencia (#116). Lista cerrada de
+# países para no marcar "soy de Providencia". Los gentilicios que también nombran otra cosa (pesos
+# mexicanos, colonia Americana, cocina americana, hablar español) solo cuentan detrás de "soy/somos":
+# con "es/son" hablan de la propiedad tanto como de una persona.
+_COPULA = r"(?:soy|somos|eres|es|son)\s+(?:de nacionalidad\s+)?"
+_SELF_COPULA = r"(?:soy|somos)\s+(?:de nacionalidad\s+)?"
+_DEMONYMS = (
+    r"(?:colombian[oa]s?|venezolan[oa]s?|argentin[oa]s?|chilen[oa]s?|peruan[oa]s?|ecuatorian[oa]s?"
+    r"|bolivian[oa]s?|paraguay[oa]s?|uruguay[oa]s?|brasilen[oa]s?|brasiler[oa]s?|cuban[oa]s?"
+    r"|puertorriquen[oa]s?|boricuas?|guatemaltec[oa]s?|honduren[oa]s?|salvadoren[oa]s?|panamen[oa]s?"
+    r"|haitian[oa]s?|gring[oa]s?|nicaraguenses?|costarricenses?|estadounidenses?|canadienses?)"
+)
+_AMBIGUOUS_DEMONYMS = r"(?:mexican[oa]s?|(?:norte)?american[oa]s?|espanol(?:a|es|as)?|dominican[oa]s?)"
+_COUNTRIES = (
+    r"(?:mexico|colombia|venezuela|argentina|chile|peru|ecuador|bolivia|paraguay|uruguay|brasil|cuba"
+    r"|(?:la )?republica dominicana|puerto rico|guatemala|honduras|el salvador|nicaragua|costa rica|panama"
+    r"|haiti|(?:los )?estados unidos|ee\.? ?uu\.?|usa|canada|espana)"
+)
+_ORIGIN_PHRASE = (r"(?:soy|somos|es|son|vengo|venimos|vine|vinimos|llegue|llegamos)\s+(?:de|desde)"
+                  r"|naci|nacimos|originari[oa]s? de|oriund[oa]s? de")
 _PROTECTED = _any((
+    rf"\b(?:{_COPULA})?{_DEMONYMS}\b",
+    rf"\b{_SELF_COPULA}{_AMBIGUOUS_DEMONYMS}\b",
+    rf"\b(?:{_ORIGIN_PHRASE})(?:\s+en)?\s+{_COUNTRIES}(?![\w])",
     r"\b(?:nacionalidad|extranjer[oa]s?|migrantes?|inmigrantes?|indigenas?|raza|origen etnico)\b",
     r"\b(?:religion|catolic[oa]s?|cristian[oa]s?|musulman\w*|judi[oa]s?|ateo|atea|evangelic[oa]s?|budistas?)\b",
     r"\b(?:soy (?:mujer|hombre|gay|lesbiana|trans)|genero|orientacion sexual|embarazad[oa])\b",
