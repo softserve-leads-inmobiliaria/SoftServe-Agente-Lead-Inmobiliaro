@@ -146,6 +146,30 @@ def test_protected_categories_are_flagged(text):
     assert inspect_input(text).protected_category
 
 
+@pytest.mark.parametrize("text", [
+    "soy colombiano", "Soy venezolana y busco depa", "somos argentinos", "soy nicaragüense",
+    "soy boricua", "soy gringa", "soy mexicano", "somos españoles", "soy americana",
+    "soy de Colombia", "vengo de Venezuela", "nací en Perú", "somos de Estados Unidos",
+    "soy de la República Dominicana", "originario de Cuba", "vengo de EE.UU.",
+])
+def test_demonyms_and_origin_phrases_are_flagged(text):
+    """#116: el origen dicho como lo dice un lead, no solo con sustantivos como "nacionalidad"."""
+    verdict = inspect_input(text)
+    assert verdict.protected_category and verdict.signal_text != text
+
+
+@pytest.mark.parametrize("text", [
+    "Busco en la colonia Americana", "la cocina es americana", "estilo americano",
+    "cerca de Av. México", "precio en pesos mexicanos", "quiero comida mexicana cerca",
+    "¿me atienden en español?", "hablo español", "soy de Providencia", "vengo de Zapopan",
+    "somos de Tlaquepaque", "vengo de ver una casa", "el precio es de 3 millones",
+])
+def test_places_and_words_that_look_like_an_origin_are_not_flagged(text):
+    """#116: zonas, calles, monedas e idioma no son origen. Lista cerrada de países y, para los
+    gentilicios ambiguos (mexicano, americano, español), solo detrás de "soy/somos"."""
+    assert not inspect_input(text).protected_category
+
+
 def test_the_audit_does_not_say_which_protected_category_was_mentioned():
     kinds = dict(inspect_input("Soy musulmán y busco casa").audit_kinds())
     assert kinds == {"input.protected_category": {}}
