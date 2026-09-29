@@ -1314,6 +1314,119 @@ con señales escritas a mano: más rápido de escribir, pero no encuentra ningun
 ninguno de los dos está en la tabla de puntos. (c) No construir el gold set hasta que A-11 esté: A-11 depende
 de C-6, y sin la prueba no hay forma objetiva de saber que el arreglo funcionó.
 
+---
+
+## DT-36 — El gold set de factualidad se arma sobre la salida real del catálogo, y el contrato se valida aparte de A-4
+
+**Estado:** aceptada
+
+**Contexto.** `C-7` (#33) pide ≥30 preguntas cubriendo el catálogo de demo, con *gate* de CI al 100%. `A-5`
+(#7) ya había construido un gold set de 32 casos, pero con los `tool_results` **escritos a mano**. Después
+de eso el catálogo migró a Postgres (C-1) y recibió el inventario de demo de 12 propiedades (C-9, #35), así
+que la pregunta de diseño era qué aporta C-7 sobre lo que A-5 ya hizo — la historia lo dice: "lo que esta
+historia agrega sobre eso es cubrir el catálogo de demo".
+
+**Lo que encontró al escribirse.** Dos cosas, y ninguna era un defecto del guardrail.
+
+1. **Las fixtures de A-5 ya no son la salida de ninguna tool.** Contrastadas contra `contracts/mcp/`: los
+   dos `search_properties` les falta `address_approx` (que el contrato exige), el `get_property` les falta
+   `type`, `zone` y `address_exact`, y el `get_promotions` le falta `valid_until`. La clave es que **nadie
+   lo comprobaba**: el gold set congelaba literales sin contrastarlos con el contrato, así que la deriva
+   entre el catálogo y el gold set pasó inadvertida. Si mañana C-1 renombra `m2` o suelta `bathrooms`, el
+   gold set de A-5 sigue en verde. (`unavailable` sí es real, pero lo agrega A-4 después, no el catálogo.)
+2. **Cobertura:** 7 de las 12 propiedades del inventario no aparecían en **ningún** gold set. Ninguna renta,
+   ninguna preventa, ni el estudio, el terreno, el local comercial ni la cerrada — justo los casos borde que
+   C-9 metió a propósito.
+
+Al escribir los casos sobre datos reales, tres de los primeros salieron mal, y **los tres eran diseño malo
+del caso, no fallas del guardrail**: el precio de una apartada (A-4 mueve a `unavailable` guardando solo
+`{id, title, status}` y descarta el precio a propósito, `availability.py:61`); unos "3 baños" que pasaban
+porque 3 era el conteo del listado (`factuality.py:59`); y "el estudio tiene 2 recámaras" cuando el estudio
+tiene `bedrooms: 0` y el 2 eran los baños de otra propiedad del turno. Los tres son DT-23, el límite ya
+documentado de que el guardrail no sabe de qué propiedad habla el texto.
+
+**Decisión.** El gold set de C-7 vive en `services/core/tests/test_factuality_catalogo_gold_set.py`: **75
+casos** (46 que deben pasar, 29 que deben bloquear) sobre **27 turnos** que cubren las 12 propiedades y las 5
+tools. Sus fixtures las produce `services/core/tests/demo_catalogo.py`, que corre `CatalogService` de verdad
+sobre la base migrada que ya monta el `conftest.py` de `core`, sembrada con `scripts/seed_catalog.seed()`
+—el mismo del compose, así que el inventario no se duplica en ningún lado.
+
+Cuatro cosas que eso obliga a decidir:
+
+- **Las fixtures se generan en cada corrida, no se commitean.** Un JSON versionado reintroduce exactamente la
+  deriva que C-7 viene a cerrar: un archivo que nadie regenera termina dejando de ser la salida del catálogo
+  sin que nadie lo note.
+- **El catálogo corre en un subproceso.** `core` y `catalog` comparten el nombre de paquete `app` (sus dos
+  `conftest.py` lo ponen en `sys.path`, y CI corre cada carpeta en un proceso distinto por eso), así que el
+  generador se lanza con `PYTHONPATH=services/catalog` y devuelve el JSON por stdout. Cada proceso ve un solo
+  `app`, sin manipular `sys.modules` a mano.
+- **La capa de A-4 la pone el guardrail real, no una copia.** `AvailabilityGuard` no habla con el catálogo por
+  MCP: solo necesita un objeto con `await call(tool, arguments)`. `demo_catalogo._TurnoGrabado` se lo da
+  reproduciendo las salidas de la corrida —incluida la de `get_availability` de cada propiedad—, así que lo
+  que ve el guardrail de factualidad es literalmente lo que A-4 haría en producción. La alternativa obvia,
+  replicar la transformación de `availability.py` dentro del test, se descartó: una copia de la lógica del
+  guardrail queda en verde el día que el guardrail cambia, que es justo el modo de falla que C-7 vino a cerrar.
+- **El contrato se valida contra la salida cruda, y la capa de A-4 aparte.** `outputSchema` tiene
+  `additionalProperties: false` y no contempla la revalidación, así que la salida cruda es la única validable
+  tal cual (27/27 en verde). `Demo` expone las dos vistas de **una sola** corrida —`crudo` y `con_a4`— porque
+  `get_availability` estampa su `checked_at` y pedir los payloads dos veces daría dos instantes distintos. La
+  forma post-A-4 se fija con su propio test: un `search_properties` es el mismo objeto más
+  `availability_checked_at` y `unavailable`; un `get_property`, más `availability_checked_at`; las otras tres
+  tools pasan intactas.
+
+**El reloj va fijo en los dos lados, y no es cosmético.** `factuality._walk` extrae números de *cualquier*
+string del payload, así que el `checked_at` real del catálogo (`2026-09-28T11:59:35.824340-05:00`) metía
+`35.824340` en el set de números autorizados, y los microsegundos cambian en cada corrida: cualquier caso
+que rozara ese número haría fallar el gold set al azar. Por eso el generador inyecta `now` fijo a
+`CatalogService` (el servicio ya recibe el reloj por inyección), con lo cual el `checked_at` que ve A-4 es
+`2026-01-01T00:00:00+00:00`, el mismo valor estable que ya usan `catalog_stub.py` y `test_availability.py`.
+El test de A-4 lo comprueba, así que si el reloj dejara de estar inyectado el CI se cae en vez de volver el
+gold set aleatorio.
+
+**Cómo se verificó que el gate muerde.** Por mutación: se rompió `factuality.py` de ocho maneras (quitar el
+manejo de comas, no contar el tamaño de las listas, ignorar lo que dijo el lead, ignorar los estados, no
+examinar los strings, permitir cualquier número, dejarlo pasar todo, bloquearlo todo) y el gold set tiene
+que caerse en las ocho. La primera corrida detectó **siete**: faltaban casos donde el estado
+("apartado"/"cerrada") *no* está respaldado, porque los que había solo afirmaban estados correctos y pasaban
+igual con el chequeo de estados desactivado. Con los ocho casos agregados, las ocho se detectan. Es la forma
+en que un gold set se vuelve un test que no comprueba nada: no leyéndolo, sino rompiéndolo.
+
+Un detalle que salió de esa misma prueba y que conviene no perder: la mutación "dejar pasar todo" se lleva
+por delante los 29 casos que deben bloquear, y ninguno de los 46 que deben pasar. Es el número exacto de los
+29 casos de bloqueo, así que el conteo del gold set queda verificado contra sí mismo.
+
+**Alternativas.** (a) Volcar el JSON real a un archivo commiteado: se ve en el diff y un cambio de catálogo
+se nota en review, pero puede separarse del catálogo si nadie lo regenera — reintroduce el problema. (b) Derivar
+los `tool_results` de las listas puras de `data.py` replicando la proyección a mano: corre sin Postgres, pero
+es literalmente el problema original, dicts a mano sin validar. (c) Cargar `app.data` y `app.service` del
+catálogo en el test de `core` con `importlib` y `sys.modules`: todo en un archivo, pero frágil, depende del
+fallback de CPython para `from app import data` y se rompe con el primer import de otra cosa. (d) Mover el
+gold set a `services/catalog/tests/` y cargar `factuality.py` por ruta (es autónomo, no importa nada local):
+invierte lo que fijó DT-35 y rompe el patrón al que `guardrails.md` §4 apunta. (e) Ampliar el `outputSchema`
+para admitir los campos de A-4 y validar el payload final de una: más simple, pero toca el contrato de C-1,
+fuera del alcance de C-7. (f) Reescribir las 32 fixtures de A-5 sobre el catálogo real: eliminaría la
+divergencia de raíz, pero esos 32 casos prueban un criterio que sigue vivo (DT-23) y el criterio del repo es
+no borrar casos antiguos; además, el gate de contrato nuevo es lo que habría delatado la deriva. (g) Replicar
+la transformación de A-4 dentro del test en vez de ejecutar `AvailabilityGuard`: es lo que se hizo primero y
+funcionaba, pero es una segunda copia de `availability.py` que se queda en verde cuando el guardrail cambia,
+y el test que debería delatar esa deriva se habría quedado mudo. Salió barato corregirlo porque
+`AvailabilityGuard` solo depende del protocolo `call`, no del transporte: no hace falta red para correrlo.
+
+**Consecuencias.** (a) C-7 **no arregla** el gold set de A-5: lo expone. El test de contrato nuevo es el que
+se habría caído cuando las fixtures se quedaron atrás, y ahora se queda atento si vuelve a pasar. (b) Los
+gold sets de guardrail son cuatro archivos en `services/core/tests/` (A-5, A-6, C-6, C-7), y `demo_catalogo.py`
+es el único que necesita Postgres y un subproceso: ~2s a la suite de `core`, que ya lo necesitaba. (c) Los
+límites de DT-23 quedan fijados como casos que **pasan** a propósito, con el porqué al lado, no como
+`xfail`: el guardrail no está roto, su límite es conocido y la repo no mergea en rojo. (d) A diferencia de C-6,
+aquí no hay ningún `xfail(strict=True)`: 75/75 en verde y no queda ningún defecto abierto. (e) El gold set
+hereda una limitación de los datos reales, y conviene que quede explícita: una de las cinco mutaciones de
+`availability.py` —no revalidar el estado en `get_property`, dejar el que traía el listado— **no se puede
+matar con datos reales**, porque el listado y `get_availability` leen la misma columna de Postgres y no pueden
+discrepar. Ese caso es justamente el que motivó A-4, así que tampoco es opcional descartarlo:
+`test_availability.py::test_get_property_replaces_a_stale_status_with_the_current_one` lo cubre con un
+catálogo que miente, que es la única forma de producirlo. Lo que sí se comprueba acá es que el estado que
+A-4 estampa venga de `get_availability` y no del listado.
+
 ## DT-38 — Authority mide si se dijo quién decide, no con quién; "mis hijos" se generaliza en vez de borrarse
 
 **Estado:** aceptada
