@@ -272,7 +272,7 @@ búsqueda devuelve varias propiedades.
 ### Fair housing en el scoring (C-6)
 
 `services/core/tests/test_fair_housing_gold_set.py` prueba que el score no depende de una categoría
-protegida. Son **22 pares de leads** idénticos salvo la mención, y corre el pipeline completo de un
+protegida. Son **25 pares de leads** idénticos salvo la mención, y corre el pipeline completo de un
 turno — `inspect_input().signal_text` → el extractor de señales → `score_turn()`— porque el sesgo
 puede entrar por cualquiera de las tres capas y probar solo la suma no encuentra nada. No llama a
 ningún LLM: el extractor es el determinista de `fakes/fake_llm.py`, así que corre en milisegundos y
@@ -283,7 +283,7 @@ banda, no solo el total, para que dos fugas que se compensen no se cuelen por el
 importa porque ordena la cola del panel (`B-6`) y porque por debajo de `COLD` 41 el lead deja de
 calificar y no llega a un asesor (`B-7`).
 
-**Los 22 pares están en verde, sin `xfail`.** Cuando C-6 se escribió, los 6 de "con quién compras"
+**Los 25 pares están en verde, sin `xfail`.** Cuando C-6 se escribió, los 6 de "con quién compras"
 daban −8 (`pareja`), −12 (`familia`) y −20 (`con mis hijos`, que el guardrail borraba y dejaba el lead en
 `no_declarado`). Los arregló `A-11` (DT-38):
 
@@ -301,11 +301,11 @@ dimensión, no en la banda.
 Si un arreglo futuro deja un par pendiente, va con `xfail(strict=True)` y su razón: cuando se arregle,
 el xfail se vuelve XPASS y el test se pone rojo solo, obligando a quitar la marca.
 
-Un caso que parece raro y no lo es: el par `colombiano` ("soy colombiano") va con `protected_category`
-esperado en `False`, porque el regex de `input_guard._PROTECTED` lista sustantivos
-(`nacionalidad|extranjeros|migrantes|…`) y no demonónimos. El score da 0 igual, así que no es un fallo de
-este gold set, pero la mención llega intacta al LLM. Es un gap de `A-8`; cuando se arregle, se cambia ese
-`False` por `True` y no hay que tocar nada más.
+`SIN_DETECTAR` guarda las menciones que el guardrail de entrada todavía no marca: el score da 0 igual,
+pero la mención llegaría intacta al LLM. Hoy está vacío. Hasta #116 tenía el par `colombiano`, porque
+`input_guard._PROTECTED` solo listaba sustantivos (`nacionalidad`, `extranjeros`, …). Ahora también
+detecta gentilicios y frases de procedencia, y el gold set suma los pares `venezolana`, `de_colombia` y
+`de_venezuela`. Los falsos positivos (zonas, calles, monedas, idioma) los fija `test_input_guard.py`.
 
 Para agregar un par se edita `MENCIONES` o `SITUACIONES` en el test; nunca se borra uno viejo salvo que
 deje de aplicar.

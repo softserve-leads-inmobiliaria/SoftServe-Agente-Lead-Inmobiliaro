@@ -154,7 +154,7 @@ Las cajas con borde punteado no están construidas.
 - **Guardrail de entrada**: los 5 detectores de `guardrails.md` §1 (DT-15).
 - **Fair housing en el scoring** (`A-11`, DT-38): Authority da lo mismo a `solo`, `pareja` y `familia`, y
   "mis hijos" se generaliza a "mi familia" en vez de borrarse. El gold set de perfiles pareados de `C-6`
-  queda en 22 de 22 con diferencia 0. Lo que haga el modelo real con una mención protegida no se ha
+  queda en 25 de 25 con diferencia 0. Lo que haga el modelo real con una mención protegida no se ha
   probado: el gold set usa el extractor determinista.
 - **Guardrails de salida** con el agente de Bedrock: disponibilidad revalidada (`A-4`, DT-21),
   factualidad (`A-5`, DT-23), dirección reservada (`A-6`, DT-25) y 6 de los 8 *claims* prohibidos (`A-7`,
