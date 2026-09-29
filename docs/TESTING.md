@@ -223,23 +223,23 @@ banda, no solo el total, para que dos fugas que se compensen no se cuelen por el
 importa porque ordena la cola del panel (`B-6`) y porque por debajo de `COLD` 41 el lead deja de
 calificar y no llega a un asesor (`B-7`).
 
-**16 de los 22 pares están en verde; los 6 de "con quién compras" van con `xfail(strict=True)`:**
+**Los 22 pares están en verde, sin `xfail`.** Cuando C-6 se escribió, los 6 de "con quién compras"
+daban −8 (`pareja`), −12 (`familia`) y −20 (`con mis hijos`, que el guardrail borraba y dejaba el lead en
+`no_declarado`). Los arregló `A-11` (DT-38):
 
-| Lo que dice el lead | `decision_maker` | Total | Δ |
-| :--- | :--- | ---: | ---: |
-| decido yo | `solo` | 100 (HOT) | — |
-| con mi esposa / con mi esposo / con mi pareja | `pareja` | 92 (HOT) | −8 |
-| con mis padres / con mi familia | `familia` | 88 (HOT) | −12 |
-| con mis hijos | `None` → `no_declarado` | 80 (HOT) | −20 |
+| Lo que dice el lead | `decision_maker` | Authority |
+| :--- | :--- | ---: |
+| decido yo | `solo` | 20 |
+| con mi esposa / con mi esposo / con mi pareja | `pareja` | 20 |
+| con mis padres / con mi familia | `familia` | 20 |
+| con mis hijos (el LLM ve "con mi familia") | `familia` | 20 |
 
-Ojo con la banda: los tres siguen en `HOT` (el corte es `WARM` ≤ 70), así que la aserción de banda del
-gate es una red contra fugas de 30 puntos o más y no llega a dispararse con ninguno de los 22 pares. Los
-deltas son todos de Authority.
+Ojo con la banda: el control da 100 (`HOT`) y el corte es `WARM` ≤ 70, así que la aserción de banda del
+gate es una red contra fugas de 30 puntos o más. Una fuga más chica se ve en el total y en la
+dimensión, no en la banda.
 
-Es el *scoring* con sesgo, y lo arregla `A-11`, no C-6 (DT-35). El caso de `con mis hijos` **no** se
-resuelve aplanando la tabla: el guardrail de entrada borra la mención, el extractor ya no ve quién
-decide y el score cae a `no_declarado`. Por eso el `strict=True`: cuando A-11 lo resuelva, los xfail
-se vuelven XPASS y el test se pone rojo solo, obligando a quitar las marcas.
+Si un arreglo futuro deja un par pendiente, va con `xfail(strict=True)` y su razón: cuando se arregle,
+el xfail se vuelve XPASS y el test se pone rojo solo, obligando a quitar la marca.
 
 Un caso que parece raro y no lo es: el par `colombiano` ("soy colombiano") va con `protected_category`
 esperado en `False`, porque el regex de `input_guard._PROTECTED` lista sustantivos
@@ -247,7 +247,7 @@ esperado en `False`, porque el regex de `input_guard._PROTECTED` lista sustantiv
 este gold set, pero la mención llega intacta al LLM. Es un gap de `A-8`; cuando se arregle, se cambia ese
 `False` por `True` y no hay que tocar nada más.
 
-Para agrega un par se edita `MENCIONES` o `SITUACIONES` en el test; nunca se borra uno viejo salvo que
+Para agregar un par se edita `MENCIONES` o `SITUACIONES` en el test; nunca se borra uno viejo salvo que
 deje de aplicar.
 
 ### Casos borde del inventario de demo (C-9)

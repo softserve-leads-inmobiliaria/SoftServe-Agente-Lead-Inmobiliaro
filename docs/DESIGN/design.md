@@ -64,7 +64,7 @@ Usado por `C-4` (implementación), `A-9` (integración en la FSM), `A-11`/`C-6` 
 | Dimensión | Señal de entrada | Regla de puntos |
 | :--- | :--- | :--- |
 | **B**udget | `budget_hint` (texto libre u opcional, del contrato `ScoreSignal`) | `None`/vacío → 0 · cualquier valor declarado → 20 (no se parsea como rango numérico — el contrato solo transporta texto libre) |
-| **A**uthority | `decision_maker` (enum: `solo`/`pareja`/`familia`/`no_declarado`) | `solo` → 20 · `pareja` → 12 · `familia` → 8 · `no_declarado` → 0 |
+| **A**uthority | `decision_maker` (enum: `solo`/`pareja`/`familia`/`no_declarado`) | `solo`/`pareja`/`familia` → 20 · `no_declarado` → 0. Mide si se dijo quién decide, no con quién (fair housing, DT-38) |
 | **N**eed fit | `matching_properties` (conteo de `search_properties` del turno, no del LLM) | 0 → 0 · 1-2 → 10 · 3+ → 20 |
 | **T**iming | `urgency` (enum: `inmediata`/`3_meses`/`explorando`/`no_declarada`) | `inmediata` → 20 · `3_meses` → 12 · `explorando` → 5 · `no_declarada` → 0 |
 | **E**ligibility | `meets_requirements` (booleano de `check_requirements`, no del LLM) | `True` → 20 · `False`/`None` (no verificado todavía) → 0 |
@@ -152,6 +152,10 @@ Las cajas con borde punteado no están construidas.
   no terminal por sus tres caminos (DT-12, DT-16). La suite de transiciones cubre cada arista (`OBS-3`).
 - **Score BANT-E** acumulado turno a turno en Postgres, en la misma transacción que la FSM (DT-14).
 - **Guardrail de entrada**: los 5 detectores de `guardrails.md` §1 (DT-15).
+- **Fair housing en el scoring** (`A-11`, DT-38): Authority da lo mismo a `solo`, `pareja` y `familia`, y
+  "mis hijos" se generaliza a "mi familia" en vez de borrarse. El gold set de perfiles pareados de `C-6`
+  queda en 22 de 22 con diferencia 0. Lo que haga el modelo real con una mención protegida no se ha
+  probado: el gold set usa el extractor determinista.
 - **Guardrails de salida** con el agente de Bedrock: disponibilidad revalidada (`A-4`, DT-21),
   factualidad (`A-5`, DT-23), dirección reservada (`A-6`, DT-25) y 6 de los 8 *claims* prohibidos (`A-7`,
   DT-26). Sus gold sets corren con la suite de `core` en CI. Ninguno se ha visto dispararse contra
@@ -182,9 +186,7 @@ Las cajas con borde punteado no están construidas.
 | :--- | :--- | :--- |
 | Agendar la visita de verdad (proveedor de calendario, reserva desde la conversación) | `B-8`; entidad `Visit` en §1 | `get_slots` y `book` ya existen en el catálogo (`C-2`, DT-32), pero `core` no los llama: `SCHEDULE -> HANDOFF` lo dispara la intención `agendar_visita` del lead sin reservar nada, así que la ficha de traspaso nunca muestra una visita |
 | *Scheduler* de *nurturing* (`DISCOVERY -> NURTURE -> LOST`) | DT-3, DT-12 | Las aristas `no_response` existen en la FSM y en sus tests, pero nada las dispara: ningún lead llega a `NURTURE` ni a `LOST` |
-| Fair housing en el scoring | §3, `guardrails.md` §2.4, `A-11`, `C-6` | La prueba de perfiles pareados ya existe (`C-6`, DT-35) y **encontró sesgo**: −8 por "con mi esposa", −12 por "con mi familia" y −20 por "con mis hijos" (el guardrail borra la mención y el extractor ya no ve quién decide). Los 6 pares van con `xfail(strict=True)` hasta que A-11 lo resuelva. La garantía estructural sigue en pie: `ScoreSignal` no tiene campo para categorías protegidas y el guardrail de entrada las quita del texto (DT-15) |
 | FAQ con embeddings | `FaqEntry` en §1, DT-7, `C-5` | La tabla y `pgvector` existen; no hay modelo de embeddings ni búsqueda |
-| Inventario de demo | `C-9` | El catálogo del stack arranca vacío: toda búsqueda devuelve cero propiedades. Los tests siembran las suyas |
 | Cancelar los *jobs* de un lead en `/stop` | `guardrails.md` §1 | No hay *jobs* que cancelar hasta que exista el *scheduler* |
 | *Claim* 6 completo (promoción genérica sin número) | `guardrails.md` §2.2, DT-26 | Solo se bloquea si trae un número inventado |
 | Gold sets y *contract tests* como *gate* de merge | `guardrails.md` §4, `OBS-4`, `OBS-5` | Corren en CI y un fallo deja el PR en rojo, pero nada impide hacer merge igual: ver §5.4 |
