@@ -221,8 +221,9 @@ def test_the_rest_of_a_message_with_a_protected_mention_is_answered_normally(eng
     ("Busco un departamento, lo veo con mi pareja, en tres meses",
      "Soy madre soltera, busco un departamento, lo veo con mi pareja, en tres meses"),
     ("Busco una casa", "Tengo hijos y busco una casa"),
-    # "mis hijos" es la frase que el extractor leería como decision_maker=familia (8 puntos menos que "solo").
-    ("Busco una casa, es urgente", "Lo hablo con mis hijos, busco una casa, es urgente"),
+    # Mismo quién decide (familia), distinta situación familiar: tener hijos no mueve el score (A-11, DT-38).
+    ("Lo hablo con mis padres, busco una casa, es urgente",
+     "Lo hablo con mis hijos, busco una casa, es urgente"),
 ])
 def test_paired_profiles_get_the_same_score(engine, plain, with_mention):
     a, b = Chat(engine), Chat(engine)

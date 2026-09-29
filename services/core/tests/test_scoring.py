@@ -45,7 +45,7 @@ def test_budget(hint, points):
 
 # --- Authority --------------------------------------------------------------
 @pytest.mark.parametrize("dm,points", [
-    ("solo", 20), ("pareja", 12), ("familia", 8), ("no_declarado", 0),
+    ("solo", 20), ("pareja", 20), ("familia", 20), ("no_declarado", 0),
 ])
 def test_authority(dm, points):
     assert score_authority(dm)[0] == points
@@ -120,8 +120,8 @@ def test_total_is_sum_of_dimensions_and_band_matches():
         budget_hint="1.5M", decision_maker="pareja", urgency="3_meses",
         matching_properties=2, meets_requirements=None,
     ))
-    assert (s.need_fit, s.budget, s.authority, s.timing, s.eligibility) == (10, 20, 12, 12, 0)
-    assert s.total == 54 and s.band == "WARM"
+    assert (s.need_fit, s.budget, s.authority, s.timing, s.eligibility) == (10, 20, 20, 12, 0)
+    assert s.total == 62 and s.band == "WARM"
 
 
 def test_each_dimension_has_a_reason():
@@ -148,4 +148,4 @@ def test_from_dict_accepts_contract_score_signal():
         (Path(__file__).resolve().parents[3] / "contracts" / "examples" / "fsm_state.valid.json")
         .read_text(encoding="utf-8")
     )["score_signal"]
-    assert compute_score(ScoreSignal.from_dict(example)).total == 10 + 20 + 12 + 12 + 0
+    assert compute_score(ScoreSignal.from_dict(example)).total == 10 + 20 + 20 + 12 + 0

@@ -166,7 +166,15 @@ def test_mentioning_a_protected_category_never_changes_the_score_signal(base, wi
 
 
 def test_family_status_words_do_not_reach_the_signal():
-    assert FakeLLM().extract_signal(inspect_input("Lo hablo con mis hijos").signal_text)["decision_maker"] is None
+    assert "hijos" not in inspect_input("Lo hablo con mis hijos").signal_text
+
+
+def test_deciding_with_ones_children_is_read_like_deciding_with_ones_parents():
+    """A-11 (DT-38): la mención se generaliza a "mi familia", no se borra: quién decide sigue a la vista."""
+    llm = FakeLLM()
+    hijos = llm.extract_signal(inspect_input("Lo hablo con mis hijos").signal_text)
+    padres = llm.extract_signal(inspect_input("Lo hablo con mis padres").signal_text)
+    assert hijos == padres and hijos["decision_maker"] == "familia"
 
 
 # --- general ------------------------------------------------------------------------------------
