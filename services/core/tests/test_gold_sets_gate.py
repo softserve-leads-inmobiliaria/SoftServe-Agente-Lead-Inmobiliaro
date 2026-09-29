@@ -70,8 +70,8 @@ GOLD_SETS = (
         atributo="PAIRS",
         minimo=20,
         nota=(
-            "22 pares. 6 van con `xfail(strict=True)` porque el scoring tiene sesgo (DT-35): el gate "
-            "de score=0 los espera, pero el conteo de pares es el umbral que C-6 define."
+            "22 pares, todos con diferencia 0 desde A-11 (DT-38). El umbral es el conteo de pares; "
+            "la diferencia = 0 la vigila el propio gold set."
         ),
     ),
     GoldSet(
@@ -84,10 +84,9 @@ GOLD_SETS = (
     GoldSet(
         historia="C-7",
         modulo="test_factuality_catalogo_gold_set",
-        atributo="CASES",
+        atributo="CASOS",
         minimo=30,
-        nota="Gold set sobre el catálogo real de demo. Aterriza con el PR de C-7.",
-        requerido=False,
+        nota="75 casos sobre la salida real del catálogo de demo (DT-36).",
     ),
 )
 
@@ -165,7 +164,7 @@ def test_gold_sets_que_aun_no_aterrizaron_en_main():
 
 
 def test_el_gate_detecta_un_gold_set_bajo_su_umbral():
-    """Autocomprobación: si esto no falla, el gate no muerde y OBS-4 no está cumplir nada."""
+    """Autocomprobación: si esto no falla, el gate no muerde y OBS-4 no está cumpliendo nada."""
     imposible = GoldSet(
         historia="autocomprobación",
         modulo="test_address_guard_gold_set",
