@@ -18,6 +18,12 @@ silencio salvo lo que cada fila indica.
 | Fuera de dominio | Preguntas fuera de bienes raíces, o que piden dictamen legal/fiscal/crediticio formal | Respuesta acotada + oferta de `HUMAN_HANDOFF` si insiste |
 | Categoría protegida en la entrada | El lead menciona origen, religión, situación familiar, género, nacionalidad | Se responde con normalidad al resto del mensaje; el dato no entra a `ScoreSignal` |
 
+El origen se detecta también como lo dice un lead (#116): gentilicios ("soy colombiano", "somos
+argentinos") y frases de procedencia ("soy de Colombia", "vengo de Venezuela", "nací en Perú"). La
+lista de países es cerrada, para no marcar "soy de Providencia". Los gentilicios que también nombran otra
+cosa ("pesos mexicanos", "colonia Americana", "cocina americana", "hablo español") solo cuentan detrás
+de "soy" o "somos". El costo de esa regla: "mi esposa es española" no se marca.
+
 **Regla general:** el guardrail de entrada nunca detiene la conversación en seco salvo `/stop` —
 degrada a una respuesta segura o a `HUMAN_HANDOFF`.
 
@@ -84,7 +90,7 @@ existir) — se actualiza en el mismo PR que cierra la historia correspondiente.
 | Factualidad sobre el catálogo de demo | Gold set de 75 casos sobre la salida real de `CatalogService`, ya pasada por el `AvailabilityGuard` real (`C-7`, `services/core/tests/test_factuality_catalogo_gold_set.py`) + validación de cada turno contra `contracts/mcp/` | Sí — 100%, sin `xfail`. 27/27 turnos y 12/12 propiedades del inventario. Cierra el hueco que dejó el de A-5: sus fixtures ya no son la salida de ninguna tool y nada lo señalaba (DT-36) |
 | Dirección reservada | Gold set de dirección reservada, fusionado en `A-6` (`services/core/tests/test_address_guard_gold_set.py`) — antes iba a ser `C-8`, ver notas de `A-06.md` | Sí — 0 fugas |
 | *Claims* prohibidos | Suite adversarial de A-7 (`services/core/tests/test_promise_guard.py`) — los 6 cubiertos con código, en positivo y negativo | Sí — corre con la suite de `core` |
-| Fair housing | Gold set de perfiles pareados, 22 pares (`C-6`, `services/core/tests/test_fair_housing_gold_set.py`) | Sí — 22/22 con diferencia 0, sin `xfail`. Los 6 pares de "con quién compras" daban −8/−12/−20 (DT-35) hasta que A-11 los arregló (DT-38) |
+| Fair housing | Gold set de perfiles pareados, 25 pares (`C-6`, `services/core/tests/test_fair_housing_gold_set.py`) | Sí — 25/25 con diferencia 0, sin `xfail`. Los 6 pares de "con quién compras" daban −8/−12/−20 (DT-35) hasta que A-11 los arregló (DT-38) |
 | PII/consentimiento | Test de privacidad + `/stop` | Manual (E2E) |
 | Contrato MCP del Catalog Service | *Contract test* dedicado | Sí |
 
