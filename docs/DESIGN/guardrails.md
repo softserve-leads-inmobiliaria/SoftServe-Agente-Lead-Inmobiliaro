@@ -89,3 +89,8 @@ existir) — se actualiza en el mismo PR que cierra la historia correspondiente.
 | Contrato MCP del Catalog Service | *Contract test* dedicado | Sí |
 
 "Sí" significa que corre en CI y deja el PR en rojo si falla. Nada impide mergear un PR en rojo (ver `design.md` §5.4): el *gate* depende de que el equipo no lo haga.
+
+El umbral de cada gold set lo define su propia historia y lo comprueba un único registro
+(`services/core/tests/test_gold_sets_gate.py`, OBS-4 / DT-37), que además se cae si aparece un gold set
+nuevo que nadie registró ahí. La columna "¿*Gate* de CI?" de esta tabla es el resultado esperado de ese
+registro, no una promesa: si un gold set baja de su mínimo, esa fila pasa a ser falsa y el CI avisa.

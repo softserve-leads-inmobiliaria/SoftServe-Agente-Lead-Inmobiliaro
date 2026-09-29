@@ -310,6 +310,34 @@ este gold set, pero la mención llega intacta al LLM. Es un gap de `A-8`; cuando
 Para agregar un par se edita `MENCIONES` o `SITUACIONES` en el test; nunca se borra uno viejo salvo que
 deje de aplicar.
 
+### El registro de gold sets (OBS-4)
+
+`services/core/tests/test_gold_sets_gate.py` es el lugar donde se ve, de una vez, **qué gold set hay y qué
+mínimo le pide su historia**. Antes cada archivo traía su `assert len(CASES) >= N` a mano: eso ya ponía el
+CI en rojo si un gold set bajaba de su umbral, pero los números estaban sueltos y tres de cuatro no
+coincidían con lo que decía su historia (C-6, C-8 y A-7 no definían ninguno; los `15`/`20` los había
+inventado quien escribió el test).
+
+El registro declara `GOLD_SETS` con `historia → módulo → atributo → mínimo` y comprueba tres cosas:
+
+| Test | Qué se cae |
+| :--- | :--- |
+| `test_umbral_de_cada_gold_set` | Un gold set con menos casos de los que su historia pide |
+| `test_todo_gold_set_del_repo_esta_registrado` | Un `*gold*.py` nuevo que nadie anotó en el registro |
+| `test_el_gate_detecta_un_gold_set_bajo_su_umbral` | El gate mismo, si dejara de detectar algo |
+
+Ese último es el importante: un gate que no muerde no es un gate, así que el registro se autocomprueba
+pasándose un mínimo imposible y exigiendo que lo atrape.
+
+Para agregar un gold set hay que hacer dos cosas: crear el archivo en `services/core/tests/` y añadir su
+entrada al registro con el mínimo que pida su historia. Si el archivo se llama de otra forma y no es un
+`*gold*.py`, la segunda regla no lo encuentra — por eso la lista explícita es la fuente y esa regla es la
+red.
+
+Un gold set cuyo PR todavía no está en `main` se registra con `requerido=False`: el gate avisa con un
+warning en vez de ponerse rojo, y cuando llega empieza a exigir su umbral. Hoy todos los registrados
+están en `main`, así que ninguno lo usa. Ver DT-37.
+
 ### Casos borde del inventario de demo (C-9)
 
 El catálogo del stack no arranca vacío: el servicio `seed` baja a Postgres las 12 propiedades y 3

@@ -1427,6 +1427,66 @@ discrepar. Ese caso es justamente el que motivó A-4, así que tampoco es opcion
 catálogo que miente, que es la única forma de producirlo. Lo que sí se comprueba acá es que el estado que
 A-4 estampa venga de `get_availability` y no del listado.
 
+## DT-37 — El umbral de cada gold set vive en su historia, y un registro central los comprueba
+
+**Estado:** aceptada
+
+**Contexto.** `OBS-4` (#46) pide que CI falle si cualquier gold set baja del umbral que define su propia
+historia. Al revisar el repo, la mitad de eso ya era cierto y la otra mitad no: cada gold set traía su
+`assert len(CASES) >= N` a nivel de módulo, y se verificó que bajarlo deja a `pytest` con exit 2 (error de
+colección), o sea que CI se pone rojo. Lo que no existía era la parte de "cualquier":
+
+- Los umbrales estaban escritos a mano dentro de cada archivo, sueltos, sin un lugar donde se vieran juntos.
+- Tres de cuatro **no coincidían con su historia**. Solo A-5 pedía un número ("≥30 preguntas"). El gold set
+  de C-6 assertaba `>= 20` con un mensaje que afirmaba *"C-6 pide al menos 20 pares"*, y `C-06.md` no pedía
+  ningún número: decía "N pares". C-08 y A-07 tampoco definían ninguno, y sus archivos assertaban 15 igual.
+  Los tres números los había inventado quien escribió el test.
+- Nada obligaba a un gold set **nuevo** a declarar umbral. Sin `assert`, un gold set vacío pasaba en verde
+  para siempre.
+
+**Decisión.** El umbral es un dato de la historia, y un registro central lo comprueba:
+`services/core/tests/test_gold_sets_gate.py` declara `GOLD_SETS` (historia → módulo → atributo → mínimo) y
+verifica tres cosas: que cada gold set tenga al menos los casos que su historia pide, que **todo** `*gold*.py`
+de la carpeta esté registrado — si aparece uno nuevo y nadie lo anotó, el CI se cae diciendo cuál — y que el
+gate se autocompruebe, pasándole un mínimo imposible y exigiendo que lo detecte. En paralelo, el número que
+los archivos afirmaban se escribió en las historias que no lo tenían: `C-06.md` (≥20 pares), `C-08.md` (≥15
+casos) y `A-07.md` (≥15 casos, en sus notas de diseño, porque su AC va sobre la tabla de *claims* y no sobre
+el conteo).
+
+**El umbral es un conteo, no una cobertura.** Es lo que evita el choque con DT-35: los 6 pares con
+`xfail(strict=True)` de C-6 **no** ponen a C-6 "bajo su umbral", porque el umbral de C-6 es el número de
+pares (22 ≥ 20) y la diferencia de score = 0 ya la vigila el propio `xfail(strict=True)` — que se vuelve XPASS
+*strict* y pone el CI rojo solo cuando A-11 arregle el sesgo. El gate de OBS-4 no duplica ese trabajo ni lo
+contradice: mira el conteo.
+
+**Un gold set cuyo PR sigue abierto entra con `requerido=False`.** Si el módulo no está, el gate avisa con
+un warning y sigue verde; cuando llega a `main`, la entrada empieza a exigir su umbral. Así entró C-7
+mientras su PR (#117) estaba abierto. Ya en `main`, su entrada pasó a requerida, con el atributo `CASOS`
+que usa ese archivo: con `requerido=False` y el nombre `CASES`, los dos PR pasaban por separado y juntos
+dejaban `main` en rojo. Al registrar un gold set que todavía no está en `main`, hay que confirmar el nombre
+del atributo en su PR.
+
+**Consecuencias.** (a) La historia pasó a ser la fuente de verdad del número, que es literalmente lo que OBS-4
+pide; el registro es quien lo comprueba, no quien lo decide. (b) La convención de nombres pasó a ser carga
+real: la regla de "todo registrado" se apoya en `*gold*.py`. Un gold set con otro nombre no lo encontraría,
+por eso el registro es la lista explícita y esa regla es la red, no al revés. (c) `test_promise_guard.py`
+(A-7) está registrado aunque no lleve "gold" en el nombre, porque es una suite adversarial con el mismo tipo
+de umbral; el registro es un superconjunto de los `*gold*.py`. (d) El `assert` dentro de cada archivo se queda:
+es la red local, y el registro no lo reemplaza. Si alguien lo baja, su propio archivo se pone rojo aunque el
+registro no lo note. (e) La autocomprobación del gate evita el peor modo de fallo de esto —un gate que no
+detecta nada y por lo tanto nunca se cae— y se verificó además con los tres escenarios reales: subir un
+umbral, agregar un gold set sin registrar y exigir C-7 antes de que aterrice.
+
+**Alternativas.** (a) Un paso de CI que solo imprimiera los conteos: es lo más chico, pero no agrega ninguna
+garantía, porque los números siguen sueltos y nadie obliga a declararlos. (b) Registro central sin exigir
+registrar los gold sets nuevos: no rompe a nadie, pero deja abierto justo el hueco que OBS-4 viene a cerrar.
+(c) Gate estricto desde el primer día, exigiendo el gold set de C-7: el gate quedaría completo de una, pero
+`main` se pondría rojo hasta que C-7 se apruebe y bloquearía el merge de todos. (d) Esperar a que C-7 aterrice
+y escribir el registro de una: más limpio, pero deja OBS-4 parada detrás de un PR que no depende de ella.
+(e) Gate sobre cobertura de *claims* en vez de conteo: mucho más fuerte, pero varios gold sets prueban
+*pipeline* y no tienen una noción de "claim" que contar; habría que inventar esa abstracción para cuatro
+archivos que no la piden.
+
 ## DT-38 — Authority mide si se dijo quién decide, no con quién; "mis hijos" se generaliza en vez de borrarse
 
 **Estado:** aceptada
