@@ -32,6 +32,7 @@ class TurnInput:
     text: str  # el mensaje ya filtrado por el guardrail de entrada
     history: tuple[tuple[str, str], ...] = ()  # (rol, contenido), del más viejo al más nuevo
     lead_qualified: bool = False
+    listing: Mapping[str, Any] | None = None  # la propiedad del anuncio por el que llegó el lead (#122)
 
 
 @dataclass(frozen=True)
@@ -105,14 +106,15 @@ class BedrockAgent:
                 return await catalog.call(name, arguments)
 
             visible = [_visible(s) for s in specs]
-            chat = await self._llm.chat(turn.history, turn.text, visible, run_tool)
+            current = _with_listing_note(turn.text, turn.listing)
+            chat = await self._llm.chat(turn.history, current, visible, run_tool)
             if not chat.text:
                 raise LLMFormatError("respuesta vacía")
             guard_audits: list[tuple[str, dict[str, Any]]] = []
             violations = _output_violations(chat.text, chat.tool_results, turn.text, turn.lead_qualified)
             if violations:
                 # Una oportunidad de corregirse con lo que ya sabe, antes de degradar la conversación (A-5).
-                retry = await self._llm.regenerate(turn.history, turn.text, chat.text, violations, visible, run_tool)
+                retry = await self._llm.regenerate(turn.history, current, chat.text, violations, visible, run_tool)
                 chat.tool_results.update(retry.tool_results)
                 chat.tool_calls += retry.tool_calls
                 guard_audits.append(("output.factuality_regenerated", {"violations": len(violations)}))
@@ -129,6 +131,14 @@ class BedrockAgent:
             return AgentResult(text=LLM_FALLBACK_REPLY, intent="otro", llm_error=type(exc).__name__)
         return AgentResult(text=chat.text, intent=classification.intent, raw_signal=classification.signal,
                            tool_results=chat.tool_results, tool_calls=chat.tool_calls, guard_audits=guard_audits)
+
+
+def _with_listing_note(text: str, listing: Mapping[str, Any] | None) -> str:
+    """El mensaje del lead más la referencia del anuncio por el que llegó (#122). Solo la ve el LLM: no se
+    guarda en el historial ni cuenta como algo que dijo el lead para la factualidad."""
+    if not listing:
+        return text
+    return f"{text}\n\n(El lead llegó por el anuncio de {listing.get('title')}, ref. {listing.get('id')}.)"
 
 
 def _output_violations(text: str, tool_results: Mapping[str, Any], lead_text: str,
