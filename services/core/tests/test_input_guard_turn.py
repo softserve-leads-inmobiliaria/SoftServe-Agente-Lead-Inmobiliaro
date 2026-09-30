@@ -17,7 +17,10 @@ from app.input_guard import (
 from app.turn import process_turn
 from db.repo_root import repo_root
 
-INBOUND = json.loads((repo_root() / "contracts" / "examples" / "event.valid.json").read_text(encoding="utf-8"))
+# Sin `property_id`: como un mensaje normal de Telegram (solo el `/start` del anuncio lo trae, #122).
+INBOUND = {key: value for key, value in json.loads(
+    (repo_root() / "contracts" / "examples" / "event.valid.json").read_text(encoding="utf-8")).items()
+    if key != "property_id"}
 CARD = "4111 1111 1111 1111"
 
 
