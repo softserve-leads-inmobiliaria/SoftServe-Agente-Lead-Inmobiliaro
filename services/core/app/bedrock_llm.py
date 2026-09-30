@@ -58,6 +58,9 @@ CHAT_SYSTEM = (
     "- En una búsqueda, `properties` son las únicas que puedes ofrecer. Las de `unavailable` no están "
     "disponibles: si el lead pregunta por una, dile su estado (apartada, cerrada o sin verificar) y no la "
     "ofrezcas.\n"
+    "- Si el lead llegó por el anuncio de una propiedad (verás su referencia, `ref. prop_…`, en la "
+    "conversación), cuando diga \"esta\", \"este departamento\" o algo parecido se refiere a esa: consúltala "
+    "con get_property y no le pidas la referencia.\n"
     "- No prometas descuentos, apartados, aprobación de crédito ni cierre de una operación.\n"
     "- No pidas ni comentes origen, religión, género, nacionalidad ni situación familiar.\n"
     "- Si no puedes ayudar con algo, ofrece comunicar al lead con un asesor.\n"
@@ -108,6 +111,9 @@ def parse_json_object(raw: str) -> dict[str, Any]:
     raise LLMFormatError("la respuesta del clasificador no contiene un objeto JSON")
 
 
+CHAT_OPENED = "(El lead abrió la conversación.)"
+
+
 def to_messages(history: Sequence[tuple[str, str]], current: str) -> list[dict[str, Any]]:
     """Historial + mensaje actual en el formato de Converse: empieza con `user` y alterna roles."""
     messages: list[dict[str, Any]] = []
@@ -118,8 +124,10 @@ def to_messages(history: Sequence[tuple[str, str]], current: str) -> list[dict[s
             messages[-1]["content"][0]["text"] += "\n" + content
         else:
             messages.append({"role": role, "content": [{"text": content}]})
-    while messages and messages[0]["role"] != "user":
-        messages.pop(0)
+    if messages and messages[0]["role"] != "user":
+        # El lead abrió el chat sin escribir (p. ej. `/start prop_<id>`, #122): el saludo del asistente se
+        # conserva, porque puede traer la referencia de la propiedad del anuncio.
+        messages.insert(0, {"role": "user", "content": [{"text": CHAT_OPENED}]})
     return messages
 
 

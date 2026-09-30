@@ -27,6 +27,13 @@ def property_of_interest(tool_results: Mapping[str, Any]) -> dict[str, Any] | No
     return None
 
 
+def listing_greeting(listing: Mapping[str, Any]) -> str:
+    """Saludo del lead que llega por el anuncio de una propiedad (#122). Título y referencia salen del
+    catálogo; la referencia queda en el historial para que el LLM sepa de qué propiedad se habla después."""
+    return (f"¡Hola! Soy el asistente de la inmobiliaria. Veo que llegaste por el anuncio de "
+            f"{listing['title']} (ref. {listing['id']}). ¿Qué te gustaría saber?")
+
+
 def zone_of_interest(tool_results: Mapping[str, Any]) -> str | None:
     """Zona de la propiedad de interés, si el turno llamó alguna tool que la traiga."""
     found = property_of_interest(tool_results)

@@ -8,6 +8,7 @@ from botocore.exceptions import ClientError, EndpointConnectionError
 from botocore.stub import Stubber
 
 from app.bedrock_llm import (
+    CHAT_OPENED,
     CHAT_SYSTEM,
     CLASSIFIER_SYSTEM,
     MAX_TOOL_ROUNDS,
@@ -74,9 +75,12 @@ def test_consecutive_messages_of_the_same_role_are_merged():
     assert messages[0]["content"][0]["text"] == "Hola\n¿Hay alguien?"
 
 
-def test_a_history_that_starts_with_the_assistant_drops_that_message():
-    messages = to_messages([("assistant", "¡Hola!")], "Busco casa")
-    assert [m["role"] for m in messages] == ["user"]
+def test_a_history_that_starts_with_the_assistant_keeps_it_after_the_lead_opening_the_chat():
+    # El saludo del deep-link trae la referencia de la propiedad del anuncio (#122): no se puede perder.
+    messages = to_messages([("assistant", "¡Hola! Veo que llegaste por el anuncio (ref. prop_00231).")], "¿Sigue?")
+    assert [m["role"] for m in messages] == ["user", "assistant", "user"]
+    assert messages[0]["content"][0]["text"] == CHAT_OPENED
+    assert "ref. prop_00231" in messages[1]["content"][0]["text"]
 
 
 def test_empty_messages_and_other_roles_are_skipped():

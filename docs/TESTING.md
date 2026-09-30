@@ -57,7 +57,9 @@ Con un bot creado en @BotFather: poner `TELEGRAM_BOT_TOKEN` en el `.env` y `dock
 (*long polling*, no hace falta URL pública). Sin token, `core` arranca igual y no levanta el bot. Comprobar:
 
 1. Un saludo → aviso de privacidad más la respuesta del agente.
-2. `https://t.me/<bot>?start=prop_00231` → el `property_id` llega en el evento.
+2. `https://t.me/<bot>?start=prop_00231` → el saludo nombra la propiedad del anuncio (`ref. prop_00231`), el
+   lead queda con la zona de esa propiedad y, con Bedrock, "¿sigue disponible?" se responde sobre ella sin
+   pedir la referencia (#122).
 3. `STOP` y `/stop` → `consent_status=withdrawn` y `status=closed_lost` en `leads`, sin pasar por el LLM.
 4. Un segundo `getUpdates` externo devuelve `409 Conflict`: confirma que el *polling* corre de verdad.
 

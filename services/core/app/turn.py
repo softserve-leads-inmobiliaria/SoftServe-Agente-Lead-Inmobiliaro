@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Awaitable, Callable, Mapping, Sequence
 
 from sqlalchemy import Engine
@@ -32,7 +32,7 @@ from app.input_guard import (
     InputVerdict,
     inspect_input,
 )
-from app.interest import zone_of_interest
+from app.interest import listing_greeting, zone_of_interest
 from app.lead_scoring import TurnEvidence, score_turn
 from app.qualification import just_qualified
 from app.scoring import Score
@@ -161,6 +161,30 @@ def _raw_signal(verdict: InputVerdict, from_agent: Mapping[str, Any]) -> dict[st
     return raw
 
 
+async def _listing(event: Mapping[str, Any], catalog: Any, lead_qualified: bool) -> dict[str, Any] | None:
+    """La propiedad del anuncio por el que llegó el lead (`?start=prop_<id>`, #122), o None.
+
+    La consulta el código, no el LLM: así la zona y el `need_fit` no dependen de que el modelo decida
+    buscarla. Si no existe o el catálogo falla, el turno sigue como si el evento no la trajera.
+    """
+    property_id = event.get("property_id")
+    if not property_id:
+        return None
+    try:
+        listing = await catalog.call("get_property", {"property_id": property_id, "lead_qualified": lead_qualified})
+    except Exception:
+        logger.warning("no se pudo consultar la propiedad del anuncio", exc_info=True)
+        return None
+    return listing if listing and listing.get("id") and listing.get("title") else None
+
+
+def _with_listing(result: AgentResult, listing: dict[str, Any], greet: bool) -> AgentResult:
+    """Suma la propiedad del anuncio a los resultados del turno; la que haya consultado el agente manda.
+    En el *deep-link* sin texto, el saludo nombra la propiedad."""
+    tool_results = {"get_property": listing, **result.tool_results}
+    return replace(result, tool_results=tool_results, text=listing_greeting(listing) if greet else result.text)
+
+
 def _lead_message(verdict: InputVerdict, original: str) -> list[SavedMessage]:
     """El mensaje del lead tal como se guarda: nunca el original. Sin PII ni categorías protegidas, y un
     intento de *jailbreak* no se guarda para que no vuelva al LLM como historial."""
@@ -205,8 +229,12 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     else:
         # El agente solo ve el texto filtrado y el historial que guardó este mismo servicio.
         text = verdict.signal_text if verdict.signal_text.strip() or not event["text"].strip() else OMITTED_MESSAGE
+        guarded = AvailabilityGuard(catalog)
+        listing = await _listing(event, guarded, context.lead_qualified)
         result = await agent.run(TurnInput(event=event, text=text, history=context.history,
-                                           lead_qualified=context.lead_qualified), AvailabilityGuard(catalog))
+                                           lead_qualified=context.lead_qualified, listing=listing), guarded)
+        if listing:
+            result = _with_listing(result, listing, greet=not event["text"].strip())
     outbound = FakeCore().handle_event(event, intent=result.intent, text=result.text)
     if verdict.pii:
         outbound["text"] += " " + PII_REMINDER

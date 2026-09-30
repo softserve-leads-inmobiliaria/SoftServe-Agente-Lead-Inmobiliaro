@@ -12,7 +12,10 @@ from app.state_store import ConversationMismatch
 from app.turn import advance, process_turn
 from db.repo_root import repo_root
 
-INBOUND = json.loads((repo_root() / "contracts" / "examples" / "event.valid.json").read_text(encoding="utf-8"))
+# Sin `property_id`: como un mensaje normal de Telegram (solo el `/start` del anuncio lo trae, #122).
+INBOUND = {key: value for key, value in json.loads(
+    (repo_root() / "contracts" / "examples" / "event.valid.json").read_text(encoding="utf-8")).items()
+    if key != "property_id"}
 
 # Frases que el fake LLM clasifica en cada intención.
 SAY = {
@@ -272,3 +275,71 @@ def test_advance_reports_the_score(engine):
     event = INBOUND | {"conversation_id": str(uuid.uuid4()), "lead_id": str(uuid.uuid4())}
     moved = advance(engine, event, "saludo")
     assert (moved.score.total, moved.score.band) == (0, "COLD")
+
+
+# --- #122: la propiedad del anuncio (`?start=prop_<id>`) -------------------------------------------------------
+
+LISTING = {"id": "prop_00231", "title": "Depto 2 rec. en Providencia", "zone": "Providencia", "status": "disponible"}
+
+
+class ListingCatalog:
+    """El catálogo con la propiedad del anuncio; guarda qué tools le piden."""
+
+    def __init__(self, missing=False):
+        self.calls, self.missing = [], missing
+
+    async def call(self, tool, arguments=None):
+        from app.catalog_client import CatalogToolError
+
+        self.calls.append((tool, dict(arguments or {})))
+        if tool == "get_property":
+            if self.missing:
+                raise CatalogToolError({"code": "NOT_FOUND", "message": "no existe"})
+            return dict(LISTING)
+        return stub_call(tool, arguments)
+
+
+def _deep_link(chat, catalog, message="", property_id="prop_00231"):
+    event = INBOUND | {"conversation_id": chat.conversation_id, "lead_id": chat.lead_id,
+                       "event_id": str(uuid.uuid4()), "text": message, "property_id": property_id}
+    return asyncio.run(process_turn(chat.engine, event, catalog))
+
+
+def _lead_zone(engine, lead_id):
+    with engine.connect() as connection:
+        return connection.execute(text("SELECT zone FROM leads WHERE id = :l"), {"l": lead_id}).scalar()
+
+
+def test_the_listing_greeting_names_the_property_the_lead_came_from(engine):
+    chat = Conversation(engine)
+    reply = _deep_link(chat, ListingCatalog())
+    assert "Depto 2 rec. en Providencia" in reply["text"] and "ref. prop_00231" in reply["text"]
+    assert chat.state == "DISCOVERY"
+
+
+def test_the_listing_is_looked_up_by_the_code_and_gives_the_lead_its_zone(engine):
+    chat = Conversation(engine)
+    catalog = ListingCatalog()
+    _deep_link(chat, catalog, message="Hola, me interesa esta propiedad")
+    assert ("get_property", {"property_id": "prop_00231", "lead_qualified": False}) in catalog.calls
+    assert _lead_zone(engine, chat.lead_id) == "Providencia"
+    with engine.connect() as connection:
+        saved = connection.execute(text("SELECT last_tool_results FROM fsm_context WHERE conversation_id = :c"),
+                                   {"c": chat.conversation_id}).scalar()
+    assert saved["get_property"]["id"] == "prop_00231"
+
+
+def test_the_greeting_stays_in_the_history_for_the_next_turns(engine):
+    chat = Conversation(engine)
+    _deep_link(chat, ListingCatalog())
+    with engine.connect() as connection:
+        history = connection.execute(text("SELECT content FROM messages WHERE conversation_id = :c"),
+                                     {"c": chat.conversation_id}).scalars().all()
+    assert any("ref. prop_00231" in content for content in history)
+
+
+def test_a_listing_the_catalog_does_not_know_falls_back_to_the_plain_greeting(engine):
+    chat = Conversation(engine)
+    reply = _deep_link(chat, ListingCatalog(missing=True), property_id="prop_99999")
+    assert "ref." not in reply["text"] and reply["text"]
+    assert chat.state == "DISCOVERY" and _lead_zone(engine, chat.lead_id) is None

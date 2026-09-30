@@ -317,3 +317,25 @@ def test_a_throttling_error_during_the_regeneration_still_falls_back_to_the_safe
     catalog = FakeCatalog(properties=[{"id": "p1", "title": "Casa", "price": 2350000, "status": "disponible"}])
     result = run(agent_for(client).run(turn(), catalog))
     assert result.text == LLM_FALLBACK_REPLY and result.intent == "otro" and result.llm_error == "LLMError"
+
+
+# --- #122: la propiedad del anuncio -----------------------------------------------------------------------------
+
+LISTING = {"id": "prop_00231", "title": "Depto 2 rec. en Providencia", "zone": "Providencia"}
+
+
+def test_the_model_is_told_which_listing_the_lead_came_from():
+    client = ScriptedBedrock(classification("consulta_precio"), text("Déjame revisarla."))
+    message = TurnInput(event=EVENT, text="¿Sigue disponible?", listing=LISTING)
+    run(agent_for(client).run(message, FakeCatalog()))
+    sent = client.calls_to(CHAT)[0]["messages"][-1]["content"][0]["text"]
+    assert sent.startswith("¿Sigue disponible?") and "ref. prop_00231" in sent
+
+
+def test_the_listing_note_never_counts_as_something_the_lead_said():
+    # "00231" y "2" están en la nota, no en lo que dijo el lead: un precio inventado sigue siendo inventado.
+    client = ScriptedBedrock(classification("consulta_precio"), text("Cuesta $2,000,000."),
+                             text("Cuesta $2,000,000."))
+    message = TurnInput(event=EVENT, text="¿Cuánto cuesta?", listing=LISTING)
+    result = run(agent_for(client).run(message, FakeCatalog()))
+    assert result.text == FACTUALITY_DEGRADE_REPLY
