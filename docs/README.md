@@ -12,6 +12,7 @@ segundo árbol de documentación.
 | [`../harness/README.md`](../harness/README.md) | Formato de los guiones del arnés E2E y qué valida en cada turno |
 | [`DESIGN/design.md`](DESIGN/design.md) | Referencia compartida: entidades, estados de la FSM, reglas BANT-E, transporte MCP, y qué está construido de verdad (§5) |
 | [`DESIGN/guardrails.md`](DESIGN/guardrails.md) | Guardrails de entrada y salida, *claims* prohibidos, estado de cobertura |
+| [`DESIGN/propuestas.md`](DESIGN/propuestas.md) | Funcionalidades propuestas para después del alcance actual (inventario y rotación, atribución al bot, demanda insatisfecha) y qué datos necesita cada una |
 | [`DECISIONS/decisions.md`](DECISIONS/decisions.md) | Bitácora de decisiones de arquitectura (el *por qué*) |
 | [`STORIES/README.md`](STORIES/README.md) | Índice de historias de usuario, prioridades y dependencias |
 | [`STORIES/ROADMAP.md`](STORIES/ROADMAP.md) | Orden recomendado y reparto entre las 3 personas |

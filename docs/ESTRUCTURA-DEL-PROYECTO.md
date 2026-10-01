@@ -76,7 +76,8 @@ SoftServe-Agente-Lead-Inmobiliaro/
     ├── DECISIONS/decisions.md   # Bitácora de decisiones de arquitectura (DT-*)
     ├── DESIGN/
     │   ├── design.md            # Referencia compartida y estado real del sistema (§5)
-    │   └── guardrails.md        # Guardrails de entrada y salida, y su cobertura
+    │   ├── guardrails.md        # Guardrails de entrada y salida, y su cobertura
+    │   └── propuestas.md        # Funcionalidades propuestas, todavía sin historias
     ├── STORIES/                 # Épicas, roadmap e historias de usuario, un archivo por historia
     └── presentations/           # Presentaciones de avance, una por fecha
 ```
