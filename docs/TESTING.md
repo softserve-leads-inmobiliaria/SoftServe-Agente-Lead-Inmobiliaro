@@ -151,6 +151,29 @@ curl -X POST localhost:8000/events -H "Content-Type: application/json" -d @contr
 
 Para apagar: `docker compose down`. Para borrar también los datos: `docker compose down -v`.
 
+### Demo en vivo (Telegram + Bedrock)
+
+`scripts/demo/` reúne los pasos de una demo, que a mano son varios y en un orden que importa. Con el
+`.env` de Bedrock y `TELEGRAM_BOT_TOKEN` puestos:
+
+```
+bash scripts/demo/up.sh       # arranca Docker si hace falta, levanta core, panel y phoenix, corre el seed y comprueba
+bash scripts/demo/down.sh     # exporta las conversaciones a txt y apaga borrando la base (--purge: también las imágenes)
+```
+
+- `up.sh` no levanta el arnés: sus guiones esperan el agente *fake* y con Bedrock fallan y gastan cupo.
+  Tampoco crea leads de prueba, así que la cola del panel arranca vacía. Al final imprime la URL del
+  panel y el enlace de registro de cada asesor (cambian en cada `seed`) y el enlace del anuncio para
+  empezar como lead.
+- `python scripts/demo/conversar.py [escenario ...]`: ensayo automático por `POST /events` contra el LLM
+  del `.env` (deep-link hasta el asesor, búsqueda y recomendación, guardrails), con pausas para no pasar
+  el cupo de 10 llamadas por minuto. Los avisos al asesor no salen por esta vía: solo por Telegram.
+- `python scripts/demo/exportar.py [minutos]`: guarda en txt las conversaciones activas en ese lapso
+  (por defecto 60), con el estado final de cada una. `down.sh` lo corre solo antes de borrar la base.
+
+Las transcripciones quedan en `tmp/demo/transcripciones/`, que no se versiona. Llevan el texto que guardó
+`core`, ya sin PII ni categorías protegidas; el aviso de privacidad no aparece porque lo agrega el canal.
+
 ## Pruebas automáticas
 
 ```
@@ -419,6 +442,7 @@ Se agregan aquí apenas se descubren.
 - **Puerto ocupado** (p. ej. `5432` si hay un Postgres local, o `8080` si otro programa ya lo usa
   — pasó en Windows con un servicio del sistema): cambiar `POSTGRES_PORT` / `PANEL_PORT` en `.env`,
   o solo para una corrida: `PANEL_PORT=8090 docker compose up`. El error dice "ports are not
-  available ... Solo se permite un uso de cada dirección de socket".
+  available ... Solo se permite un uso de cada dirección de socket" o "... Intento de acceso a un
+  socket no permitido por sus permisos de acceso".
 - **Docker Desktop no arranca con doble clic** (Windows): probar `docker desktop start` desde la
   terminal, que además espera a que el motor responda.

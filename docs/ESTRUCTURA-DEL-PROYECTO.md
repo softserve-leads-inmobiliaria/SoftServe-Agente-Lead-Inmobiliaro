@@ -19,7 +19,7 @@ SoftServe-Agente-Lead-Inmobiliaro/
 ├── CONTRIBUTING.md              # Reglas de trabajo del equipo
 ├── docker-compose.yml           # Stack completo: postgres, phoenix, migrate, seed, catalog, core, panel, harness
 ├── .env.example                 # Variables de entorno con sus defaults de desarrollo
-├── .dockerignore / .gitignore
+├── .dockerignore / .gitignore / .gitattributes
 ├── pyproject.toml               # Configuración de ruff y pytest
 ├── requirements-dev.txt         # Todo lo necesario para correr las suites en local y en CI
 ├── alembic.ini
@@ -63,6 +63,7 @@ SoftServe-Agente-Lead-Inmobiliaro/
 ├── scripts/
 │   ├── seed_advisors.py         # Asesores de demo (servicio seed)
 │   ├── seed_catalog.py          # Inventario de demo: propiedades y promociones (C-9)
+│   ├── demo/                    # Levantar y apagar la demo en vivo, ensayo automático, export de transcripciones
 │   └── github/                  # Labels, Issues desde las historias, Project, protección de main
 ├── tests/
 │   ├── contracts/               # Un test por contrato; corre sin ningún servicio levantado
