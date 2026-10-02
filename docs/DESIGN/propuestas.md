@@ -94,15 +94,60 @@ Lo que pidió el profesor no se puede calcular con el esquema actual (`db/models
 | Orden | Propuesta | Por qué |
 | :---: | :--- | :--- |
 | 1 | Historial, operaciones y atribución (§2) | Es lo que pidió el profesor y le da un número de negocio al proyecto |
-| 2 | Demanda insatisfecha (§3) | Cuesta poco: las búsquedas ya pasan por `core` |
+| 2 | Demanda insatisfecha y campaña de origen (§3) | Cuesta poco: las búsquedas y `utm_campaign` ya pasan por `core` |
 | 3 | Fotos y botones en Telegram (§5) | El mayor efecto visual en la demo por el esfuerzo |
 
-## 7. Pendientes que conviene cerrar antes
+## 7. Esfuerzo estimado
 
-Estas propuestas se apoyan en flujos que hoy tienen huecos conocidos:
+Con la fórmula de `docs/STORIES/README.md` (`horas = puntos × 2`). Es una estimación para conversar con
+el equipo, no un plan.
 
-- **#125**: dar datos de calificación cuenta como frustración y lleva al lead a `HUMAN_HANDOFF`. Ensucia
-  la conversión por banda y cualquier métrica de frustración.
-- **`B-8`**: sin agenda real no hay visitas, y la métrica "consultas sin visitas" de §2.2 sale vacía.
-- **`need_fit`** solo cuenta resultados de `search_properties`: un lead que llega por el anuncio de una
-  propiedad que entra en su presupuesto queda con `need_fit = 0`.
+| Propuesta | Qué hay que construir | Puntos | Horas |
+| :--- | :--- | :---: | :---: |
+| §2 | Migración de `property_status_events`, `deals` y `property_interest` | 2 | 4 |
+| §2 | "Cerrar operación" en el panel: lead a `closed_won`, propiedad a `arrendado`/`vendido`, con su evento | 3 | 6 |
+| §2 | `property_interest` escrito en `advance` (`turn.py`), en la transacción del turno | 2 | 4 |
+| §2 | Rol o token de gerencia en el panel | 1 | 2 |
+| §2 | Consultas y vistas de las métricas de §2.2 | 5 | 10 |
+| §2 | Historia sintética en el `seed` y la regla de atribución en `decisions.md` | 3 | 6 |
+| **§2** | **Subtotal** | **16** | **~32** |
+| §3 | Demanda insatisfecha | 1–2 | 2–4 |
+| §3 | `utm_campaign` en el lead: llega en el evento canónico (`channels/canonical.py`) y `core` no lo guarda. Cabe en la misma migración de §2 | 1 | 2 |
+| §5 | Fotos y botones en Telegram: `Property` no tiene foto y el canal no maneja `callback_query` ni `reply_markup` | 3 | 6 |
+| §4 | Resumen de la conversación con el LLM, con guardrails de salida | 3 | 6 |
+| §4 | SLA de atención del asesor | 2 | 4 |
+| §3, §5 | Reporte semanal y alertas de propiedades nuevas: necesitan el *scheduler*, que no existe (§5.3 de `design.md`) | 5+ | 10+ |
+| §5 | Notas de voz: necesita un servicio de transcripción | 3 | 6 |
+
+Las tres prioridades de §6 suman unos **21 puntos (~42 h)**. Lo que depende del *scheduler* y las notas
+de voz quedan fuera de un alcance razonable para el curso.
+
+## 8. Pendientes y en qué orden encajan
+
+Estado al 1 de octubre de 2026. Algunas historias abiertas son base de estas propuestas y otras no las
+tocan:
+
+| Pendiente | Horas | Relación con las propuestas |
+| :--- | :---: | :--- |
+| #125: dar datos de calificación contaba como frustración | — | Cerrado en #127 |
+| **`B-8`** (#23): agenda real | 6 | **Es base.** Sin visitas, "consultas sin visitas" de §2.2 sale vacía y el botón "Agendar visita" de §5 no tiene qué hacer. `get_slots` y `book` ya existen en el catálogo; falta que `core` los llame |
+| **`need_fit`** solo cuenta resultados de `search_properties` | ~2 | **Es base.** Un lead que llega por el anuncio de una propiedad que entra en su presupuesto queda con `need_fit = 0`, y eso sesga la conversión por banda del score |
+| #119: `decision_maker` y "mi esposa" | ~4 | No la bloquea, pero cambia un contrato: conviene antes de sumar más cambios de esquema |
+| #104: endurecer el stack de Docker | ~4 | Independiente y barato; tiene que estar antes de la demo |
+| `C-5` (#31): FAQ con embeddings | 6 | Independiente. Para la demo aporta menos que §2 |
+| `OBS-6` (#48): E2E contra el bot real | 6 | Independiente, pero `Z-2` depende de ella |
+| `Z-1` (#51), `Z-2` (#52): hardening y demo | 16 | Cierre por definición: `Z-1` no admite alcance nuevo, así que las propuestas tienen que entrar antes |
+
+Orden sugerido, a decidir con el equipo:
+
+1. `B-8` y la corrección de `need_fit`. En paralelo, #119.
+2. §2 con la demanda insatisfecha y `utm_campaign` en la misma migración.
+3. Fotos y botones en Telegram, si hay margen.
+4. #104 y una corrida real de `OBS-6`, para no descubrir en la semana 8 un fallo contra Telegram o Bedrock.
+5. `Z-1` y `Z-2` al final, con las propuestas ya dentro: la demo tiene que mostrar el sistema final.
+
+`C-5` queda por debajo de §2: si falta tiempo, es la primera en salir.
+
+Capacidad: con 8 semanas desde el 15 de septiembre y la semana 8 reservada para cierre, quedan unas 4
+semanas de construcción, unas 86 h netas al ritmo de `ROADMAP.md`. Lo pendiente más los pasos 1 a 3 suma
+unas 75 h: cabe con poco margen. Si hay que recortar, se recorta §4 y §5 antes que §2.
