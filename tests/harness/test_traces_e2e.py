@@ -131,5 +131,6 @@ def test_what_the_lead_wrote_never_reaches_the_collector(traced_stack, tmp_path)
     time.sleep(1.0)
     everything = b"".join(collector.raw)
     assert everything
-    for fragment in ("Secretísima", "4111", "tarjeta es", "colonia"):
+    # "4111 1111" y no "4111": las trazas llevan UUID aleatorios y en un v4 sale "-4111-" (#126).
+    for fragment in ("Secretísima", "4111 1111", "tarjeta es", "colonia"):
         assert fragment.encode("utf-8") not in everything, fragment

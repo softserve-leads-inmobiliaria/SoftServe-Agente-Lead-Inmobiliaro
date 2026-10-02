@@ -154,7 +154,7 @@ def test_pii_is_not_persisted_anywhere_and_the_reply_asks_for_the_right_data(eng
     (entry,) = chat.audits("input.pii")
     assert entry.payload["types"] == ["tarjeta"]
     dump = json.dumps([dict(r._mapping) for r in chat.audits()], default=str)
-    assert CARD not in dump and "4111" not in dump
+    assert CARD not in dump and "4111 1111" not in dump  # el payload lleva UUID: "4111" solo podría salir ahí (#126)
     with engine.connect() as connection:
         for table, column in (("fsm_context", "score_signal"), ("fsm_context", "last_tool_results")):
             stored = connection.execute(text(f"SELECT {column}::text FROM {table} WHERE conversation_id = :c"),

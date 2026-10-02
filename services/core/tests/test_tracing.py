@@ -186,7 +186,8 @@ def test_no_span_carries_what_the_lead_wrote(engine, spans, message):
     everything = json.dumps([{"name": s.name, "attributes": {k: str(v) for k, v in s.attributes.items()},
                               "events": [(e.name, {k: str(v) for k, v in e.attributes.items()}) for e in s.events]}
                              for s in spans.get_finished_spans()], ensure_ascii=False)
-    for secret in ("4111", "tarjeta es", "presupuesto es 3", "católico", "system prompt", message):
+    # "4111 1111" y no "4111": las trazas llevan UUID aleatorios y en un v4 sale "-4111-" (#126).
+    for secret in ("4111 1111", "tarjeta es", "presupuesto es 3", "católico", "system prompt", message):
         assert secret not in everything, secret
 
 
