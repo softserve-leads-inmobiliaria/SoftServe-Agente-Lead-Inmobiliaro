@@ -26,23 +26,30 @@ class TurnEvidence:
     tool_results: Mapping[str, Any] = field(default_factory=dict)
 
 
-def merge_signal(current: Mapping[str, Any], evidence: TurnEvidence) -> dict[str, Any]:
-    """Acumula: lo que el lead declara en un turno se conserva en los siguientes.
+def declared_signal(raw: Mapping[str, Any]) -> dict[str, str]:
+    """Los datos de calificación que el lead declara de verdad en este turno.
 
-    Un campo que el mensaje no menciona (o que el LLM devuelve inválido) no pisa lo ya declarado:
-    ignorarlo es más seguro que inventar un valor. Lo declarado más recientemente gana.
+    Un campo que el mensaje no menciona (o que el LLM devuelve inválido) no cuenta: ignorarlo es más
+    seguro que inventar un valor.
     """
-    merged = dict(current)
-    raw = evidence.raw_signal
-
+    declared: dict[str, str] = {}
     budget = raw.get("budget_hint")
     if isinstance(budget, str) and budget.strip():
-        merged["budget_hint"] = budget.strip()
+        declared["budget_hint"] = budget.strip()
     for name, table in ENUMS.items():
         value = raw.get(name)
         if isinstance(value, str) and value in table and value != NOT_DECLARED[name]:
-            merged[name] = value
+            declared[name] = value
+    return declared
 
+
+def merge_signal(current: Mapping[str, Any], evidence: TurnEvidence) -> dict[str, Any]:
+    """Acumula: lo que el lead declara en un turno se conserva en los siguientes.
+
+    Un campo que el mensaje no declara (ver `declared_signal`) no pisa lo ya declarado. Lo declarado
+    más recientemente gana.
+    """
+    merged = {**current, **declared_signal(evidence.raw_signal)}
     found = evidence.tool_results.get("search_properties")
     if isinstance(found, Mapping) and isinstance(found.get("properties"), list):
         merged["matching_properties"] = len(found["properties"])

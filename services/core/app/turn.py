@@ -106,7 +106,8 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         span.set_attribute(SPAN_KIND, "CHAIN")
         store = StateStore(session)
         state = store.lock(conversation_id, lead_id)
-        streak = next_streak(state.unresolved_streak, intent, counts_as_unresolved)
+        evidence = evidence or TurnEvidence()
+        streak = next_streak(state.unresolved_streak, intent, counts_as_unresolved, evidence.raw_signal)
         trigger = trigger_for(state.fsm_state, intent, frustrated=is_frustrated(streak))
         after = next_state(state.fsm_state, trigger) if trigger else state.fsm_state
         if after != state.fsm_state:
@@ -114,7 +115,6 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         if trigger == HUMAN_REQUESTED:
             streak = 0  # la racha ya cumplió su función
         store.save_streak(conversation_id, streak)
-        evidence = evidence or TurnEvidence()
         signal, score = score_turn(state.score_signal, evidence)
         store.save_scoring(conversation_id, lead_id, signal, dict(evidence.tool_results), score)
         zone = zone_of_interest(evidence.tool_results)
@@ -239,11 +239,12 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     if verdict.pii:
         outbound["text"] += " " + PII_REMINDER
     counts = not (verdict.jailbreak or verdict.out_of_domain)
+    evidence = TurnEvidence(raw_signal=_raw_signal(verdict, result.raw_signal), tool_results=result.tool_results)
+    streak = next_streak(context.unresolved_streak, result.intent, raw_signal=evidence.raw_signal)
     if (counts and context.fsm_state not in TERMINAL_STATES and result.intent not in HUMAN_INTENTS
-            and is_frustrated(next_streak(context.unresolved_streak, result.intent))):
+            and is_frustrated(streak)):
         outbound["text"] = FRUSTRATION_REPLY  # esta racha dispara el traspaso: se le avisa al lead
 
-    evidence = TurnEvidence(raw_signal=_raw_signal(verdict, result.raw_signal), tool_results=result.tool_results)
     span.set_attributes({"turn.intent": result.intent, "turn.tools": sorted(result.tool_results),
                          "turn.agent": agent.name, "turn.llm_error": result.llm_error or "",
                          "turn.output_guard": [action for action, _ in result.guard_audits]})
