@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from replay import ROOT, ScriptError, configured_responder, replay  # noqa: E402
+from replay import ROOT, RUN_ERRORS, configured_responder, describe, replay  # noqa: E402
 
 FIXTURES = ROOT / "harness" / "fixtures"
 
@@ -31,9 +31,9 @@ def main() -> int:
         try:
             replay(path, responder)
             print(f"OK    {path.name}")
-        except (ScriptError, AssertionError, OSError) as exc:
+        except RUN_ERRORS as exc:
             failed += 1
-            print(f"FALLA {exc}")
+            print(f"FALLA {path.name}: {describe(exc)}")
     print(f"{len(scripts) - failed}/{len(scripts)} guiones en verde")
     return 1 if failed else 0
 

@@ -1534,3 +1534,50 @@ defectos en la dimensión Authority, que llegaban a 6 pares con `xfail(strict=Tr
   señal con ella.
 - La aserción de banda del gold set sigue sin morder: el control está en 100 y todos los pares también
   (DT-35). Una fuga chica se ve en el total y en la dimensión, no en la banda.
+
+## DT-39 — La corrida real de OBS-6 se comprueba en los 3 servicios, con ids por corrida y fuera de CI
+
+**Estado:** aceptada
+
+**Contexto.** `OBS-6` (#48) pide al menos una corrida real, no mockeada, contra los 3 servicios. Los 8
+guiones solo se corrían dentro de `tests/harness`, sobre bases temporales, y contra el stack de Docker
+`docker compose run harness` solo miraba las respuestas de `core`. Nada comprobaba que lo que el lead
+dijo llegara al `panel`. Al preparar la corrida aparecieron los bugs que las notas de la historia
+anticipaban: `run_all.py` abortaba sin informe si una respuesta salía del contrato o no era JSON, el
+timeout de 30 s no alcanzaba para un turno de Bedrock con cola y reintentos (15 s + 20 s), y los ids
+deterministas hacían que una segunda corrida sobre la misma base heredara conversaciones terminadas.
+
+**Decisión.**
+- `harness/scripts/live_run.py` reproduce los guiones contra el stack levantado y comprueba los tres
+  servicios: las respuestas de `core` (que consulta a `catalog` por MCP), el estado final en Postgres y,
+  para cada lead con zona, la cola y la ficha del asesor de esa zona en el `panel`.
+- Los ids de la corrida real se derivan de un `run_id` (`build_events(..., run_id)`). Sin `run_id` el
+  arnés sigue siendo determinista, como pide CT-9.
+- El estado final esperado de cada guion vive en `harness/scripts/expectations.py`, que usan
+  `test_e2e.py` y `live_run.py`.
+- `--sin-frases` deja de exigir `expect_reply_contains` para la corrida con Bedrock, pero mantiene el
+  contrato, la respuesta no vacía, el estado final y el panel.
+- **La corrida real no corre en CI.** Necesita el stack de Docker, el bot y cupo del LLM. CI sí corre la
+  herramienta contra procesos reales de los 3 servicios (`tests/harness/test_live_run.py`), así que un
+  bug como los de arriba se ve en el PR y no el día de la demo.
+- Telegram se prueba a mano con un checklist (`docs/TESTING.md`): un bot no puede escribirse a sí mismo.
+
+**Alternativas.**
+- Leer el estado desde el `panel` en vez de Postgres: los leads sin zona no aparecen en ninguna cola,
+  así que se perdería la mitad de los guiones. Descartada; el panel se comprueba solo donde aplica.
+- Automatizar Telegram con una cuenta de usuario (MTProto): pide credenciales personales en el repo
+  para una sola comprobación. Descartada.
+- Hacer más tolerantes los `expect_reply_contains` de los guiones para Bedrock (sinónimos, regex):
+  rompe el determinismo con el agente *fake* sin garantizar nada con el modelo. Descartada.
+
+**Consecuencias.**
+- Los leads de cada corrida quedan en la base local y se ven en el panel junto a los de una demo.
+  `bash scripts/demo/down.sh` los borra.
+- Un guion nuevo tiene que declarar su estado final en `expectations.py`, como antes en `test_e2e.py`.
+- La corrida con Bedrock queda pendiente hasta que haya credenciales. Es el mismo comando con
+  `--sin-frases`.
+- La primera corrida real (2-oct) encontró dos cosas que los tests no veían. El guion
+  `deep_link_solo_precio` apuntaba a `prop_00450`, que no existe en el inventario sembrado: `core` lo
+  registraba como aviso y seguía, así que el guion pasaba sin probar el deep-link (#122). Ahora usa
+  `prop_00233`. Por Telegram, una falla de red transitoria al enviar la respuesta a `STOP` dejó al lead
+  sin respuesta, aunque la baja se guardó: el canal no reintenta el envío. Queda como hallazgo para B-1.

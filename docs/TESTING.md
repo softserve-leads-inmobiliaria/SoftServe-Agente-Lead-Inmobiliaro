@@ -174,6 +174,42 @@ bash scripts/demo/down.sh     # exporta las conversaciones a txt y apaga borrand
 Las transcripciones quedan en `tmp/demo/transcripciones/`, que no se versiona. Llevan el texto que guardó
 `core`, ya sin PII ni categorías protegidas; el aviso de privacidad no aparece porque lo agrega el canal.
 
+### Corrida real contra los 3 servicios (OBS-6)
+
+`docker compose run --rm harness` solo mira las respuestas de `core`. La corrida real además comprueba
+lo que quedó en los servicios: el estado final de la FSM en Postgres y, para cada lead con zona, que
+aparezca en la cola del asesor de esa zona en el `panel` con su etapa y que su ficha muestre la
+transcripción. No usa nada simulado: arnés → `core` → `catalog` por MCP → Postgres → `panel` (DT-39).
+
+```
+docker compose up -d --build core panel phoenix
+docker compose run --rm seed                  # asesores e inventario: sin asesores el panel no se comprueba
+docker compose run --rm --build harness       # 8/8 dentro de los contenedores
+python harness/scripts/live_run.py            # 8/8 contra los 3 servicios, desde el host
+```
+
+- Cada corrida usa ids nuevos (`run_id`), así que se puede repetir sobre la misma base sin heredar
+  conversaciones que quedaron en `HUMAN_HANDOFF`. Los leads de la corrida quedan en la base: en la cola
+  del panel aparecen junto a los de una demo.
+- El informe queda en `tmp/harness/<fecha>_corrida_real.md`, con la tabla de resultados y la
+  transcripción de cada guion. Es la evidencia que se adjunta al PR.
+- Con `LLM_PROVIDER=bedrock`: `python harness/scripts/live_run.py --sin-frases`. El modelo responde bien
+  con otras palabras, así que no se exigen las frases fijas de los guiones, pero sí el contrato, que la
+  respuesta no llegue vacía, el estado final y el panel. Cada turno espera hasta `HARNESS_HTTP_TIMEOUT`
+  segundos (60 por defecto: con Bedrock un turno puede esperar cupo y reintentos).
+- `CORE_URL`, `PANEL_URL` y `DATABASE_URL` (o `POSTGRES_*`) cambian a dónde apunta. Por defecto, al stack
+  de `docker compose`.
+
+**La parte de Telegram es manual.** Un bot no puede mandarse mensajes a sí mismo, así que alguien escribe
+desde su Telegram con `core` levantado con `TELEGRAM_BOT_TOKEN`, y después se verifica en la base y el
+panel:
+
+1. `https://t.me/<bot>?start=prop_00231` → saludo con aviso de privacidad y la propiedad del anuncio.
+2. "¿Cuánto cuesta?" → responde sobre esa propiedad.
+3. "Quiero hablar con un asesor" → `HUMAN_HANDOFF` en `conversations`; el lead aparece en el panel de
+   Providencia con la transcripción.
+4. `STOP` → `consent_status=withdrawn` en `leads` y una fila `input.opt_out` en `audit_log`.
+
 ## Pruebas automáticas
 
 ```
@@ -185,7 +221,7 @@ python -m pytest db/tests              # esquema: los de migraciones necesitan P
 python -m pytest services/core/tests
 python -m pytest services/catalog/tests
 python -m pytest services/panel/tests
-python -m pytest tests/harness         # arnés + e2e: levanta catalog y core como procesos, sin Docker
+python -m pytest tests/harness         # arnés + e2e: levanta catalog, core y panel como procesos, sin Docker
 ```
 
 ### Tests de la base de datos
