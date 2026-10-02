@@ -50,6 +50,42 @@ def test_frustration_starts_exactly_at_the_threshold():
     assert [is_frustrated(n) for n in range(5)] == [False, False, False, True, True]
 
 
+QUALIFYING_SIGNALS = [
+    {"budget_hint": "2.5 millones", "decision_maker": None, "urgency": None},
+    {"budget_hint": None, "decision_maker": "pareja", "urgency": None},
+    {"budget_hint": None, "decision_maker": "no_declarado", "urgency": "3_meses"},
+]
+EMPTY_SIGNALS = [
+    {},
+    {"budget_hint": None, "decision_maker": None, "urgency": None},
+    {"budget_hint": "  ", "decision_maker": "no_declarado", "urgency": "no_declarada"},
+    {"budget_hint": None, "decision_maker": "inventado", "urgency": "algun_dia"},  # inválidos: no cuentan
+]
+
+
+@pytest.mark.parametrize("signal", QUALIFYING_SIGNALS)
+def test_a_catch_all_turn_that_declares_qualification_data_resets_the_streak(signal):
+    """#125: dar presupuesto, quién decide o plazo cae en `otro`, pero el lead está cooperando."""
+    assert next_streak(2, UNRESOLVED_INTENT, raw_signal=signal) == 0
+
+
+@pytest.mark.parametrize("signal", EMPTY_SIGNALS)
+def test_a_catch_all_turn_without_qualification_data_still_counts(signal):
+    assert next_streak(2, UNRESOLVED_INTENT, raw_signal=signal) == 3
+
+
+def test_a_lead_giving_its_data_in_separate_messages_is_not_frustrated():
+    """La secuencia de la demo del 1 de octubre: tres `otro` seguidos, cada uno con un dato."""
+    streak = 0
+    for signal in QUALIFYING_SIGNALS:
+        streak = next_streak(streak, UNRESOLVED_INTENT, raw_signal=signal)
+        assert not is_frustrated(streak)
+
+
+def test_a_turn_forced_by_the_guardrail_is_ignored_even_with_qualification_data():
+    assert next_streak(2, UNRESOLVED_INTENT, counts=False, raw_signal=QUALIFYING_SIGNALS[0]) == 2
+
+
 def test_turns_forced_by_the_guardrail_leave_the_streak_untouched():
     assert next_streak(2, "otro", counts=False) == 2
     assert next_streak(2, "saludo", counts=False) == 2
