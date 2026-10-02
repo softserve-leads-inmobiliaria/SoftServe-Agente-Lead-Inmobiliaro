@@ -97,6 +97,25 @@ def test_a_resolved_turn_breaks_the_streak(engine):
     assert chat.state == "HUMAN_HANDOFF"
 
 
+def test_a_lead_giving_its_qualification_data_is_not_handed_off(engine):
+    """#125: la secuencia de la demo del 1 de octubre. Cada mensaje cae en `otro`, pero trae un dato."""
+    chat = Chat(engine)
+    chat.say("Hola")
+    for message in ("Tengo un presupuesto de 2.5 millones con crédito preaprobado",
+                    "La decisión la tomamos mi pareja y yo", "La decisión la tomamos mi pareja y yo",
+                    "Queremos mudarnos en tres meses"):
+        assert chat.say(message) != FRUSTRATION_REPLY
+        assert chat.streak == 0
+    assert chat.state not in ("HANDOFF", "HUMAN_HANDOFF")
+
+
+def test_catch_all_messages_without_data_still_hand_off(engine):
+    chat = Chat(engine)
+    chat.say("Hola")
+    replies = [chat.say(message) for message in ("ok", "mmm", "no sé")]
+    assert replies[-1] == FRUSTRATION_REPLY and chat.state == "HUMAN_HANDOFF"
+
+
 def test_the_streak_survives_a_restart(engine, database_url):
     chat = Chat(engine)
     chat.say("Hola")
