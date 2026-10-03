@@ -72,23 +72,31 @@ primera propiedad que el lead consulta (#81; el ruteo por zona al asesor es A-10
 pasar por una búsqueda, asignar la zona a mano (`update leads set zone='Providencia' where ...`). Un token
 inventado y un lead de otra zona dan el mismo 404.
 
-### Avisos al asesor por Telegram (B-7, A-12)
+### Avisos al asesor: en el panel, y por Telegram si lo registró (B-7, A-12, B-15)
 
-Con `TELEGRAM_BOT_TOKEN` puesto, cada asesor se registra una vez abriendo su enlace
-`https://t.me/<bot>?start=adv_<token>` (el `<token>` es el de su URL del panel: `docker compose logs seed`).
-El bot responde "te voy a avisar…" y guarda su chat en `advisors.telegram_chat_id`; un enlace inválido no
-registra a nadie y no dice por qué. Registrado, recibe dos avisos, cada uno una sola vez por lead y en el
-turno exacto de la transición:
+El asesor recibe dos avisos, cada uno una sola vez por lead y en el turno exacto de la transición. Los dos
+quedan siempre en su panel, en `http://localhost:8080/panel/<token>/avisos`, con el contador de no leídos.
+La página se recarga sola cada 30 segundos, y abrir un aviso lo marca como leído y lleva a la ficha
+(B-15, DT-42). No hace falta registrar ningún asesor en Telegram: con una sola cuenta, la del lead, se
+prueba todo.
+
+Telegram es un canal adicional. Con `TELEGRAM_BOT_TOKEN` puesto, un asesor se registra una vez abriendo su
+enlace `https://t.me/<bot>?start=adv_<token>` (el `<token>` es el de su URL del panel:
+`docker compose logs seed`). El bot responde "te voy a avisar…" y guarda su chat en
+`advisors.telegram_chat_id`; un enlace inválido no registra a nadie y no dice por qué. Registrado, recibe
+además cada aviso en el chat.
 
 - **Lead calificado (B-7, DT-24):** la banda del score cruza a WARM/HOT. Tarjeta con score, zona, propiedad
-  de interés y visita. El lead queda asignado al asesor de su zona (o a cualquiera registrado si no hay).
+  de interés y visita. El lead queda asignado al asesor que elige la agenda: el de su zona, o cualquiera
+  si no hay (A-10, DT-42).
 - **Traspaso (A-12, DT-28):** la conversación llega a `HANDOFF` (visita agendada) o `HUMAN_HANDOFF` (pidió una
   persona, consulta fuera de alcance o frustración). Ficha con el motivo, el score, la propiedad, la visita y
   la **transcripción completa** (en varios mensajes si excede el tope de Telegram). Va al mismo asesor que
   ya tenía el lead; si el mismo turno califica y traspasa, llega solo la ficha.
 
-Para verlo: registrar un asesor, escribirle al bot como lead y pedir "quiero hablar con un asesor". Si no
-hay asesor registrado, el turno sigue igual y solo queda un `warning` en el log del core.
+Para verlo: escribirle al bot como lead y pedir "quiero hablar con un asesor", y abrir los avisos del
+asesor de la zona en el panel. En el panel van el resumen y el motivo, sin la transcripción, que está en la
+ficha. Si el envío por Telegram falla, el aviso queda igual en el panel.
 
 ### Usar el LLM real (Bedrock)
 

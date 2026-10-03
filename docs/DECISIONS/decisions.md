@@ -1152,7 +1152,8 @@ reservar visitas o elegir asesor por su cuenta.
 
 ## DT-33 — Ruteo del lead al asesor: lo decide la agenda del catálogo, solo entre asesores con Telegram
 
-**Estado:** aceptada
+**Estado:** aceptada. El filtro "solo entre asesores con Telegram" lo reemplazó DT-42 (`B-15`): hoy la agenda
+elige entre todos los asesores
 
 **Contexto.** `A-10` (#12) pide asignar el lead por zona, reparto por turnos e idioma, con una cola
 general si no hay asesor en la zona. Hasta ahora lo hacía `pick_advisor` en `core`, al mandar la
@@ -1537,7 +1538,8 @@ defectos en la dimensión Authority, que llegaban a 6 pares con `xfail(strict=Tr
 
 ## DT-39 — Agendar la visita: la agenda del catálogo es el proveedor, y el código ofrece horarios numerados
 
-**Estado:** aceptada
+**Estado:** aceptada. Desde DT-42 (`B-15`), no tener asesor con Telegram ya no lleva al respaldo de horario
+preferido: la agenda asigna un asesor aunque no tenga Telegram
 
 **Contexto.** `B-8` (#23) pide agendar la visita desde la conversación, con `get_slots` y `book` contra el
 asesor del lead, y un respaldo de "hora preferida" si el calendario no responde. DT-32 dejó a esta historia
