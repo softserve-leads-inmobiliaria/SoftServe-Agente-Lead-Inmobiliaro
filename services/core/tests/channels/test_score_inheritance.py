@@ -12,7 +12,7 @@ from db.models import Conversation, FsmContext, Lead, LeadScore
 from db.session import session_scope
 
 CALIFICA = "Tengo presupuesto de 3 millones, decido yo y es urgente"
-SIGNAL = {"budget_hint": "3 millones", "decision_maker": "solo", "urgency": "inmediata",
+SIGNAL = {"budget_hint": "3 millones", "decision_maker": "declarado", "urgency": "inmediata",
           "matching_properties": 2, "meets_requirements": True}
 
 

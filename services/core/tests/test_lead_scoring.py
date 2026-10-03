@@ -20,17 +20,17 @@ def test_an_empty_turn_leaves_the_signal_and_the_score_at_zero():
 
 
 def test_what_the_lead_declares_is_kept_in_later_turns():
-    signal = merge_signal(EMPTY, turn({"budget_hint": "3 millones", "decision_maker": "solo", "urgency": None}))
+    signal = merge_signal(EMPTY, turn({"budget_hint": "3 millones", "decision_maker": "declarado", "urgency": None}))
     signal = merge_signal(signal, turn({"budget_hint": None, "decision_maker": None, "urgency": "inmediata"}))
     signal = merge_signal(signal, turn())
     assert signal["budget_hint"] == "3 millones"
-    assert signal["decision_maker"] == "solo" and signal["urgency"] == "inmediata"
+    assert signal["decision_maker"] == "declarado" and signal["urgency"] == "inmediata"
 
 
 def test_the_latest_declaration_wins():
-    signal = merge_signal(EMPTY, turn({"urgency": "explorando", "decision_maker": "pareja"}))
-    signal = merge_signal(signal, turn({"urgency": "inmediata", "decision_maker": "solo"}))
-    assert (signal["urgency"], signal["decision_maker"]) == ("inmediata", "solo")
+    signal = merge_signal(EMPTY, turn({"urgency": "explorando", "decision_maker": "declarado"}))
+    signal = merge_signal(signal, turn({"urgency": "inmediata", "decision_maker": "declarado"}))
+    assert (signal["urgency"], signal["decision_maker"]) == ("inmediata", "declarado")
 
 
 def test_the_score_grows_as_the_conversation_reveals_more():
@@ -39,7 +39,7 @@ def test_the_score_grows_as_the_conversation_reveals_more():
     for evidence in (
         turn(),
         turn({"budget_hint": "presupuesto de 3 millones"}),
-        turn({"decision_maker": "solo"}),
+        turn({"decision_maker": "declarado"}),
         turn({"urgency": "inmediata"}),
         turn(search_properties={"properties": [{}, {}, {}]}),
         turn(check_requirements={"meets_requirements": True}),
@@ -50,7 +50,7 @@ def test_the_score_grows_as_the_conversation_reveals_more():
 
 
 def test_the_score_is_exactly_what_the_pure_rules_compute():
-    signal, score = score_turn(EMPTY, turn({"budget_hint": "2 millones", "decision_maker": "pareja",
+    signal, score = score_turn(EMPTY, turn({"budget_hint": "2 millones", "decision_maker": "declarado",
                                             "urgency": "3_meses"}, search_properties={"properties": [{}]}))
     assert score == compute_score(ScoreSignal.from_dict(signal))
     assert (score.need_fit, score.budget, score.authority, score.timing, score.eligibility) == (10, 20, 20, 12, 0)
@@ -124,7 +124,7 @@ def test_a_turn_without_tools_keeps_the_previous_matches_and_eligibility():
     {"decision_maker": "no_declarado", "urgency": "no_declarada"},
 ])
 def test_invalid_or_empty_values_from_the_llm_never_overwrite_what_was_declared(raw):
-    current = EMPTY | {"budget_hint": "3 millones", "decision_maker": "solo", "urgency": "inmediata"}
+    current = EMPTY | {"budget_hint": "3 millones", "decision_maker": "declarado", "urgency": "inmediata"}
     assert merge_signal(current, turn(raw)) == current
 
 
@@ -136,7 +136,7 @@ def test_unknown_fields_from_the_llm_are_ignored():
 
 def test_the_merge_does_not_mutate_its_input():
     current = dict(EMPTY)
-    merge_signal(current, turn({"decision_maker": "solo"}))
+    merge_signal(current, turn({"decision_maker": "declarado"}))
     assert current == EMPTY
 
 
@@ -153,9 +153,9 @@ def test_the_fake_extractor_can_only_emit_the_three_raw_fields():
     ("Mi presupuesto es de 3 millones", {"budget_hint": "presupuesto es de 3 millones",
                                          "decision_maker": None, "urgency": None}),
     ("Tengo $2,500,000 disponibles", {"budget_hint": "$2,500,000", "decision_maker": None, "urgency": None}),
-    ("Decido yo, y lo necesito urgente", {"budget_hint": None, "decision_maker": "solo", "urgency": "inmediata"}),
-    ("Lo veo con mi pareja, en tres meses", {"budget_hint": None, "decision_maker": "pareja", "urgency": "3_meses"}),
-    ("Lo hablo con mi familia", {"budget_hint": None, "decision_maker": "familia", "urgency": None}),
+    ("Decido yo, y lo necesito urgente", {"budget_hint": None, "decision_maker": "declarado", "urgency": "inmediata"}),
+    ("Lo veo con mi pareja, en tres meses", {"budget_hint": None, "decision_maker": "declarado", "urgency": "3_meses"}),
+    ("Lo hablo con mi familia", {"budget_hint": None, "decision_maker": "declarado", "urgency": None}),
     ("Solo estoy viendo, sin prisa", {"budget_hint": None, "decision_maker": None, "urgency": "explorando"}),
     ("MI PRESUPUESTO: 2 MILLONES", {"budget_hint": "presupuesto: 2 millones", "decision_maker": None,
                                     "urgency": None}),

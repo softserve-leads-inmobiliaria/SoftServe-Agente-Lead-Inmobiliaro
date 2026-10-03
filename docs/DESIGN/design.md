@@ -64,7 +64,7 @@ Usado por `C-4` (implementación), `A-9` (integración en la FSM), `A-11`/`C-6` 
 | Dimensión | Señal de entrada | Regla de puntos |
 | :--- | :--- | :--- |
 | **B**udget | `budget_hint` (texto libre u opcional, del contrato `ScoreSignal`) | `None`/vacío → 0 · cualquier valor declarado → 20 (no se parsea como rango numérico — el contrato solo transporta texto libre) |
-| **A**uthority | `decision_maker` (enum: `solo`/`pareja`/`familia`/`no_declarado`) | `solo`/`pareja`/`familia` → 20 · `no_declarado` → 0. Mide si se dijo quién decide, no con quién (fair housing, DT-38) |
+| **A**uthority | `decision_maker` (enum: `declarado`/`no_declarado`) | `declarado` → 20 · `no_declarado` → 0. Mide si se dijo cómo se decide; el contrato no guarda con quién (fair housing, DT-38, DT-40) |
 | **N**eed fit | `matching_properties` (conteo de `search_properties` del turno, no del LLM) | 0 → 0 · 1-2 → 10 · 3+ → 20 |
 | **T**iming | `urgency` (enum: `inmediata`/`3_meses`/`explorando`/`no_declarada`) | `inmediata` → 20 · `3_meses` → 12 · `explorando` → 5 · `no_declarada` → 0 |
 | **E**ligibility | `meets_requirements` (booleano de `check_requirements`, no del LLM) | `True` → 20 · `False`/`None` (no verificado todavía) → 0 |
@@ -153,9 +153,10 @@ Las cajas con borde punteado no están construidas.
   no terminal por sus tres caminos (DT-12, DT-16). La suite de transiciones cubre cada arista (`OBS-3`).
 - **Score BANT-E** acumulado turno a turno en Postgres, en la misma transacción que la FSM (DT-14).
 - **Guardrail de entrada**: los 5 detectores de `guardrails.md` §1 (DT-15).
-- **Fair housing en el scoring** (`A-11`, DT-38): Authority da lo mismo a `solo`, `pareja` y `familia`, y
-  "mis hijos" se generaliza a "mi familia" en vez de borrarse. El gold set de perfiles pareados de `C-6`
-  queda en 25 de 25 con diferencia 0. Lo que haga el modelo real con una mención protegida no se ha
+- **Fair housing en el scoring** (`A-11`, DT-38; #119, DT-40): `decision_maker` solo dice si el lead
+  declaró cómo se decide, sin con quién. "mis hijos" se generaliza a "mi familia" y "mi esposa" o "mi
+  marido" a "mi pareja" en vez de borrarse. El gold set de perfiles pareados de `C-6` queda en 27 de 27
+  con diferencia 0. Lo que haga el modelo real con una mención protegida no se ha
   probado: el gold set usa el extractor determinista.
 - **Guardrails de salida** con el agente de Bedrock: disponibilidad revalidada (`A-4`, DT-21),
   factualidad (`A-5`, DT-23), dirección reservada (`A-6`, DT-25) y 6 de los 8 *claims* prohibidos (`A-7`,

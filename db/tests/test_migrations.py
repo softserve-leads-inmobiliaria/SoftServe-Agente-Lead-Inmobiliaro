@@ -102,6 +102,30 @@ def test_downgrade_then_upgrade_round_trips(database_urls):
     engine.dispose()
 
 
+@pytest.mark.parametrize("old", ["solo", "pareja", "familia"])
+def test_0006_rewrites_the_old_decision_maker_values(old):
+    """#119 (DT-40): con quién decidía el lead no queda guardado ni en la señal ni en las razones."""
+    with temporary_database(migrate=False) as url:
+        config = alembic_config(url)
+        command.upgrade(config, "0005")
+        engine = create_engine(url)
+        with Session(engine) as session, session.begin():
+            conversation = new_conversation(session)
+            session.add(FsmContext(conversation_id=conversation.id, score_signal={
+                "budget_hint": None, "decision_maker": old, "urgency": "no_declarada",
+                "matching_properties": 0, "meets_requirements": None}))
+            session.add(LeadScore(lead_id=conversation.lead_id, need_fit=0, budget=0, authority=20, timing=0,
+                                  eligibility=0, total=20, band="COLD",
+                                  reasons=["Need fit", f"Authority: decision_maker={old}", "Timing"]))
+            conversation_id, lead_id = conversation.id, conversation.lead_id
+        command.upgrade(config, "0006")
+        with Session(engine) as session:
+            assert session.get(FsmContext, conversation_id).score_signal["decision_maker"] == "declarado"
+            assert session.get(LeadScore, lead_id).reasons == [
+                "Need fit", "Authority: decision_maker=declarado", "Timing"]
+        engine.dispose()
+
+
 # --- estado de la FSM (lo que A-1 necesita) ----------------------------------------------------
 
 def test_new_conversation_starts_in_greeting(session):
@@ -131,7 +155,7 @@ def test_persisted_state_reads_back_as_a_valid_fsm_state_contract(session):
     session.add(FsmContext(
         conversation_id=conversation.id, lead_qualified=True,
         last_tool_results={"search_properties": {"properties": []}},
-        score_signal={"budget_hint": "2M", "decision_maker": "pareja", "urgency": "3_meses",
+        score_signal={"budget_hint": "2M", "decision_maker": "declarado", "urgency": "3_meses",
                       "matching_properties": 2, "meets_requirements": True}))
     session.add(LeadScore(lead_id=lead.id, need_fit=10, budget=20, authority=12, timing=12,
                           eligibility=20, total=74, band="HOT", reasons=["a", "b", "c", "d", "e"]))

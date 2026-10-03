@@ -1589,3 +1589,42 @@ que el lead miró (por ejemplo, la del anuncio, #122) ya no se conocía cuando p
 - Un lead en `SCHEDULE` que pregunta otra cosa recibe de nuevo los horarios, no la respuesta del agente.
   Si insiste tres veces sin elegir, la racha de frustración lo pasa a un asesor (A-13).
 - Cancelar o mover una visita sigue fuera de alcance (DT-32).
+
+## DT-40 — `decision_maker` solo dice si se declaró cómo se decide; "mi esposa" se generaliza a "mi pareja"
+
+**Estado:** aceptada
+
+**Contexto.** DT-38 igualó los puntos de Authority, pero dejó dos huecos (#119). El contrato
+`ScoreSignal.decision_maker` seguía siendo `solo`/`pareja`/`familia`/`no_declarado`: el prompt de Bedrock le
+pedía al modelo distinguir pareja de familia, y el dato quedaba guardado en `fsm_context.score_signal` y
+en las razones de `lead_scores`. Y "con mi esposa" o "con mi esposo" llegaban intactos al LLM y al
+historial, aunque revelan el estado civil, que `guardrails.md` §1 declara protegido.
+
+**Decisión.**
+- **El enum pasa a `declarado`/`no_declarado`** (`contracts/fsm_state.schema.json`). Authority sigue dando
+  20 y 0 (`scoring.DECISION_MAKER_POINTS`). El prompt del clasificador pide `declarado` si el mensaje dice
+  cómo se toma la decisión, solo o con otras personas, y le dice al modelo que no distinga con quién.
+- **La migración `0006` reescribe lo ya guardado**: `solo`, `pareja` y `familia` pasan a `declarado` en
+  `fsm_context.score_signal` y en la razón de Authority de `lead_scores.reasons`. Sin ella, `compute_score`
+  rechazaría la señal acumulada de una conversación vieja. El `downgrade` deja `solo`, que valía lo mismo.
+- **"mi esposa", "mi esposo", "mi marido", "mi mujer", "mi novia" y "mi novio" se generalizan a "mi
+  pareja"**, con el mismo mecanismo que "mis hijos" → "mi familia" (DT-38; `input_guard._GENERALIZED`), y
+  se marcan como mención protegida. El LLM sigue viendo que la decisión se comparte.
+- El gold set de `C-6` suma "con mi marido" y "con mi novia" (27 pares) y prueba que cada mención que
+  revela estado civil o situación familiar llega generalizada al LLM.
+
+**Alternativas.**
+- `solo`/`compartida`/`no_declarado`: conserva para el asesor si el lead decide solo, pero sigue guardando
+  un dato del hogar que no pesa en el score. Descartada.
+- Dejar el contrato como estaba y solo redactar "mi esposa": la distinción seguía guardándose y bastaba
+  un cambio en la tabla de puntos para volver a puntuarla. Descartada.
+- Tolerar en el código los valores viejos en vez de migrarlos: dejaba guardado justo el dato que se
+  quiere quitar. Descartada.
+
+**Consecuencias.**
+- El asesor ya no ve en la razón de Authority si el lead decide solo, en pareja o en familia. Si le
+  importa, lo pregunta en la llamada.
+- "mis padres" no se generaliza: dice con quién se decide, no el estado civil ni si el lead tiene hijos.
+  Con el enum colapsado, tampoco se guarda.
+- Los ejemplos de `contracts/examples/` y los tests usan `declarado`. Un consumidor que mande `pareja`
+  ahora falla la validación del contrato.

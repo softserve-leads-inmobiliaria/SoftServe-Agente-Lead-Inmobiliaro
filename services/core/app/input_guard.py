@@ -106,12 +106,16 @@ _PROTECTED = _any((
     r"\b(?:soy (?:mujer|hombre|gay|lesbiana|trans)|genero|orientacion sexual|embarazad[oa])\b",
     r"\b(?:casad[oa]s?|solter[oa]s?|divorciad[oa]s?|viud[oa]s?|madre soltera|padre soltero|estado civil)\b",
     r"\b(?:tengo hij[oa]s|mis hij[oa]s)\b",
+    r"\bmi (?:espos[oa]|marido|mujer|novi[oa])\b",
 ))
-# Mención protegida que además dice con quién se decide ("lo hablo con mis hijos"): se generaliza en vez de
-# borrarse. Borrarla dejaba "lo hablo con" y el lead perdía los puntos de Authority por tener hijos (A-11,
-# DT-38). "mi familia" conserva el rol sin revelar la situación familiar.
-_FAMILY_ROLE = re.compile(r"mis hij[oa]s")
-NEUTRAL_FAMILY = "mi familia"
+# Menciones protegidas que además dicen que la decisión se comparte ("lo hablo con mis hijos", "con mi
+# esposa"): se generalizan en vez de borrarse. Borrarlas dejaba "lo hablo con" y el lead perdía los puntos
+# de Authority (A-11, DT-38). "mi familia" y "mi pareja" conservan el rol sin revelar la situación
+# familiar ni el estado civil (#119, DT-40).
+_GENERALIZED: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"mis hij[oa]s"), "mi familia"),
+    (re.compile(r"mi (?:espos[oa]|marido|mujer|novi[oa])"), "mi pareja"),
+)
 
 # Lo que puede quedar de un mensaje al quitar una mención protegida ("Soy ___") sin aportar contenido.
 _FILLER_WORDS = frozenset({"soy", "estoy", "somos", "estamos", "tengo", "tenemos", "y", "e", "es", "mi", "que", "con",
@@ -198,7 +202,7 @@ def strip_protected(text: str) -> str:
 
     Las reglas trabajan sobre el texto normalizado (minúsculas, sin acentos); aquí se recuerda a qué
     posición del original corresponde cada carácter normalizado para poder recortar el original.
-    Las menciones de `_FAMILY_ROLE` no se borran: se reemplazan por `NEUTRAL_FAMILY`.
+    Las menciones de `_GENERALIZED` no se borran: se reemplazan por su forma neutra.
     """
     normalized: list[str] = []
     origin: list[int] = []
@@ -212,8 +216,9 @@ def strip_protected(text: str) -> str:
     for match in _PROTECTED.finditer("".join(normalized)):
         for position in range(match.start(), match.end()):
             keep[origin[position]] = False
-        if _FAMILY_ROLE.fullmatch(match.group()):
-            replacement[origin[match.start()]] = NEUTRAL_FAMILY
+        neutral = next((word for role, word in _GENERALIZED if role.fullmatch(match.group())), None)
+        if neutral:
+            replacement[origin[match.start()]] = neutral
     if all(keep):
         return text
     kept_text = "".join(replacement.get(index, "") + (char if kept else "")
