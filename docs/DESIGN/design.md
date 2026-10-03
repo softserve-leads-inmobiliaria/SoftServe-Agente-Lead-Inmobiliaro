@@ -211,6 +211,16 @@ Las cajas con borde punteado no están construidas.
   recámaras y presupuesto), sin lead ni texto. Cuenta lo que contestó el catálogo, antes de revalidar la
   disponibilidad. La misma búsqueda repetida en un turno es una fila; en dos turnos, dos. Un filtro que la
   tabla rechazaría queda vacío en vez de tumbar el turno.
+- **Atribución al bot y conversión** (`N-7`, DT-41): `services/panel/app/attribution.py`, de solo lectura,
+  con cuatro consultas por periodo. Todavía no hay vista: la arma `N-8`.
+  - Cierres atribuidos al bot sobre el total del periodo, con la regla de DT-41 (ventana de 60 días en
+    `ATTRIBUTION_WINDOW_DAYS`).
+  - Tiempo del primer contacto al cierre: mediana y p90. El primer contacto es `leads.created_at`, porque
+    el lead se crea con su primer mensaje.
+  - Conversión a `closed_won` por banda (HOT, WARM, COLD), con la banda actual del lead.
+  - Retorno por `utm_campaign`: leads, calificados y cierres.
+  Las dos primeras toman los cierres del periodo; las dos últimas, los leads creados en él. Cada una
+  excluye lo sintético salvo que se pida (`include_synthetic=True`), y ninguna devuelve un lead.
 - **Trazas por turno** hacia Phoenix sin texto de los leads (DT-18) y **logs JSON** en los 3 servicios
   (DT-27).
 - **Métricas del funnel**: una fila de `funnel_events` por transición real (DT-17).
