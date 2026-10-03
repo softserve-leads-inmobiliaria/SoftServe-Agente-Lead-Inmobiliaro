@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "harness" / "scripts"))
 
 import run_all  # noqa: E402
+from expectations import EXPECTED_FINAL_STATE  # noqa: E402
 from replay import build_events, http_responder, replay  # noqa: E402
 
 from db.testing import temporary_database  # noqa: E402
@@ -110,19 +111,7 @@ def test_search_reply_carries_data_that_only_the_catalog_has(stack, tmp_path):
     assert "Por ejemplo: Depto 2 rec. en Providencia." in reply["text"]
 
 
-# Estado final en Postgres tras reproducir cada guion (A-1): lo que dejó el flujo de la FSM.
-EXPECTED_FINAL_STATE = {
-    "saludo_y_busqueda": "RECOMMEND",
-    "deep_link_y_visita": "HUMAN_HANDOFF",
-    "flujo_completo_hasta_handoff": "HANDOFF",
-    "lead_que_declara_todo": "QUALIFY",
-    "queja_a_humano": "HUMAN_HANDOFF",
-    "solicitud_humano_directa": "HUMAN_HANDOFF",
-    "sigue_explorando_zona": "DISCOVERY",
-    "deep_link_solo_precio": "RECOMMEND",
-}
-
-
+# Estado final en Postgres tras reproducir cada guion (A-1): `harness/scripts/expectations.py`.
 @pytest.mark.parametrize("name,expected", EXPECTED_FINAL_STATE.items())
 def test_fsm_state_is_persisted_in_postgres(stack, database_url, name, expected):
     from sqlalchemy import create_engine, text

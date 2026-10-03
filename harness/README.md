@@ -37,8 +37,25 @@ Ejemplo:
     python harness/scripts/replay.py harness/fixtures/saludo_y_busqueda.jsonl   # un guion
     python harness/scripts/run_all.py                                            # todos
 
+Con `CORE_URL` los dos hablan con el core por HTTP; cada turno espera hasta `HARNESS_HTTP_TIMEOUT`
+segundos (60 por defecto). Una respuesta fuera de contrato, que no es JSON o que no llega cuenta como
+FALLA de ese guion y la corrida sigue con los demás.
+
+## Corrida real (OBS-6)
+
+    python harness/scripts/live_run.py               # contra el stack de docker compose
+    python harness/scripts/live_run.py --sin-frases  # con LLM_PROVIDER=bedrock
+
+Reproduce todos los guiones contra los servicios levantados y además comprueba lo que dejaron: el
+estado final de la FSM en Postgres (`harness/scripts/expectations.py`) y, si el lead quedó con zona, que
+el `panel` lo muestre en la cola del asesor de esa zona con su etapa y la transcripción en su ficha.
+Cada corrida deriva los ids de un `run_id` propio, así que se puede repetir sobre la misma base. Deja un
+informe en `tmp/harness/`. `--sin-frases` no exige `expect_reply_contains`, pero sí el contrato y que
+la respuesta tenga texto. Cómo levantar el stack: `docs/TESTING.md`, "Corrida real".
+
 ## Agregar un guion nuevo
 
-Crea `harness/fixtures/<nombre>.jsonl`. No hay que tocar código: `run_all.py` y la suite
-`tests/harness` descubren todos los `*.jsonl` de esa carpeta. Convención: una fixture nueva por cada
-historia de `core` que cambie el comportamiento conversacional.
+Crea `harness/fixtures/<nombre>.jsonl` y declara su estado final en `harness/scripts/expectations.py`
+(un test lo exige). Nada más: `run_all.py`, `live_run.py` y la suite `tests/harness` descubren todos
+los `*.jsonl` de esa carpeta. Convención: una fixture nueva por cada historia de `core` que cambie el
+comportamiento conversacional.

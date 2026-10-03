@@ -3,7 +3,8 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SKIP_DIRS = {".git", ".venv", "node_modules", ".pytest_cache", ".ruff_cache"}
+# `tmp/` no se versiona y guarda salidas generadas, como los informes de la corrida real (OBS-6).
+SKIP_DIRS = {".git", ".venv", "node_modules", ".pytest_cache", ".ruff_cache", "tmp"}
 # Plantillas que GitHub muestra por su cuenta: no son documentación que alguien tenga que encontrar.
 NOT_DOCS = {ROOT / ".github" / "PULL_REQUEST_TEMPLATE.md"}
 LINK = re.compile(r"\]\(([^)\s#]+)(?:#[^)]*)?\)")

@@ -202,7 +202,7 @@ Las cajas con borde punteado no están construidas.
 | Cancelar los *jobs* de un lead en `/stop` | `guardrails.md` §1 | No hay *jobs* que cancelar hasta que exista el *scheduler* |
 | *Claim* 6 completo (promoción genérica sin número) | `guardrails.md` §2.2, DT-26 | Solo se bloquea si trae un número inventado |
 | Gold sets y *contract tests* como *gate* de merge | `guardrails.md` §4, `OBS-4`, `OBS-5` | Corren en CI y un fallo deja el PR en rojo, pero nada impide hacer merge igual: ver §5.4 |
-| Conversaciones E2E contra el bot real | `OBS-6` | El arnés corre 8 guiones contra los servicios en Docker con el agente *fake*. Falta la corrida contra Telegram y Bedrock |
+| Conversaciones E2E contra el bot real | `OBS-6` | Corrida real hecha el 2-oct con el agente *fake*: 8/8 guiones contra `core`, `catalog` y `panel` en Docker, comprobados en Postgres y en la cola del asesor (`harness/scripts/live_run.py`, DT-43), más una conversación manual por Telegram (deep-link, traspaso con tarjeta al asesor, `STOP`). Falta la corrida con Bedrock (`--sin-frases`), que espera credenciales |
 | Plan B de observabilidad | `OBS-8`, DT-31 | Documentado y probado una vez: Jaeger recibe las trazas de `core` cambiando solo `OTEL_EXPORTER_OTLP_ENDPOINT`. No está en el compose, a propósito |
 
 ### 5.4 Límites conocidos de lo construido

@@ -95,3 +95,43 @@ def test_turn_without_expectations_replays_fine(tmp_path):
     path = _write(tmp_path, '{"text": "Hola"}\n')
     (reply,) = replay(path, default_responder())
     assert reply["direction"] == "outbound"
+
+
+def test_run_id_gives_each_run_its_own_conversation():
+    turns = [{"text": "Hola"}]
+    first, second = build_events("demo", turns, "corrida-1")[0], build_events("demo", turns, "corrida-2")[0]
+    default = build_events("demo", turns)[0]
+    assert len({first["conversation_id"], second["conversation_id"], default["conversation_id"]}) == 3
+    assert len({first["lead_id"], second["lead_id"], default["lead_id"]}) == 3
+    assert first == build_events("demo", turns, "corrida-1")[0]
+    assert default == build_events("demo", turns, None)[0]
+
+
+def test_without_checking_replies_the_phrases_are_not_required(tmp_path):
+    path = _write(tmp_path, json.dumps({"text": "Hola", "expect_reply_contains": "inexistente"}))
+    (reply,) = replay(path, default_responder(), check_replies=False)
+    assert reply["text"]
+
+
+def test_an_empty_reply_fails_even_without_checking_phrases(tmp_path):
+    path = _write(tmp_path, '{"text": "Hola"}\n')
+    responder = default_responder()
+    with pytest.raises(AssertionError, match="vacía"):
+        replay(path, lambda event: responder(event) | {"text": "  "}, check_replies=False)
+
+
+def _not_json(event):
+    raise json.JSONDecodeError("cuerpo HTML de un proxy", "<html>", 0)
+
+
+@pytest.mark.parametrize("responder", [lambda event: {"texto": "no canónico"}, _not_json],
+                         ids=["fuera_de_contrato", "no_es_json"])
+def test_run_all_reports_every_script_instead_of_aborting(tmp_path, monkeypatch, capsys, responder):
+    """OBS-6: una respuesta fuera de contrato o que no es JSON cortaba la corrida sin informe."""
+    for name in ("a", "b"):
+        (tmp_path / f"{name}.jsonl").write_text('{"text": "Hola"}\n', encoding="utf-8")
+    monkeypatch.setattr(run_all, "discover", lambda: sorted(tmp_path.glob("*.jsonl")))
+    monkeypatch.setattr(run_all, "configured_responder", lambda: responder)
+    assert run_all.main() == 1
+    output = capsys.readouterr().out
+    assert output.count("FALLA") == 2 and "0/2 guiones en verde" in output
