@@ -220,6 +220,7 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
 
     span.set_attribute("turn.outcome", "out_of_domain" if verdict.out_of_domain
                        else "jailbreak" if verdict.jailbreak else "normal")
+    listing = None
     if verdict.out_of_domain:
         result = AgentResult(text=_out_of_domain_reply(context), intent="otro")
     elif verdict.jailbreak:
@@ -239,7 +240,8 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     if verdict.pii:
         outbound["text"] += " " + PII_REMINDER
     counts = not (verdict.jailbreak or verdict.out_of_domain)
-    evidence = TurnEvidence(raw_signal=_raw_signal(verdict, result.raw_signal), tool_results=result.tool_results)
+    evidence = TurnEvidence(raw_signal=_raw_signal(verdict, result.raw_signal), tool_results=result.tool_results,
+                            listing=listing)
     streak = next_streak(context.unresolved_streak, result.intent, raw_signal=evidence.raw_signal)
     if (counts and context.fsm_state not in TERMINAL_STATES and result.intent not in HUMAN_INTENTS
             and is_frustrated(streak)):
