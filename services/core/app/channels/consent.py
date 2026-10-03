@@ -11,6 +11,7 @@ from typing import Final
 
 from sqlalchemy import Engine, select, update
 
+from app import jobs
 from app.input_guard import is_opt_out as core_is_opt_out
 from db.models import AuditLog, Conversation, Lead
 from db.session import session_scope
@@ -71,7 +72,8 @@ def is_first_turn(engine: Engine, conversation_id: uuid.UUID) -> bool:
 def withdraw_consent(engine: Engine, lead_id: uuid.UUID) -> None:
     """Marca la baja de inmediato: `consent_status=withdrawn` y el lead fuera del funnel.
 
-    Deja el mismo rastro de auditoría (`input.opt_out`) que la baja que detecta el core.
+    Deja el mismo rastro de auditoría (`input.opt_out`) que la baja que detecta el core, y cancela lo
+    que el *scheduler* tenía pendiente para el lead (A-17).
     """
     with session_scope(engine) as session:
         session.execute(
@@ -79,6 +81,7 @@ def withdraw_consent(engine: Engine, lead_id: uuid.UUID) -> None:
             .where(Lead.id == lead_id)
             .values(consent_status="withdrawn", status="closed_lost")
         )
+        jobs.cancel_for_lead(session, lead_id)
         session.add(AuditLog(actor="channel", action="input.opt_out",
                              payload={"lead_id": str(lead_id), "channel": "telegram"}))
 
