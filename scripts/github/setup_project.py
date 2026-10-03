@@ -75,7 +75,7 @@ LOTE_MAP = {
     "A-5": "Lote 5", "B-7": "Lote 5",
     "A-6": "Lote 6", "A-12": "Lote 6",
     # ROADMAP.md §8: propuestas de octubre (E6 y lo que sale de docs/DESIGN/propuestas.md).
-    "N-1": "Lote 7", "N-2": "Lote 7", "A-15": "Lote 7",
+    "N-1": "Lote 7", "N-2": "Lote 7", "A-15": "Lote 7", "B-8": "Lote 7",
     "N-3": "Lote 8", "N-4": "Lote 8", "N-5": "Lote 8", "N-6": "Lote 8", "N-7": "Lote 8", "N-9": "Lote 8",
     "B-10": "Lote 8",
     "N-8": "Lote 9", "B-11": "Lote 9",
