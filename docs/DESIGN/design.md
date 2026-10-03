@@ -191,8 +191,14 @@ Las cajas con borde punteado no están construidas.
   asesor ve los leads de su zona y los que tiene asignados (DT-42).
 - **Esquema de inteligencia comercial** (`N-1`, migración `0008`): `property_status_events`, `deals`,
   `property_interest` y `unmet_searches`, más `leads.utm_campaign`, `properties.photo_url` y `synthetic`.
-  `db/property_history.py` es la única vía para cambiar el estado de una propiedad. Solo el esquema: todavía
-  nada escribe en esas tablas (lo hacen `N-3`, `N-4`, `N-5` y `N-9`).
+  `db/property_history.py` es la única vía para cambiar el estado de una propiedad. De esas tablas, hoy solo
+  se escribe `property_interest` (`N-4`); `deals`, `unmet_searches` y el historial de estados esperan a
+  `N-3`, `N-5` y `N-9`.
+- **Interés del lead por propiedad** (`N-4`): cada turno guarda, en su misma transacción, las propiedades
+  que el lead tocó: `anuncio` (el *deep-link*), `consulta` (`get_property`), `busqueda` (cada resultado de
+  `search_properties`) y `visita` (la visita reservada). Una fila por propiedad y tipo en cada turno, sin
+  texto del lead. Es la base de la atribución de DT-41. Con el agente de Bedrock, si un turno llama dos
+  veces a `get_property`, solo queda la última.
 - **Trazas por turno** hacia Phoenix sin texto de los leads (DT-18) y **logs JSON** en los 3 servicios
   (DT-27).
 - **Métricas del funnel**: una fila de `funnel_events` por transición real (DT-17).
