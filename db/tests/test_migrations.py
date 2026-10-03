@@ -104,25 +104,36 @@ def test_downgrade_then_upgrade_round_trips(database_urls):
 
 @pytest.mark.parametrize("old", ["solo", "pareja", "familia"])
 def test_0006_rewrites_the_old_decision_maker_values(old):
-    """#119 (DT-40): con quién decidía el lead no queda guardado ni en la señal ni en las razones."""
+    """#119 (DT-40): con quién decidía el lead no queda guardado ni en la señal ni en las razones.
+
+    SQL plano y no los modelos: los modelos describen `head`, y la base está en 0005."""
+    signal = json.dumps({"budget_hint": None, "decision_maker": old, "urgency": "no_declarada",
+                         "matching_properties": 0, "meets_requirements": None})
     with temporary_database(migrate=False) as url:
         config = alembic_config(url)
         command.upgrade(config, "0005")
         engine = create_engine(url)
-        with Session(engine) as session, session.begin():
-            conversation = new_conversation(session)
-            session.add(FsmContext(conversation_id=conversation.id, score_signal={
-                "budget_hint": None, "decision_maker": old, "urgency": "no_declarada",
-                "matching_properties": 0, "meets_requirements": None}))
-            session.add(LeadScore(lead_id=conversation.lead_id, need_fit=0, budget=0, authority=20, timing=0,
-                                  eligibility=0, total=20, band="COLD",
-                                  reasons=["Need fit", f"Authority: decision_maker={old}", "Timing"]))
-            conversation_id, lead_id = conversation.id, conversation.lead_id
+        with engine.begin() as connection:
+            lead_id = connection.execute(text(
+                "INSERT INTO leads (telegram_user_id) VALUES ('tg_0006') RETURNING id")).scalar_one()
+            conversation_id = connection.execute(text(
+                "INSERT INTO conversations (lead_id) VALUES (:lead) RETURNING id"), {"lead": lead_id}).scalar_one()
+            connection.execute(text(
+                "INSERT INTO fsm_context (conversation_id, score_signal) VALUES (:conversation, CAST(:signal AS jsonb))"),
+                {"conversation": conversation_id, "signal": signal})
+            connection.execute(text(
+                "INSERT INTO lead_scores (lead_id, need_fit, budget, authority, timing, eligibility, total, band,"
+                " reasons) VALUES (:lead, 0, 0, 20, 0, 0, 20, 'COLD', :reasons)"),
+                {"lead": lead_id, "reasons": ["Need fit", f"Authority: decision_maker={old}", "Timing"]})
         command.upgrade(config, "0006")
-        with Session(engine) as session:
-            assert session.get(FsmContext, conversation_id).score_signal["decision_maker"] == "declarado"
-            assert session.get(LeadScore, lead_id).reasons == [
-                "Need fit", "Authority: decision_maker=declarado", "Timing"]
+        with engine.connect() as connection:
+            stored = connection.execute(text(
+                "SELECT score_signal ->> 'decision_maker' FROM fsm_context WHERE conversation_id = :c"),
+                {"c": conversation_id}).scalar_one()
+            reasons = connection.execute(text("SELECT reasons FROM lead_scores WHERE lead_id = :l"),
+                                         {"l": lead_id}).scalar_one()
+        assert stored == "declarado"
+        assert reasons == ["Need fit", "Authority: decision_maker=declarado", "Timing"]
         engine.dispose()
 
 

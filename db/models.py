@@ -45,6 +45,9 @@ PROPERTY_STATUSES = ("disponible", "apartado", "cerrado")
 SCORE_BANDS = ("COLD", "WARM", "HOT")
 MESSAGE_ROLES = ("user", "assistant", "system", "tool")
 NOTIFICATION_KINDS = ("calificado", "traspaso")
+# Inteligencia comercial (N-1). Una propiedad colocada queda en `cerrado`; si fue renta o venta lo dice `deals`.
+DEAL_KINDS = ("renta", "venta")
+INTEREST_KINDS = ("anuncio", "consulta", "busqueda", "visita")
 
 # Dimensión del vector de la FAQ. Valor de partida (modelos de sentence embeddings habituales usan
 # 384); C-5 fija el modelo real (DT-7) y, si cambia, lo ajusta con una migración nueva.
@@ -54,6 +57,11 @@ EMBEDDING_DIM = 384
 def _one_of(column: str, values: tuple[str, ...], name: str) -> CheckConstraint:
     listed = ", ".join(f"'{value}'" for value in values)
     return CheckConstraint(f"{column} IN ({listed})", name=name)
+
+
+def _null_or_one_of(column: str, values: tuple[str, ...], name: str) -> CheckConstraint:
+    listed = ", ".join(f"'{value}'" for value in values)
+    return CheckConstraint(f"{column} IS NULL OR {column} IN ({listed})", name=name)
 
 
 class Base(DeclarativeBase):
@@ -71,6 +79,11 @@ _UUID_PK = dict(primary_key=True, default=uuid.uuid4, server_default=text("gen_r
 
 def _now() -> Mapped[datetime]:
     return mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+def _synthetic() -> Mapped[bool]:
+    """Fila sembrada por la historia sintética de N-9: se distingue y se borra sin tocar datos reales."""
+    return mapped_column(server_default=text("false"), nullable=False)
 
 
 class Lead(Base):
@@ -96,6 +109,9 @@ class Lead(Base):
     qualified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     budget: Mapped[str | None] = mapped_column(Text)  # texto libre, como budget_hint (design.md §3)
     timing: Mapped[str | None] = mapped_column(Text)
+    # Campaña del primer contacto (`?start=camp_…`, N-5). Una campaña posterior no la pisa.
+    utm_campaign: Mapped[str | None] = mapped_column(String)
+    synthetic: Mapped[bool] = _synthetic()
     created_at: Mapped[datetime] = _now()
     updated_at: Mapped[datetime] = _now()
 
@@ -198,10 +214,12 @@ class Property(Base):
     bedrooms: Mapped[int] = mapped_column(Integer, nullable=False)
     bathrooms: Mapped[Decimal] = mapped_column(Numeric(3, 1), nullable=False)
     amenities: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"), nullable=False)
+    # Se cambia solo con db/property_history.py, que deja el evento en property_status_events (N-1).
     status: Mapped[str] = mapped_column(String, server_default="disponible", nullable=False)
     address_approx: Mapped[str] = mapped_column(String, nullable=False)
     # Reservada hasta lead_qualified=true (guardrails.md).
     address_exact: Mapped[str] = mapped_column(String, nullable=False)
+    photo_url: Mapped[str | None] = mapped_column(String)  # foto en Telegram (B-10)
 
 
 class Promotion(Base):
@@ -263,6 +281,93 @@ class AdvisorNotification(Base):
     body: Mapped[str] = mapped_column(Text, nullable=False)  # el resumen, sin la transcripción
     created_at: Mapped[datetime] = _now()
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PropertyStatusEvent(Base):
+    """Historial de estados de una propiedad (N-1): de aquí salen los días en el mercado (N-6).
+    Lo escribe solo db/property_history.py, en la misma sesión que cambia `Property.status`."""
+
+    __tablename__ = "property_status_events"
+    __table_args__ = (
+        _null_or_one_of("from_status", PROPERTY_STATUSES, "ck_property_status_events_from_status"),
+        _one_of("to_status", PROPERTY_STATUSES, "ck_property_status_events_to_status"),
+        Index("ix_property_status_events_property_changed", "property_id", "changed_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    property_id: Mapped[str] = mapped_column(ForeignKey("properties.id", ondelete="CASCADE"), nullable=False)
+    from_status: Mapped[str | None] = mapped_column(String)  # None: el alta de la propiedad
+    to_status: Mapped[str] = mapped_column(String, nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(),
+                                                 index=True, nullable=False)
+    actor: Mapped[str] = mapped_column(String, nullable=False)  # p. ej. el id del asesor, o "seed"
+    synthetic: Mapped[bool] = _synthetic()
+
+
+class Deal(Base):
+    """Operación cerrada (N-3): qué propiedad, con qué lead, qué asesor, renta o venta y a qué precio."""
+
+    __tablename__ = "deals"
+    __table_args__ = (
+        _one_of("kind", DEAL_KINDS, "ck_deals_kind"),
+        CheckConstraint("price >= 0", name="ck_deals_price"),
+        Index("ix_deals_property_closed", "property_id", "closed_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), **_UUID_PK)
+    property_id: Mapped[str] = mapped_column(ForeignKey("properties.id"), nullable=False)
+    lead_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("leads.id", ondelete="CASCADE"),
+                                               index=True, nullable=False)
+    advisor_id: Mapped[str] = mapped_column(ForeignKey("advisors.id"), index=True, nullable=False)
+    kind: Mapped[str] = mapped_column(String, nullable=False)
+    price: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    closed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(),
+                                                index=True, nullable=False)
+    synthetic: Mapped[bool] = _synthetic()
+
+
+class PropertyInterest(Base):
+    """Qué propiedades vio, consultó o visitó cada lead (N-4). Base de la atribución al bot (DT-41).
+    Sin texto del lead: solo el tipo de interacción y la fecha."""
+
+    __tablename__ = "property_interest"
+    __table_args__ = (
+        _one_of("kind", INTEREST_KINDS, "ck_property_interest_kind"),
+        # DT-41: EXISTS con el mismo lead y propiedad dentro de la ventana previa al cierre.
+        Index("ix_property_interest_lead_property_created", "lead_id", "property_id", "created_at"),
+        Index("ix_property_interest_property_created", "property_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    lead_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("leads.id", ondelete="CASCADE"), nullable=False)
+    property_id: Mapped[str] = mapped_column(ForeignKey("properties.id", ondelete="CASCADE"), nullable=False)
+    kind: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(),
+                                                 index=True, nullable=False)
+    synthetic: Mapped[bool] = _synthetic()
+
+
+class UnmetSearch(Base):
+    """Búsqueda sin resultados (N-5): los filtros de `search_properties`, sin lead ni texto del lead."""
+
+    __tablename__ = "unmet_searches"
+    __table_args__ = (
+        _null_or_one_of("type", PROPERTY_TYPES, "ck_unmet_searches_type"),
+        CheckConstraint("bedrooms IS NULL OR bedrooms >= 0", name="ck_unmet_searches_bedrooms"),
+        CheckConstraint("budget_min IS NULL OR budget_min >= 0", name="ck_unmet_searches_budget_min"),
+        CheckConstraint("budget_max IS NULL OR budget_max >= 0", name="ck_unmet_searches_budget_max"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    # Cada filtro es opcional, como en search_properties.
+    zone: Mapped[str | None] = mapped_column(String)
+    type: Mapped[str | None] = mapped_column(String)
+    bedrooms: Mapped[int | None] = mapped_column(Integer)
+    budget_min: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    budget_max: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(),
+                                                 index=True, nullable=False)
+    synthetic: Mapped[bool] = _synthetic()
 
 
 class FaqEntry(Base):
