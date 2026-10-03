@@ -48,6 +48,9 @@ NOTIFICATION_KINDS = ("calificado", "traspaso")
 # Inteligencia comercial (N-1). Una propiedad colocada queda en `cerrado`; si fue renta o venta lo dice `deals`.
 DEAL_KINDS = ("renta", "venta")
 INTEREST_KINDS = ("anuncio", "consulta", "busqueda", "visita")
+# Tareas diferidas (A-17, DT-44). Cada historia que agregue una clase de *job* la suma aquí y en una migración.
+JOB_KINDS = ("no_response",)
+JOB_STATUSES = ("pending", "done", "failed", "cancelled")
 
 # Dimensión del vector de la FAQ. Valor de partida (modelos de sentence embeddings habituales usan
 # 384); C-5 fija el modelo real (DT-7) y, si cambia, lo ajusta con una migración nueva.
@@ -377,6 +380,37 @@ class FaqEntry(Base):
     question: Mapped[str] = mapped_column(Text, nullable=False)
     answer: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
+
+
+class ScheduledJob(Base):
+    """Tarea diferida (A-17, DT-44): la ejecuta el *scheduler* de `core` cuando vence `run_at`.
+
+    `dedupe_key` identifica al *job* dentro de su clase (para `no_response`, la conversación): no puede
+    haber dos pendientes con la misma clave. Los ejecutados, cancelados o fallidos quedan como registro.
+    """
+
+    __tablename__ = "scheduled_jobs"
+    __table_args__ = (
+        _one_of("kind", JOB_KINDS, "ck_scheduled_jobs_kind"),
+        _one_of("status", JOB_STATUSES, "ck_scheduled_jobs_status"),
+        CheckConstraint("attempts >= 0", name="ck_scheduled_jobs_attempts"),
+        Index("ix_scheduled_jobs_due", "run_at", postgresql_where=text("status = 'pending'")),
+        Index("uq_scheduled_jobs_pending_key", "kind", "dedupe_key", unique=True,
+              postgresql_where=text("status = 'pending'")),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), **_UUID_PK)
+    kind: Mapped[str] = mapped_column(String, nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(String, nullable=False)
+    # Null para los *jobs* que no son de un lead (p. ej. el reporte semanal de N-10).
+    lead_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("leads.id", ondelete="CASCADE"), index=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"), nullable=False)
+    run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String, server_default="pending", nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, server_default=text("0"), nullable=False)  # ejecuciones fallidas
+    last_error: Mapped[str | None] = mapped_column(Text)  # el tipo de la excepción, sin datos del lead
+    created_at: Mapped[datetime] = _now()
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class FunnelEvent(Base):
