@@ -15,7 +15,7 @@ from typing import Any, Awaitable, Callable, Mapping, Sequence
 from sqlalchemy import Engine
 from starlette.concurrency import run_in_threadpool
 
-from app import reminders, scheduling_client, visits
+from app import alerts, reminders, scheduling_client, visits
 from app.agent import Agent, AgentResult, FakeAgent, TurnInput
 from app.availability import AvailabilityGuard
 from app.demand import SearchLog, UnmetSearch
@@ -111,7 +111,8 @@ def read_guard_context(engine: Engine, event: Mapping[str, Any]) -> GuardContext
 def advance(engine: Engine, event: Mapping[str, Any], intent: str,
             evidence: TurnEvidence | None = None, audits: Sequence[Audit] = (),
             counts_as_unresolved: bool = True, messages: Sequence[SavedMessage] = (),
-            visit: VisitStep | None = None, unmet_searches: Sequence[UnmetSearch] = ()) -> Transition:
+            visit: VisitStep | None = None, unmet_searches: Sequence[UnmetSearch] = (),
+            alert: Mapping[str, Any] | None = None) -> Transition:
     """Carga y bloquea el estado, aplica el trigger, puntúa, audita y guarda, en una transacción.
 
     `messages` son los mensajes del turno (lead y asistente): van en la misma transacción, así el
@@ -119,7 +120,8 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
 
     `counts_as_unresolved=False` para los turnos que fuerza el guardrail de entrada: no suman a la
     racha de frustración. `visit` es el paso de agenda del turno (B-8), si lo hubo. `unmet_searches` son
-    las búsquedas del turno que no encontraron nada (N-5).
+    las búsquedas del turno que no encontraron nada (N-5). `alert`, los filtros de la alerta que pidió el
+    lead (A-18).
     """
     conversation_id, lead_id = _ids(event)
     with get_tracer().start_as_current_span("fsm.advance") as span, session_scope(engine) as session:
@@ -151,6 +153,8 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         if event.get("utm_campaign"):
             store.set_campaign_if_unknown(lead_id, str(event["utm_campaign"]))
         store.record_unmet_searches(unmet_searches)
+        if alert:
+            alerts.create(session, lead_id, conversation_id, alert)
         restart_silence(session, conversation_id, lead_id, after)  # A-17: el lead escribió
         previous_band = state.score["band"] if state.score else None
         qualified = just_qualified(previous_band, score.band) and store.qualify(conversation_id, lead_id)
@@ -237,6 +241,26 @@ async def _visit_step(event: Mapping[str, Any], context: GuardContext, result: A
     return await visits.start(agenda, lead_id, prop, today)
 
 
+def _alert_step(context: GuardContext, result: AgentResult, searches: SearchLog | None,
+                text: str) -> tuple[AgentResult, dict[str, Any] | None]:
+    """La alerta de propiedades nuevas (A-18): la respuesta del turno y los filtros a guardar, si el lead la pidió.
+
+    Si la pide, se usan los filtros de la búsqueda de este turno o, si no buscó, los de la oferta del turno
+    anterior. Si no la pide y la búsqueda trajo pocas propiedades, se le ofrece.
+    """
+    current = searches.last_search if searches else None
+    if alerts.is_request(text):
+        filters = (current[0] if current and alerts.has_filters(current[0])
+                   else context.last_tool_results.get(alerts.ALERT_KEY))
+        if alerts.has_filters(filters):
+            return replace(result, text=alerts.CREATED_TEXT), dict(filters)
+        return replace(result, text=alerts.NO_SEARCH_TEXT), None
+    if current and current[1] <= alerts.FEW_RESULTS and alerts.has_filters(current[0]):
+        return replace(result, text=f"{result.text}\n\n{alerts.OFFER_TEXT}",
+                       tool_results={**result.tool_results, alerts.ALERT_KEY: current[0]}), None
+    return result, None
+
+
 def _lead_message(verdict: InputVerdict, original: str) -> list[SavedMessage]:
     """El mensaje del lead tal como se guarda: nunca el original. Sin PII ni categorías protegidas, y un
     intento de *jailbreak* no se guarda para que no vuelva al LLM como historial."""
@@ -304,6 +328,9 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
         # Un turno forzado por el guardrail no responde a la oferta, pero tampoco la borra.
         result = replace(result, tool_results={**result.tool_results,
                                                OFFER_KEY: context.last_tool_results[OFFER_KEY]})
+    alert = None
+    if visit is None and counts and result.intent not in HUMAN_INTENTS:
+        result, alert = _alert_step(context, result, searches, verdict.signal_text)
     outbound = FakeCore().handle_event(event, intent=result.intent, text=result.text)
     if verdict.pii:
         outbound["text"] += " " + PII_REMINDER
@@ -321,7 +348,7 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     saved = [*_lead_message(verdict, event["text"]), ("assistant", outbound["text"], result.tool_calls or None)]
     audits = [*audits, *result.guard_audits]  # A-5: la factualidad de salida se audita igual que la entrada
     transition = await run_in_threadpool(advance, engine, event, result.intent, evidence, audits, counts, saved,
-                                         visit, searches.unmet if searches else ())
+                                         visit, searches.unmet if searches else (), alert)
     _describe(span, transition)
     span.set_attribute("lead.qualified_now", transition.qualified)
     if transition.qualified and on_qualified is not None:

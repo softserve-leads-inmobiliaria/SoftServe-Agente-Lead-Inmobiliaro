@@ -11,10 +11,11 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
 from sqlalchemy import case, func, literal, select, update
-from sqlalchemy.dialects.postgresql import UUID, insert
+from sqlalchemy.dialects.postgresql import JSONB, UUID, insert
 from sqlalchemy.orm import Session
 
-from app import jobs
+from app import alerts, jobs
+from app.interest import REMEMBERED_KEY
 from app.scoring import Score
 from db.models import (
     AuditLog,
@@ -248,11 +249,21 @@ class StateStore:
         for filters in searches:
             self._session.add(UnmetSearch(**filters))
 
+    def remember(self, conversation_id: uuid.UUID, prop: Mapping[str, Any]) -> None:
+        """Deja `prop` como la propiedad de interés de la conversación (`REMEMBERED_KEY`) sin tocar el resto
+        de `last_tool_results`: la usa el *scheduler* cuando le avisa al lead de una propiedad (A-18)."""
+        self._session.execute(
+            update(FsmContext).where(FsmContext.conversation_id == conversation_id)
+            .values(last_tool_results=FsmContext.last_tool_results.op("||")(
+                literal({REMEMBERED_KEY: dict(prop)}, type_=JSONB)), updated_at=func.now()))
+
     def withdraw_consent(self, lead_id: uuid.UUID) -> None:
-        """La baja también cancela todo lo que el *scheduler* tenía pendiente para el lead (A-17)."""
+        """La baja también cancela todo lo que el *scheduler* tenía pendiente para el lead (A-17) y sus
+        alertas de propiedades nuevas (A-18)."""
         self._session.execute(update(Lead).where(Lead.id == lead_id)
                               .values(consent_status="withdrawn", updated_at=func.now()))
         jobs.cancel_for_lead(self._session, lead_id)
+        alerts.deactivate_for_lead(self._session, lead_id)
 
     def audit(self, action: str, payload: Mapping[str, Any]) -> None:
         """Registra una detección del guardrail. El `payload` no debe llevar el contenido del mensaje."""

@@ -48,17 +48,26 @@ class SearchLog:
     def __init__(self, catalog: Any) -> None:
         self._catalog = catalog
         self._unmet: dict[tuple[Any, ...], UnmetSearch] = {}
+        self._last: tuple[UnmetSearch, int] | None = None
 
     async def tool_specs(self) -> list[dict[str, Any]]:
         return await self._catalog.tool_specs()
 
     async def call(self, tool: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
         result = await self._catalog.call(tool, arguments)
-        if tool == "search_properties" and isinstance(result, Mapping) and not result.get("properties"):
+        if tool == "search_properties" and isinstance(result, Mapping):
+            found = result.get("properties")
             filters = unmet_filters(arguments)
-            self._unmet.setdefault(tuple(filters.values()), filters)
+            self._last = (filters, len(found) if isinstance(found, list) else 0)
+            if not found:
+                self._unmet.setdefault(tuple(filters.values()), filters)
         return result
 
     @property
     def unmet(self) -> list[UnmetSearch]:
         return list(self._unmet.values())
+
+    @property
+    def last_search(self) -> tuple[UnmetSearch, int] | None:
+        """Los filtros de la última búsqueda del turno y cuántas propiedades trajo (A-18), o None."""
+        return self._last

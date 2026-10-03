@@ -12,6 +12,7 @@ Clases de *job*:
 - `no_response`: los seguimientos y las aristas `no_response` de la FSM (`DISCOVERY -> NURTURE -> LOST`,
   design.md §2). Cada mensaje del lead reinicia la cuenta.
 - `visit_reminder`: el recordatorio de la visita el día anterior (B-13, `app/reminders.py`).
+- `alert_scan` y `property_alert`: las alertas de propiedades nuevas (A-18, `app/alerts.py`).
 """
 from __future__ import annotations
 
@@ -30,10 +31,10 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from app import jobs, reminders
+from app import address_guard, alerts, factuality, jobs, promise_guard, reminders
 from app.fsm import NO_RESPONSE, next_state
 from app.state_store import StateStore
-from db.models import Conversation, Lead, Property, ScheduledJob
+from db.models import Conversation, Lead, Property, PropertyAlert, ScheduledJob
 from db.session import session_scope
 
 logger = logging.getLogger("core.scheduler")
@@ -119,7 +120,8 @@ class Scheduler:
         self._policy = policy or default_policy()
         self._clock = clock
         self._batch_size = batch_size
-        self._handlers = {NO_RESPONSE_KIND: self._no_response, reminders.VISIT_REMINDER_KIND: self._visit_reminder}
+        self._handlers = {NO_RESPONSE_KIND: self._no_response, reminders.VISIT_REMINDER_KIND: self._visit_reminder,
+                          alerts.ALERT_SCAN_KIND: self._alert_scan, alerts.PROPERTY_ALERT_KIND: self._property_alert}
 
     def run_due(self, now: datetime | None = None) -> int:
         """Ejecuta los jobs vencidos a `now` (el reloj del scheduler si no se pasa). Devuelve cuántos tomó."""
@@ -179,20 +181,27 @@ class Scheduler:
 
     # --- no_response ---------------------------------------------------------------------------------
 
-    def _no_response(self, session: Session, job: ScheduledJob, now: datetime) -> str:
-        state, attempt = job.payload["state"], int(job.payload["attempt"])
-        conversation_id = uuid.UUID(job.payload["conversation_id"])
+    @staticmethod
+    def _lock_conversation(session: Session, conversation_id: uuid.UUID) -> Any:
+        """Bloquea la conversación y devuelve su estado y el lead. `_Busy` si un turno la tiene.
+
+        NOWAIT: un turno en curso tiene la conversación y espera a este job para cancelarlo. Esperar aquí
+        sería un deadlock; se suelta el job y el turno lo cancela.
+        """
         try:
-            # NOWAIT: un turno en curso tiene la conversación y espera a este job para cancelarlo. Esperar
-            # aquí sería un deadlock; se suelta el job y el turno lo cancela.
-            row = session.execute(
-                select(Conversation.fsm_state, Lead.consent_status, Lead.telegram_user_id)
+            return session.execute(
+                select(Conversation.fsm_state, Lead.consent_status, Lead.telegram_user_id, Lead.qualified_at)
                 .join(Lead, Lead.id == Conversation.lead_id).where(Conversation.id == conversation_id)
                 .with_for_update(of=Conversation, nowait=True)).one_or_none()
         except OperationalError as exc:
             if isinstance(exc.orig, LockNotAvailable):
                 raise _Busy from exc
             raise
+
+    def _no_response(self, session: Session, job: ScheduledJob, now: datetime) -> str:
+        state, attempt = job.payload["state"], int(job.payload["attempt"])
+        conversation_id = uuid.UUID(job.payload["conversation_id"])
+        row = self._lock_conversation(session, conversation_id)
         if row is None or row.consent_status == "withdrawn" or row.fsm_state != state:
             return "cancelled"  # el lead se dio de baja, o la conversación ya no está donde estaba
         store = StateStore(session)
@@ -238,6 +247,53 @@ class Scheduler:
         session.flush()
         self._channel.send(row.telegram_user_id, text)  # lo último antes del commit
         logger.info("recordatorio de visita enviado", extra=extra)
+        return "done"
+
+    # --- alertas de propiedades nuevas (A-18) ------------------------------------------------------------
+
+    def _alert_scan(self, session: Session, job: ScheduledJob, now: datetime) -> str:
+        """Encola un `property_alert` por cada propiedad nueva que cumpla una alerta activa, y se vuelve a
+        programar mientras quede alguna alerta activa."""
+        alerts.expire(session, now)
+        for match in alerts.new_matches(session, now):
+            jobs.enqueue(session, alerts.PROPERTY_ALERT_KIND, f"{match.alert_id}:{match.property_id}", now,
+                         lead_id=match.lead_id, once=True,
+                         payload={"alert_id": str(match.alert_id), "property_id": match.property_id,
+                                  "conversation_id": str(match.conversation_id)})
+        if alerts.any_active(session, now):
+            jobs.enqueue(session, alerts.ALERT_SCAN_KIND, alerts.SCAN_KEY, now + alerts.scan_every())
+        return "done"
+
+    def _property_alert(self, session: Session, job: ScheduledJob, now: datetime) -> str:
+        conversation_id = uuid.UUID(job.payload["conversation_id"])
+        lead = self._lock_conversation(session, conversation_id)  # escribe la propiedad recordada
+        alert = session.get(PropertyAlert, uuid.UUID(job.payload["alert_id"]))
+        prop = session.get(Property, job.payload["property_id"])
+        if (lead is None or lead.consent_status == "withdrawn" or alert is None or not alert.active
+                or alert.expires_at <= now or prop is None or prop.status != "disponible"):
+            return "cancelled"
+        found = {"id": prop.id, "title": prop.title, "price": float(prop.price), "type": prop.type,
+                 "zone": prop.zone, "bedrooms": prop.bedrooms, "status": prop.status}
+        text = f"{alerts.alert_text(found)}\n\n{STOP_HINT}"
+        # A-18: el aviso pasa por los guardrails de salida, como una respuesta del LLM (A-5, A-6, A-7).
+        tool_results = {"get_property": found}
+        violations = [*factuality.check(text, tool_results), *address_guard.check(text, lead.qualified_at is not None),
+                      *promise_guard.check(text, tool_results)]
+        extra = {"job_id": str(job.id), "alert_id": str(alert.id), "property_id": prop.id}
+        if violations:
+            logger.warning("alerta bloqueada por el guardrail de salida",
+                           extra=extra | {"violations": [violation.kind for violation in violations]})
+            return "cancelled"
+        if self._channel is None or not self._channel.reachable(lead.telegram_user_id):
+            logger.info("alerta sin canal", extra=extra)
+            return "done"
+        store = StateStore(session)
+        store.add_messages(conversation_id, [("assistant", text, None)])
+        # Si el lead contesta "me interesa", el turno siguiente sabe de qué propiedad habla.
+        store.remember(conversation_id, {key: found[key] for key in ("id", "title", "zone")})
+        session.flush()
+        self._channel.send(lead.telegram_user_id, text)  # lo último antes del commit
+        logger.info("alerta de propiedad nueva enviada", extra=extra)
         return "done"
 
 
