@@ -16,3 +16,18 @@ EXPECTED_FINAL_STATE = {
     "sigue_explorando_zona": "DISCOVERY",
     "deep_link_solo_precio": "RECOMMEND",
 }
+
+# Con el LLM real (`live_run.py --sin-frases`), otros estados finales también válidos. El modelo de Bedrock
+# pide la zona antes de buscar, así que sin búsqueda la FSM se queda en `QUALIFY` (corrida del 3-oct, #48).
+ALSO_VALID_WITH_LLM = {
+    "saludo_y_busqueda": ("QUALIFY",),
+    "deep_link_solo_precio": ("QUALIFY",),
+}
+
+
+def accepted_final_states(name: str, real_llm: bool) -> set[str]:
+    """Los estados finales que se aceptan para un guion. Con el agente *fake*, solo el declarado."""
+    expected = EXPECTED_FINAL_STATE.get(name)
+    if expected is None:
+        return set()
+    return {expected, *(ALSO_VALID_WITH_LLM.get(name, ()) if real_llm else ())}
