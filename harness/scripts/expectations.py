@@ -17,11 +17,14 @@ EXPECTED_FINAL_STATE = {
     "deep_link_solo_precio": "RECOMMEND",
 }
 
-# Con el LLM real (`live_run.py --sin-frases`), otros estados finales también válidos. El modelo de Bedrock
-# pide la zona antes de buscar, así que sin búsqueda la FSM se queda en `QUALIFY` (corrida del 3-oct, #48).
+# Con el LLM real (`live_run.py --sin-frases`), otros estados finales también válidos (corridas del 3-oct,
+# #48). El modelo de Bedrock suele pedir la zona antes de buscar: sin búsqueda la FSM se queda en `QUALIFY`,
+# y si el lead pide la visita sin haber visto una propiedad, la conversación espera su horario preferido en
+# `SCHEDULE`. El modelo no siempre elige igual, así que el mismo guion puede llegar a uno u otro.
 ALSO_VALID_WITH_LLM = {
     "saludo_y_busqueda": ("QUALIFY",),
     "deep_link_solo_precio": ("QUALIFY",),
+    "flujo_completo_hasta_handoff": ("SCHEDULE",),
 }
 
 
