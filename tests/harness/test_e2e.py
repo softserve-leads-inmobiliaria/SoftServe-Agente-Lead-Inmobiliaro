@@ -19,7 +19,11 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "harness" / "scripts"))
 
 import run_all  # noqa: E402
-from expectations import EXPECTED_FINAL_STATE  # noqa: E402
+from expectations import (  # noqa: E402
+    ALSO_VALID_WITH_LLM,
+    EXPECTED_FINAL_STATE,
+    accepted_final_states,
+)
 from replay import build_events, http_responder, replay  # noqa: E402
 
 from db.testing import temporary_database  # noqa: E402
@@ -232,6 +236,14 @@ def test_funnel_events_are_written_once_per_transition(stack, database_url):
 
 def test_every_fixture_has_a_declared_final_state():
     assert {p.stem for p in run_all.discover()} == set(EXPECTED_FINAL_STATE)
+
+
+def test_other_final_states_are_accepted_only_with_the_real_llm():
+    assert set(ALSO_VALID_WITH_LLM) <= set(EXPECTED_FINAL_STATE)
+    assert accepted_final_states("saludo_y_busqueda", real_llm=False) == {"RECOMMEND"}
+    assert accepted_final_states("saludo_y_busqueda", real_llm=True) == {"RECOMMEND", "QUALIFY"}
+    assert accepted_final_states("queja_a_humano", real_llm=True) == {"HUMAN_HANDOFF"}
+    assert accepted_final_states("no_existe", real_llm=True) == set()
 
 
 def test_core_answers_503_when_the_catalog_is_down(database_url):
