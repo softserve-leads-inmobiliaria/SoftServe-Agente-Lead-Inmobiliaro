@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% if refresh_seconds %}<meta http-equiv="refresh" content="{{ refresh_seconds }}">{% endif %}
   <title>{% block title %}Panel de asesores{% endblock %}</title>
   <style>
     :root {
@@ -48,6 +49,10 @@
     }
     .pill-sql { border-color: var(--hot); color: var(--hot); }
     .pill-mql { border-color: var(--warm); color: var(--warm); }
+    .notice { padding: 12px 0; border-bottom: 1px solid var(--line); }
+    .notice:last-child { border-bottom: 0; }
+    .notice-body { white-space: pre-line; margin: 4px 0; }
+    .notice-unread { font-weight: 600; }
   </style>
 </head>
 <body>

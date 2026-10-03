@@ -3,6 +3,7 @@
 {% block heading %}Mis leads{% endblock %}
 {% block subheading %}
   {{ advisor.name }} · zona {{ advisor.zone }} · ordenados por calidad ·
+  <a href="/panel/{{ token }}/avisos">Avisos{% if unread %} ({{ unread }} sin leer){% endif %}</a> ·
   <a href="/panel/{{ token }}/funnel">Funnel del negocio &rarr;</a>
 {% endblock %}
 

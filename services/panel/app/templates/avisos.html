@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Avisos — {{ advisor.name }}{% endblock %}
+{% block heading %}Avisos{% endblock %}
+{% block subheading %}
+  {{ advisor.name }} · {{ unread }} sin leer · se actualiza cada {{ refresh_seconds }} s ·
+  <a href="/panel/{{ token }}">&larr; Mis leads</a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  {% if notices %}
+  {% for notice in notices %}
+  <div class="notice{% if not notice.read_at %} notice-unread{% endif %}">
+    <span class="pill">{% if notice.kind == "traspaso" %}traspaso{% else %}lead calificado{% endif %}</span>
+    <span class="muted">{{ notice.created_at.strftime("%d/%m %H:%M") }}{% if not notice.read_at %} · nuevo{% endif %}</span>
+    <p class="notice-body">{{ notice.body }}</p>
+    <a href="/panel/{{ token }}/avisos/{{ notice.id }}">Abrir la ficha &rarr;</a>
+  </div>
+  {% endfor %}
+  {% else %}
+  <p class="empty">Todavía no tienes avisos. Aquí llegan los leads calificados y los traspasos.</p>
+  {% endif %}
+</div>
+{% endblock %}
