@@ -8,8 +8,10 @@ Un *job* se ejecuta una sola vez: se toma con `FOR UPDATE SKIP LOCKED`, y su efe
 queda en `failed`. El mensaje al lead se envía al final, justo antes del commit: si el commit fallara
 después de un envío, el reintento lo repetiría (el único caso de duplicado, ver DT-44).
 
-Hoy hay una sola clase de *job*, `no_response`: los seguimientos y las aristas `no_response` de la FSM
-(`DISCOVERY -> NURTURE -> LOST`, design.md §2). Cada mensaje del lead reinicia la cuenta.
+Clases de *job*:
+- `no_response`: los seguimientos y las aristas `no_response` de la FSM (`DISCOVERY -> NURTURE -> LOST`,
+  design.md §2). Cada mensaje del lead reinicia la cuenta.
+- `visit_reminder`: el recordatorio de la visita el día anterior (B-13, `app/reminders.py`).
 """
 from __future__ import annotations
 
@@ -28,10 +30,10 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from app import jobs
+from app import jobs, reminders
 from app.fsm import NO_RESPONSE, next_state
 from app.state_store import StateStore
-from db.models import Conversation, Lead, ScheduledJob
+from db.models import Conversation, Lead, Property, ScheduledJob
 from db.session import session_scope
 
 logger = logging.getLogger("core.scheduler")
@@ -117,7 +119,7 @@ class Scheduler:
         self._policy = policy or default_policy()
         self._clock = clock
         self._batch_size = batch_size
-        self._handlers = {NO_RESPONSE_KIND: self._no_response}
+        self._handlers = {NO_RESPONSE_KIND: self._no_response, reminders.VISIT_REMINDER_KIND: self._visit_reminder}
 
     def run_due(self, now: datetime | None = None) -> int:
         """Ejecuta los jobs vencidos a `now` (el reloj del scheduler si no se pasa). Devuelve cuántos tomó."""
@@ -212,6 +214,30 @@ class Scheduler:
         if after in self._policy.intervals:
             _schedule_attempt(session, conversation_id, job.lead_id, after, 1, self._policy, now)
         logger.info("sin respuesta: cambia de estado", extra=extra | {"fsm_state_after": after})
+        return "done"
+
+    # --- visit_reminder --------------------------------------------------------------------------------
+
+    def _visit_reminder(self, session: Session, job: ScheduledJob, now: datetime) -> str:
+        """No cambia la FSM, así que no bloquea la conversación: solo lee al lead y la propiedad al enviar."""
+        scheduled_at = datetime.fromisoformat(job.payload["scheduled_at"])
+        row = session.execute(
+            select(Lead.consent_status, Lead.telegram_user_id, Lead.qualified_at, Property.title,
+                   Property.address_approx, Property.address_exact)
+            .join(Property, Property.id == job.payload["property_id"]).where(Lead.id == job.lead_id)).one_or_none()
+        if row is None or row.consent_status == "withdrawn" or scheduled_at <= now:
+            return "cancelled"
+        extra = {"job_id": str(job.id), "visit_id": job.dedupe_key}
+        if self._channel is None or not self._channel.reachable(row.telegram_user_id):
+            logger.info("recordatorio sin canal", extra=extra)
+            return "done"
+        # A-6: la dirección exacta solo para un lead calificado; si no, la aproximada.
+        address = row.address_exact if row.qualified_at is not None else row.address_approx
+        text = reminders.reminder_text(row.title, scheduled_at, address)
+        StateStore(session).add_messages(uuid.UUID(job.payload["conversation_id"]), [("assistant", text, None)])
+        session.flush()
+        self._channel.send(row.telegram_user_id, text)  # lo último antes del commit
+        logger.info("recordatorio de visita enviado", extra=extra)
         return "done"
 
 

@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Mapping
 
-from sqlalchemy import ColumnElement, func, text, update
+from sqlalchemy import ColumnElement, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -19,8 +19,14 @@ _PENDING = text("status = 'pending'")
 
 
 def enqueue(session: Session, kind: str, dedupe_key: str, run_at: datetime | ColumnElement[Any], *,
-            lead_id: uuid.UUID | None = None, payload: Mapping[str, Any] | None = None) -> bool:
-    """Programa un *job*. Si ya hay uno pendiente con la misma clase y clave, no hace nada y devuelve False."""
+            lead_id: uuid.UUID | None = None, payload: Mapping[str, Any] | None = None, once: bool = False) -> bool:
+    """Programa un *job*. Si ya hay uno pendiente con la misma clase y clave, no hace nada y devuelve False.
+
+    `once=True`: tampoco si alguna vez hubo uno con esa clave, aunque ya se haya ejecutado o cancelado.
+    """
+    if once and session.execute(select(ScheduledJob.id).where(
+            ScheduledJob.kind == kind, ScheduledJob.dedupe_key == dedupe_key).limit(1)).first() is not None:
+        return False
     inserted = session.execute(
         insert(ScheduledJob)
         .values(kind=kind, dedupe_key=dedupe_key, run_at=run_at, lead_id=lead_id, payload=dict(payload or {}))
