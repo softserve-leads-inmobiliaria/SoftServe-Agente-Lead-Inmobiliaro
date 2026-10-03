@@ -14,6 +14,7 @@ from sqlalchemy import case, func, literal, select, update
 from sqlalchemy.dialects.postgresql import UUID, insert
 from sqlalchemy.orm import Session
 
+from app import jobs
 from app.scoring import Score
 from db.models import (
     AuditLog,
@@ -248,8 +249,10 @@ class StateStore:
             self._session.add(UnmetSearch(**filters))
 
     def withdraw_consent(self, lead_id: uuid.UUID) -> None:
+        """La baja también cancela todo lo que el *scheduler* tenía pendiente para el lead (A-17)."""
         self._session.execute(update(Lead).where(Lead.id == lead_id)
                               .values(consent_status="withdrawn", updated_at=func.now()))
+        jobs.cancel_for_lead(self._session, lead_id)
 
     def audit(self, action: str, payload: Mapping[str, Any]) -> None:
         """Registra una detección del guardrail. El `payload` no debe llevar el contenido del mensaje."""

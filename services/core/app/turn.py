@@ -50,6 +50,7 @@ from app.interest import (
 )
 from app.lead_scoring import TurnEvidence, score_turn
 from app.qualification import just_qualified
+from app.scheduler import restart_silence
 from app.scoring import Score
 from app.skeleton import Catalog, respond
 from app.state_store import GuardContext, StateStore
@@ -148,6 +149,7 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         if event.get("utm_campaign"):
             store.set_campaign_if_unknown(lead_id, str(event["utm_campaign"]))
         store.record_unmet_searches(unmet_searches)
+        restart_silence(session, conversation_id, lead_id, after)  # A-17: el lead escribió
         previous_band = state.score["band"] if state.score else None
         qualified = just_qualified(previous_band, score.band) and store.qualify(conversation_id, lead_id)
         _write_audits(store, event, audits)
