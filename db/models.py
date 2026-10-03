@@ -49,7 +49,7 @@ NOTIFICATION_KINDS = ("calificado", "traspaso")
 DEAL_KINDS = ("renta", "venta")
 INTEREST_KINDS = ("anuncio", "consulta", "busqueda", "visita")
 # Tareas diferidas (A-17, DT-44). Cada historia que agregue una clase de *job* la suma aquí y en una migración.
-JOB_KINDS = ("no_response",)
+JOB_KINDS = ("no_response", "visit_reminder")
 JOB_STATUSES = ("pending", "done", "failed", "cancelled")
 
 # Dimensión del vector de la FAQ. Valor de partida (modelos de sentence embeddings habituales usan
@@ -385,8 +385,8 @@ class FaqEntry(Base):
 class ScheduledJob(Base):
     """Tarea diferida (A-17, DT-44): la ejecuta el *scheduler* de `core` cuando vence `run_at`.
 
-    `dedupe_key` identifica al *job* dentro de su clase (para `no_response`, la conversación): no puede
-    haber dos pendientes con la misma clave. Los ejecutados, cancelados o fallidos quedan como registro.
+    `dedupe_key` identifica al *job* dentro de su clase (para `no_response`, la conversación; para
+    `visit_reminder`, la visita): no puede haber dos pendientes con la misma clave. Los ejecutados, cancelados o fallidos quedan como registro.
     """
 
     __tablename__ = "scheduled_jobs"
