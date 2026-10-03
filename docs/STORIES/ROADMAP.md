@@ -137,7 +137,8 @@ Igual que en §4: cada lote solo depende de los anteriores, y dentro de un lote 
 | **7: base** | N-1, N-2, A-15 y B-8 (ya en el backlog) | N-1 es el esquema de todo lo demás: su primer PR es solo la migración. N-2 es una decisión de equipo, no código |
 | **8: sobre el esquema** | N-3, N-4, N-5, N-6, N-7, N-9, B-10 | Todo depende solo de N-1 (N-7 también de N-2). N-6 y N-7 fijan en su primer PR las firmas que usa N-8 |
 | **9: integración** | N-8, B-11 | La vista de gerencia sobre N-6 y N-7; los botones sobre B-8 |
-| Backlog | A-16, A-17, A-18, B-12, B-13, B-14, N-10 | P2. Todo lo que necesita el *scheduler* (A-17) cuelga de él |
+| Backlog | A-16, A-17, A-18, B-12, B-13, N-10 | P2. Todo lo que necesita el *scheduler* (A-17) cuelga de él |
+| Tarea futura | B-14 | Fuera del alcance del capstone: necesita un servicio externo de transcripción, con credenciales y costo propios. La historia queda escrita para retomarla después |
 
 Después del lote 9 siguen `OBS-6` (una corrida real antes de la semana 8) y la semana 8 de §6. `Z-1` no admite alcance nuevo: lo que no esté en `main` antes de `Z-1` queda fuera.
 
