@@ -1698,3 +1698,50 @@ cierto para el 100 % de los cierres y no mide nada.
   dejar adivinar a qué lead se refiere, pero quien lo ve es un asesor de la misma inmobiliaria. Si las
   métricas llegan a salir del equipo (por ejemplo, el reporte semanal por Telegram de
   `propuestas.md` §3), hay que revisarlo.
+
+## DT-42 — Los avisos al asesor se guardan en el panel; Telegram es un canal adicional y el ruteo ya no lo exige
+
+**Estado:** aceptada. Reemplaza el filtro de Telegram de DT-33; el resto de DT-33 sigue igual.
+
+**Contexto.** DT-33 ruteaba los leads solo entre asesores que habían abierto el bot de Telegram
+(`registered_only=true`). La tarjeta del lead calificado (B-7) y la ficha de traspaso (A-12) solo existían
+como mensajes de Telegram. El equipo no tiene una cuenta de Telegram por asesor, así que sin asesores
+registrados pasaban tres cosas: el lead quedaba sin asesor, los avisos no llegaban a nadie y B-8 nunca
+podía reservar una visita, porque sin asesor no hay horarios (DT-39).
+
+**Decisión.**
+- **El ruteo no exige Telegram.** `notify_advisor`, `notify_handoff` y `visits.start` llaman a
+  `assign_advisor` sin `registered_only`. La agenda elige entre todos los asesores, con la misma
+  preferencia de zona, idioma y reparto por turnos. La regla local `pick_advisor` tampoco filtra.
+  `registered_only` sigue en el contrato, opcional, pero `core` ya no lo usa.
+- **Cada aviso se guarda en `advisor_notifications`** (migración `0007`): asesor, lead, tipo
+  (`calificado` o `traspaso`), texto, fecha y fecha de lectura. El texto es el resumen de la tarjeta o de
+  la ficha (motivo, score, propiedad, visita u horario preferido), sin la transcripción, que ya está en la
+  ficha del lead.
+- **Telegram es un canal adicional.** Si el asesor registró su chat, además se le manda el aviso por ahí,
+  como antes. Si no lo registró, el bot no está arrancado o el envío falla, el aviso queda solo en el
+  panel.
+- **Sección "Avisos" en el panel** (`/panel/<token>/avisos`): los últimos 50 avisos del asesor, los más
+  nuevos primero, con el contador de no leídos (también en la lista de leads). Abrir uno lo marca como
+  leído y lleva a la ficha (303). La página se recarga cada 30 segundos. El aviso de otro asesor responde
+  404, igual que uno inexistente (DT-5).
+- **El asesor ve también los leads que tiene asignados**, no solo los de su zona. La cola general
+  (`assign_advisor`, grupo `any`) le puede asignar un lead de otra zona o sin zona, y su aviso tiene que
+  llevar a una ficha que abra. Aplica a la lista, la ficha y "Marcar en gestión".
+
+**Alternativas.**
+- Una sola cuenta de Telegram compartida por los asesores: `telegram_chat_id` es único y registrar un
+  chat se lo quita a otro asesor, así que solo uno recibe avisos. Descartada.
+- Notificaciones push del navegador o *server-sent events*: llegan sin recargar, pero requieren permisos
+  del navegador y una conexión abierta por asesor. Recargar cada 30 segundos alcanza para el volumen del
+  curso. Descartada por ahora.
+- Correo al asesor: necesita un servidor SMTP y credenciales. Descartada.
+
+**Consecuencias.**
+- Sin Telegram, el asesor no recibe la notificación push en el celular: tiene que tener el panel
+  abierto.
+- En la demo basta una cuenta de Telegram, la del lead: los asesores trabajan desde el panel, y B-8
+  reserva visitas reales.
+- Si un asesor registra Telegram, recibe cada aviso dos veces: en el panel y en el chat. El panel es la
+  fuente de verdad, y el contador de no leídos solo baja al abrir el aviso en el panel.
+- La migración de `N-1` pasa a `0008`.
