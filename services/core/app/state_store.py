@@ -25,6 +25,7 @@ from db.models import (
     Message,
     Property,
     PropertyInterest,
+    UnmetSearch,
 )
 
 logger = logging.getLogger("core.state_store")
@@ -233,6 +234,18 @@ class StateStore:
             if written is None:
                 logger.warning("interés no registrado: la propiedad no está en el inventario",
                                extra={"property_id": property_id, "kind": kind})
+
+    def set_campaign_if_unknown(self, lead_id: uuid.UUID, campaign: str) -> None:
+        """Guarda la campaña del primer contacto (`?start=camp_…`, N-5). Una campaña posterior no la pisa:
+        cuenta la que trajo al lead. `WHERE utm_campaign IS NULL` deja la decisión en la base."""
+        self._session.execute(update(Lead).where(Lead.id == lead_id, Lead.utm_campaign.is_(None))
+                              .values(utm_campaign=campaign, updated_at=func.now()))
+
+    def record_unmet_searches(self, searches: Sequence[Mapping[str, Any]]) -> None:
+        """Una fila de `unmet_searches` por búsqueda sin resultados del turno (N-5): solo los filtros, sin
+        lead ni texto. `demand.SearchLog` ya quitó las repetidas del turno."""
+        for filters in searches:
+            self._session.add(UnmetSearch(**filters))
 
     def withdraw_consent(self, lead_id: uuid.UUID) -> None:
         self._session.execute(update(Lead).where(Lead.id == lead_id)
