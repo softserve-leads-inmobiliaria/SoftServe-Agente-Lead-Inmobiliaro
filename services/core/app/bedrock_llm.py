@@ -68,6 +68,24 @@ CHAT_SYSTEM = (
 )
 
 
+SUMMARY_SYSTEM = (
+    "Resumes para un asesor inmobiliario la conversación entre un lead y el asistente virtual de la "
+    "inmobiliaria. Respondes SOLO con un objeto JSON, sin texto adicional, con estas claves, cada una con "
+    "una o dos frases cortas en español:\n"
+    '- "busca": qué busca el lead (tipo de propiedad, zona, presupuesto, plazo), solo con lo que dice la '
+    "conversación.\n"
+    '- "objeciones": las dudas o reparos del lead (precio, ubicación, tiempos, requisitos). Si no hay, '
+    '"Ninguna".\n'
+    '- "siguiente_paso": qué conviene que haga el asesor ahora, a partir del motivo del traspaso.\n'
+    "Reglas:\n"
+    "- Todo número o dato debe aparecer en la conversación o en los DATOS DEL LEAD. No inventes nada.\n"
+    "- No incluyas direcciones exactas.\n"
+    "- No prometas descuentos, apartados, aprobación de crédito ni cierre de una operación.\n"
+    "- No menciones origen, religión, género, nacionalidad, situación familiar ni estado civil."
+)
+SUMMARY_KEYS = ("busca", "objeciones", "siguiente_paso")
+
+
 class LLMError(Exception):
     """Falló la llamada al LLM (red, credenciales, límite del proveedor, respuesta inválida)."""
 
@@ -198,6 +216,19 @@ class BedrockLLM:
         intent = data.get("intent")
         signal = {key: data.get(key) for key in ("budget_hint", "decision_maker", "urgency")}
         return Classification(intent if intent in INTENTS else "otro", signal)
+
+    async def summarize(self, transcript: str, facts: str) -> dict[str, str]:
+        """El resumen del traspaso para el asesor (A-16), con el modelo de conversación y sin tools."""
+        prompt = f"DATOS DEL LEAD:\n{facts or 'sin datos'}\n\nCONVERSACIÓN:\n{transcript or 'sin mensajes'}"
+        response = await self._converse(
+            self.chat_model_id, system=[{"text": SUMMARY_SYSTEM}],
+            messages=[{"role": "user", "content": [{"text": prompt}]}],
+            inferenceConfig={"maxTokens": MAX_REPLY_TOKENS, "temperature": 0.0})
+        data = parse_json_object(_text_of(response))
+        sections = {key: data.get(key) for key in SUMMARY_KEYS}
+        if not all(isinstance(value, str) and value.strip() for value in sections.values()):
+            raise LLMFormatError("el resumen no trae las tres secciones")
+        return {key: value.strip() for key, value in sections.items()}
 
     async def chat(self, history: Sequence[tuple[str, str]], current: str,
                    specs: Sequence[Mapping[str, Any]], run_tool: ToolRunner) -> ChatResult:

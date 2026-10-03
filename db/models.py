@@ -114,6 +114,10 @@ class Lead(Base):
     timing: Mapped[str | None] = mapped_column(Text)
     # Campaña del primer contacto (`?start=camp_…`, N-5). Una campaña posterior no la pisa.
     utm_campaign: Mapped[str | None] = mapped_column(String)
+    # Resumen del último traspaso para el asesor (A-16). En `leads` porque `conversations` es una
+    # proyección congelada del contrato (CT-3).
+    handoff_summary: Mapped[str | None] = mapped_column(Text)
+    handoff_summary_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     synthetic: Mapped[bool] = _synthetic()
     created_at: Mapped[datetime] = _now()
     updated_at: Mapped[datetime] = _now()

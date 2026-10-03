@@ -71,6 +71,16 @@
   {% endif %}
 </div>
 
+{% if lead.handoff_summary %}
+<div class="card">
+  <h2 style="font-size:15px;margin:0 0 12px">Resumen del traspaso</h2>
+  <p style="white-space:pre-line;margin:0">{{ lead.handoff_summary }}</p>
+  {% if lead.handoff_summary_at %}
+  <p class="muted" style="margin:8px 0 0">Generado el {{ lead.handoff_summary_at.strftime("%d/%m %H:%M") }}</p>
+  {% endif %}
+</div>
+{% endif %}
+
 <div class="card">
   <h2 style="font-size:15px;margin:0 0 12px">Conversación</h2>
   {% if messages %}

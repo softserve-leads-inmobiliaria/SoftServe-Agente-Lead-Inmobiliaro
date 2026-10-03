@@ -136,3 +136,29 @@ def test_un_lead_sin_score_no_rompe_la_ficha(client, mundo, session_factory):
 
     assert page.status_code == 200
     assert "Todavía sin calificar" in page.text
+
+
+# --- resumen del traspaso (A-16) ------------------------------------------------------------------------
+
+def _resumir(session_factory, lead_id, summary):
+    with session_factory() as session:
+        lead = session.get(Lead, lead_id)
+        lead.handoff_summary = summary
+        lead.handoff_summary_at = datetime.now(timezone.utc)
+        session.commit()
+
+
+def test_la_ficha_muestra_el_resumen_antes_de_la_transcripcion(client, mundo, session_factory):
+    _resumir(session_factory, mundo["lead"].id,
+             "Qué busca: depa en Providencia.\nObjeciones: Ninguna.\nSiguiente paso: llamarle.")
+
+    page = client.get(f"/panel/{mundo['valeria'].access_token}/leads/{mundo['lead'].id}")
+
+    assert "Resumen del traspaso" in page.text and "Siguiente paso: llamarle." in page.text
+    assert page.text.index("Resumen del traspaso") < page.text.index("Hola, busco depa")
+
+
+def test_sin_traspaso_la_ficha_sale_sin_resumen_como_antes(client, mundo):
+    page = client.get(f"/panel/{mundo['valeria'].access_token}/leads/{mundo['lead'].id}")
+
+    assert page.status_code == 200 and "Resumen del traspaso" not in page.text

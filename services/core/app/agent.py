@@ -15,6 +15,8 @@ from app.fakes.fake_llm import FakeLLM
 from app.fsm import HUMAN_INTENTS
 from app.input_guard import HANDOFF_OFFER, OMITTED_MESSAGE
 from app.skeleton import respond
+from app.summary import SummaryFacts
+from app.summary import template as summary_template
 
 HISTORY_LIMIT = 20  # mensajes previos que se le dan al LLM
 
@@ -69,6 +71,10 @@ class FakeAgent:
         return AgentResult(text=reply.outbound["text"], intent=reply.intent,
                            raw_signal=FakeLLM().extract_signal(turn.text), tool_results=reply.tool_results,
                            tool_calls=[{"name": name, "is_error": False} for name in reply.tool_results])
+
+    async def summarize(self, transcript: str, facts: SummaryFacts) -> dict[str, str]:
+        """El resumen del traspaso (A-16) sale de una plantilla determinista, sin leer la conversación."""
+        return summary_template(facts)
 
 
 class BedrockAgent:
@@ -131,6 +137,11 @@ class BedrockAgent:
             return AgentResult(text=LLM_FALLBACK_REPLY, intent="otro", llm_error=type(exc).__name__)
         return AgentResult(text=chat.text, intent=classification.intent, raw_signal=classification.signal,
                            tool_results=chat.tool_results, tool_calls=chat.tool_calls, guard_audits=guard_audits)
+
+    async def summarize(self, transcript: str, facts: SummaryFacts) -> dict[str, str]:
+        """El resumen del traspaso (A-16). Si el LLM falla, lanza `LLMError`: la ficha sale sin resumen."""
+        with self._llm.turn():
+            return await self._llm.summarize(transcript, "\n".join(facts.lines()))
 
 
 def _with_listing_note(text: str, listing: Mapping[str, Any] | None) -> str:
