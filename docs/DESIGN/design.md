@@ -108,7 +108,7 @@ Las secciones 1-4 son el plan compartido y no se reescriben. Esta sección solo 
 verdad, para no tener que cruzar el backlog con el código. Es una foto del sistema, no el estado de
 las historias: ese vive en GitHub Issues/Project. Se actualiza en el PR que cambie algo de lo que dice.
 
-**Corte:** 2026-09-24, `main` en `0cccd76`.
+**Corte:** 2026-10-02, `main` en `d8d0425`.
 
 Tres niveles, de más a menos evidencia:
 
@@ -130,9 +130,10 @@ flowchart LR
     CAT --> PG
     PANEL[panel<br/>de asesores] --> PG
     CORE -. OTLP .-> PHX[Phoenix]
-    CORE -- avisos --> ADV[Asesor<br/>por Telegram]
+    CORE -- avisos --> PG
+    CORE -. avisos, opcional .-> ADV[Asesor<br/>por Telegram]
+    CORE -- agenda HTTP --> CAT
     SCHED[scheduler<br/>de nurturing]:::nobuilt -.-> CORE
-    CAL[proveedor de<br/>calendario]:::nobuilt -.-> CORE
     FAQ[FAQ con<br/>embeddings]:::nobuilt -.-> PG
     classDef nobuilt stroke-dasharray: 5 5
 ```
@@ -186,7 +187,12 @@ Las cajas con borde punteado no están construidas.
 - **Avisos al asesor en el panel** (`B-15`, DT-42): cada tarjeta y ficha de traspaso se guarda en
   `advisor_notifications` y se ve en `/panel/<token>/avisos`, con el contador de no leídos. Telegram es
   un canal adicional para el asesor que registró su chat.
-- **Panel de asesores** con ficha, etapa y transcripción (`B-5`), autenticado por token (DT-5).
+- **Panel de asesores** con ficha, etapa y transcripción (`B-5`), autenticado por token (DT-5). Cada
+  asesor ve los leads de su zona y los que tiene asignados (DT-42).
+- **Esquema de inteligencia comercial** (`N-1`, migración `0008`): `property_status_events`, `deals`,
+  `property_interest` y `unmet_searches`, más `leads.utm_campaign`, `properties.photo_url` y `synthetic`.
+  `db/property_history.py` es la única vía para cambiar el estado de una propiedad. Solo el esquema: todavía
+  nada escribe en esas tablas (lo hacen `N-3`, `N-4`, `N-5` y `N-9`).
 - **Trazas por turno** hacia Phoenix sin texto de los leads (DT-18) y **logs JSON** en los 3 servicios
   (DT-27).
 - **Métricas del funnel**: una fila de `funnel_events` por transición real (DT-17).
