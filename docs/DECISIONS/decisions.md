@@ -1854,3 +1854,59 @@ intentos". También es la base de `B-13`, `A-18` y `N-10`.
 - Las conversaciones que se quedan en silencio en `QUALIFY`, `RECOMMEND` o `SCHEDULE` no tienen
   seguimiento: la FSM no tiene arista `no_response` ahí.
 - Pendiente de verificar en vivo con Telegram, con tiempos cortos (`SCHEDULER_DISCOVERY_HOURS=0.01`).
+
+## DT-45 — Alertas de propiedades nuevas: pedido por regla, "nueva" según el historial de estados
+
+**Estado:** propuesta
+
+**Contexto.** `A-18` pide que el lead pueda decir "avísame si sale algo así" después de una búsqueda con
+pocos resultados, y que un *job* de A-17 le escriba una vez por cada propiedad que cumpla. Hay que
+decidir cuatro cosas:
+- cómo se detecta el pedido;
+- qué filtros se guardan;
+- qué es una propiedad "nueva";
+- cómo pasa el mensaje por los guardrails de salida si no lo escribe el LLM.
+
+**Decisión.**
+- **El pedido lo detecta el código**, con una regla como la de `/stop` ("avísame", "me avisas",
+  "notifícame", "alerta"), no una intención nueva del LLM. Funciona igual con el agente *fake* y con
+  Bedrock, y no cambia el contrato de intenciones ni los gold sets.
+- **Se guardan los filtros de la búsqueda**, no el texto. Son los argumentos de `search_properties` del
+  turno, o los del turno anterior si ahí se ofreció la alerta (`alert_offer` en `last_tool_results`). Una
+  búsqueda sin ningún filtro no se vuelve alerta.
+- **Oferta:** si una búsqueda con filtros trae 2 propiedades o menos, el turno agrega una línea ofreciendo
+  la alerta. Sin eso, casi nadie sabría que existe.
+- **Vigencia:** una alerta activa por lead, que reemplaza a la anterior y vence a los 90 días. `/stop` la
+  desactiva por los dos caminos de la baja.
+- **"Nueva" significa que entró a `disponible` después de crearse la alerta**, según
+  `property_status_events` (N-1): un alta o una vuelta desde `apartado`. Lo que el lead ya vio en su
+  búsqueda no le llega como novedad. Los criterios de coincidencia son los de `search_properties`: zona
+  por coincidencia parcial, tipo, recámaras exactas y precio dentro del rango.
+- **Dos clases de *job* (migración `0011`):**
+  - `alert_scan` busca coincidencias cada `ALERT_SCAN_MINUTES` (10 por defecto). Solo existe mientras
+    haya alguna alerta activa: se crea con la primera y deja de reprogramarse cuando no queda ninguna.
+  - Por cada coincidencia encola un `property_alert`, con la clave `alerta:propiedad` y `once=True`
+    (DT-44).
+- **El aviso usa una plantilla con datos del catálogo** (título, referencia, zona, tipo, recámaras y
+  precio), sin LLM. Aun así pasa por los tres guardrails de salida: factualidad, dirección y promesas.
+  Si alguno lo bloquea, no se envía y queda un `warning`. Antes de enviar se revisa otra vez el
+  consentimiento y que la propiedad siga `disponible`.
+- **El aviso deja la propiedad como la de interés de la conversación** (`property_of_interest`). Así, si
+  el lead contesta "me interesa" o pide una visita, el turno siguiente sabe de cuál habla. Si el lead
+  estaba en `NURTURE`, su respuesta sigue el flujo normal (`NURTURE -> DISCOVERY`).
+
+**Alternativas.**
+- Intención `pedir_alerta` en el clasificador: cambia el contrato, el agente *fake* y los gold sets por
+  una frase que una regla reconoce bien. Descartada.
+- Comparar contra lo que había en el catálogo al crear la alerta (una "foto" de ids): no ve una propiedad
+  que vuelve de `apartado` y guarda una lista por alerta. El historial de estados ya existe. Descartada.
+- Disparar la alerta en el momento del alta (en `record_listing`): ata `db/` a `core` y al bot, y el alta
+  no siempre pasa por `core`. Descartada: el *scan* periódico desacopla a quien publica de quien avisa.
+
+**Consecuencias.**
+- Hoy ningún código de producción da de alta propiedades. El inventario sale del *seed*, que no deja
+  eventos, y la historia sintética de N-9 usa `record_listing` con fechas pasadas. Quien agregue el alta
+  de propiedades tiene que pasar por `db/property_history.py`, o las alertas no la verán.
+- Con el agente *fake*, que busca sin filtros, la alerta nunca se ofrece; se ve con Bedrock.
+- Pendiente de verificar en vivo: buscar algo que no exista por Telegram, pedir la alerta y publicar una
+  propiedad con `record_listing`.
