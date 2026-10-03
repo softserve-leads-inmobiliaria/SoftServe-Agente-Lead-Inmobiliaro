@@ -15,7 +15,7 @@ from typing import Any, Awaitable, Callable, Mapping, Sequence
 from sqlalchemy import Engine
 from starlette.concurrency import run_in_threadpool
 
-from app import alerts, reminders, scheduling_client, visits
+from app import alerts, reminders, scheduling_client, summary, visits
 from app.agent import Agent, AgentResult, FakeAgent, TurnInput
 from app.availability import AvailabilityGuard
 from app.demand import SearchLog, UnmetSearch
@@ -358,6 +358,14 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
         except Exception:
             logger.exception("fallo al notificar la calificación del lead")
     span.set_attribute("lead.handoff_now", transition.handoff_reason is not None)
+    if transition.handoff_reason:
+        # A-16: el resumen para el asesor, antes de la ficha del traspaso que lo lleva.
+        try:
+            conversation_id, lead_id = _ids(event)
+            written = await summary.generate(engine, lead_id, conversation_id, transition.handoff_reason, agent)
+            span.set_attribute("handoff.summary", written is not None)
+        except Exception:
+            logger.exception("fallo al generar el resumen del traspaso")
     if transition.handoff_reason and on_handoff is not None:
         try:
             await on_handoff(event, transition)

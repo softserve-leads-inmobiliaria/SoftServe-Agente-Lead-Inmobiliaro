@@ -152,6 +152,7 @@ class HandoffFile:
     fsm_state: str
     reason: str
     transcript: tuple[tuple[str, str], ...]  # (rol, contenido) en orden cronológico
+    summary: str | None = None  # el resumen para el asesor (A-16); None si no se pudo generar
 
 
 def transcript_of(session, conversation_id: uuid.UUID) -> tuple[tuple[str, str], ...]:
@@ -166,7 +167,9 @@ def transcript_of(session, conversation_id: uuid.UUID) -> tuple[tuple[str, str],
 def build_handoff_file(session, lead_id: uuid.UUID, conversation_id: uuid.UUID, score: Mapping[str, Any],
                        fsm_state: str, reason: str) -> HandoffFile:
     return HandoffFile(card=build_card(session, lead_id, conversation_id, score), fsm_state=fsm_state,
-                       reason=reason, transcript=transcript_of(session, conversation_id))
+                       reason=reason, transcript=transcript_of(session, conversation_id),
+                       summary=session.execute(select(Lead.handoff_summary)
+                                               .where(Lead.id == lead_id)).scalar_one_or_none())
 
 
 def handoff_summary(handoff: HandoffFile) -> str:
@@ -181,6 +184,8 @@ def handoff_summary(handoff: HandoffFile) -> str:
     ]
     if card.reasons:
         lines.append("Por qué el score: " + "; ".join(card.reasons))
+    if handoff.summary:
+        lines += ["", "Resumen:", handoff.summary]
     return "\n".join(lines)
 
 

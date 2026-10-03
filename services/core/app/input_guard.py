@@ -229,6 +229,11 @@ def strip_protected(text: str) -> str:
     return "" if all(word in _FILLER_WORDS for word in words) else stripped
 
 
+def mentions_protected(text: str) -> bool:
+    """True si el texto menciona una categoría protegida (`guardrails.md` §1). Lo usa también la salida (A-16)."""
+    return bool(_PROTECTED.search(normalize(text)))
+
+
 def is_opt_out(text: str) -> bool:
     normalized = normalize(text)
     return bool(_STOP_COMMAND.search(normalized) or _STOP_PHRASES.search(normalized))
