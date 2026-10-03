@@ -6,14 +6,16 @@ bot no arranca: así la suite, el arnés y CI siguen corriendo sin credenciales.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from datetime import datetime
-from typing import Any, Mapping
+from typing import Any, Awaitable, Callable, Mapping
 
 from sqlalchemy import Engine
 from starlette.concurrency import run_in_threadpool
 from telegram import Bot, Update
+from telegram.error import BadRequest, NetworkError, RetryAfter, TimedOut
 from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageHandler, filters
 
 from app.agent import Agent
@@ -27,6 +29,11 @@ logger = logging.getLogger("core.channels.telegram")
 
 # Lo que ve el lead si el turno falla: nunca se le deja sin respuesta.
 ERROR_REPLY = "Perdona, tuve un problema para responderte. ¿Me lo puedes repetir en un momento?"
+
+# Espera antes de cada reintento del envío al lead: 3 intentos en total.
+SEND_RETRY_DELAYS: tuple[float, ...] = (1.0, 2.0)
+# Si Telegram pide esperar más que esto, no se reintenta: la respuesta ya llegaría fuera de contexto.
+MAX_RETRY_AFTER_SECONDS = 30.0
 
 _ENGINE_KEY = "engine"
 _CATALOG_KEY = "catalog"
@@ -107,9 +114,43 @@ async def _on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         logger.exception("fallo al procesar un mensaje de Telegram")
         reply = ERROR_REPLY
     try:
-        await message.reply_text(reply)
+        await send_with_retry(lambda: message.reply_text(reply))
     except Exception:
         logger.exception("no se pudo enviar la respuesta por Telegram")
+
+
+async def send_with_retry(send: Callable[[], Awaitable[Any]],
+                          delays: tuple[float, ...] = SEND_RETRY_DELAYS) -> None:
+    """Reintenta el envío solo cuando el mensaje seguro no salió (#161).
+
+    - `TimedOut` (subclase de `NetworkError`) no se reintenta: el mensaje pudo llegar y se duplicaría.
+    - `BadRequest` (también subclase de `NetworkError`) y `Forbidden` no se reintentan: no cambian.
+    - `NetworkError` (fallo de conexión) se reintenta tras la espera de `delays`.
+    - `RetryAfter` se reintenta tras la espera que pide Telegram, hasta `MAX_RETRY_AFTER_SECONDS`.
+
+    Si se agotan los intentos, propaga el último error. El turno ya se guardó y no se repite.
+    """
+    for attempt in range(len(delays) + 1):
+        try:
+            await send()
+            return
+        except (TimedOut, BadRequest):
+            raise
+        except RetryAfter as error:
+            wait = _seconds(error.retry_after)
+            if attempt == len(delays) or wait > MAX_RETRY_AFTER_SECONDS:
+                raise
+        except NetworkError:
+            if attempt == len(delays):
+                raise
+            wait = delays[attempt]
+        logger.warning("reintentando el envío por Telegram", extra={"attempt": attempt + 1, "wait": wait})
+        await asyncio.sleep(wait)
+
+
+def _seconds(retry_after: Any) -> float:
+    # python-telegram-bot lo da en segundos (int) y en versiones nuevas como `timedelta`.
+    return float(retry_after.total_seconds() if hasattr(retry_after, "total_seconds") else retry_after)
 
 
 async def reply_to(engine: Engine, catalog: Catalog, *, telegram_user_id: str, text: str,
