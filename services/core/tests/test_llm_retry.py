@@ -385,6 +385,23 @@ def test_each_retry_and_the_final_failure_are_logged_as_warnings_without_the_lea
     assert "secreto" not in caplog.text and "4111" not in caplog.text and "7 millones" not in caplog.text
 
 
+def test_running_out_of_the_local_quota_is_logged_too(caplog):
+    """La corrida de OBS-6 con Bedrock: el cupo local (DT-19) se agotaba y el turno caía al texto seguro sin
+    dejar nada en el log."""
+    client, stub = stubbed()
+    fail(stub, "ValidationException", 400)  # la primera llamada gasta el único cupo del minuto
+    llm = make(client, FakeClock(), max_wait=0.0, per_minute=1)
+
+    with caplog.at_level(logging.WARNING, logger="core.bedrock_llm"):
+        for _ in range(2):
+            with pytest.raises(LLMError):
+                run(llm.classify(LEAD_TEXT))
+
+    last = [r for r in caplog.records if r.levelno == logging.WARNING][-1]
+    assert (last.llm_error_code, last.llm_give_up_reason) == ("LocalRateLimit", "local_rate_limit")
+    assert "secreto" not in caplog.text
+
+
 def test_the_final_failure_is_recorded_in_the_turn_trace():
     exporter = InMemorySpanExporter()
     tracing.configure(exporter, processor=SimpleSpanProcessor, instrument=False)
