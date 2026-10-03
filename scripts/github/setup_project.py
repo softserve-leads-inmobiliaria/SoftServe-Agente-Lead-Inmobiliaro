@@ -50,6 +50,8 @@ EPIC_MILESTONE = {
            "Trazas, métricas del funnel, cobertura de FSM, gate de CI, contract tests, E2E, logs."),
     "E5": ("E5 — Cierre y demo",
            "Hardening final, demo en vivo, documento de arquitectura, documentación publicada."),
+    "E6": ("E6 — Inteligencia comercial",
+           "Historial de inventario, operaciones cerradas, atribución al bot y demanda insatisfecha."),
 }
 
 TRACK_DISPLAY = {"A": "Core", "B": "Borde", "C": "Datos", "CROSS": "Cross"}
@@ -58,7 +60,8 @@ FIELD_SPECS = [
     ("Priority", "SINGLE_SELECT", ["P0", "P1", "P2"]),
     ("Track", "SINGLE_SELECT", ["Core", "Borde", "Datos", "Cross"]),
     ("Estimate", "NUMBER", None),
-    ("Lote", "SINGLE_SELECT", ["Lote 1", "Lote 2", "Lote 3", "Lote 4", "Lote 5", "Lote 6", "Z-cierre", "Backlog"]),
+    ("Lote", "SINGLE_SELECT", ["Lote 1", "Lote 2", "Lote 3", "Lote 4", "Lote 5", "Lote 6",
+                                  "Lote 7", "Lote 8", "Lote 9", "Z-cierre", "Backlog"]),
 ]
 
 # Mapeo de docs/STORIES/ROADMAP.md §4 (batches que respetan dependencias) +
@@ -71,6 +74,11 @@ LOTE_MAP = {
     "A-4": "Lote 4", "B-5": "Lote 4", "C-1b": "Lote 4", "C-7": "Lote 4", "C-9": "Lote 4",
     "A-5": "Lote 5", "B-7": "Lote 5",
     "A-6": "Lote 6", "A-12": "Lote 6",
+    # ROADMAP.md §8: propuestas de octubre (E6 y lo que sale de docs/DESIGN/propuestas.md).
+    "N-1": "Lote 7", "N-2": "Lote 7", "A-15": "Lote 7",
+    "N-3": "Lote 8", "N-4": "Lote 8", "N-5": "Lote 8", "N-6": "Lote 8", "N-7": "Lote 8", "N-9": "Lote 8",
+    "B-10": "Lote 8",
+    "N-8": "Lote 9", "B-11": "Lote 9",
     "Z-1": "Z-cierre", "Z-2": "Z-cierre", "Z-3": "Z-cierre", "Z-4": "Z-cierre",
 }
 
@@ -105,7 +113,8 @@ def gh_json(args: list[str]):
 
 def ensure_milestones(repo: str, apply: bool) -> dict[str, str]:
     """Devuelve {epic_code: milestone_title}, creando los que falten."""
-    existing = json.loads(run_gh(["api", f"repos/{repo}/milestones", "--paginate"]))
+    # state=all: sin esto la API solo lista los abiertos, y uno cerrado (E0) se intentaría crear de nuevo.
+    existing = json.loads(run_gh(["api", f"repos/{repo}/milestones?state=all", "--paginate"]))
     existing_titles = {m["title"] for m in existing}
 
     result = {}
@@ -146,10 +155,46 @@ def ensure_project(owner: str, title: str, apply: bool) -> int | None:
     return created["number"]
 
 
+FIELD_OPTIONS_QUERY = """
+query($id: ID!) {
+  node(id: $id) { ... on ProjectV2SingleSelectField { options { id name color description } } }
+}
+"""
+
+FIELD_OPTIONS_MUTATION = """
+mutation($fieldId: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]) {
+  updateProjectV2Field(input: {fieldId: $fieldId, singleSelectOptions: $options}) { clientMutationId }
+}
+"""
+
+
+def ensure_options(field_id: str, name: str, wanted: list[str], apply: bool) -> None:
+    """Agrega a un campo single-select ya existente las opciones que le falten.
+
+    Reenvía las opciones actuales con su `id`: sin él, GitHub las recrea y los items pierden su valor.
+    """
+    data = json.loads(run_gh(["api", "graphql", "-f", f"query={FIELD_OPTIONS_QUERY}", "-f", f"id={field_id}"]))
+    current = data["data"]["node"]["options"]
+    missing = [o for o in wanted if o not in {c["name"] for c in current}]
+    if not missing:
+        return
+    print(f"[field] '{name}': agregar opciones {', '.join(missing)}")
+    if not apply:
+        return
+    options = [{"id": c["id"], "name": c["name"], "color": c["color"], "description": c["description"]}
+               for c in current]
+    options += [{"name": o, "color": "GRAY", "description": ""} for o in missing]
+    run_gh(["api", "graphql", "--input", "-"],
+           input_json={"query": FIELD_OPTIONS_MUTATION, "variables": {"fieldId": field_id, "options": options}})
+
+
 def ensure_fields(number: int, owner: str, apply: bool) -> None:
-    existing = {f["name"] for f in gh_json(["project", "field-list", str(number), "--owner", owner])["fields"]}
+    fields = gh_json(["project", "field-list", str(number), "--owner", owner])["fields"]
+    existing = {f["name"]: f["id"] for f in fields}
     for name, dtype, options in FIELD_SPECS:
         if name in existing:
+            if options:
+                ensure_options(existing[name], name, options, apply)
             continue
         print(f"[field] crear '{name}' ({dtype})")
         if not apply:
