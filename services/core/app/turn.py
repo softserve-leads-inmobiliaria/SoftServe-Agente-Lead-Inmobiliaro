@@ -9,12 +9,13 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 from typing import Any, Awaitable, Callable, Mapping, Sequence
 
 from sqlalchemy import Engine
 from starlette.concurrency import run_in_threadpool
 
-from app import scheduling_client, visits
+from app import reminders, scheduling_client, visits
 from app.agent import Agent, AgentResult, FakeAgent, TurnInput
 from app.availability import AvailabilityGuard
 from app.demand import SearchLog, UnmetSearch
@@ -139,6 +140,7 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         store.save_streak(conversation_id, streak)
         if booked:
             store.mark_visit_scheduled(lead_id)
+            reminders.schedule(session, lead_id, conversation_id, visit.tool_results[VISIT_KEY], datetime.now(UTC))
         signal, score = score_turn(state.score_signal, evidence)
         store.save_scoring(conversation_id, lead_id, signal, dict(evidence.tool_results), score)
         zone = zone_of_interest(evidence.tool_results)
