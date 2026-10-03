@@ -9,7 +9,7 @@ from botocore.exceptions import ClientError
 from sqlalchemy import text as sql
 from test_catalog_client import _serve, build_catalog_like
 
-from app import tracing
+from app import alerts, tracing
 from app.agent import LLM_FALLBACK_REPLY, AgentResult, BedrockAgent
 from app.bedrock_llm import BedrockLLM
 from app.catalog_client import CatalogClient
@@ -236,8 +236,9 @@ def test_the_llm_reply_reaches_the_lead_and_drives_the_fsm_and_the_score(engine)
                              text("Tengo una casa en Providencia."))
     chat = Chat(engine, bedrock(client))
     assert chat.say("Hola") == "¡Hola! ¿Qué buscas?"
+    # Una sola propiedad con un filtro de zona: el turno también ofrece la alerta de A-18.
     assert chat.say("Busco casa en Providencia, decido yo, es urgente y tengo 3 millones") == \
-        "Tengo una casa en Providencia."
+        f"Tengo una casa en Providencia.\n\n{alerts.OFFER_TEXT}"
     assert chat.scalar("SELECT fsm_state FROM conversations WHERE id = :c") == "QUALIFY"
     # need_fit 10 (una propiedad del catálogo) + budget 20 + authority 20 + timing 20
     assert chat.scalar("SELECT total FROM lead_scores WHERE lead_id = :l") == 70
