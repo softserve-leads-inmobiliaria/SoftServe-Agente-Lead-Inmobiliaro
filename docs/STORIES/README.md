@@ -61,6 +61,10 @@ El orden recomendado para avanzar las historias con 3 personas en paralelo, mini
 | [`A-12`](A-12.md) | Ficha del lead al asesor en HANDOFF | P0 | 3 | 6h | A-9, B-7 |
 | [`A-13`](A-13.md) | `HUMAN_HANDOFF` desde cualquier estado | P1 | 1 | 2h | A-1 |
 | [`A-14`](A-14.md) | Reintentos con backoff exponencial ante límites de Bedrock | P1 | 2 | 4h | A-2 |
+| [`A-15`](A-15.md) | `need_fit` cuenta la propiedad del anuncio | P1 | 1 | 2h | — |
+| [`A-16`](A-16.md) | Resumen de la conversación en la ficha del asesor | P2 | 3 | 6h | — |
+| [`A-17`](A-17.md) | *Scheduler* de tareas diferidas | P2 | 5 | 10h | — |
+| [`A-18`](A-18.md) | Alertas de propiedades nuevas | P2 | 3 | 6h | A-17 |
 
 ### E2 — Canal y borde
 
@@ -75,6 +79,11 @@ El orden recomendado para avanzar las historias con 3 personas en paralelo, mini
 | [`B-7`](B-07.md) | Notificación al asesor con la tarjeta del lead | P0 | 3 | 6h | B-5 |
 | [`B-8`](B-08.md) | Agendar visita vía el proveedor de calendario elegido | P1 | 3 | 6h | C-2 |
 | [`B-9`](B-09.md) | Dashboard del funnel | P1 | 3 | 6h | OBS-1 |
+| [`B-10`](B-10.md) | Foto de la propiedad en Telegram | P1 | 2 | 4h | N-1 |
+| [`B-11`](B-11.md) | Botones "Agendar visita" y "Hablar con un asesor" | P1 | 3 | 6h | B-8 |
+| [`B-12`](B-12.md) | SLA de atención del asesor | P2 | 2 | 4h | N-8 |
+| [`B-13`](B-13.md) | Recordatorio de la visita el día anterior | P2 | 1 | 2h | B-8, A-17 |
+| [`B-14`](B-14.md) | Notas de voz transcritas | P2 | 3 | 6h | — |
 
 ### E3 — Datos y conocimiento
 
@@ -113,6 +122,21 @@ El orden recomendado para avanzar las historias con 3 personas en paralelo, mini
 | [`Z-2`](Z-02.md) | Demo end-to-end guionizada en vivo | P0 | 3 | 6h | OBS-6 |
 | [`Z-3`](Z-03.md) | Documento de arquitectura final | P0 | 3 | 6h | — |
 | [`Z-4`](Z-04.md) | Documentación publicada y enlazada | P1 | 1 | 2h | Z-3 |
+
+### E6 — Inteligencia comercial
+
+| Historia | Título | Prioridad | Puntos | Duración | Depende |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| [`N-1`](N-01.md) | Esquema de historial, operaciones, interés y demanda | P1 | 3 | 6h | — |
+| [`N-2`](N-02.md) | Regla de atribución y visibilidad de las métricas | P1 | 1 | 2h | — |
+| [`N-3`](N-03.md) | Cerrar operación desde la ficha del lead | P1 | 3 | 6h | N-1 |
+| [`N-4`](N-04.md) | Registrar el interés del lead por cada propiedad | P1 | 2 | 4h | N-1 |
+| [`N-5`](N-05.md) | Campaña de origen y demanda insatisfecha | P1 | 2 | 4h | N-1 |
+| [`N-6`](N-06.md) | Consultas de inventario y rotación | P1 | 3 | 6h | N-1 |
+| [`N-7`](N-07.md) | Consultas de atribución al bot y conversión | P1 | 3 | 6h | N-1, N-2 |
+| [`N-8`](N-08.md) | Vista de inventario y negocio en el panel | P1 | 3 | 6h | N-2, N-6, N-7 |
+| [`N-9`](N-09.md) | Seis meses de historia sintética para la demo | P1 | 3 | 6h | N-1 |
+| [`N-10`](N-10.md) | Reporte semanal al gerente por Telegram | P2 | 2 | 4h | N-6, N-7, A-17 |
 
 ## Piso absoluto
 

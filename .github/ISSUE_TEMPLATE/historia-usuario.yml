@@ -11,7 +11,7 @@ body:
         tabla de su épica en `docs/STORIES/README.md`. Este Issue es el *tracking* de esa historia,
         no reemplaza el archivo — el contenido completo (criterios de aceptación, DoD) vive ahí.
 
-        Asignar labels: `track:core|borde|datos|cross`, `prio:P0|P1|P2`, `epic:contratos|motor-agente|canal-borde|datos|observabilidad|cierre`, `points:1|2|3|5|8`.
+        Asignar labels: `track:core|borde|datos|cross`, `prio:P0|P1|P2`, `epic:contratos|motor-agente|canal-borde|datos|observabilidad|cierre|negocio`, `points:1|2|3|5|8`.
         Asignar Milestone = la épica. Si depende de otra historia, dejarlo en el campo de abajo y además
         marcarla en el Project.
 
@@ -19,7 +19,7 @@ body:
     id: backlog-id
     attributes:
       label: ID del backlog
-      placeholder: "CT-1, A-4, B-1, C-5, OBS-2..."
+      placeholder: "CT-1, A-4, B-1, C-5, OBS-2, N-1..."
     validations:
       required: true
 

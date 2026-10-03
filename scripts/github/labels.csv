@@ -14,6 +14,7 @@ epic:canal-borde|0E8A16|E2 — Canal y borde
 epic:datos|5319E7|E3 — Datos y conocimiento
 epic:observabilidad|FBCA04|E4 — Observabilidad y calidad
 epic:cierre|C2E0C6|E5 — Cierre y demo
+epic:negocio|BFD4F2|E6 — Inteligencia comercial
 points:1|C2E0C6|1 punto Fibonacci (~2h ideales)
 points:2|C2E0C6|2 puntos Fibonacci (~4h ideales)
 points:3|C2E0C6|3 puntos Fibonacci (~6h ideales)

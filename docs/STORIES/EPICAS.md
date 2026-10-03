@@ -16,13 +16,13 @@ Cada épica agrupa historias de una misma área funcional. El objetivo, alcance 
 
 **Decisión de arquitectura:** el estado de la conversación (FSM, historial, score) se persiste en Postgres desde la primera historia que lo necesita (A-1) — no vive en memoria con un espejo agregado después. Ver `docs/ESTRUCTURA-DEL-PROYECTO.md` §4.
 
-**Historias:** A-1 a A-13.
+**Historias:** A-1 a A-18.
 
 ## E2 — Canal y borde
 
 **Objetivo:** el bot de Telegram, la conversión a/desde el evento canónico, la identidad del lead entre canales, y el panel interno de asesores (lista, ficha, cola priorizada, notificaciones, agenda).
 
-**Historias:** B-1 a B-9.
+**Historias:** B-1 a B-14.
 
 ## E3 — Datos y conocimiento
 
@@ -43,6 +43,14 @@ Cada épica agrupa historias de una misma área funcional. El objetivo, alcance 
 **Objetivo:** hardening final (solo *bugfix*, sin alcance nuevo), demo end-to-end ensayada en vivo, documento de arquitectura final, y documentación publicada y enlazada.
 
 **Historias:** Z-1 a Z-4.
+
+## E6 — Inteligencia comercial
+
+**Objetivo:** que la inmobiliaria sepa cuánto colocó en un periodo, qué propiedades no rotan, cuáles se cerraron después de conversar con el bot y qué demanda no está cubriendo. Pedido por el profesor; el análisis de qué faltaba está en [`docs/DESIGN/propuestas.md`](../DESIGN/propuestas.md).
+
+**Decisión de organización:** todo el esquema nuevo entra en una sola historia (N-1) y una sola migración, para que `core`, el panel y el *seed* trabajen en paralelo sin chocar en Alembic. Las consultas (N-6, N-7) y las vistas (N-8) son historias separadas que se coordinan por las firmas que fijan las consultas en su primer PR.
+
+**Historias:** N-1 a N-10. Las otras propuestas de `propuestas.md` van en su épica natural: A-15 a A-18 en E1 y B-10 a B-14 en E2.
 
 ---
 
