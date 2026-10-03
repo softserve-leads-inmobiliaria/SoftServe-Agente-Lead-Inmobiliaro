@@ -49,7 +49,7 @@ NOTIFICATION_KINDS = ("calificado", "traspaso")
 DEAL_KINDS = ("renta", "venta")
 INTEREST_KINDS = ("anuncio", "consulta", "busqueda", "visita")
 # Tareas diferidas (A-17, DT-44). Cada historia que agregue una clase de *job* la suma aquí y en una migración.
-JOB_KINDS = ("no_response", "visit_reminder")
+JOB_KINDS = ("no_response", "visit_reminder", "alert_scan", "property_alert")
 JOB_STATUSES = ("pending", "done", "failed", "cancelled")
 
 # Dimensión del vector de la FAQ. Valor de partida (modelos de sentence embeddings habituales usan
@@ -371,6 +371,37 @@ class UnmetSearch(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(),
                                                  index=True, nullable=False)
     synthetic: Mapped[bool] = _synthetic()
+
+
+class PropertyAlert(Base):
+    """Alerta de propiedades nuevas (A-18, DT-45): los filtros de una búsqueda, sin texto del lead.
+
+    Una activa por lead: una nueva desactiva la anterior. Vence en `expires_at`; `/stop` la desactiva.
+    """
+
+    __tablename__ = "property_alerts"
+    __table_args__ = (
+        _null_or_one_of("type", PROPERTY_TYPES, "ck_property_alerts_type"),
+        CheckConstraint("bedrooms IS NULL OR bedrooms >= 0", name="ck_property_alerts_bedrooms"),
+        CheckConstraint("budget_min IS NULL OR budget_min >= 0", name="ck_property_alerts_budget_min"),
+        CheckConstraint("budget_max IS NULL OR budget_max >= 0", name="ck_property_alerts_budget_max"),
+        Index("uq_property_alerts_active_lead", "lead_id", unique=True, postgresql_where=text("active")),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), **_UUID_PK)
+    lead_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("leads.id", ondelete="CASCADE"), nullable=False)
+    # Por donde se le avisa: el mensaje queda en el historial de esta conversación.
+    conversation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"),
+                                                       nullable=False)
+    # Los mismos filtros que `unmet_searches`, y como en search_properties cada uno es opcional.
+    zone: Mapped[str | None] = mapped_column(String)
+    type: Mapped[str | None] = mapped_column(String)
+    bedrooms: Mapped[int | None] = mapped_column(Integer)
+    budget_min: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    budget_max: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    active: Mapped[bool] = mapped_column(server_default=text("true"), nullable=False)
+    created_at: Mapped[datetime] = _now()
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class FaqEntry(Base):

@@ -13,7 +13,7 @@ DEFS = CONTRACT["$defs"]
 EXPECTED_TABLES = {
     "leads", "conversations", "messages", "lead_scores", "properties", "promotions", "advisors",
     "visits", "advisor_notifications", "faq_entries", "funnel_events", "audit_log", "fsm_context",
-    "property_status_events", "deals", "property_interest", "unmet_searches", "scheduled_jobs",
+    "property_status_events", "deals", "property_interest", "unmet_searches", "scheduled_jobs", "property_alerts",
 }
 
 
