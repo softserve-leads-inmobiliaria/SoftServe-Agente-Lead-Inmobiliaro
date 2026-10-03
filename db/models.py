@@ -44,6 +44,7 @@ PROPERTY_TYPES = ("venta", "renta", "preventa")
 PROPERTY_STATUSES = ("disponible", "apartado", "cerrado")
 SCORE_BANDS = ("COLD", "WARM", "HOT")
 MESSAGE_ROLES = ("user", "assistant", "system", "tool")
+NOTIFICATION_KINDS = ("calificado", "traspaso")
 
 # Dimensión del vector de la FAQ. Valor de partida (modelos de sentence embeddings habituales usan
 # 384); C-5 fija el modelo real (DT-7) y, si cambia, lo ajusta con una migración nueva.
@@ -243,6 +244,25 @@ class Visit(Base):
     advisor_id: Mapped[str] = mapped_column(ForeignKey("advisors.id"), nullable=False)
     scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class AdvisorNotification(Base):
+    """Aviso al asesor en el panel (B-15): la tarjeta del lead calificado (B-7) o la ficha de traspaso
+    (A-12). Se guarda siempre; Telegram es un canal más, solo para el asesor que registró su chat."""
+
+    __tablename__ = "advisor_notifications"
+    __table_args__ = (
+        _one_of("kind", NOTIFICATION_KINDS, "ck_advisor_notifications_kind"),
+        Index("ix_advisor_notifications_advisor_created", "advisor_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), **_UUID_PK)
+    advisor_id: Mapped[str] = mapped_column(ForeignKey("advisors.id", ondelete="CASCADE"), nullable=False)
+    lead_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("leads.id", ondelete="CASCADE"), nullable=False)
+    kind: Mapped[str] = mapped_column(String, nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)  # el resumen, sin la transcripción
+    created_at: Mapped[datetime] = _now()
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class FaqEntry(Base):
