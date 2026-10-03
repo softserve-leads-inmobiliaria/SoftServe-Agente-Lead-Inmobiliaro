@@ -13,7 +13,7 @@ Usado por `CT-3` (contrato `FsmState`/`LeadScore`/`Conversation`) y `C-3` (migra
 
 | Entidad | Campos clave | Notas |
 | :--- | :--- | :--- |
-| `Lead` | id, telegram_user_id, phone, email, consent_status, status (nuevo/mql/sql/visit_scheduled/closed_won/closed_lost), zone, budget, timing, utm_campaign, synthetic | Identidad única por canal. `utm_campaign` es la del primer contacto (`N-5`) |
+| `Lead` | id, telegram_user_id, phone, email, consent_status, status (nuevo/mql/sql/visit_scheduled/closed_won/closed_lost), zone, budget, timing, utm_campaign, handoff_summary, synthetic | Identidad única por canal. `utm_campaign` es la del primer contacto (`N-5`). `handoff_summary` es el resumen del último traspaso (`A-16`, DT-46) |
 | `Conversation` | id, lead_id, fsm_state, started_at, last_message_at | Una por hilo de conversación |
 | `Message` | id, conversation_id, role, content, tool_calls, created_at | Historial completo |
 | `LeadScore` | lead_id, need_fit, budget, authority, timing, eligibility, total, band (COLD/WARM/HOT), reasons | Persistido, nunca calculado por el LLM directamente |
@@ -247,6 +247,11 @@ Las cajas con borde punteado no están construidas.
   - El mensaje deja la propiedad como la de interés de la conversación. `/stop` desactiva la alerta.
   - Hoy ningún código da de alta propiedades: quien lo haga tiene que pasar por `db/property_history.py`
     para que la alerta las vea.
+- **Resumen del traspaso para el asesor** (`A-16`, DT-46): al llegar a `HANDOFF` o `HUMAN_HANDOFF`, el
+  turno genera un resumen de la conversación: qué busca el lead, sus objeciones y el siguiente paso. Con
+  Bedrock lo redacta el LLM; con el agente *fake*, una plantilla. Pasa por los guardrails de salida y no
+  puede mencionar categorías protegidas. Se guarda en `leads.handoff_summary` y lo muestran la ficha del
+  panel y la ficha de traspaso, antes de la transcripción. Si falla, la ficha sale sin resumen.
 - **Reintento del envío al lead por Telegram** (#161): si la respuesta del turno no sale por un fallo de
   conexión, el bot la reenvía hasta 3 veces, tras 1 y 2 segundos. Con `RetryAfter`, espera lo que pide
   Telegram, hasta 30 segundos. No reintenta un `TimedOut` (el mensaje pudo llegar y saldría duplicado) ni

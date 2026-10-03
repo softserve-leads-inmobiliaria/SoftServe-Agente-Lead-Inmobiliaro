@@ -1910,3 +1910,50 @@ decidir cuatro cosas:
 - Con el agente *fake*, que busca sin filtros, la alerta nunca se ofrece; se ve con Bedrock.
 - Pendiente de verificar en vivo: buscar algo que no exista por Telegram, pedir la alerta y publicar una
   propiedad con `record_listing`.
+
+## DT-46 — Resumen del traspaso: se genera en el turno, se valida como una respuesta y se guarda en `leads`
+
+**Estado:** propuesta
+
+**Contexto.** `A-16` pide un resumen de la conversación (qué busca el lead, sus objeciones y el siguiente
+paso) en la ficha del panel y en la ficha de traspaso, generado al llegar a `HANDOFF` o
+`HUMAN_HANDOFF`. Hay que decidir cuándo se genera, dónde se guarda y cómo se valida un texto que lee el
+asesor y no el lead.
+
+**Decisión.**
+- **Se genera en el mismo turno del traspaso**, después del commit y antes de la ficha (A-12), que lo
+  lleva. Así se genera también por el arnés (`POST /events`), que no notifica a nadie. El turno espera
+  como mucho `SUMMARY_TIMEOUT_SECONDS` (15 s): pasado ese tiempo, la ficha sale sin resumen.
+- **Con Bedrock lo redacta el modelo de conversación**, sin tools y con temperatura 0. Recibe las últimas
+  60 líneas de la transcripción guardada y los datos del lead (motivo del traspaso, zona, presupuesto,
+  plazo, propiedad de interés, visita), y devuelve un JSON con las tres secciones. **Con el agente
+  *fake*** sale de una plantilla determinista con esos mismos datos; las objeciones quedan "sin
+  detectar", porque sin LLM no se identifican.
+- **Se valida como una respuesta al lead:** factualidad (A-5), dirección reservada (A-6) y promesas
+  (A-7), con la transcripción y los datos del lead como fuente válida. La transcripción ya está sin PII ni
+  categorías protegidas (A-8), y el agente ya pasó sus propios guardrails. Además, el resumen no puede
+  mencionar ninguna categoría protegida: las reglas de A-8, más las formas en tercera persona ("su
+  esposa", "sus hijos"). "Su pareja" y "su familia" sí valen, porque son las formas neutras de DT-40.
+- **Lo que no pasa se descarta**, sin regenerar: el resumen es un extra y la ficha ya tiene la
+  transcripción. Si el LLM falla, tarda demasiado o el JSON viene incompleto, la ficha sale sin resumen,
+  como antes, y queda un `warning` con la clase del error o de la violación, nunca el texto.
+- **Se guarda en `leads.handoff_summary` y `handoff_summary_at`** (migración `0012`), y no en
+  `conversations`. `conversations` es la proyección congelada del contrato
+  `fsm_state.schema.json#/$defs/Conversation` (CT-3, `additionalProperties: false`), y la ficha del panel
+  es por lead. Guarda el resumen del último traspaso: uno nuevo reemplaza al anterior, y uno fallido no
+  lo borra.
+
+**Alternativas.**
+- Un *job* del *scheduler* (DT-44) que lo genere después del turno: no le agrega latencia al lead, pero la
+  ficha de traspaso saldría antes que el resumen, o habría que retrasarla. Descartada: el traspaso pasa
+  una vez por conversación.
+- Columna en `conversations`, como decía la historia: obliga a cambiar un contrato congelado por un dato
+  que solo lee el panel. Descartada.
+- Regenerar ante una violación, como el *pipeline* de DT-23: duplica el costo por un texto opcional.
+  Descartada.
+
+**Consecuencias.**
+- El turno del traspaso tarda lo que tarde una llamada más al LLM (con Bedrock, un par de segundos).
+- El aviso de traspaso del panel (`advisor_notifications`) y el primer mensaje de Telegram al asesor
+  llevan el resumen al final, antes de la transcripción.
+- Pendiente de verificar en vivo contra Bedrock con al menos tres conversaciones distintas.
