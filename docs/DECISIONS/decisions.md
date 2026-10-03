@@ -1628,3 +1628,73 @@ historial, aunque revelan el estado civil, que `guardrails.md` §1 declara prote
   Con el enum colapsado, tampoco se guarda.
 - Los ejemplos de `contracts/examples/` y los tests usan `declarado`. Un consumidor que mande `pareja`
   ahora falla la validación del contrato.
+
+## DT-41 — Un cierre es del bot si el lead tocó esa propiedad con el bot en los 60 días previos; las métricas agregadas las ve cualquier asesor
+
+**Estado:** propuesta (`N-2`, #142). Pasa a aceptada cuando la revisen las tres personas del equipo.
+
+**Contexto.** La épica E6 (`docs/DESIGN/propuestas.md` §2) mide cuánto negocio trae el agente. `N-7`
+cuenta los cierres atribuidos al bot y `N-8` los muestra en el panel, pero las dos dependen de tres
+cosas sin decidir: qué cuenta como "cerrada gracias al bot", quién ve las métricas de toda la
+inmobiliaria y qué no puede salir nunca en una vista agregada.
+
+Hay un dato que pesa en la primera: **todo lead de la base llegó por el bot**. `leads` solo se crea desde
+Telegram, y `N-3` cierra la operación desde la ficha de un lead. Por eso, "el lead conversó con el bot" es
+cierto para el 100 % de los cierres y no mide nada.
+
+**Decisión.**
+
+1. **Regla de atribución.** Un cierre (`deals`, `N-1`) se atribuye al bot si `property_interest` (`N-4`)
+   tiene una fila con **el mismo lead y la misma propiedad** del cierre, de tipo `anuncio`, `consulta` o
+   `visita`, con fecha **anterior al cierre y como máximo 60 días antes**.
+   - `anuncio`: el lead entró por el anuncio de esa propiedad (`?start=prop_…`).
+   - `consulta`: el bot la consultó con `get_property` para el lead.
+   - `visita`: el bot agendó la visita (B-8).
+   - `busqueda` **no cuenta sola**: que la propiedad haya salido en una lista de resultados no muestra
+     interés en ella. Sí cuenta si, además, el lead la consultó o la visitó.
+   - Haber conversado sin tocar esa propiedad no cuenta (ver el contexto).
+   - La ventana se mide desde la **última** interacción que cuenta. Un lead que consultó la propiedad
+     hace 90 días y la visitó hace 10 cuenta.
+   - Es binaria: un cierre es del bot o no. No se reparte el crédito entre canales.
+2. **Quién ve las métricas agregadas.** El mismo criterio de B-9: **cualquier token de asesor** ve las
+   métricas de toda la inmobiliaria, con cortes por zona y por asesor (`services/panel/app/funnel.py`).
+   No hay token ni rol de gerencia, así que `N-8` no necesita columna ni migración. El resto del panel
+   sigue aislado por zona (DT-5): la ficha y la cola de un lead solo las ve el asesor de su zona.
+3. **Lo que nunca sale en una vista agregada** (`N-6`, `N-7`, `N-8` y cualquier reporte que venga después):
+   - el texto de la conversación (`messages.content`) y los resultados de tools guardados en el contexto
+     de la FSM;
+   - el teléfono (`leads.phone`) y el correo (`leads.email`);
+   - el nombre del lead, si alguna vez se guarda, y su identidad de Telegram (`telegram_user_id`, el
+     `@usuario`);
+   - el `lead_id` o cualquier enlace a la ficha de un lead. Una vista agregada cuenta leads, no los
+     lista. La lista de estancadas de `N-8` muestra propiedades, no leads.
+
+   El detalle de un lead sigue solo en su ficha, para el asesor de su zona.
+
+**Alternativas.**
+- **Contar cualquier conversación con el bot.** Descartada: con todos los leads llegados por Telegram,
+  da el 100 % siempre.
+- **Contar también `busqueda`.** Descartada: atribuiría al bot una propiedad que el lead quizá ni
+  abrió, solo porque salió entre tres resultados. Si el equipo la quiere, puede ir como una segunda
+  cifra ("cierres asistidos") en `N-7`, nunca sumada a la principal.
+- **Ventana de 30 o de 90 días.** 30 deja fuera las ventas, que tardan más que una renta; 90 atribuye
+  cierres que ya no tienen que ver con la conversación. 60 es el valor de `propuestas.md` §2.3. La
+  ventana es una constante de `N-7` y se puede cambiar sin migración.
+- **Token o rol de gerencia.** Descartado por ahora: necesita una columna o tabla nueva, su rotación y
+  una forma de entregarlo, para tres asesores que ya ven el funnel global. Se retoma si el equipo de
+  asesores crece o si la gerencia es una persona distinta de los asesores.
+
+**Consecuencias.**
+- `N-7` implementa la regla tal cual: un `EXISTS` sobre `property_interest` con lead, propiedad, tipo
+  y ventana, con la ventana de 60 días en una constante. Los tests de `N-7` cubren los bordes:
+  día 60 contra 61, solo `busqueda`, otra propiedad del mismo lead e interacción posterior al cierre.
+- La regla depende de que `N-4` registre las interacciones. Los cierres anteriores a `N-4` no tienen
+  interacciones registradas y salen como no atribuidos. La historia sintética de `N-9` las siembra
+  junto con sus cierres.
+- `N-8` usa la misma autenticación que el funnel de B-9. Un token que no existe responde 404.
+- Un asesor ve cuántos cierres hizo cada uno de sus compañeros. B-9 ya muestra el funnel por asesor,
+  así que no cambia lo que se expone hoy.
+- No se aplica un umbral mínimo de conteo por celda. Con tres asesores y cortes por zona, un "1" puede
+  dejar adivinar a qué lead se refiere, pero quien lo ve es un asesor de la misma inmobiliaria. Si las
+  métricas llegan a salir del equipo (por ejemplo, el reporte semanal por Telegram de
+  `propuestas.md` §3), hay que revisarlo.
