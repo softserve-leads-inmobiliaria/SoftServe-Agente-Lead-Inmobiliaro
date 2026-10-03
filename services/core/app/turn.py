@@ -17,6 +17,7 @@ from starlette.concurrency import run_in_threadpool
 from app import scheduling_client, visits
 from app.agent import Agent, AgentResult, FakeAgent, TurnInput
 from app.availability import AvailabilityGuard
+from app.demand import SearchLog, UnmetSearch
 from app.fakes.fake_core import FakeCore
 from app.fakes.fake_llm import FakeLLM
 from app.fsm import (
@@ -108,14 +109,15 @@ def read_guard_context(engine: Engine, event: Mapping[str, Any]) -> GuardContext
 def advance(engine: Engine, event: Mapping[str, Any], intent: str,
             evidence: TurnEvidence | None = None, audits: Sequence[Audit] = (),
             counts_as_unresolved: bool = True, messages: Sequence[SavedMessage] = (),
-            visit: VisitStep | None = None) -> Transition:
+            visit: VisitStep | None = None, unmet_searches: Sequence[UnmetSearch] = ()) -> Transition:
     """Carga y bloquea el estado, aplica el trigger, puntúa, audita y guarda, en una transacción.
 
     `messages` son los mensajes del turno (lead y asistente): van en la misma transacción, así el
     historial nunca queda desfasado del estado.
 
     `counts_as_unresolved=False` para los turnos que fuerza el guardrail de entrada: no suman a la
-    racha de frustración. `visit` es el paso de agenda del turno (B-8), si lo hubo.
+    racha de frustración. `visit` es el paso de agenda del turno (B-8), si lo hubo. `unmet_searches` son
+    las búsquedas del turno que no encontraron nada (N-5).
     """
     conversation_id, lead_id = _ids(event)
     with get_tracer().start_as_current_span("fsm.advance") as span, session_scope(engine) as session:
@@ -143,6 +145,9 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
             store.set_zone_if_unknown(lead_id, zone)
         booked_property = visit.tool_results[VISIT_KEY].get("property") if booked else None
         store.record_interest(lead_id, interactions(evidence.tool_results, evidence.listing, booked_property))
+        if event.get("utm_campaign"):
+            store.set_campaign_if_unknown(lead_id, str(event["utm_campaign"]))
+        store.record_unmet_searches(unmet_searches)
         previous_band = state.score["band"] if state.score else None
         qualified = just_qualified(previous_band, score.band) and store.qualify(conversation_id, lead_id)
         _write_audits(store, event, audits)
@@ -263,7 +268,7 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
 
     span.set_attribute("turn.outcome", "out_of_domain" if verdict.out_of_domain
                        else "jailbreak" if verdict.jailbreak else "normal")
-    listing = None
+    listing, searches = None, None
     if verdict.out_of_domain:
         result = AgentResult(text=_out_of_domain_reply(context), intent="otro")
     elif verdict.jailbreak:
@@ -273,7 +278,8 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     else:
         # El agente solo ve el texto filtrado y el historial que guardó este mismo servicio.
         text = verdict.signal_text if verdict.signal_text.strip() or not event["text"].strip() else OMITTED_MESSAGE
-        guarded = AvailabilityGuard(catalog)
+        searches = SearchLog(catalog)  # por debajo del guardrail: cuenta lo que contestó el catálogo (N-5)
+        guarded = AvailabilityGuard(searches)
         listing = await _listing(event, guarded, context.lead_qualified)
         result = await agent.run(TurnInput(event=event, text=text, history=context.history,
                                            lead_qualified=context.lead_qualified, listing=listing), guarded)
@@ -311,7 +317,7 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     saved = [*_lead_message(verdict, event["text"]), ("assistant", outbound["text"], result.tool_calls or None)]
     audits = [*audits, *result.guard_audits]  # A-5: la factualidad de salida se audita igual que la entrada
     transition = await run_in_threadpool(advance, engine, event, result.intent, evidence, audits, counts, saved,
-                                         visit)
+                                         visit, searches.unmet if searches else ())
     _describe(span, transition)
     span.set_attribute("lead.qualified_now", transition.qualified)
     if transition.qualified and on_qualified is not None:
