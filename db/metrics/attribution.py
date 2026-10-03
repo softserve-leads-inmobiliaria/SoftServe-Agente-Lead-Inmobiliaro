@@ -1,4 +1,4 @@
-"""Atribución al bot y conversión (N-7). Solo lee de Postgres, con SQL explícito, como `funnel.py`.
+"""Atribución al bot y conversión (N-7). Solo lee de Postgres, con SQL explícito, como el `funnel.py` del panel.
 
 Vista agregada (DT-41): cualquier token de asesor la ve entera, y nunca devuelve un lead. Cuenta leads y
 cierres; no lista ids, nombres, teléfonos, correos ni texto de la conversación.

@@ -11,9 +11,10 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.inventory import (
+from db.metrics.inventory import (
     INQUIRIES_WITHOUT_VISITS,
     LOCAL_TZ,
     NO_INQUIRIES,
@@ -29,9 +30,18 @@ from app.inventory import (
 )
 from db.models import Advisor, Deal, Lead, Property, PropertyInterest, UnmetSearch
 from db.property_history import record_listing, set_status
+from db.testing import temporary_database
 
 START, END = datetime(2026, 9, 1, tzinfo=UTC), datetime(2026, 10, 1, tzinfo=UTC)
 CLOSED = datetime(2026, 9, 20, 12, tzinfo=UTC)
+
+
+@pytest.fixture(scope="module")
+def engine():
+    with temporary_database() as url:
+        engine = create_engine(url)
+        yield engine
+        engine.dispose()
 
 
 @pytest.fixture
@@ -297,7 +307,7 @@ def test_the_report_brings_every_query_of_the_period(session):
 
 def test_no_query_returns_a_lead(session):
     """Vista agregada, como la de N-7: ningún resultado lleva ids ni datos de leads."""
-    from app import inventory
+    from db.metrics import inventory
 
     for name in ("PlacedGroup", "Placements", "DaysOnMarket", "StagnantProperty", "RankedProperty",
                  "UnmetDemand", "InventoryReport"):

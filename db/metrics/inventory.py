@@ -1,4 +1,4 @@
-"""Inventario y rotación (N-6). Solo lee de Postgres, con SQL explícito, como `funnel.py` y `attribution.py`.
+"""Inventario y rotación (N-6). Solo lee de Postgres, con SQL explícito, como `attribution.py`.
 
 Para el gerente: cuánto se colocó en un periodo, qué tan rápido rota cada zona, qué propiedades están
 estancadas y qué piden los leads que no hay. Vista agregada, como la de N-7: no devuelve leads ni texto
