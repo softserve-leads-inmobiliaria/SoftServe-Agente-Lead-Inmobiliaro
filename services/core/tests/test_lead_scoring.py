@@ -73,6 +73,43 @@ def test_a_search_without_results_resets_the_match_count():
     assert merge_signal(current, turn(search_properties={"properties": []}))["matching_properties"] == 0
 
 
+# --- A-15: la propiedad del anuncio cuenta como coincidencia -------------------------------------------------
+
+LISTING = {"id": "prop_00231", "title": "Depto 2 rec. en Providencia", "status": "disponible"}
+
+
+def from_listing(listing=LISTING, **tool_results):
+    return TurnEvidence(tool_results=tool_results, listing=listing)
+
+
+def test_an_available_listing_counts_as_one_match():
+    signal, score = score_turn(EMPTY, from_listing())
+    assert signal["matching_properties"] == 1 and score.need_fit > 0
+
+
+@pytest.mark.parametrize("status", ["apartado", "cerrado", "sin_verificar", None])
+def test_a_listing_that_is_not_available_does_not_count(status):
+    assert merge_signal(EMPTY, from_listing(LISTING | {"status": status}))["matching_properties"] == 0
+
+
+def test_a_search_in_the_same_turn_with_more_results_wins():
+    assert merge_signal(EMPTY, from_listing(search_properties={"properties": [{}, {}, {}]}))["matching_properties"] == 3
+
+
+def test_an_empty_search_in_the_same_turn_does_not_erase_the_listing():
+    assert merge_signal(EMPTY, from_listing(search_properties={"properties": []}))["matching_properties"] == 1
+
+
+def test_the_listing_never_lowers_what_an_earlier_search_found():
+    assert merge_signal(EMPTY | {"matching_properties": 4}, from_listing())["matching_properties"] == 4
+
+
+def test_a_later_search_wins_as_before():
+    signal = merge_signal(EMPTY, from_listing())
+    assert merge_signal(signal, turn(search_properties={"properties": [{}, {}]}))["matching_properties"] == 2
+    assert merge_signal(signal, turn())["matching_properties"] == 1
+
+
 def test_a_turn_without_tools_keeps_the_previous_matches_and_eligibility():
     current = EMPTY | {"matching_properties": 4, "meets_requirements": True}
     merged = merge_signal(current, turn({"urgency": "explorando"}))

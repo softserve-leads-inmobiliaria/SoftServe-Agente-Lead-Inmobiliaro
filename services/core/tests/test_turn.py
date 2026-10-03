@@ -285,8 +285,8 @@ LISTING = {"id": "prop_00231", "title": "Depto 2 rec. en Providencia", "zone": "
 class ListingCatalog:
     """El catálogo con la propiedad del anuncio; guarda qué tools le piden."""
 
-    def __init__(self, missing=False):
-        self.calls, self.missing = [], missing
+    def __init__(self, missing=False, status="disponible"):
+        self.calls, self.missing, self.status = [], missing, status
 
     async def call(self, tool, arguments=None):
         from app.catalog_client import CatalogToolError
@@ -295,7 +295,9 @@ class ListingCatalog:
         if tool == "get_property":
             if self.missing:
                 raise CatalogToolError({"code": "NOT_FOUND", "message": "no existe"})
-            return dict(LISTING)
+            return LISTING | {"status": self.status}
+        if tool == "get_availability":
+            return stub_call(tool, arguments) | {"status": self.status}
         return stub_call(tool, arguments)
 
 
@@ -343,3 +345,24 @@ def test_a_listing_the_catalog_does_not_know_falls_back_to_the_plain_greeting(en
     reply = _deep_link(chat, ListingCatalog(missing=True), property_id="prop_99999")
     assert "ref." not in reply["text"] and reply["text"]
     assert chat.state == "DISCOVERY" and _lead_zone(engine, chat.lead_id) is None
+
+
+# --- A-15: la propiedad del anuncio cuenta para `need_fit` ----------------------------------------------------
+
+def test_a_lead_from_the_listing_of_an_available_property_has_need_fit(engine):
+    chat = Conversation(engine)
+    _deep_link(chat, ListingCatalog())
+    assert _score_row(engine, chat.lead_id).need_fit == 10  # 1 propiedad -> need_fit 10, como una búsqueda
+
+
+def test_a_lead_from_the_listing_of_a_property_already_taken_has_no_need_fit(engine):
+    chat = Conversation(engine)
+    _deep_link(chat, ListingCatalog(status="apartado"))
+    assert _score_row(engine, chat.lead_id).need_fit == 0
+
+
+def test_the_listing_need_fit_is_kept_in_the_next_turns(engine):
+    chat = Conversation(engine)
+    _deep_link(chat, ListingCatalog())
+    chat.say("saludo")
+    assert _score_row(engine, chat.lead_id).need_fit == 10
