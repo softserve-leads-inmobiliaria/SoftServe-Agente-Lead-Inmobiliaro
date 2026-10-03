@@ -15,12 +15,13 @@ from __future__ import annotations
 
 from typing import Any, Final, Mapping
 
-from app.fsm import HUMAN_INTENTS, HUMAN_REQUESTED
+from app.fsm import HUMAN_INTENTS, HUMAN_REQUESTED, VISIT_SCHEDULED
 from app.lead_scoring import declared_signal
 
 HANDOFF_STATES: Final = frozenset({"HANDOFF", "HUMAN_HANDOFF"})  # estados en los que un asesor toma el lead
 
 UNRESOLVED_INTENT: Final = "otro"
+VISIT_REQUESTED_REASON: Final = "visit_requested"  # visita pedida sin reservar: la coordina el asesor (B-8)
 FRUSTRATION_STREAK: Final = 3  # turnos seguidos sin resolver que se leen como frustración
 
 FRUSTRATION_REPLY: Final = ("Perdona que no te esté ayudando como esperas. "
@@ -33,29 +34,34 @@ def is_unresolved(intent: str, raw_signal: Mapping[str, Any] | None = None) -> b
 
 
 def next_streak(current: int, intent: str, counts: bool = True,
-                raw_signal: Mapping[str, Any] | None = None) -> int:
+                raw_signal: Mapping[str, Any] | None = None, resolved: bool = False) -> int:
     """Racha tras este turno: suma si quedó sin resolver, se reinicia si se resolvió.
 
     `raw_signal` es la señal cruda del turno: si declara un dato de calificación, el turno cuenta
-    como resuelto. Con `counts=False` (turno que fuerza el guardrail) la racha queda como estaba.
+    como resuelto. `resolved` lo marca el código cuando el turno resolvió algo por su cuenta (una
+    visita agendada, B-8: "la 2" no tiene intención propia). Con `counts=False` (turno que fuerza el
+    guardrail) la racha queda como estaba.
     """
     if not counts:
         return current
-    return current + 1 if is_unresolved(intent, raw_signal) else 0
+    return current + 1 if not resolved and is_unresolved(intent, raw_signal) else 0
 
 
 def is_frustrated(streak: int) -> bool:
     return streak >= FRUSTRATION_STREAK
 
 
-def handoff_reason(after: str, trigger: str | None, intent: str) -> str | None:
+def handoff_reason(after: str, trigger: str | None, intent: str, visit_booked: bool = True) -> str | None:
     """Por qué la conversación llegó a un traspaso en este turno; None si no hubo traspaso (A-12).
 
     Los estados de traspaso son terminales, así que un trigger que termina en uno es siempre la
-    transición de este turno: no hace falta comparar con el estado anterior.
+    transición de este turno: no hace falta comparar con el estado anterior. Una visita que la agenda
+    no pudo reservar (B-8) se traspasa como `visit_requested`: el asesor tiene que coordinarla.
     """
     if after not in HANDOFF_STATES or trigger is None:
         return None
     if trigger == HUMAN_REQUESTED:
         return intent if intent in HUMAN_INTENTS else "frustration"
+    if trigger == VISIT_SCHEDULED and not visit_booked:
+        return VISIT_REQUESTED_REASON
     return trigger

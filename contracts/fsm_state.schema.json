@@ -67,7 +67,8 @@
         },
         "decision_maker": {
           "type": "string",
-          "enum": ["solo", "pareja", "familia", "no_declarado"]
+          "enum": ["declarado", "no_declarado"],
+          "description": "Si el lead dijo cómo se toma la decisión de compra (solo o con otras personas). No se guarda con quién: estado civil y situación familiar son categorías protegidas (#119, DT-40)."
         },
         "urgency": {
           "type": "string",

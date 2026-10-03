@@ -1,9 +1,10 @@
 # Propuestas de funcionalidades
 
-Ideas para después del alcance actual, con lo que cada una necesita del sistema. **No son historias
-ni compromisos**: cuando se elija alguna, se baja a una historia en `docs/STORIES/` y su issue en el
-[Project](https://github.com/orgs/softserve-leads-inmobiliaria/projects/1). Lo que ya está construido
-está en [`design.md` §5](design.md#5-estado-real-del-sistema).
+Ideas para después del alcance actual, con lo que cada una necesita del sistema. Cada propuesta ya
+tiene su historia en `docs/STORIES/` (ver §9); el orden y el reparto están en
+[`ROADMAP.md` §8](../STORIES/ROADMAP.md#8-propuestas-de-octubre-e6-y-lo-que-sale-de-propuestasmd), y el
+estado, en el [Project](https://github.com/orgs/softserve-leads-inmobiliaria/projects/1). Lo que ya está
+construido está en [`design.md` §5](design.md#5-estado-real-del-sistema).
 
 Origen: el profesor pidió que la inmobiliaria pueda saber cuántas propiedades se arrendaron en la última
 semana o mes, cuáles están sin rotación y cuáles se arrendaron después de conversar con el bot. El resto
@@ -151,3 +152,19 @@ Orden sugerido, a decidir con el equipo:
 Capacidad: con 8 semanas desde el 15 de septiembre y la semana 8 reservada para cierre, quedan unas 4
 semanas de construcción, unas 86 h netas al ritmo de `ROADMAP.md`. Lo pendiente más los pasos 1 a 3 suma
 unas 75 h: cabe con poco margen. Si hay que recortar, se recorta §4 y §5 antes que §2.
+
+## 9. Historias
+
+| Propuesta | Historias |
+| :--- | :--- |
+| §2.1 Datos nuevos | [`N-1`](../STORIES/N-01.md) esquema, [`N-3`](../STORIES/N-03.md) cerrar operación, [`N-4`](../STORIES/N-04.md) interés por propiedad |
+| §2.2 Métricas | [`N-6`](../STORIES/N-06.md) inventario y rotación, [`N-7`](../STORIES/N-07.md) atribución y conversión, [`N-8`](../STORIES/N-08.md) vista en el panel |
+| §2.3 Cosas a decidir | [`N-2`](../STORIES/N-02.md) regla de atribución y visibilidad, [`N-9`](../STORIES/N-09.md) historia sintética |
+| §3 Demanda insatisfecha, campaña y ranking | [`N-5`](../STORIES/N-05.md); el ranking va en [`N-6`](../STORIES/N-06.md) |
+| §3 Reporte semanal | [`N-10`](../STORIES/N-10.md) (P2) |
+| §4 Para el asesor | [`A-16`](../STORIES/A-16.md) resumen, [`B-12`](../STORIES/B-12.md) SLA (P2) |
+| §5 Agenda real y recordatorio | `B-8` (ya existía), [`B-13`](../STORIES/B-13.md) recordatorio (P2) |
+| §5 Fotos y botones | [`B-10`](../STORIES/B-10.md) foto, [`B-11`](../STORIES/B-11.md) botones |
+| §5 Alertas y notas de voz | [`A-18`](../STORIES/A-18.md), [`B-14`](../STORIES/B-14.md) (P2) |
+| *Scheduler* (lo piden §3 y §5) | [`A-17`](../STORIES/A-17.md) (P2) |
+| §8 `need_fit` | [`A-15`](../STORIES/A-15.md) |

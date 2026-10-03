@@ -1535,7 +1535,218 @@ defectos en la dimensión Authority, que llegaban a 6 pares con `xfail(strict=Tr
 - La aserción de banda del gold set sigue sin morder: el control está en 100 y todos los pares también
   (DT-35). Una fuga chica se ve en el total y en la dimensión, no en la banda.
 
-## DT-39 — La corrida real de OBS-6 se comprueba en los 3 servicios, con ids por corrida y fuera de CI
+## DT-39 — Agendar la visita: la agenda del catálogo es el proveedor, y el código ofrece horarios numerados
+
+**Estado:** aceptada
+
+**Contexto.** `B-8` (#23) pide agendar la visita desde la conversación, con `get_slots` y `book` contra el
+asesor del lead, y un respaldo de "hora preferida" si el calendario no responde. DT-32 dejó a esta historia
+elegir el proveedor de calendario. Hasta ahora `SCHEDULE -> HANDOFF` lo disparaba la intención
+`agendar_visita` sin reservar nada, y `last_tool_results` se sobrescribía cada turno, así que la propiedad
+que el lead miró (por ejemplo, la del anuncio, #122) ya no se conocía cuando pedía la visita.
+
+**Decisión.**
+- **El proveedor es la agenda del catálogo** (`get_slots` y `book`, DT-32): horario fijo de lunes a sábado,
+  de 9:00 a 18:00, y las visitas en `visits`. No se integra un calendario externo.
+- **Lo decide el código, no el LLM** (`services/core/app/visits.py`). Al pedir la visita en `RECOMMEND`,
+  `core` pide el asesor con `assign_advisor(registered_only=true)`, como DT-33, y le ofrece al lead los
+  3 primeros horarios libres de los próximos 7 días, numerados. La oferta queda en `last_tool_results`
+  (`visit_offer`). En `SCHEDULE`, la respuesta del lead se lee con reglas: el número ("2", "la 2"), el
+  ordinal ("la segunda") o la hora en 24 horas ("16:00", "a las 16"). Si no elige exactamente uno, se le vuelven a
+  ofrecer. La respuesta de la agenda reemplaza la del agente en esos turnos.
+- **`SCHEDULE -> HANDOFF` lo dispara la visita resuelta**, no una intención (`trigger_for(...,
+  visit_settled=True)`). Resuelta es reservada con `book`, o con el horario preferido del lead. Una
+  reserva pasa `Lead.status` a `visit_scheduled`. El turno que la resuelve reinicia la racha de
+  frustración: "la 2" cae en `otro`.
+- **`book` va con `idempotency_key = <conversation_id>:<horario>`**: el reintento de un webhook o un "la 2"
+  repetido devuelven la misma visita. Con `SLOT_TAKEN` se ofrecen horarios nuevos.
+- **Respaldo de horario preferido.** Si la agenda no responde, no hay asesor con Telegram, no quedan
+  horarios, `book` falla por otro motivo o no se sabe qué propiedad visitar, se le pide al lead su día y
+  hora preferidos. El siguiente mensaje que mencione un día u hora ("mañana en la tarde", "el sábado") se
+  pasa al asesor en la ficha ("Horario preferido para la visita: ..."), con el motivo `visit_requested`.
+  Un "ok" no cuenta: se vuelve a preguntar.
+- **La propiedad de interés se arrastra** en `last_tool_results` (`property_of_interest`: id, título y
+  zona, sin `status`) mientras ningún turno traiga otra. El guardrail de factualidad (A-5) no la ve: usa
+  solo las tools del turno en curso. La tarjeta y la ficha del asesor ahora la muestran aunque el turno que
+  las dispara no la haya consultado.
+- La visita se muestra en la ficha en hora de Guadalajara.
+
+**Alternativas.**
+- Integrar Google Calendar u otro proveedor externo, descartada: necesita credenciales y cuentas de los
+  asesores y multiplica el esfuerzo de la historia. `get_slots` sigue siendo el punto donde se conectaría.
+- Que el LLM entienda la fecha en texto libre ("el martes en la tarde") y el código la valide contra
+  `get_slots`, descartada por ahora: depende del modelo y obliga a cambiar el prompt y el contrato de
+  clasificación. Las opciones numeradas son deterministas y se prueban sin Bedrock.
+- Publicar `get_slots` y `book` como tools del LLM, descartada por DT-32.
+- Guardar la propiedad de interés en una columna nueva, descartada para esta historia: necesita una
+  migración, y `N-4` (#144) va a guardar el interés por propiedad en su propia tabla.
+
+**Consecuencias.**
+- El camino feliz necesita un mensaje más en `SCHEDULE`. Los tests y el guion del arnés
+  `flujo_completo_hasta_handoff` responden con un horario. En los tests de `core` la agenda está caída
+  (`conftest.py`), así que toman el respaldo; la reserva real se prueba en `test_visits_turn.py` con una
+  agenda falsa que valida cada pedido contra el contrato.
+- Un lead en `SCHEDULE` que pregunta otra cosa recibe de nuevo los horarios, no la respuesta del agente.
+  Si insiste tres veces sin elegir, la racha de frustración lo pasa a un asesor (A-13).
+- Cancelar o mover una visita sigue fuera de alcance (DT-32).
+
+## DT-40 — `decision_maker` solo dice si se declaró cómo se decide; "mi esposa" se generaliza a "mi pareja"
+
+**Estado:** aceptada
+
+**Contexto.** DT-38 igualó los puntos de Authority, pero dejó dos huecos (#119). El contrato
+`ScoreSignal.decision_maker` seguía siendo `solo`/`pareja`/`familia`/`no_declarado`: el prompt de Bedrock le
+pedía al modelo distinguir pareja de familia, y el dato quedaba guardado en `fsm_context.score_signal` y
+en las razones de `lead_scores`. Y "con mi esposa" o "con mi esposo" llegaban intactos al LLM y al
+historial, aunque revelan el estado civil, que `guardrails.md` §1 declara protegido.
+
+**Decisión.**
+- **El enum pasa a `declarado`/`no_declarado`** (`contracts/fsm_state.schema.json`). Authority sigue dando
+  20 y 0 (`scoring.DECISION_MAKER_POINTS`). El prompt del clasificador pide `declarado` si el mensaje dice
+  cómo se toma la decisión, solo o con otras personas, y le dice al modelo que no distinga con quién.
+- **La migración `0006` reescribe lo ya guardado**: `solo`, `pareja` y `familia` pasan a `declarado` en
+  `fsm_context.score_signal` y en la razón de Authority de `lead_scores.reasons`. Sin ella, `compute_score`
+  rechazaría la señal acumulada de una conversación vieja. El `downgrade` deja `solo`, que valía lo mismo.
+- **"mi esposa", "mi esposo", "mi marido", "mi mujer", "mi novia" y "mi novio" se generalizan a "mi
+  pareja"**, con el mismo mecanismo que "mis hijos" → "mi familia" (DT-38; `input_guard._GENERALIZED`), y
+  se marcan como mención protegida. El LLM sigue viendo que la decisión se comparte.
+- El gold set de `C-6` suma "con mi marido" y "con mi novia" (27 pares) y prueba que cada mención que
+  revela estado civil o situación familiar llega generalizada al LLM.
+
+**Alternativas.**
+- `solo`/`compartida`/`no_declarado`: conserva para el asesor si el lead decide solo, pero sigue guardando
+  un dato del hogar que no pesa en el score. Descartada.
+- Dejar el contrato como estaba y solo redactar "mi esposa": la distinción seguía guardándose y bastaba
+  un cambio en la tabla de puntos para volver a puntuarla. Descartada.
+- Tolerar en el código los valores viejos en vez de migrarlos: dejaba guardado justo el dato que se
+  quiere quitar. Descartada.
+
+**Consecuencias.**
+- El asesor ya no ve en la razón de Authority si el lead decide solo, en pareja o en familia. Si le
+  importa, lo pregunta en la llamada.
+- "mis padres" no se generaliza: dice con quién se decide, no el estado civil ni si el lead tiene hijos.
+  Con el enum colapsado, tampoco se guarda.
+- Los ejemplos de `contracts/examples/` y los tests usan `declarado`. Un consumidor que mande `pareja`
+  ahora falla la validación del contrato.
+
+## DT-41 — Un cierre es del bot si el lead tocó esa propiedad con el bot en los 60 días previos; las métricas agregadas las ve cualquier asesor
+
+**Estado:** propuesta (`N-2`, #142). Pasa a aceptada cuando la revisen las tres personas del equipo.
+
+**Contexto.** La épica E6 (`docs/DESIGN/propuestas.md` §2) mide cuánto negocio trae el agente. `N-7`
+cuenta los cierres atribuidos al bot y `N-8` los muestra en el panel, pero las dos dependen de tres
+cosas sin decidir: qué cuenta como "cerrada gracias al bot", quién ve las métricas de toda la
+inmobiliaria y qué no puede salir nunca en una vista agregada.
+
+Hay un dato que pesa en la primera: **todo lead de la base llegó por el bot**. `leads` solo se crea desde
+Telegram, y `N-3` cierra la operación desde la ficha de un lead. Por eso, "el lead conversó con el bot" es
+cierto para el 100 % de los cierres y no mide nada.
+
+**Decisión.**
+
+1. **Regla de atribución.** Un cierre (`deals`, `N-1`) se atribuye al bot si `property_interest` (`N-4`)
+   tiene una fila con **el mismo lead y la misma propiedad** del cierre, de tipo `anuncio`, `consulta` o
+   `visita`, con fecha **anterior al cierre y como máximo 60 días antes**.
+   - `anuncio`: el lead entró por el anuncio de esa propiedad (`?start=prop_…`).
+   - `consulta`: el bot la consultó con `get_property` para el lead.
+   - `visita`: el bot agendó la visita (B-8).
+   - `busqueda` **no cuenta sola**: que la propiedad haya salido en una lista de resultados no muestra
+     interés en ella. Sí cuenta si, además, el lead la consultó o la visitó.
+   - Haber conversado sin tocar esa propiedad no cuenta (ver el contexto).
+   - La ventana se mide desde la **última** interacción que cuenta. Un lead que consultó la propiedad
+     hace 90 días y la visitó hace 10 cuenta.
+   - Es binaria: un cierre es del bot o no. No se reparte el crédito entre canales.
+2. **Quién ve las métricas agregadas.** El mismo criterio de B-9: **cualquier token de asesor** ve las
+   métricas de toda la inmobiliaria, con cortes por zona y por asesor (`services/panel/app/funnel.py`).
+   No hay token ni rol de gerencia, así que `N-8` no necesita columna ni migración. El resto del panel
+   sigue aislado por zona (DT-5): la ficha y la cola de un lead solo las ve el asesor de su zona.
+3. **Lo que nunca sale en una vista agregada** (`N-6`, `N-7`, `N-8` y cualquier reporte que venga después):
+   - el texto de la conversación (`messages.content`) y los resultados de tools guardados en el contexto
+     de la FSM;
+   - el teléfono (`leads.phone`) y el correo (`leads.email`);
+   - el nombre del lead, si alguna vez se guarda, y su identidad de Telegram (`telegram_user_id`, el
+     `@usuario`);
+   - el `lead_id` o cualquier enlace a la ficha de un lead. Una vista agregada cuenta leads, no los
+     lista. La lista de estancadas de `N-8` muestra propiedades, no leads.
+
+   El detalle de un lead sigue solo en su ficha, para el asesor de su zona.
+
+**Alternativas.**
+- **Contar cualquier conversación con el bot.** Descartada: con todos los leads llegados por Telegram,
+  da el 100 % siempre.
+- **Contar también `busqueda`.** Descartada: atribuiría al bot una propiedad que el lead quizá ni
+  abrió, solo porque salió entre tres resultados. Si el equipo la quiere, puede ir como una segunda
+  cifra ("cierres asistidos") en `N-7`, nunca sumada a la principal.
+- **Ventana de 30 o de 90 días.** 30 deja fuera las ventas, que tardan más que una renta; 90 atribuye
+  cierres que ya no tienen que ver con la conversación. 60 es el valor de `propuestas.md` §2.3. La
+  ventana es una constante de `N-7` y se puede cambiar sin migración.
+- **Token o rol de gerencia.** Descartado por ahora: necesita una columna o tabla nueva, su rotación y
+  una forma de entregarlo, para tres asesores que ya ven el funnel global. Se retoma si el equipo de
+  asesores crece o si la gerencia es una persona distinta de los asesores.
+
+**Consecuencias.**
+- `N-7` implementa la regla tal cual: un `EXISTS` sobre `property_interest` con lead, propiedad, tipo
+  y ventana, con la ventana de 60 días en una constante. Los tests de `N-7` cubren los bordes:
+  día 60 contra 61, solo `busqueda`, otra propiedad del mismo lead e interacción posterior al cierre.
+- La regla depende de que `N-4` registre las interacciones. Los cierres anteriores a `N-4` no tienen
+  interacciones registradas y salen como no atribuidos. La historia sintética de `N-9` las siembra
+  junto con sus cierres.
+- `N-8` usa la misma autenticación que el funnel de B-9. Un token que no existe responde 404.
+- Un asesor ve cuántos cierres hizo cada uno de sus compañeros. B-9 ya muestra el funnel por asesor,
+  así que no cambia lo que se expone hoy.
+- No se aplica un umbral mínimo de conteo por celda. Con tres asesores y cortes por zona, un "1" puede
+  dejar adivinar a qué lead se refiere, pero quien lo ve es un asesor de la misma inmobiliaria. Si las
+  métricas llegan a salir del equipo (por ejemplo, el reporte semanal por Telegram de
+  `propuestas.md` §3), hay que revisarlo.
+
+## DT-42 — Los avisos al asesor se guardan en el panel; Telegram es un canal adicional y el ruteo ya no lo exige
+
+**Estado:** aceptada. Reemplaza el filtro de Telegram de DT-33; el resto de DT-33 sigue igual.
+
+**Contexto.** DT-33 ruteaba los leads solo entre asesores que habían abierto el bot de Telegram
+(`registered_only=true`). La tarjeta del lead calificado (B-7) y la ficha de traspaso (A-12) solo existían
+como mensajes de Telegram. El equipo no tiene una cuenta de Telegram por asesor, así que sin asesores
+registrados pasaban tres cosas: el lead quedaba sin asesor, los avisos no llegaban a nadie y B-8 nunca
+podía reservar una visita, porque sin asesor no hay horarios (DT-39).
+
+**Decisión.**
+- **El ruteo no exige Telegram.** `notify_advisor`, `notify_handoff` y `visits.start` llaman a
+  `assign_advisor` sin `registered_only`. La agenda elige entre todos los asesores, con la misma
+  preferencia de zona, idioma y reparto por turnos. La regla local `pick_advisor` tampoco filtra.
+  `registered_only` sigue en el contrato, opcional, pero `core` ya no lo usa.
+- **Cada aviso se guarda en `advisor_notifications`** (migración `0007`): asesor, lead, tipo
+  (`calificado` o `traspaso`), texto, fecha y fecha de lectura. El texto es el resumen de la tarjeta o de
+  la ficha (motivo, score, propiedad, visita u horario preferido), sin la transcripción, que ya está en la
+  ficha del lead.
+- **Telegram es un canal adicional.** Si el asesor registró su chat, además se le manda el aviso por ahí,
+  como antes. Si no lo registró, el bot no está arrancado o el envío falla, el aviso queda solo en el
+  panel.
+- **Sección "Avisos" en el panel** (`/panel/<token>/avisos`): los últimos 50 avisos del asesor, los más
+  nuevos primero, con el contador de no leídos (también en la lista de leads). Abrir uno lo marca como
+  leído y lleva a la ficha (303). La página se recarga cada 30 segundos. El aviso de otro asesor responde
+  404, igual que uno inexistente (DT-5).
+- **El asesor ve también los leads que tiene asignados**, no solo los de su zona. La cola general
+  (`assign_advisor`, grupo `any`) le puede asignar un lead de otra zona o sin zona, y su aviso tiene que
+  llevar a una ficha que abra. Aplica a la lista, la ficha y "Marcar en gestión".
+
+**Alternativas.**
+- Una sola cuenta de Telegram compartida por los asesores: `telegram_chat_id` es único y registrar un
+  chat se lo quita a otro asesor, así que solo uno recibe avisos. Descartada.
+- Notificaciones push del navegador o *server-sent events*: llegan sin recargar, pero requieren permisos
+  del navegador y una conexión abierta por asesor. Recargar cada 30 segundos alcanza para el volumen del
+  curso. Descartada por ahora.
+- Correo al asesor: necesita un servidor SMTP y credenciales. Descartada.
+
+**Consecuencias.**
+- Sin Telegram, el asesor no recibe la notificación push en el celular: tiene que tener el panel
+  abierto.
+- En la demo basta una cuenta de Telegram, la del lead: los asesores trabajan desde el panel, y B-8
+  reserva visitas reales.
+- Si un asesor registra Telegram, recibe cada aviso dos veces: en el panel y en el chat. El panel es la
+  fuente de verdad, y el contador de no leídos solo baja al abrir el aviso en el panel.
+- La migración de `N-1` pasa a `0008`.
+
+## DT-43 — La corrida real de OBS-6 se comprueba en los 3 servicios, con ids por corrida y fuera de CI
 
 **Estado:** aceptada
 

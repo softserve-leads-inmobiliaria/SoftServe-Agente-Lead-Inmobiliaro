@@ -195,7 +195,7 @@ def test_the_fake_agent_keeps_the_original_behavior():
 
 def test_the_fake_agent_extracts_the_raw_signal_from_the_filtered_text():
     result = run(FakeAgent().run(turn("Decido yo y es urgente"), FakeCatalog()))
-    assert result.raw_signal["decision_maker"] == "solo" and result.raw_signal["urgency"] == "inmediata"
+    assert result.raw_signal["decision_maker"] == "declarado" and result.raw_signal["urgency"] == "inmediata"
 
 
 def test_the_agents_have_names_for_the_traces():

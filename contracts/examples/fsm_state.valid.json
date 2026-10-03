@@ -10,7 +10,7 @@
   },
   "score_signal": {
     "budget_hint": "1.5M-2.5M MXN",
-    "decision_maker": "pareja",
+    "decision_maker": "declarado",
     "urgency": "3_meses",
     "matching_properties": 2,
     "meets_requirements": null

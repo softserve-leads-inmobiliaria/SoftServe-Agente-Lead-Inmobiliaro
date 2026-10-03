@@ -1,4 +1,4 @@
-"""Panel de asesores (B-5): lista de leads de su zona y ficha completa de cada uno.
+"""Panel de asesores (B-5): lista de leads de su zona, ficha completa de cada uno y avisos (B-15).
 
 Auth por token estático en la URL (DT-5). Todo lo que no es del asesor del token responde 404 —
 nunca 401/403, para que el código de estado no revele si un token o un lead existen.
@@ -16,7 +16,15 @@ from sqlalchemy.orm import Session
 
 from app.auth import resolve_advisor
 from app.funnel import funnel_report
-from app.repo import as_context, claim_lead, lead_detail, leads_for_advisor
+from app.repo import (
+    as_context,
+    claim_lead,
+    lead_detail,
+    leads_for_advisor,
+    notices_for_advisor,
+    open_notice,
+    unread_notices,
+)
 from db.logging_config import configure_json_logging
 from db.models import Advisor
 from db.session import get_engine, session_scope
@@ -27,6 +35,7 @@ app = FastAPI(title="Panel de asesores")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 NOT_FOUND = HTTPException(status_code=404, detail="No encontrado")
+REFRESH_SECONDS = 30  # los avisos no llegan solos al navegador: la página se recarga (B-15)
 
 
 def get_session() -> Session:
@@ -58,6 +67,7 @@ def leads_list(request: Request, advisor: CurrentAdvisor, session: DbSession) ->
         "advisor": advisor,
         "token": advisor.access_token,
         "leads": leads_for_advisor(session, advisor),
+        "unread": unread_notices(session, advisor),
     })
 
 
@@ -78,6 +88,25 @@ def funnel(request: Request, advisor: CurrentAdvisor, session: DbSession) -> HTM
     return templates.TemplateResponse(request, "funnel.html", {
         "advisor": advisor, "token": advisor.access_token, "report": funnel_report(session),
     })
+
+
+@app.get("/panel/{advisor_token}/avisos", response_class=HTMLResponse)
+def notices(request: Request, advisor: CurrentAdvisor, session: DbSession) -> HTMLResponse:
+    """Avisos del asesor (B-15): leads calificados y traspasos. La página se recarga sola."""
+    return templates.TemplateResponse(request, "avisos.html", {
+        "advisor": advisor, "token": advisor.access_token,
+        "notices": notices_for_advisor(session, advisor), "unread": unread_notices(session, advisor),
+        "refresh_seconds": REFRESH_SECONDS,
+    })
+
+
+@app.get("/panel/{advisor_token}/avisos/{notice_id}")
+def notice(notice_id: uuid.UUID, advisor: CurrentAdvisor, session: DbSession) -> RedirectResponse:
+    """Abre el aviso: lo marca como leído y lleva a la ficha del lead."""
+    lead_id = open_notice(session, advisor, notice_id)
+    if lead_id is None:
+        raise NOT_FOUND
+    return RedirectResponse(url=f"/panel/{advisor.access_token}/leads/{lead_id}", status_code=303)
 
 
 @app.post("/panel/{advisor_token}/leads/{lead_id}/gestionar")

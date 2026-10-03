@@ -93,13 +93,29 @@ def test_all_states_are_known_and_reachable_from_greeting():
     ("QUALIFY", "otro", None),
     ("RECOMMEND", "agendar_visita", VISIT_REQUESTED),
     ("RECOMMEND", "consulta_precio", None),
-    ("SCHEDULE", "agendar_visita", VISIT_SCHEDULED),
+    ("SCHEDULE", "agendar_visita", None),  # B-8: la agenda la resuelve el código, no una intención
     ("SCHEDULE", "saludo", None),
     ("NURTURE", "saludo", LEAD_RETURNED),
     ("NURTURE", "busqueda_propiedad", LEAD_RETURNED),
 ])
 def test_trigger_for(state, intent, expected):
     assert trigger_for(state, intent) == expected
+
+
+@pytest.mark.parametrize("intent", ["agendar_visita", "otro", "saludo"])
+def test_schedule_moves_only_when_the_code_settles_the_visit(intent):
+    """B-8: en SCHEDULE la respuesta del lead ("la 2") no tiene intención propia; decide la agenda."""
+    assert trigger_for("SCHEDULE", intent, visit_settled=True) == VISIT_SCHEDULED
+    assert trigger_for("SCHEDULE", intent) is None
+
+
+@pytest.mark.parametrize("state", [s for s in FSM_STATES if s != "SCHEDULE"])
+def test_a_settled_visit_means_nothing_outside_schedule(state):
+    assert trigger_for(state, "saludo", visit_settled=True) == trigger_for(state, "saludo")
+
+
+def test_a_human_request_wins_over_a_settled_visit():
+    assert trigger_for("SCHEDULE", "solicitud_humano", visit_settled=True) == HUMAN_REQUESTED
 
 
 @pytest.mark.parametrize("state", [s for s in FSM_STATES if s not in TERMINAL_STATES])

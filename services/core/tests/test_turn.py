@@ -25,6 +25,7 @@ SAY = {
     "agendar_visita": "Quiero agendar una visita",
     "solicitud_humano": "Quiero hablar con un asesor",
     "otro": "¿Cómo va el clima hoy?",
+    "horario_preferido": "Mañana a las 10",  # B-8: respuesta a la agenda, sin intención propia
 }
 
 
@@ -55,7 +56,7 @@ class Conversation:
 def test_a_conversation_walks_the_whole_happy_path_and_persists_each_step(engine):
     chat = Conversation(engine)
     path = [("saludo", "DISCOVERY"), ("busqueda_propiedad", "QUALIFY"), ("consulta_precio", "RECOMMEND"),
-            ("agendar_visita", "SCHEDULE"), ("agendar_visita", "HANDOFF")]
+            ("agendar_visita", "SCHEDULE"), ("horario_preferido", "HANDOFF")]
     for intent, expected in path:
         reply = chat.say(intent)
         assert reply["direction"] == "outbound"
@@ -202,7 +203,7 @@ def test_the_persisted_signal_and_score_form_a_valid_fsm_state_contract(engine):
         state = StateStore(session).lock(uuid.UUID(chat.conversation_id), uuid.UUID(chat.lead_id))
     contract = state.to_contract()
     Draft202012Validator(_fsm_state_contract(), format_checker=FormatChecker()).validate(contract)
-    assert contract["score_signal"] == {"budget_hint": "presupuesto es 2 millones", "decision_maker": "solo",
+    assert contract["score_signal"] == {"budget_hint": "presupuesto es 2 millones", "decision_maker": "declarado",
                                         "urgency": "inmediata", "matching_properties": 1,
                                         "meets_requirements": None}
     assert contract["score"]["total"] == 10 + 20 + 20 + 20 and contract["score"]["band"] == "WARM"
@@ -231,11 +232,13 @@ def test_tool_results_are_kept_only_for_the_last_turn(engine):
             return connection.execute(text("SELECT last_tool_results FROM fsm_context WHERE conversation_id = :c"),
                                       {"c": chat.conversation_id}).scalar()
 
+    remembered = {"property_of_interest": {"id": PROPERTY["id"], "title": PROPERTY["title"]}}
     chat.say("busqueda_propiedad")
     assert last_results() == {"search_properties": {"properties": [PROPERTY | {"availability_checked_at": CHECKED_AT}],
-                                                    "unavailable": []}}
+                                                    "unavailable": []}} | remembered
     chat.say("saludo")
-    assert last_results() == {}
+    # B-8: de un turno a otro solo se arrastra la propiedad de interés, sin su `status`.
+    assert last_results() == remembered
 
 
 def test_a_turn_without_a_search_keeps_the_matches_counted_before(engine):
@@ -285,8 +288,8 @@ LISTING = {"id": "prop_00231", "title": "Depto 2 rec. en Providencia", "zone": "
 class ListingCatalog:
     """El catálogo con la propiedad del anuncio; guarda qué tools le piden."""
 
-    def __init__(self, missing=False):
-        self.calls, self.missing = [], missing
+    def __init__(self, missing=False, status="disponible"):
+        self.calls, self.missing, self.status = [], missing, status
 
     async def call(self, tool, arguments=None):
         from app.catalog_client import CatalogToolError
@@ -295,7 +298,9 @@ class ListingCatalog:
         if tool == "get_property":
             if self.missing:
                 raise CatalogToolError({"code": "NOT_FOUND", "message": "no existe"})
-            return dict(LISTING)
+            return LISTING | {"status": self.status}
+        if tool == "get_availability":
+            return stub_call(tool, arguments) | {"status": self.status}
         return stub_call(tool, arguments)
 
 
@@ -343,3 +348,24 @@ def test_a_listing_the_catalog_does_not_know_falls_back_to_the_plain_greeting(en
     reply = _deep_link(chat, ListingCatalog(missing=True), property_id="prop_99999")
     assert "ref." not in reply["text"] and reply["text"]
     assert chat.state == "DISCOVERY" and _lead_zone(engine, chat.lead_id) is None
+
+
+# --- A-15: la propiedad del anuncio cuenta para `need_fit` ----------------------------------------------------
+
+def test_a_lead_from_the_listing_of_an_available_property_has_need_fit(engine):
+    chat = Conversation(engine)
+    _deep_link(chat, ListingCatalog())
+    assert _score_row(engine, chat.lead_id).need_fit == 10  # 1 propiedad -> need_fit 10, como una búsqueda
+
+
+def test_a_lead_from_the_listing_of_a_property_already_taken_has_no_need_fit(engine):
+    chat = Conversation(engine)
+    _deep_link(chat, ListingCatalog(status="apartado"))
+    assert _score_row(engine, chat.lead_id).need_fit == 0
+
+
+def test_the_listing_need_fit_is_kept_in_the_next_turns(engine):
+    chat = Conversation(engine)
+    _deep_link(chat, ListingCatalog())
+    chat.say("saludo")
+    assert _score_row(engine, chat.lead_id).need_fit == 10

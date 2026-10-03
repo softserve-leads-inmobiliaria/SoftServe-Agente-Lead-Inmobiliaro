@@ -87,7 +87,8 @@ EDGE_MESSAGES = {
     ("DISCOVERY", DISCOVERY_COMPLETE): "Busco un departamento",
     ("QUALIFY", QUALIFIED): "¿Cuánto cuesta?",
     ("RECOMMEND", VISIT_REQUESTED): "Quiero agendar una visita",
-    ("SCHEDULE", VISIT_SCHEDULED): "Quiero agendar una visita",
+    # B-8: en los tests la agenda no responde; el lead deja su horario preferido y la visita queda resuelta.
+    ("SCHEDULE", VISIT_SCHEDULED): ("Quiero agendar una visita", "Mañana a las 10"),
     ("NURTURE", LEAD_RETURNED): "Hola, sigo interesado",
     ("DISCOVERY", NO_RESPONSE): None,
     ("NURTURE", NO_RESPONSE): None,
@@ -150,7 +151,8 @@ def test_each_edge_moves_the_persisted_state(engine, edge):
     if message is None:
         chat.fire(trigger)
     else:
-        chat.say(message)
+        for said in message if isinstance(message, tuple) else (message,):
+            chat.say(said)
     assert chat.state == TRANSITIONS[edge]
 
 
@@ -167,9 +169,10 @@ def _expected(state, intent):
         return "HUMAN_HANDOFF"
     if state == "NURTURE":
         return "DISCOVERY"  # el lead vuelve a escribir
+    if state == "SCHEDULE":
+        return state  # B-8: ninguna intención la agenda; avanza cuando el código resuelve la visita
     advance_on = {"GREETING": (None, "DISCOVERY"), "DISCOVERY": ("busqueda_propiedad", "QUALIFY"),
-                  "QUALIFY": ("consulta_precio", "RECOMMEND"), "RECOMMEND": ("agendar_visita", "SCHEDULE"),
-                  "SCHEDULE": ("agendar_visita", "HANDOFF")}[state]
+                  "QUALIFY": ("consulta_precio", "RECOMMEND"), "RECOMMEND": ("agendar_visita", "SCHEDULE")}[state]
     required, target = advance_on
     return target if required in (None, intent) else state
 
@@ -193,7 +196,7 @@ def test_the_happy_path_visits_every_state_of_the_funnel_in_order(engine):
     chat = Conversation(engine)
     visited = [chat.state]
     for message in ("Hola", "Busco un departamento", "¿Cuánto cuesta?", "Quiero agendar una visita",
-                    "Quiero agendar una visita"):
+                    "Mañana a las 10"):
         chat.say(message)
         visited.append(chat.state)
     assert visited == ["GREETING", "DISCOVERY", "QUALIFY", "RECOMMEND", "SCHEDULE", "HANDOFF"]
@@ -224,7 +227,7 @@ def test_every_state_can_be_reached_in_a_real_conversation(engine):
     chat = Conversation(engine)
     reached.add(chat.state)
     for message in ("Hola", "Busco un departamento", "¿Cuánto cuesta?", "Quiero agendar una visita",
-                    "Quiero agendar una visita"):
+                    "Mañana a las 10"):
         chat.say(message)
         reached.add(chat.state)
     quiet = Conversation(engine)

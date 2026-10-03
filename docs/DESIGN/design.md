@@ -13,14 +13,19 @@ Usado por `CT-3` (contrato `FsmState`/`LeadScore`/`Conversation`) y `C-3` (migra
 
 | Entidad | Campos clave | Notas |
 | :--- | :--- | :--- |
-| `Lead` | id, telegram_user_id, phone, email, consent_status, status (nuevo/mql/sql/visit_scheduled/closed_won/closed_lost), zone, budget, timing | Identidad única por canal |
+| `Lead` | id, telegram_user_id, phone, email, consent_status, status (nuevo/mql/sql/visit_scheduled/closed_won/closed_lost), zone, budget, timing, utm_campaign, synthetic | Identidad única por canal. `utm_campaign` es la del primer contacto (`N-5`) |
 | `Conversation` | id, lead_id, fsm_state, started_at, last_message_at | Una por hilo de conversación |
 | `Message` | id, conversation_id, role, content, tool_calls, created_at | Historial completo |
 | `LeadScore` | lead_id, need_fit, budget, authority, timing, eligibility, total, band (COLD/WARM/HOT), reasons | Persistido, nunca calculado por el LLM directamente |
-| `Property` | id, title, price, type (venta/renta/preventa), zone, m2, bedrooms, bathrooms, amenities, status (disponible/apartado/cerrado), address_exact, address_approx | `address_exact` reservada hasta `lead_qualified=true` |
+| `Property` | id, title, price, type (venta/renta/preventa), zone, m2, bedrooms, bathrooms, amenities, status (disponible/apartado/cerrado), address_exact, address_approx, photo_url | `address_exact` reservada hasta `lead_qualified=true`. `status` solo cambia por `db/property_history.py` (`N-1`) |
 | `Promotion` | id, property_id, title, description, valid_until | Siempre atada a una propiedad; alimenta `catalog.get_promotions` |
 | `Advisor` | id, name, zone, language, access_token | `access_token` = auth del panel (ver `decisions.md`) |
 | `Visit` | id, lead_id, property_id, advisor_id, scheduled_at, idempotency_key | Idempotente para evitar duplicados por reintento de webhook del proveedor de calendario |
+| `AdvisorNotification` | id, advisor_id, lead_id, kind (calificado/traspaso), body, created_at, read_at | Aviso al asesor en el panel; Telegram es un canal adicional (`B-15`, DT-42) |
+| `PropertyStatusEvent` | id, property_id, from_status, to_status, changed_at, actor, synthetic | Historial de estados de la propiedad; `from_status` nulo es el alta. Lo escribe solo `db/property_history.py` (`N-1`) |
+| `Deal` | id, property_id, lead_id, advisor_id, kind (renta/venta), price, closed_at, synthetic | Operación cerrada desde la ficha (`N-3`). La propiedad queda en `cerrado` |
+| `PropertyInterest` | id, lead_id, property_id, kind (anuncio/consulta/busqueda/visita), created_at, synthetic | Qué propiedades tocó cada lead con el bot (`N-4`); base de la atribución (DT-41). Sin texto del lead |
+| `UnmetSearch` | id, zone, type, bedrooms, budget_min, budget_max, created_at, synthetic | Búsqueda sin resultados (`N-5`), sin lead ni texto |
 | `FaqEntry` | id, question, answer, embedding vector(N) | N = dimensión del modelo de embeddings elegido |
 | `FunnelEvent` | id, lead_id, event_type, created_at | Tabla *append-only* para métricas del funnel |
 | `AuditLog` | id, actor, action, payload, created_at | Trazabilidad de guardrails e intentos de abuso |
@@ -64,7 +69,7 @@ Usado por `C-4` (implementación), `A-9` (integración en la FSM), `A-11`/`C-6` 
 | Dimensión | Señal de entrada | Regla de puntos |
 | :--- | :--- | :--- |
 | **B**udget | `budget_hint` (texto libre u opcional, del contrato `ScoreSignal`) | `None`/vacío → 0 · cualquier valor declarado → 20 (no se parsea como rango numérico — el contrato solo transporta texto libre) |
-| **A**uthority | `decision_maker` (enum: `solo`/`pareja`/`familia`/`no_declarado`) | `solo`/`pareja`/`familia` → 20 · `no_declarado` → 0. Mide si se dijo quién decide, no con quién (fair housing, DT-38) |
+| **A**uthority | `decision_maker` (enum: `declarado`/`no_declarado`) | `declarado` → 20 · `no_declarado` → 0. Mide si se dijo cómo se decide; el contrato no guarda con quién (fair housing, DT-38, DT-40) |
 | **N**eed fit | `matching_properties` (conteo de `search_properties` del turno, no del LLM) | 0 → 0 · 1-2 → 10 · 3+ → 20 |
 | **T**iming | `urgency` (enum: `inmediata`/`3_meses`/`explorando`/`no_declarada`) | `inmediata` → 20 · `3_meses` → 12 · `explorando` → 5 · `no_declarada` → 0 |
 | **E**ligibility | `meets_requirements` (booleano de `check_requirements`, no del LLM) | `True` → 20 · `False`/`None` (no verificado todavía) → 0 |
@@ -153,9 +158,10 @@ Las cajas con borde punteado no están construidas.
   no terminal por sus tres caminos (DT-12, DT-16). La suite de transiciones cubre cada arista (`OBS-3`).
 - **Score BANT-E** acumulado turno a turno en Postgres, en la misma transacción que la FSM (DT-14).
 - **Guardrail de entrada**: los 5 detectores de `guardrails.md` §1 (DT-15).
-- **Fair housing en el scoring** (`A-11`, DT-38): Authority da lo mismo a `solo`, `pareja` y `familia`, y
-  "mis hijos" se generaliza a "mi familia" en vez de borrarse. El gold set de perfiles pareados de `C-6`
-  queda en 25 de 25 con diferencia 0. Lo que haga el modelo real con una mención protegida no se ha
+- **Fair housing en el scoring** (`A-11`, DT-38; #119, DT-40): `decision_maker` solo dice si el lead
+  declaró cómo se decide, sin con quién. "mis hijos" se generaliza a "mi familia" y "mi esposa" o "mi
+  marido" a "mi pareja" en vez de borrarse. El gold set de perfiles pareados de `C-6` queda en 27 de 27
+  con diferencia 0. Lo que haga el modelo real con una mención protegida no se ha
   probado: el gold set usa el extractor determinista.
 - **Guardrails de salida** con el agente de Bedrock: disponibilidad revalidada (`A-4`, DT-21),
   factualidad (`A-5`, DT-23), dirección reservada (`A-6`, DT-25) y 6 de los 8 *claims* prohibidos (`A-7`,
@@ -168,12 +174,18 @@ Las cajas con borde punteado no están construidas.
   por red.
 - **Agenda en el catálogo** (`C-2`, DT-32): `assign_advisor`, `get_slots` y `book` por HTTP en
   `/scheduling`, fuera de MCP para que el LLM no las vea. `book` es idempotente, y la base impide dos
-  visitas del mismo asesor a la misma hora. `core` usa `assign_advisor`; `get_slots` y `book`, todavía
-  no: ver §5.3.
+  visitas del mismo asesor a la misma hora. `core` usa las tres: `assign_advisor` para el ruteo, y
+  `get_slots` y `book` para agendar la visita.
+- **Visita agendada desde la conversación** (`B-8`, DT-39): al pedirla, el lead elige entre 3 horarios
+  numerados de su asesor y `core` la reserva con `book`. Si la agenda no responde, el lead deja su horario
+  preferido y el asesor lo ve en la ficha de traspaso.
 - **Ruteo del lead al asesor** (`A-10`, DT-33): la tarjeta y la ficha de traspaso van al asesor que
-  elige la agenda, por zona, idioma y reparto por turnos, solo entre los que ya abrieron el bot. Si el
+  elige la agenda, por zona, idioma y reparto por turnos, entre todos los asesores (DT-42). Si el
   catálogo no responde, se usa la regla local de `B-7`. Verificado en el stack con Docker llamando a
   `notify_advisor`, sin Telegram real.
+- **Avisos al asesor en el panel** (`B-15`, DT-42): cada tarjeta y ficha de traspaso se guarda en
+  `advisor_notifications` y se ve en `/panel/<token>/avisos`, con el contador de no leídos. Telegram es
+  un canal adicional para el asesor que registró su chat.
 - **Panel de asesores** con ficha, etapa y transcripción (`B-5`), autenticado por token (DT-5).
 - **Trazas por turno** hacia Phoenix sin texto de los leads (DT-18) y **logs JSON** en los 3 servicios
   (DT-27).
@@ -185,13 +197,12 @@ Las cajas con borde punteado no están construidas.
 
 | Qué | Dónde está diseñado | Qué pasa hoy |
 | :--- | :--- | :--- |
-| Agendar la visita de verdad (proveedor de calendario, reserva desde la conversación) | `B-8`; entidad `Visit` en §1 | `get_slots` y `book` ya existen en el catálogo (`C-2`, DT-32), pero `core` no los llama: `SCHEDULE -> HANDOFF` lo dispara la intención `agendar_visita` del lead sin reservar nada, así que la ficha de traspaso nunca muestra una visita |
 | *Scheduler* de *nurturing* (`DISCOVERY -> NURTURE -> LOST`) | DT-3, DT-12 | Las aristas `no_response` existen en la FSM y en sus tests, pero nada las dispara: ningún lead llega a `NURTURE` ni a `LOST` |
 | FAQ con embeddings | `FaqEntry` en §1, DT-7, `C-5` | La tabla y `pgvector` existen; no hay modelo de embeddings ni búsqueda |
 | Cancelar los *jobs* de un lead en `/stop` | `guardrails.md` §1 | No hay *jobs* que cancelar hasta que exista el *scheduler* |
 | *Claim* 6 completo (promoción genérica sin número) | `guardrails.md` §2.2, DT-26 | Solo se bloquea si trae un número inventado |
 | Gold sets y *contract tests* como *gate* de merge | `guardrails.md` §4, `OBS-4`, `OBS-5` | Corren en CI y un fallo deja el PR en rojo, pero nada impide hacer merge igual: ver §5.4 |
-| Conversaciones E2E contra el bot real | `OBS-6` | Corrida real hecha el 2-oct con el agente *fake*: 8/8 guiones contra `core`, `catalog` y `panel` en Docker, comprobados en Postgres y en la cola del asesor (`harness/scripts/live_run.py`, DT-39), más una conversación manual por Telegram (deep-link, traspaso con tarjeta al asesor, `STOP`). Falta la corrida con Bedrock (`--sin-frases`), que espera credenciales |
+| Conversaciones E2E contra el bot real | `OBS-6` | Corrida real hecha el 2-oct con el agente *fake*: 8/8 guiones contra `core`, `catalog` y `panel` en Docker, comprobados en Postgres y en la cola del asesor (`harness/scripts/live_run.py`, DT-43), más una conversación manual por Telegram (deep-link, traspaso con tarjeta al asesor, `STOP`). Falta la corrida con Bedrock (`--sin-frases`), que espera credenciales |
 | Plan B de observabilidad | `OBS-8`, DT-31 | Documentado y probado una vez: Jaeger recibe las trazas de `core` cambiando solo `OTEL_EXPORTER_OTLP_ENDPOINT`. No está en el compose, a propósito |
 
 ### 5.4 Límites conocidos de lo construido

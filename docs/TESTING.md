@@ -179,7 +179,7 @@ Las transcripciones quedan en `tmp/demo/transcripciones/`, que no se versiona. L
 `docker compose run --rm harness` solo mira las respuestas de `core`. La corrida real además comprueba
 lo que quedó en los servicios: el estado final de la FSM en Postgres y, para cada lead con zona, que
 aparezca en la cola del asesor de esa zona en el `panel` con su etapa y que su ficha muestre la
-transcripción. No usa nada simulado: arnés → `core` → `catalog` por MCP → Postgres → `panel` (DT-39).
+transcripción. No usa nada simulado: arnés → `core` → `catalog` por MCP → Postgres → `panel` (DT-43).
 
 ```
 docker compose up -d --build core panel phoenix
@@ -333,7 +333,7 @@ búsqueda devuelve varias propiedades.
 ### Fair housing en el scoring (C-6)
 
 `services/core/tests/test_fair_housing_gold_set.py` prueba que el score no depende de una categoría
-protegida. Son **25 pares de leads** idénticos salvo la mención, y corre el pipeline completo de un
+protegida. Son **27 pares de leads** idénticos salvo la mención, y corre el pipeline completo de un
 turno — `inspect_input().signal_text` → el extractor de señales → `score_turn()`— porque el sesgo
 puede entrar por cualquiera de las tres capas y probar solo la suma no encuentra nada. No llama a
 ningún LLM: el extractor es el determinista de `fakes/fake_llm.py`, así que corre en milisegundos y
@@ -344,16 +344,17 @@ banda, no solo el total, para que dos fugas que se compensen no se cuelen por el
 importa porque ordena la cola del panel (`B-6`) y porque por debajo de `COLD` 41 el lead deja de
 calificar y no llega a un asesor (`B-7`).
 
-**Los 25 pares están en verde, sin `xfail`.** Cuando C-6 se escribió, los 6 de "con quién compras"
+**Los 27 pares están en verde, sin `xfail`.** Cuando C-6 se escribió, los 6 de "con quién compras"
 daban −8 (`pareja`), −12 (`familia`) y −20 (`con mis hijos`, que el guardrail borraba y dejaba el lead en
-`no_declarado`). Los arregló `A-11` (DT-38):
+`no_declarado`). Los arregló `A-11` (DT-38), y #119 (DT-40) colapsó el enum para que el contrato no
+guarde con quién se decide:
 
-| Lo que dice el lead | `decision_maker` | Authority |
-| :--- | :--- | ---: |
-| decido yo | `solo` | 20 |
-| con mi esposa / con mi esposo / con mi pareja | `pareja` | 20 |
-| con mis padres / con mi familia | `familia` | 20 |
-| con mis hijos (el LLM ve "con mi familia") | `familia` | 20 |
+| Lo que dice el lead | Lo que ve el LLM | `decision_maker` | Authority |
+| :--- | :--- | :--- | ---: |
+| decido yo | igual | `declarado` | 20 |
+| con mi pareja / con mis padres / con mi familia | igual | `declarado` | 20 |
+| con mi esposa / con mi esposo / con mi marido / con mi novia | "con mi pareja" | `declarado` | 20 |
+| con mis hijos | "con mi familia" | `declarado` | 20 |
 
 Ojo con la banda: el control da 100 (`HOT`) y el corte es `WARM` ≤ 70, así que la aserción de banda del
 gate es una red contra fugas de 30 puntos o más. Una fuga más chica se ve en el total y en la

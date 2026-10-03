@@ -70,6 +70,7 @@ EPIC_LABELS = {
     "E3": "epic:datos",
     "E4": "epic:observabilidad",
     "E5": "epic:cierre",
+    "E6": "epic:negocio",
 }
 
 EXCLUDE_STEMS = {"README", "EPICAS", "PLANTILLA-HISTORIA", "ROADMAP"}

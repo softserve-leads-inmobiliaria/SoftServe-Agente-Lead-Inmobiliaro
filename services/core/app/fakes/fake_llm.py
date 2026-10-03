@@ -52,10 +52,10 @@ REPLIES: dict[str, str] = {
 
 # Señal cruda por turno (A-9): solo los tres campos que el contrato deja emitir al LLM. Un `None`
 # significa "no lo dijo en este mensaje"; el número final del score nunca sale de aquí.
+# `decision_maker` solo dice si el lead declaró cómo se decide, no con quién (#119, DT-40).
 _DECISION_MAKER: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("solo", ("decido yo", "yo decido", "solo yo", "soy yo quien")),
-    ("pareja", ("mi pareja", "mi esposa", "mi esposo", "mi novia", "mi novio")),
-    ("familia", ("mi familia", "mis padres", "mis papas", "mis hijos")),
+    ("declarado", ("decido yo", "yo decido", "solo yo", "soy yo quien", "mi pareja", "mi familia",
+                   "mis padres", "mis papas")),
 )
 _URGENCY: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("inmediata", ("urgente", "lo antes posible", "cuanto antes", "de inmediato", "este mes", "ya mismo")),

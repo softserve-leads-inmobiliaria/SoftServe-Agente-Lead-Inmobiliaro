@@ -52,7 +52,7 @@ def test_frustration_starts_exactly_at_the_threshold():
 
 QUALIFYING_SIGNALS = [
     {"budget_hint": "2.5 millones", "decision_maker": None, "urgency": None},
-    {"budget_hint": None, "decision_maker": "pareja", "urgency": None},
+    {"budget_hint": None, "decision_maker": "declarado", "urgency": None},
     {"budget_hint": None, "decision_maker": "no_declarado", "urgency": "3_meses"},
 ]
 EMPTY_SIGNALS = [
@@ -152,6 +152,17 @@ def test_a_human_request_without_a_human_intent_is_frustration():
 
 def test_a_scheduled_visit_hands_the_lead_over_with_its_trigger_as_the_reason():
     assert handoff_reason("HANDOFF", "visit_scheduled", "agendar_visita") == "visit_scheduled"
+
+
+def test_a_visit_the_agenda_could_not_book_is_handed_over_as_requested():
+    """B-8: el lead dejó su horario preferido; el asesor tiene que coordinar la visita."""
+    assert handoff_reason("HANDOFF", "visit_scheduled", "otro", visit_booked=False) == "visit_requested"
+
+
+def test_a_turn_resolved_by_the_code_resets_the_streak():
+    """B-8: "la 2" cae en `otro` sin señal, pero agenda la visita."""
+    assert next_streak(2, UNRESOLVED_INTENT, resolved=True) == 0
+    assert next_streak(2, UNRESOLVED_INTENT, counts=False, resolved=True) == 2
 
 
 @pytest.mark.parametrize("state", NON_TERMINAL)

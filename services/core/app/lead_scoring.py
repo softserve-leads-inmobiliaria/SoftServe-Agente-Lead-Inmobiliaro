@@ -2,7 +2,8 @@
 
 Reparto de responsabilidades (contrato `ScoreSignal`, design.md §3):
 - el LLM emite solo señal cruda: `budget_hint`, `decision_maker`, `urgency`;
-- `matching_properties` y `meets_requirements` los deriva el código de los resultados de las tools;
+- `matching_properties` y `meets_requirements` los deriva el código de los resultados de las tools
+  y de la propiedad del anuncio por el que llegó el lead (A-15);
 - el número final lo calcula `compute_score`, nunca el LLM.
 
 Todo aquí es puro: recibe la señal acumulada, lo que trae el turno y devuelve la nueva señal y el score.
@@ -12,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
+from app.availability import AVAILABLE
 from app.scoring import DECISION_MAKER_POINTS, URGENCY_POINTS, Score, ScoreSignal, compute_score
 
 NOT_DECLARED = {"decision_maker": "no_declarado", "urgency": "no_declarada"}
@@ -20,10 +22,12 @@ ENUMS = {"decision_maker": DECISION_MAKER_POINTS, "urgency": URGENCY_POINTS}
 
 @dataclass(frozen=True)
 class TurnEvidence:
-    """Lo que trae un turno para el score: señal cruda del LLM y resultados de las tools del turno."""
+    """Lo que trae un turno para el score: señal cruda del LLM, resultados de las tools del turno y la
+    propiedad del anuncio por el que llegó el lead (#122), ya revalidada, si el turno la trae."""
 
     raw_signal: Mapping[str, Any] = field(default_factory=dict)
     tool_results: Mapping[str, Any] = field(default_factory=dict)
+    listing: Mapping[str, Any] | None = None
 
 
 def declared_signal(raw: Mapping[str, Any]) -> dict[str, str]:
@@ -53,6 +57,9 @@ def merge_signal(current: Mapping[str, Any], evidence: TurnEvidence) -> dict[str
     found = evidence.tool_results.get("search_properties")
     if isinstance(found, Mapping) and isinstance(found.get("properties"), list):
         merged["matching_properties"] = len(found["properties"])
+    if evidence.listing and evidence.listing.get("status") == AVAILABLE:
+        # A-15: el lead ya mostró interés en una propiedad disponible; una búsqueda con más resultados manda.
+        merged["matching_properties"] = max(merged.get("matching_properties") or 0, 1)
     checked = evidence.tool_results.get("check_requirements")
     if isinstance(checked, Mapping) and isinstance(checked.get("meets_requirements"), bool):
         merged["meets_requirements"] = checked["meets_requirements"]

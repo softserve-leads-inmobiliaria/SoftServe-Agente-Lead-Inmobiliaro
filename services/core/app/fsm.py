@@ -63,7 +63,6 @@ _ADVANCE: Final[dict[str, tuple[str, str | None]]] = {
     "DISCOVERY": (DISCOVERY_COMPLETE, "busqueda_propiedad"),
     "QUALIFY": (QUALIFIED, "consulta_precio"),
     "RECOMMEND": (VISIT_REQUESTED, "agendar_visita"),
-    "SCHEDULE": (VISIT_SCHEDULED, "agendar_visita"),
 }
 
 
@@ -71,13 +70,16 @@ _ADVANCE: Final[dict[str, tuple[str, str | None]]] = {
 HUMAN_INTENTS: Final = frozenset({"solicitud_humano", "fuera_de_alcance"})
 
 
-def trigger_for(state: str, intent: str, frustrated: bool = False) -> str | None:
+def trigger_for(state: str, intent: str, frustrated: bool = False, visit_settled: bool = False) -> str | None:
     """Trigger que provoca el mensaje de un lead en `state`, o None si no mueve la FSM.
 
     `HUMAN_HANDOFF` se alcanza por tres caminos: petición explícita, intención fuera de alcance y
     una racha de turnos sin resolver (`frustrated`, ver `app/handoff.py`). La intención `otro`
     (cajón de sastre) por sí sola nunca lo dispara: un mensaje que el clasificador no entendió es
     ruido, no una petición; solo cuenta cuando se repite.
+
+    `SCHEDULE` no avanza por una intención: avanza cuando el código deja resuelta la visita
+    (`visit_settled`, B-8): reservada en la agenda o con el horario preferido del lead para el asesor.
     """
     if state in TERMINAL_STATES:
         return None
@@ -85,5 +87,7 @@ def trigger_for(state: str, intent: str, frustrated: bool = False) -> str | None
         return HUMAN_REQUESTED
     if state == "NURTURE":
         return LEAD_RETURNED
+    if state == "SCHEDULE":
+        return VISIT_SCHEDULED if visit_settled else None
     trigger, required_intent = _ADVANCE[state]
     return trigger if required_intent in (None, intent) else None

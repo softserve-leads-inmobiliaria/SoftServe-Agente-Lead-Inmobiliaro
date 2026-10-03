@@ -1,5 +1,6 @@
 """A-10: el asesor del lead lo elige la agenda del catálogo (`assign_advisor`), con la regla local de
-B-7 como respaldo si la agenda no responde."""
+B-7 como respaldo si la agenda no responde. Desde B-15 (DT-42) el aviso queda siempre en el panel, y
+Telegram es un canal adicional."""
 from __future__ import annotations
 
 import asyncio
@@ -16,7 +17,7 @@ from app import scheduling_client
 from app.channels import notifications
 from app.channels.telegram import reply_to
 from app.scheduling_client import SchedulingClient, SchedulingError
-from db.models import Advisor, Lead
+from db.models import Advisor, AdvisorNotification, Lead
 from db.session import session_scope
 
 CALIFICA = "Tengo presupuesto de 3 millones, decido yo y es urgente"
@@ -79,6 +80,14 @@ def _advisor_of(engine, lead_id: str) -> str | None:
         return session.get(Lead, uuid.UUID(lead_id)).advisor_id
 
 
+def _notices(engine, lead_id: str) -> list[tuple[str, str, str]]:
+    """(asesor, tipo, texto) de los avisos del lead en el panel, del más viejo al más nuevo."""
+    with session_scope(engine) as session:
+        rows = session.execute(select(AdvisorNotification).where(AdvisorNotification.lead_id == uuid.UUID(lead_id))
+                               .order_by(AdvisorNotification.created_at)).scalars()
+        return [(row.advisor_id, row.kind, row.body) for row in rows]
+
+
 # --- notificaciones -----------------------------------------------------------------------------
 
 def test_the_card_goes_to_the_advisor_the_agenda_chose(engine, clean):
@@ -90,12 +99,13 @@ def test_the_card_goes_to_the_advisor_the_agenda_chose(engine, clean):
 
     assert advisor.id == chosen
     assert bot.send_message.await_args.kwargs["chat_id"] == "chat-agenda"
-    assert agenda.calls == [{"lead_id": event["lead_id"], "registered_only": True}]
+    assert agenda.calls == [{"lead_id": event["lead_id"], "registered_only": False}]
     assert _advisor_of(engine, event["lead_id"]) == chosen
+    [(advisor_id, kind, body)] = _notices(engine, event["lead_id"])
+    assert (advisor_id, kind) == (chosen, "calificado") and "WARM · 60/100" in body and "Ficha:" not in body
 
 
-def test_without_a_registered_advisor_nobody_is_notified_or_assigned(engine, clean):
-    _advisor(engine, zone="Providencia")
+def test_without_any_advisor_nobody_is_notified_or_assigned(engine, clean):
     bot, event = AsyncMock(), _lead(engine)
 
     advisor = asyncio.run(notifications.notify_advisor(engine, event, SCORE, bot,
@@ -103,19 +113,29 @@ def test_without_a_registered_advisor_nobody_is_notified_or_assigned(engine, cle
 
     assert advisor is None
     bot.send_message.assert_not_awaited()
-    assert _advisor_of(engine, event["lead_id"]) is None
+    assert _advisor_of(engine, event["lead_id"]) is None and _notices(engine, event["lead_id"]) == []
 
 
-def test_an_assigned_advisor_without_telegram_gets_no_card(engine, clean):
-    # La agenda no reasigna: si el asesor ya asignado perdió su chat, se avisa en el log y nada más.
+def test_an_advisor_without_telegram_gets_the_card_in_the_panel(engine, clean):
     offline = _advisor(engine, zone="Providencia")
-    bot = AsyncMock()
+    bot, event = AsyncMock(), _lead(engine)
 
-    advisor = asyncio.run(notifications.notify_advisor(engine, _lead(engine), SCORE, bot,
-                                                        FakeAgenda(engine, offline)))
+    advisor = asyncio.run(notifications.notify_advisor(engine, event, SCORE, bot, FakeAgenda(engine, offline)))
 
-    assert advisor is None
+    assert advisor.id == offline
     bot.send_message.assert_not_awaited()
+    assert [(a, kind) for a, kind, _ in _notices(engine, event["lead_id"])] == [(offline, "calificado")]
+
+
+def test_if_telegram_fails_the_notice_stays_in_the_panel(engine, clean):
+    chosen = _advisor(engine, zone="Providencia", chat_id="chat-agenda")
+    bot, event = AsyncMock(), _lead(engine)
+    bot.send_message.side_effect = RuntimeError("Telegram caído")
+
+    advisor = asyncio.run(notifications.notify_advisor(engine, event, SCORE, bot, FakeAgenda(engine, chosen)))
+
+    assert advisor.id == chosen
+    assert len(_notices(engine, event["lead_id"])) == 1
 
 
 @pytest.mark.parametrize("error", ["UPSTREAM_UNAVAILABLE", "INVALID_INPUT"])
@@ -139,6 +159,20 @@ def test_the_handoff_file_goes_to_the_advisor_the_agenda_chose(engine, clean):
 
     assert advisor.id == chosen
     assert {c.kwargs["chat_id"] for c in bot.send_message.await_args_list} == {"chat-agenda"}
+
+
+def test_the_handoff_notice_has_the_reason_but_not_the_transcript(engine, clean):
+    offline = _advisor(engine, zone="Zapopan")
+    bot, event = AsyncMock(), _lead(engine)
+
+    advisor = asyncio.run(notifications.notify_handoff(engine, event, SCORE, "HUMAN_HANDOFF", "solicitud_humano",
+                                                        bot, FakeAgenda(engine, offline)))
+
+    assert advisor.id == offline
+    bot.send_message.assert_not_awaited()
+    [(_, kind, body)] = _notices(engine, event["lead_id"])
+    assert kind == "traspaso" and "el lead pidió hablar con una persona" in body
+    assert "Transcripción" not in body
 
 
 def test_telegram_turns_use_the_process_agenda(engine, clean, monkeypatch):

@@ -154,7 +154,9 @@ def test_la_frustracion_manda_la_ficha_en_el_turno_que_completa_la_racha(engine)
     assert "frustración" in _mensajes(bot)[0]
 
 
-def test_una_visita_agendada_manda_la_ficha_del_traspaso_normal(engine):
+def test_una_visita_sin_agenda_manda_la_ficha_con_el_horario_preferido(engine):
+    """B-8: en estos tests la agenda no responde, así que el lead deja su horario preferido y el asesor
+    lo coordina. La reserva real está en `test_visits_turn.py`."""
     _limpiar_asesores(engine)
     _advisor(engine, zone="Providencia", chat_id="chat-valeria")
     bot = AsyncMock()
@@ -163,10 +165,11 @@ def test_una_visita_agendada_manda_la_ficha_del_traspaso_normal(engine):
     for texto in ("Hola", "Busco un departamento", "¿Cuál es el precio?", "Quiero agendar una visita"):
         _decir(engine, lead, texto, bot)
     bot.send_message.assert_not_awaited()
-    _decir(engine, lead, "Agendemos la visita mañana", bot)
+    _decir(engine, lead, "Mañana en la tarde", bot)
 
     assert "Traspaso de lead (HANDOFF)" in _mensajes(bot)[0]
-    assert "visita agendada" in _mensajes(bot)[0]
+    assert "la agenda no la pudo reservar" in _mensajes(bot)[0]
+    assert "Horario preferido para la visita: Mañana en la tarde" in _mensajes(bot)[0]
 
 
 def test_el_traspaso_va_al_asesor_que_ya_tenia_el_lead_no_a_otro(engine):

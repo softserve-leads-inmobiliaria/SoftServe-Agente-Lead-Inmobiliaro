@@ -123,3 +123,39 @@ En orden de prioridad, sin pelearse por archivos (ya asignados por track en §3)
 ## 7. Recalibrar, no solo seguir el plan
 
 Estos números son una estimación de partida, no un compromiso. Después de cerrar el Lote 1 y el Lote 2 (fin de semana 2), comparar horas reales vs. estimadas por historia y ajustar §4/§5 en un PR — si la velocidad real es distinta a "2h ideales por punto", toda la fila de abajo de §1 cambia y vale más saberlo en la semana 2 que en la semana 7.
+
+## 8. Propuestas de octubre: E6 y lo que sale de `propuestas.md`
+
+Historias nuevas a partir de [`docs/DESIGN/propuestas.md`](../DESIGN/propuestas.md): N-1 a N-10 (E6), A-15 a A-18 y B-10 a B-14. Las P1 suman 29 puntos (~58 h) y las P2, 19 (~38 h). Con lo pendiente del backlog (B-8, OBS-6, C-5, #104 y #119, ~26 h) y unas 86 h netas hasta la semana 8 (`propuestas.md` §8), **caben las P1, sin margen; las P2 quedan fuera salvo que sobre tiempo**.
+
+### Lotes
+
+Igual que en §4: cada lote solo depende de los anteriores, y dentro de un lote nadie espera a nadie.
+
+| Lote | Historias | Qué desbloquea |
+| :--- | :--- | :--- |
+| **7: base** | N-1, N-2, A-15 y B-8 (ya en el backlog) | N-1 es el esquema de todo lo demás: su primer PR es solo la migración. N-2 es una decisión de equipo, no código |
+| **8: sobre el esquema** | N-3, N-4, N-5, N-6, N-7, N-9, B-10 | Todo depende solo de N-1 (N-7 también de N-2). N-6 y N-7 fijan en su primer PR las firmas que usa N-8 |
+| **9: integración** | N-8, B-11 | La vista de gerencia sobre N-6 y N-7; los botones sobre B-8 |
+| Backlog | A-16, A-17, A-18, B-12, B-13, B-14, N-10 | P2. Todo lo que necesita el *scheduler* (A-17) cuelga de él |
+
+Después del lote 9 siguen `OBS-6` (una corrida real antes de la semana 8) y la semana 8 de §6. `Z-1` no admite alcance nuevo: lo que no esté en `main` antes de `Z-1` queda fuera.
+
+### Por persona
+
+Mismo reparto por carpetas que §3, para que nadie edite el archivo de otro:
+
+| Persona | Lote 7 | Lote 8 | Lote 9 | Puntos P1 |
+| :--- | :--- | :--- | :--- | :---: |
+| Track A (`services/core/`) | A-15; conduce N-2 | N-4 → N-5 (mismos archivos, en ese orden), N-7 | — | 9 |
+| Track B (canal y panel) | B-8 | N-3, B-10 | N-8, B-11 | 14 |
+| Track C (`db/`, `scripts/`, catálogo) | N-1 | N-6, N-9 | — | 9 |
+
+Archivos que se cruzan y cómo se evitan los choques:
+
+- **Migraciones.** Solo N-1 crea una en los lotes 7 a 9. Dos migraciones en paralelo dejan dos *heads* en Alembic.
+- **`services/panel/`.** N-6 (`inventory.py`) y N-7 (`attribution.py`) son archivos nuevos. El track B solo toca rutas y plantillas (N-3, N-8).
+- **`turn.py` y `state_store.py`.** N-4, N-5 y A-15 son del track A. B-8 también toca `core` para llamar a `get_slots` y `book`: coordinar con el track A o pasársela (ver abajo).
+- **`contracts/` y `seed_catalog.py`.** B-10 agrega `photo_url`: avisar al track C antes, como pide §3.
+
+**El cuello de botella es el track B** (14 puntos frente a 9). La forma más limpia de equilibrarlo es que el track A tome B-8: el trabajo es que `core` llame a `get_slots` y `book` (`design.md` §5.3), o sea, la carpeta del track A. Si no alcanza el tiempo, B-11 y luego B-10 son las primeras P1 en salir; N-8 no, porque es lo que pidió el profesor.

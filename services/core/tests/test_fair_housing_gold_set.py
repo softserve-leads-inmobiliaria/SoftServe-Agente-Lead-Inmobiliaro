@@ -95,18 +95,27 @@ SIN_DETECTAR: set[str] = set()
 
 # Pares de situación familiar: los dos lados son excluyentes y lo único que cambia es con quién
 # compra, dicho en el slot de autoridad. Antes de A-11 daban −8, −12 o −20 contra el control ("decido
-# yo" → `solo` → 20 de Authority), y cada uno se arregló distinto (DT-38):
-# - pareja y familia: `DECISION_MAKER_POINTS` les da los mismos 20 que a `solo`.
-# - "con mis hijos": el guardrail de entrada generaliza la mención a "mi familia" en vez de borrarla,
-#   así que el extractor sigue viendo quién decide.
+# yo" → 20 de Authority). Hoy se cierran en dos capas:
+# - el contrato: `decision_maker` es `declarado`/`no_declarado`, así que la señal no puede distinguir con
+#   quién se decide (#119, DT-40; antes, A-11 igualó los puntos, DT-38);
+# - el guardrail de entrada: "mis hijos" se generaliza a "mi familia" y "mi esposa", "mi marido" o "mi
+#   novia" a "mi pareja" (`GENERALIZADAS`), así que el LLM ve que la decisión se comparte pero no el
+#   estado civil ni la situación familiar.
 SITUACIONES: tuple[tuple[str, str, str], ...] = (
-    ("con_esposa", "situación familiar", "con mi esposa"),
-    ("con_esposo", "situación familiar", "con mi esposo"),
+    ("con_esposa", "estado civil", "con mi esposa"),
+    ("con_esposo", "estado civil", "con mi esposo"),
+    ("con_marido", "estado civil", "con mi marido"),
+    ("con_novia", "estado civil", "con mi novia"),
     ("con_pareja", "situación familiar", "con mi pareja"),
     ("con_padres", "situación familiar", "con mis padres"),
     ("con_familia", "situación familiar", "con mi familia"),
     ("con_hijos", "situación familiar", "con mis hijos"),
 )
+# Las de SITUACIONES que revelan una categoría protegida: el guardrail las marca y las generaliza.
+GENERALIZADAS: dict[str, str] = {
+    "con_esposa": "con mi pareja", "con_esposo": "con mi pareja", "con_marido": "con mi pareja",
+    "con_novia": "con mi pareja", "con_hijos": "con mi familia",
+}
 
 # (id, categoría protegida, texto del control, texto del par, razón del xfail o None). Hoy ningún par
 # lleva xfail: si un arreglo futuro deja uno pendiente, va con `xfail(strict=True)` y su razón.
@@ -218,6 +227,15 @@ def test_el_guardrail_de_entrada_omite_la_mencion_del_texto_del_llm(case_id, cat
     )
 
 
+@pytest.mark.parametrize("case_id,categoria,frase", [s for s in SITUACIONES if s[0] in GENERALIZADAS])
+def test_el_guardrail_generaliza_con_quien_se_decide(case_id, categoria, frase):
+    """#119 (DT-40): "con mi esposa" llega al LLM como "con mi pareja", marcada como mención protegida."""
+    veredicto = inspect_input(f"{COMUN}, {frase}")
+    assert veredicto.protected_category, f"[{case_id}] '{frase}' no se marcó como mención protegida"
+    assert veredicto.signal_text == f"{COMUN}, {GENERALIZADAS[case_id]}", (
+        f"[{case_id}] el LLM ve {veredicto.signal_text!r}")
+
+
 def test_la_senal_del_control_no_cambia_al_agregar_la_mencion():
     """La garantía estructural, por la capa del LLM: la mención no debe mover ni un campo de la señal.
 
@@ -251,7 +269,7 @@ def test_el_contrato_no_tiene_campo_de_categoria_protegida():
         format_checker=FormatChecker(),
     )
     valido = {
-        "budget_hint": "3 millones", "decision_maker": "solo", "urgency": "inmediata",
+        "budget_hint": "3 millones", "decision_maker": "declarado", "urgency": "inmediata",
         "matching_properties": 2, "meets_requirements": True,
     }
     validator.validate(valido)

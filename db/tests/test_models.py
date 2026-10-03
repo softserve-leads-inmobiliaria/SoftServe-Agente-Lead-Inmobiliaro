@@ -9,10 +9,11 @@ from db.repo_root import repo_root
 CONTRACT = json.loads((repo_root() / "contracts" / "fsm_state.schema.json").read_text(encoding="utf-8"))
 DEFS = CONTRACT["$defs"]
 
-# design.md §1: las 11 entidades, más el contexto de la FSM (DT-11).
+# design.md §1: las 16 entidades, más el contexto de la FSM (DT-11).
 EXPECTED_TABLES = {
     "leads", "conversations", "messages", "lead_scores", "properties", "promotions", "advisors",
-    "visits", "faq_entries", "funnel_events", "audit_log", "fsm_context",
+    "visits", "advisor_notifications", "faq_entries", "funnel_events", "audit_log", "fsm_context",
+    "property_status_events", "deals", "property_interest", "unmet_searches",
 }
 
 
@@ -51,6 +52,8 @@ def test_lead_scores_use_the_same_dimensions_as_bant_e():
     ("conversations", "lead_id"), ("messages", "conversation_id"), ("visits", "lead_id"),
     ("visits", "property_id"), ("visits", "advisor_id"), ("promotions", "property_id"),
     ("lead_scores", "lead_id"), ("fsm_context", "conversation_id"), ("funnel_events", "lead_id"),
+    ("property_status_events", "property_id"), ("deals", "property_id"), ("deals", "lead_id"),
+    ("deals", "advisor_id"), ("property_interest", "lead_id"), ("property_interest", "property_id"),
 ])
 def test_foreign_keys_exist(table, column):
     assert models.Base.metadata.tables[table].columns[column].foreign_keys
@@ -64,6 +67,25 @@ def test_reserved_and_consent_fields_are_modelled():
     leads = models.Base.metadata.tables["leads"].columns
     assert {"consent_status", "phone", "email", "telegram_user_id"} <= set(leads.keys())
     assert "address_exact" in models.Base.metadata.tables["properties"].columns
+
+
+def test_commercial_intelligence_rows_can_be_marked_synthetic():
+    """N-9 siembra historia sintética y la borra sin tocar datos reales (N-1)."""
+    for table in ("leads", "property_status_events", "deals", "property_interest", "unmet_searches"):
+        column = models.Base.metadata.tables[table].columns["synthetic"]
+        assert not column.nullable and column.server_default is not None
+
+
+def test_unmet_searches_never_store_the_lead():
+    """Una búsqueda sin resultados guarda los filtros, nunca quién buscó ni qué escribió (N-5)."""
+    columns = set(models.Base.metadata.tables["unmet_searches"].columns.keys())
+    assert columns == {"id", "zone", "type", "bedrooms", "budget_min", "budget_max", "created_at", "synthetic"}
+
+
+def test_property_statuses_do_not_grow_with_deals():
+    """Una propiedad colocada queda en `cerrado`; si fue renta o venta lo dice `deals` (N-1)."""
+    assert models.PROPERTY_STATUSES == ("disponible", "apartado", "cerrado")
+    assert set(models.DEAL_KINDS) == {"renta", "venta"}
 
 
 def test_settings_build_the_compose_default_url(monkeypatch):

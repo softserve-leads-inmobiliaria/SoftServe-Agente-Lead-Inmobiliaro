@@ -16,7 +16,7 @@ from db.session import session_scope
 
 INBOUND = json.loads((repo_root() / "contracts" / "examples" / "event.valid.json").read_text(encoding="utf-8"))
 HAPPY_PATH = ["Hola", "Busco un departamento", "¿Cuánto cuesta?", "Quiero agendar una visita",
-              "Quiero agendar una visita"]
+              "Mañana a las 10"]  # la agenda no responde en los tests: el lead deja su horario preferido
 
 # La consulta que usará el dashboard del funnel (B-9): a cuántos leads distintos llegó cada etapa,
 # en el orden en que se alcanzaron por primera vez.
