@@ -21,6 +21,7 @@ Usado por `CT-3` (contrato `FsmState`/`LeadScore`/`Conversation`) y `C-3` (migra
 | `Promotion` | id, property_id, title, description, valid_until | Siempre atada a una propiedad; alimenta `catalog.get_promotions` |
 | `Advisor` | id, name, zone, language, access_token | `access_token` = auth del panel (ver `decisions.md`) |
 | `Visit` | id, lead_id, property_id, advisor_id, scheduled_at, idempotency_key | Idempotente para evitar duplicados por reintento de webhook del proveedor de calendario |
+| `AdvisorNotification` | id, advisor_id, lead_id, kind (calificado/traspaso), body, created_at, read_at | Aviso al asesor en el panel; Telegram es un canal adicional (`B-15`, DT-42) |
 | `FaqEntry` | id, question, answer, embedding vector(N) | N = dimensión del modelo de embeddings elegido |
 | `FunnelEvent` | id, lead_id, event_type, created_at | Tabla *append-only* para métricas del funnel |
 | `AuditLog` | id, actor, action, payload, created_at | Trazabilidad de guardrails e intentos de abuso |
@@ -175,9 +176,12 @@ Las cajas con borde punteado no están construidas.
   numerados de su asesor y `core` la reserva con `book`. Si la agenda no responde, el lead deja su horario
   preferido y el asesor lo ve en la ficha de traspaso.
 - **Ruteo del lead al asesor** (`A-10`, DT-33): la tarjeta y la ficha de traspaso van al asesor que
-  elige la agenda, por zona, idioma y reparto por turnos, solo entre los que ya abrieron el bot. Si el
+  elige la agenda, por zona, idioma y reparto por turnos, entre todos los asesores (DT-42). Si el
   catálogo no responde, se usa la regla local de `B-7`. Verificado en el stack con Docker llamando a
   `notify_advisor`, sin Telegram real.
+- **Avisos al asesor en el panel** (`B-15`, DT-42): cada tarjeta y ficha de traspaso se guarda en
+  `advisor_notifications` y se ve en `/panel/<token>/avisos`, con el contador de no leídos. Telegram es
+  un canal adicional para el asesor que registró su chat.
 - **Panel de asesores** con ficha, etapa y transcripción (`B-5`), autenticado por token (DT-5).
 - **Trazas por turno** hacia Phoenix sin texto de los leads (DT-18) y **logs JSON** en los 3 servicios
   (DT-27).

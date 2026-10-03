@@ -8,7 +8,7 @@ inventa horarios. Son dos pasos:
 2. En `SCHEDULE`, `follow_up` lee la respuesta del lead. Si elige un horario de la oferta, lo reserva con
    `book` y la visita queda resuelta (`SCHEDULE -> HANDOFF`). Si no se entiende cuál, vuelve a ofrecerlos.
 
-Respaldo: si la agenda no responde, no hay asesor con Telegram, no quedan horarios o no se sabe qué
+Respaldo: si la agenda no responde, no hay ningún asesor, no quedan horarios o no se sabe qué
 propiedad visitar, se le pide al lead su día y hora preferidos. Su siguiente mensaje se le pasa al
 asesor en la ficha de traspaso, que coordina la visita a mano.
 """
@@ -118,7 +118,7 @@ def ask_preferred(prop: Mapping[str, Any] | None) -> VisitStep:
 async def _offer(scheduling: SchedulingClient, lead_id: str, prop: dict[str, Any], today: date,
                  intro: str | None = None) -> VisitStep:
     try:
-        advisor_id = (await scheduling.assign_advisor(lead_id, registered_only=True))["advisor_id"]
+        advisor_id = (await scheduling.assign_advisor(lead_id))["advisor_id"]
         found = await scheduling.get_slots(advisor_id, today.isoformat(), SEARCH_DAYS)
         slots = [str(slot) for slot in found["slots"]][:OFFERED_SLOTS]
     except (SchedulingError, KeyError, TypeError, ValueError):

@@ -116,7 +116,7 @@ def test_asking_for_a_visit_offers_numbered_slots_of_the_property_the_lead_looke
     reply = chat.to_schedule()
     assert "Casa de prueba" in reply and "1) mar 06/10 10:00" in reply and "3) mié 07/10 16:00" in reply
     assert [operation for operation, _ in agenda.calls] == ["assign_advisor", "get_slots"]
-    assert agenda.calls[0][1]["registered_only"] is True
+    assert agenda.calls[0][1]["registered_only"] is False  # B-15: el asesor no necesita Telegram
 
 
 def test_choosing_a_slot_books_the_visit_and_hands_the_lead_over(engine, agenda):

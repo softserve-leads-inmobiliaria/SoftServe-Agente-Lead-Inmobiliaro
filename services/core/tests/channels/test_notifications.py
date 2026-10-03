@@ -11,7 +11,7 @@ from sqlalchemy import select, text
 from app.channels import advisor_registration, canonical
 from app.channels.notifications import LeadCard, pick_advisor, render
 from app.channels.telegram import reply_to
-from db.models import Advisor, Lead
+from db.models import Advisor, AdvisorNotification, Lead
 from db.session import session_scope
 
 CALIFICA = "Tengo presupuesto de 3 millones, decido yo y es urgente"
@@ -85,15 +85,14 @@ def test_un_chat_pertenece_a_un_solo_asesor(engine):
 
 # --- elección del asesor y tarjeta -------------------------------------------------------------
 
-def test_se_prefiere_el_asesor_de_la_zona_y_si_no_hay_cualquiera_registrado(engine):
+def test_se_prefiere_el_asesor_de_la_zona_y_si_no_hay_cualquiera(engine):
     _limpiar_asesores(engine)
-    _advisor(engine, zone="Zapopan", chat_id="chat-z")
-    providencia = _advisor(engine, zone="Providencia", chat_id="chat-p")
-    _advisor(engine, zone="Providencia")  # sin registrar: no cuenta
+    zapopan = _advisor(engine, zone="Zapopan", chat_id="chat-z")
+    providencia = _advisor(engine, zone="Providencia")  # sin Telegram también cuenta (B-15)
 
     with session_scope(engine) as session:
         assert pick_advisor(session, "Providencia").id == providencia.id
-        assert pick_advisor(session, "Chapalita").telegram_chat_id is not None  # cola general
+        assert pick_advisor(session, "Chapalita").id in {zapopan.id, providencia.id}  # cola general
     _limpiar_asesores(engine)
     with session_scope(engine) as session:
         assert pick_advisor(session, "Providencia") is None
@@ -163,9 +162,9 @@ def test_la_propiedad_que_el_lead_miro_antes_sigue_en_la_tarjeta(engine):
     assert "Propiedad de interés: Depa en Providencia (prop_00231)" in texto
 
 
-def test_sin_asesor_registrado_el_turno_sigue_y_el_lead_queda_marcado(engine):
+def test_sin_telegram_el_turno_sigue_y_el_aviso_queda_en_el_panel(engine):
     _limpiar_asesores(engine)
-    _advisor(engine, zone="Providencia")  # existe, pero nunca abrió el bot
+    offline = _advisor(engine, zone="Providencia")  # existe, pero nunca abrió el bot
     bot = AsyncMock()
     lead = f"tg-{uuid.uuid4().hex[:8]}"
 
@@ -175,4 +174,8 @@ def test_sin_asesor_registrado_el_turno_sigue_y_el_lead_queda_marcado(engine):
     bot.send_message.assert_not_awaited()
     with session_scope(engine) as session:
         row = session.execute(select(Lead).where(Lead.telegram_user_id == lead)).scalar_one()
-    assert row.status == "mql" and row.advisor_id is None
+    assert row.status == "mql" and row.advisor_id == offline.id
+    with session_scope(engine) as session:
+        kinds = session.execute(select(AdvisorNotification.kind)
+                                .where(AdvisorNotification.lead_id == row.id)).scalars().all()
+    assert kinds == ["calificado"]

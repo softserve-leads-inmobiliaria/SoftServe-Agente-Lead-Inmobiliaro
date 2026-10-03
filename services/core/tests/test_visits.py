@@ -88,7 +88,7 @@ def test_slots_are_shown_in_local_time_with_the_weekday():
 def test_asking_for_a_visit_offers_the_first_slots_of_the_leads_advisor():
     agenda = FakeAgenda(slots=SLOTS + ["2026-10-08T09:00:00-06:00"])
     step = run(start(agenda, "lead-1", PROP, TODAY))
-    assert agenda.calls[:2] == [("assign_advisor", "lead-1", True), ("get_slots", "adv_providencia", "2026-10-05", 7)]
+    assert agenda.calls[:2] == [("assign_advisor", "lead-1", False), ("get_slots", "adv_providencia", "2026-10-05", 7)]
     assert offer_of(step) == {"property": {"id": "prop_00231", "title": "Depto 2 rec. en Providencia",
                                            "zone": "Providencia"},
                               "advisor_id": "adv_providencia", "slots": SLOTS}
