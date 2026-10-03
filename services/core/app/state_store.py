@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
@@ -25,6 +26,8 @@ from db.models import (
     Property,
     PropertyInterest,
 )
+
+logger = logging.getLogger("core.state_store")
 
 
 def funnel_event_type(fsm_state: str) -> str:
@@ -218,14 +221,18 @@ class StateStore:
         """Una fila de `property_interest` por cada `(propiedad, tipo)` del turno (N-4). Sin texto del lead.
 
         `interest.interactions` ya quitó los repetidos del turno. Una propiedad que no está en `properties`
-        no se registra: el catálogo lee la misma base, así que solo pasa con un catálogo de prueba, y no
-        tiene por qué tumbar el turno. Cualquier otra falla sí lo tumba, como el resto de `advance`.
+        no se registra y queda un `warning`: el catálogo lee la misma base, así que solo pasa con un catálogo
+        de prueba, y no tiene por qué tumbar el turno. Cualquier otra falla sí lo tumba, como el resto de
+        `advance`.
         """
         for property_id, kind in interactions:
-            self._session.execute(insert(PropertyInterest).from_select(
+            written = self._session.execute(insert(PropertyInterest).from_select(
                 ["lead_id", "property_id", "kind"],
                 select(literal(lead_id, UUID(as_uuid=True)), Property.id, literal(kind))
-                .where(Property.id == property_id)))
+                .where(Property.id == property_id)).returning(PropertyInterest.id)).scalar()
+            if written is None:
+                logger.warning("interés no registrado: la propiedad no está en el inventario",
+                               extra={"property_id": property_id, "kind": kind})
 
     def withdraw_consent(self, lead_id: uuid.UUID) -> None:
         self._session.execute(update(Lead).where(Lead.id == lead_id)

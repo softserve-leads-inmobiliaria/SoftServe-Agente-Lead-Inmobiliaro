@@ -156,10 +156,13 @@ def test_a_booked_visit_writes_visita(engine, monkeypatch):
     assert lead.interest().count(("prop_test", "visita")) == 1
 
 
-def test_a_property_missing_from_the_inventory_is_skipped_without_breaking_the_turn(engine):
+def test_a_property_missing_from_the_inventory_is_skipped_without_breaking_the_turn(engine, caplog):
     lead = Lead(engine)
-    reply = lead.say("Busco un departamento", Catalog(found=({"id": "prop_no_existe", "title": "x"}, OTRA)))
+    with caplog.at_level("WARNING", logger="core.state_store"):
+        reply = lead.say("Busco un departamento", Catalog(found=({"id": "prop_no_existe", "title": "x", "status": "disponible"}, OTRA)))
     assert reply["text"] and lead.interest() == [("prop_otra", "busqueda")]
+    [skipped] = [record for record in caplog.records if record.name == "core.state_store"]
+    assert (skipped.property_id, skipped.kind) == ("prop_no_existe", "busqueda")
 
 
 def test_if_saving_the_interest_fails_the_whole_turn_fails(engine, monkeypatch):
