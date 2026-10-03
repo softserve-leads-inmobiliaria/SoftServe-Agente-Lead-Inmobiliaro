@@ -26,7 +26,8 @@ Usado por `CT-3` (contrato `FsmState`/`LeadScore`/`Conversation`) y `C-3` (migra
 | `Deal` | id, property_id, lead_id, advisor_id, kind (renta/venta), price, closed_at, synthetic | Operación cerrada desde la ficha (`N-3`). La propiedad queda en `cerrado` |
 | `PropertyInterest` | id, lead_id, property_id, kind (anuncio/consulta/busqueda/visita), created_at, synthetic | Qué propiedades tocó cada lead con el bot (`N-4`); base de la atribución (DT-41). Sin texto del lead |
 | `UnmetSearch` | id, zone, type, bedrooms, budget_min, budget_max, created_at, synthetic | Búsqueda sin resultados (`N-5`), sin lead ni texto |
-| `ScheduledJob` | id, kind (no_response/visit_reminder), dedupe_key, lead_id, payload, run_at, status (pending/done/failed/cancelled), attempts, last_error, created_at, finished_at | Tarea diferida del *scheduler* de `core` (`A-17`, DT-44). Un solo pendiente por clase y `dedupe_key` |
+| `ScheduledJob` | id, kind (no_response/visit_reminder/alert_scan/property_alert), dedupe_key, lead_id, payload, run_at, status (pending/done/failed/cancelled), attempts, last_error, created_at, finished_at | Tarea diferida del *scheduler* de `core` (`A-17`, DT-44). Un solo pendiente por clase y `dedupe_key` |
+| `PropertyAlert` | id, lead_id, conversation_id, zone, type, bedrooms, budget_min, budget_max, active, created_at, expires_at | Alerta de propiedades nuevas (`A-18`, DT-45): los filtros de una búsqueda, sin texto del lead. Una activa por lead, 90 días |
 | `FaqEntry` | id, question, answer, embedding vector(N) | N = dimensión del modelo de embeddings elegido |
 | `FunnelEvent` | id, lead_id, event_type, created_at | Tabla *append-only* para métricas del funnel |
 | `AuditLog` | id, actor, action, payload, created_at | Trazabilidad de guardrails e intentos de abuso |
@@ -234,6 +235,18 @@ Las cajas con borde punteado no están construidas.
   las 18:00 del día anterior, en hora de Guadalajara. Si esa hora ya pasó al reservar, no hay recordatorio.
   Dice la propiedad, la fecha, la hora y la dirección aproximada; la exacta, solo si el lead ya calificó
   (A-6). Uno por visita, y no se envía si el lead se dio de baja o si la visita ya pasó.
+- **Alertas de propiedades nuevas** (`A-18`, DT-45). El lead pide "avísame si sale algo así"; lo detecta
+  una regla, sin LLM. Se guardan los filtros de la búsqueda de ese turno o del anterior en
+  `property_alerts`, sin texto del lead: una alerta activa por lead, durante 90 días. Si una búsqueda con
+  filtros trae 2 propiedades o menos, el turno le ofrece la alerta al lead.
+  - Cada `ALERT_SCAN_MINUTES`, un `alert_scan` busca las propiedades `disponible` que cumplen los filtros
+    con los mismos criterios que `search_properties`. Solo cuentan las que entraron a `disponible` después
+    de crearse la alerta, según `property_status_events`.
+  - Por cada una, un `property_alert` le escribe al lead una sola vez. Antes revisa el consentimiento y
+    que la propiedad siga disponible, y pasa el mensaje por los guardrails de salida (A-5, A-6, A-7).
+  - El mensaje deja la propiedad como la de interés de la conversación. `/stop` desactiva la alerta.
+  - Hoy ningún código da de alta propiedades: quien lo haga tiene que pasar por `db/property_history.py`
+    para que la alerta las vea.
 - **Trazas por turno** hacia Phoenix sin texto de los leads (DT-18) y **logs JSON** en los 3 servicios
   (DT-27).
 - **Métricas del funnel**: una fila de `funnel_events` por transición real (DT-17).

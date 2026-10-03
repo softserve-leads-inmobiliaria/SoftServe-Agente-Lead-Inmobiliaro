@@ -1,0 +1,127 @@
+"""Alertas de propiedades nuevas (A-18, DT-45): "avísame si sale algo así".
+
+Lo decide el código, no el LLM, como la agenda (B-8):
+1. Después de una búsqueda con pocos resultados (`FEW_RESULTS` o menos), el turno le ofrece la alerta al
+   lead y deja los filtros de esa búsqueda en `last_tool_results` (`ALERT_KEY`).
+2. Si el lead la pide ("avísame", "me avisas"...) en ese turno o en el siguiente, se guarda la alerta en
+   `property_alerts` con esos filtros, sin texto del lead. Una activa por lead, por `ALERT_DAYS` días.
+3. Un *job* `alert_scan` del *scheduler* (A-17) busca propiedades `disponible` que cumplan los filtros y que
+   hayan entrado a `disponible` después de crearse la alerta (`property_status_events`, N-1). Por cada una
+   encola un `property_alert`, que le escribe al lead una sola vez por propiedad.
+"""
+from __future__ import annotations
+
+import os
+import re
+import unicodedata
+import uuid
+from datetime import datetime, timedelta
+from decimal import Decimal
+from typing import Any, Mapping
+
+from sqlalchemy import exists, func, select, text, update
+from sqlalchemy.orm import Session
+
+from app import jobs
+from db.models import PropertyAlert
+
+ALERT_SCAN_KIND = "alert_scan"
+PROPERTY_ALERT_KIND = "property_alert"
+SCAN_KEY = "all"  # un solo `alert_scan` pendiente para todas las alertas
+ALERT_KEY = "alert_offer"  # en `last_tool_results`: los filtros de la búsqueda que se puede volver alerta
+FEW_RESULTS = 2
+ALERT_DAYS = 90
+
+OFFER_TEXT = "Si quieres, te aviso cuando salga algo así: solo dime \"avísame\"."
+CREATED_TEXT = ("Listo, te aviso por aquí cuando salga una propiedad con lo que buscas. "
+                "Si prefieres que no te escriba más, responde STOP.")
+NO_SEARCH_TEXT = ("Con gusto te aviso. Primero cuéntame qué buscas (zona, si es venta o renta y tu "
+                  "presupuesto) para saber qué propiedades avisarte.")
+
+_REQUEST = re.compile(r"\b(avisame|avisenme|me avisas|me avisan|me avises|avisarme|notificame|alerta)\b")
+_TYPES = {"venta": "en venta", "renta": "en renta", "preventa": "en preventa"}
+
+
+def scan_every() -> timedelta:
+    return timedelta(minutes=float(os.environ.get("ALERT_SCAN_MINUTES", "10")))
+
+
+def _normalize(text: str) -> str:
+    decomposed = unicodedata.normalize("NFD", (text or "").lower())
+    return "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
+
+
+def is_request(text: str) -> bool:
+    """¿El lead pide que le avisen? Regla determinista, sin LLM."""
+    return bool(_REQUEST.search(_normalize(text)))
+
+
+def has_filters(filters: Mapping[str, Any] | None) -> bool:
+    """Una alerta sin ningún filtro avisaría de cualquier propiedad: no se guarda."""
+    return isinstance(filters, Mapping) and any(value is not None for value in filters.values())
+
+
+def create(session: Session, lead_id: uuid.UUID, conversation_id: uuid.UUID, filters: Mapping[str, Any]) -> None:
+    """Guarda la alerta del lead (reemplaza la que tuviera) y se asegura de que haya un `alert_scan` pendiente."""
+    deactivate_for_lead(session, lead_id)
+    session.add(PropertyAlert(lead_id=lead_id, conversation_id=conversation_id,
+                              expires_at=func.now() + timedelta(days=ALERT_DAYS),
+                              **{key: filters.get(key) for key in
+                                 ("zone", "type", "bedrooms", "budget_min", "budget_max")}))
+    jobs.enqueue(session, ALERT_SCAN_KIND, SCAN_KEY, func.now() + scan_every())
+
+
+def deactivate_for_lead(session: Session, lead_id: uuid.UUID) -> None:
+    session.execute(update(PropertyAlert).where(PropertyAlert.lead_id == lead_id, PropertyAlert.active)
+                    .values(active=False))
+
+
+# Mismos criterios que `search_properties` del catálogo: zona por coincidencia parcial, recámaras exactas y
+# precio dentro del rango. "Nueva" = entró a `disponible` después de crearse la alerta.
+_NEW_MATCHES = text("""
+    SELECT a.id AS alert_id, a.lead_id, a.conversation_id, p.id AS property_id
+    FROM property_alerts a
+    JOIN leads l ON l.id = a.lead_id AND l.consent_status <> 'withdrawn'
+    JOIN properties p ON p.status = 'disponible'
+        AND (a.zone IS NULL OR p.zone ILIKE '%' || a.zone || '%')
+        AND (a.type IS NULL OR p.type = a.type)
+        AND (a.bedrooms IS NULL OR p.bedrooms = a.bedrooms)
+        AND (a.budget_min IS NULL OR p.price >= a.budget_min)
+        AND (a.budget_max IS NULL OR p.price <= a.budget_max)
+    WHERE a.active AND a.expires_at > :now
+      AND EXISTS (SELECT 1 FROM property_status_events e
+                  WHERE e.property_id = p.id AND e.to_status = 'disponible' AND e.changed_at > a.created_at)
+      AND NOT EXISTS (SELECT 1 FROM scheduled_jobs j
+                      WHERE j.kind = 'property_alert' AND j.dedupe_key = a.id::text || ':' || p.id)
+    ORDER BY a.created_at, p.id
+""")
+
+
+def new_matches(session: Session, now: datetime) -> list[Any]:
+    return list(session.execute(_NEW_MATCHES, {"now": now}))
+
+
+def expire(session: Session, now: datetime) -> None:
+    session.execute(update(PropertyAlert).where(PropertyAlert.active, PropertyAlert.expires_at <= now)
+                    .values(active=False))
+
+
+def any_active(session: Session, now: datetime) -> bool:
+    return session.execute(select(exists().where(PropertyAlert.active, PropertyAlert.expires_at > now))).scalar()
+
+
+def _price(value: Any) -> str:
+    amount = Decimal(str(value))
+    return f"${amount:,.0f}" if amount == amount.to_integral_value() else f"${amount:,.2f}"
+
+
+def alert_text(prop: Mapping[str, Any]) -> str:
+    """El aviso al lead, solo con datos del catálogo: pasa por los guardrails de salida antes de enviarse."""
+    details = [_TYPES.get(prop.get("type"), "")]
+    if prop.get("bedrooms") is not None:
+        details.append(f"{prop['bedrooms']} recámara" + ("" if prop["bedrooms"] == 1 else "s"))
+    if prop.get("price") is not None:
+        details.append(_price(prop["price"]))
+    summary = ", ".join(detail for detail in details if detail)
+    return (f"¡Salió algo como lo que buscabas! {prop['title']} (ref. {prop['id']}), en {prop['zone']}: "
+            f"{summary}. ¿Quieres que te cuente más?")
