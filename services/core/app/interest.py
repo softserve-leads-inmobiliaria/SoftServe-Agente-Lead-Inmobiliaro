@@ -2,7 +2,7 @@
 
 Lógica pura sobre los `tool_results` del turno: sin base y sin red. La usa el turno para completar
 `Lead.zone`, que es por donde el panel arma la cola de cada asesor (B-5), y B-7 para elegir a quién
-notificar.
+notificar. También dice qué propiedades tocó el lead en el turno, para `property_interest` (N-4).
 """
 from __future__ import annotations
 
@@ -64,3 +64,40 @@ def zone_of_interest(tool_results: Mapping[str, Any]) -> str | None:
     found = property_of_interest(tool_results)
     zone = found.get("zone") if found else None
     return zone if isinstance(zone, str) and zone.strip() else None
+
+
+def _id(prop: Any) -> str | None:
+    found = prop.get("id") if isinstance(prop, Mapping) else None
+    return found if isinstance(found, str) and found else None
+
+
+def interactions(tool_results: Mapping[str, Any], listing: Mapping[str, Any] | None = None,
+                 booked: Mapping[str, Any] | None = None) -> list[tuple[str, str]]:
+    """Las propiedades que el lead tocó en el turno, como `(property_id, tipo)` y sin repetidos (N-4).
+
+    - `anuncio`: la del *deep-link* (`listing`, #122).
+    - `consulta`: la de `get_property`. Si es la misma del anuncio, ya cuenta como `anuncio`: el turno la
+      suma a los resultados aunque el agente no la haya consultado (`turn._with_listing`).
+    - `busqueda`: cada propiedad que devolvió `search_properties`.
+    - `visita`: la de la visita que el turno reservó (`booked`, B-8).
+
+    `tool_results` guarda el último resultado de cada tool, así que dos `get_property` en un mismo turno
+    dejan solo el último. No mira la propiedad recordada de turnos anteriores (`REMEMBERED_KEY`): eso no
+    es una interacción de este turno.
+    """
+    found: list[tuple[str, str]] = []
+    listed = _id(listing)
+    if listed:
+        found.append((listed, "anuncio"))
+    looked_up = _id(tool_results.get("get_property"))
+    if looked_up and looked_up != listed:
+        found.append((looked_up, "consulta"))
+    search = tool_results.get("search_properties")
+    results = search.get("properties") if isinstance(search, Mapping) else None
+    for prop in results if isinstance(results, list) else ():
+        if _id(prop):
+            found.append((_id(prop), "busqueda"))
+    visited = _id(booked)
+    if visited:
+        found.append((visited, "visita"))
+    return list(dict.fromkeys(found))
