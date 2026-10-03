@@ -8,23 +8,48 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from app.visits import OFFER_KEY, VISIT_KEY
+
+# La propiedad de interés más reciente, arrastrada de turno en turno en `last_tool_results` (B-8): ese
+# campo se sobrescribe cada turno, y la visita se pide varios turnos después de ver la propiedad. El
+# guardrail de factualidad (A-5) no lo mira: usa solo las tools del turno en curso.
+REMEMBERED_KEY = "property_of_interest"
+
 
 def property_of_interest(tool_results: Mapping[str, Any]) -> dict[str, Any] | None:
     """La propiedad que el lead está mirando en este turno, o None.
 
     `get_property` manda sobre `search_properties`: pedir una propiedad concreta es una señal de
-    interés más fuerte que un listado de resultados.
+    interés más fuerte que un listado de resultados. La de una visita (B-8) va entre las dos, y la
+    recordada de turnos anteriores (`REMEMBERED_KEY`) solo cuenta si el turno no trae ninguna.
     """
     looked_up = tool_results.get("get_property")
     if isinstance(looked_up, Mapping) and looked_up.get("id"):
         return dict(looked_up)
+    for key in (VISIT_KEY, OFFER_KEY):
+        visit = tool_results.get(key)
+        prop = visit.get("property") if isinstance(visit, Mapping) else None
+        if isinstance(prop, Mapping) and prop.get("id"):
+            return dict(prop)
 
     search = tool_results.get("search_properties")
     if isinstance(search, Mapping):
         found = search.get("properties")
         if isinstance(found, list) and found and isinstance(found[0], Mapping):
             return dict(found[0])
-    return None
+    remembered = tool_results.get(REMEMBERED_KEY)
+    return dict(remembered) if isinstance(remembered, Mapping) and remembered.get("id") else None
+
+
+def remember_property(tool_results: Mapping[str, Any], previous: Mapping[str, Any]) -> dict[str, Any]:
+    """`tool_results` con la propiedad de interés más reciente: la de este turno o la que ya se recordaba.
+
+    Se guarda sin `status`: en un turno posterior ya puede estar viejo.
+    """
+    found = property_of_interest(tool_results) or property_of_interest(previous)
+    if not found or not found.get("title"):
+        return dict(tool_results)
+    return {**tool_results, REMEMBERED_KEY: {key: found[key] for key in ("id", "title", "zone") if found.get(key)}}
 
 
 def listing_greeting(listing: Mapping[str, Any]) -> str:

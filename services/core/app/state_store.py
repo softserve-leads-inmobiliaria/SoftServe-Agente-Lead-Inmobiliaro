@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
 from sqlalchemy import case, func, select, update
@@ -60,6 +60,7 @@ class GuardContext:
     unresolved_streak: int
     lead_qualified: bool = False
     history: tuple[tuple[str, str], ...] = ()  # (rol, contenido) de los últimos mensajes, del más viejo al más nuevo
+    last_tool_results: Mapping[str, Any] = field(default_factory=dict)  # los del turno anterior (B-8)
 
 
 class StateStore:
@@ -142,14 +143,16 @@ class StateStore:
             .where(AuditLog.action == "input.out_of_domain",
                    AuditLog.payload["conversation_id"].astext == str(conversation_id))).scalar()
         state = self._session.execute(
-            select(Conversation.fsm_state, FsmContext.unresolved_streak, FsmContext.lead_qualified)
+            select(Conversation.fsm_state, FsmContext.unresolved_streak, FsmContext.lead_qualified,
+                   FsmContext.last_tool_results)
             .join(FsmContext, FsmContext.conversation_id == Conversation.id)
             .where(Conversation.id == conversation_id)).one_or_none()
         return GuardContext(consent_status=consent or "pending", out_of_domain_count=out_of_domain or 0,
                             fsm_state=state.fsm_state if state else "GREETING",
                             unresolved_streak=state.unresolved_streak if state else 0,
                             lead_qualified=state.lead_qualified if state else False,
-                            history=self.history(conversation_id, history_limit))
+                            history=self.history(conversation_id, history_limit),
+                            last_tool_results=(state.last_tool_results or {}) if state else {})
 
     def history(self, conversation_id: uuid.UUID, limit: int) -> tuple[tuple[str, str], ...]:
         """Los últimos `limit` mensajes de la conversación (solo lead y asistente), en orden cronológico."""
@@ -185,6 +188,12 @@ class StateStore:
         self._session.execute(update(FsmContext).where(FsmContext.conversation_id == conversation_id)
                               .values(lead_qualified=True))
         return True
+
+    def mark_visit_scheduled(self, lead_id: uuid.UUID) -> None:
+        """`Lead.status` pasa a `visit_scheduled` al reservar la visita (B-8, DT-32); un lead ya cerrado no
+        retrocede."""
+        self._session.execute(update(Lead).where(Lead.id == lead_id, Lead.status.in_(("nuevo", "mql", "sql")))
+                              .values(status="visit_scheduled", updated_at=func.now()))
 
     def set_zone_if_unknown(self, lead_id: uuid.UUID, zone: str) -> None:
         """Completa `Lead.zone` la primera vez que se sabe, y no la pisa después (#81).
