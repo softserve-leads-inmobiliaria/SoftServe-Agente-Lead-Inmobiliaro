@@ -11,9 +11,10 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.attribution import (
+from db.metrics.attribution import (
     ATTRIBUTION_WINDOW_DAYS,
     AttributionReport,
     BandConversion,
@@ -24,9 +25,18 @@ from app.attribution import (
     time_to_close,
 )
 from db.models import Advisor, Deal, Lead, LeadScore, Property, PropertyInterest
+from db.testing import temporary_database
 
 START, END = datetime(2026, 9, 1, tzinfo=UTC), datetime(2026, 10, 1, tzinfo=UTC)
 CLOSED = datetime(2026, 9, 20, 12, tzinfo=UTC)
+
+
+@pytest.fixture(scope="module")
+def engine():
+    with temporary_database() as url:
+        engine = create_engine(url)
+        yield engine
+        engine.dispose()
 
 
 @pytest.fixture

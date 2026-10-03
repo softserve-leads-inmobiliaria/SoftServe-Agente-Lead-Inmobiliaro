@@ -13,6 +13,7 @@ Clases de *job*:
   design.md §2). Cada mensaje del lead reinicia la cuenta.
 - `visit_reminder`: el recordatorio de la visita el día anterior (B-13, `app/reminders.py`).
 - `alert_scan` y `property_alert`: las alertas de propiedades nuevas (A-18, `app/alerts.py`).
+- `weekly_report_plan` y `weekly_report`: el reporte semanal al gerente (N-10, `app/weekly_report.py`).
 """
 from __future__ import annotations
 
@@ -31,7 +32,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from app import address_guard, alerts, factuality, jobs, promise_guard, reminders
+from app import address_guard, alerts, factuality, jobs, promise_guard, reminders, weekly_report
 from app.fsm import NO_RESPONSE, next_state
 from app.state_store import StateStore
 from db.models import Conversation, Lead, Property, PropertyAlert, ScheduledJob
@@ -112,16 +113,23 @@ class _Busy(Exception):
     """La conversación está en medio de un turno: el job queda para la próxima pasada, sin contar como fallo."""
 
 
+class Undeliverable(Exception):
+    """El reporte no se pudo enviar (bot sin arrancar o chat inválido): cuenta como fallo y se reintenta."""
+
+
 class Scheduler:
     def __init__(self, engine: Engine, channel: Channel | None = None, policy: NurturePolicy | None = None,
-                 clock: Callable[[], datetime] = lambda: datetime.now(UTC), batch_size: int = 50) -> None:
+                 clock: Callable[[], datetime] = lambda: datetime.now(UTC), batch_size: int = 50,
+                 report_config: weekly_report.ReportConfig | None = None) -> None:
         self._engine = engine
         self._channel = channel
         self._policy = policy or default_policy()
         self._clock = clock
         self._batch_size = batch_size
+        self._report_config = report_config or weekly_report.default_config()
         self._handlers = {NO_RESPONSE_KIND: self._no_response, reminders.VISIT_REMINDER_KIND: self._visit_reminder,
-                          alerts.ALERT_SCAN_KIND: self._alert_scan, alerts.PROPERTY_ALERT_KIND: self._property_alert}
+                          alerts.ALERT_SCAN_KIND: self._alert_scan, alerts.PROPERTY_ALERT_KIND: self._property_alert,
+                          weekly_report.PLAN_KIND: self._weekly_plan, weekly_report.REPORT_KIND: self._weekly_report}
 
     def run_due(self, now: datetime | None = None) -> int:
         """Ejecuta los jobs vencidos a `now` (el reloj del scheduler si no se pasa). Devuelve cuántos tomó."""
@@ -294,6 +302,24 @@ class Scheduler:
         session.flush()
         self._channel.send(lead.telegram_user_id, text)  # lo último antes del commit
         logger.info("alerta de propiedad nueva enviada", extra=extra)
+        return "done"
+
+    # --- reporte semanal al gerente (N-10) ------------------------------------------------------------
+
+    def _weekly_plan(self, session: Session, job: ScheduledJob, now: datetime) -> str:
+        queued = weekly_report.plan(session, job.run_at, now, self._report_config)
+        logger.info("reporte semanal programado", extra={"job_id": str(job.id), "recipients": queued})
+        return "done"
+
+    def _weekly_report(self, session: Session, job: ScheduledJob, now: datetime) -> str:
+        """Si Telegram falla, el job se reintenta (1 y 5 min); una vez enviado, `once=True` evita repetirlo."""
+        chat_id = job.payload["chat_id"]
+        if self._channel is None or not self._channel.reachable(chat_id):
+            raise Undeliverable("sin canal para el reporte semanal")
+        start, end = weekly_report.parse_period(job.payload)
+        text = weekly_report.build(session, start, end, self._report_config)
+        self._channel.send(chat_id, text)  # lo último antes del commit
+        logger.info("reporte semanal enviado", extra={"job_id": str(job.id), "week": job.dedupe_key.split(":")[0]})
         return "done"
 
 

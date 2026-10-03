@@ -8,17 +8,18 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
 
-from app import scheduler, tracing
+from app import scheduler, tracing, weekly_report
 from app.catalog_client import CatalogClient
 from app.channels.telegram import get_bot, start_bot, stop_bot
 from app.llm_config import build_agent
 from app.turn import process_turn
 from db.logging_config import configure_json_logging
-from db.session import get_engine
+from db.session import get_engine, session_scope
 
 configure_json_logging()
 logger = logging.getLogger("core")
@@ -34,6 +35,9 @@ async def lifespan(app: FastAPI):
     every = scheduler.poll_seconds()
     task = None
     if every > 0:
+        # N-10: el primer reporte semanal; después se reprograma solo. Sin destinatarios no hace nada.
+        with session_scope(get_engine()) as session:
+            weekly_report.schedule(session, datetime.now(UTC))
         channel = scheduler.TelegramChannel(asyncio.get_running_loop(), get_bot)
         task = asyncio.create_task(scheduler.run_forever(scheduler.Scheduler(get_engine(), channel), every))
     try:

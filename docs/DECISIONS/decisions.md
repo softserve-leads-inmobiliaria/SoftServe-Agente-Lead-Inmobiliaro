@@ -1957,3 +1957,52 @@ asesor y no el lead.
 - El aviso de traspaso del panel (`advisor_notifications`) y el primer mensaje de Telegram al asesor
   llevan el resumen al final, antes de la transcripción.
 - Pendiente de verificar en vivo contra Bedrock con al menos tres conversaciones distintas.
+
+## DT-47 — Las consultas de negocio viven en `db/metrics/`; el reporte semanal va a chats configurados
+
+**Estado:** propuesta
+
+**Contexto.** `N-10` manda cada semana, por Telegram, las cifras de `N-6` (colocadas, estancadas y demanda
+sin cubrir) con un *job* del *scheduler* de A-17. El *scheduler* corre en `core`, pero las consultas de
+`N-6` y `N-7` estaban en `services/panel/app/`, y cada servicio tiene su imagen: lo único que comparten
+es `db/`. Además, `N-2` (DT-41) no definió un rol de gerente, así que no hay a quién mandarle el reporte.
+
+**Decisión.**
+- **Las consultas agregadas pasan a `db/metrics/`**: `inventory.py` (N-6) y `attribution.py` (N-7), con
+  sus tests en `db/tests/`. Las dos imágenes ya copian `db/`. En el panel quedan
+  `services/panel/app/inventory.py` y `attribution.py` como reexportaciones, así `N-8` sigue importando
+  `app.inventory` y `app.attribution`. Las reglas de conteo tienen una sola fuente: el reporte y el panel
+  muestran las mismas cifras.
+- **Destinatarios por configuración:** `WEEKLY_REPORT_CHAT_IDS`, uno o más chats de Telegram separados
+  por coma. Sin la variable no se programa nada. No hay tabla ni rol de gerencia, igual que en DT-41. El
+  mensaje se manda con el bot de `core`.
+- **Dos clases de *job* (migración `0013`):**
+  - `weekly_report_plan`: uno solo pendiente a la vez, con la clave `semanal`. `core` lo programa al
+    arrancar (es idempotente: un reinicio no lo duplica). Al ejecutarse, encola un `weekly_report` por
+    destinatario y se vuelve a programar para la semana siguiente.
+  - `weekly_report`: uno por semana y destinatario, con la clave `<año>-W<semana>:<chat>` y `once=True`
+    (DT-44). Si Telegram falla o el bot no está arrancado, cuenta como fallo y se reintenta a 1 y 5
+    minutos; una vez enviado, esa semana no se vuelve a mandar a ese chat.
+- **Calendario:** el lunes a las 9:00, hora local (UTC-6, la de la agenda), con la última semana completa
+  (lunes a lunes). El día y la hora se cambian con `WEEKLY_REPORT_WEEKDAY` y `WEEKLY_REPORT_HOUR`.
+- **Contenido:** colocadas de la semana (total, monto y por zona), estancadas de más de 60 días (las 5 más
+  antiguas, con "sin consultas" o "consultas sin visitas", y cuántas más hay) y las 3 búsquedas sin
+  resultado más repetidas. Termina con el enlace a la vista de N-8 (`PANEL_PUBLIC_URL` +
+  `/panel/<tu token>/negocio`), sin el token. Solo agregados, con la lista de DT-41: ningún lead.
+  La historia sintética de N-9 se excluye salvo con `WEEKLY_REPORT_INCLUDE_SYNTHETIC=1`.
+
+**Alternativas.**
+- `core` le pide el reporte al panel por HTTP: agrega una dependencia de red entre servicios y un
+  *endpoint* interno que hay que proteger. Descartada.
+- Repetir en `core` las tres consultas que usa el reporte: más rápido, pero las reglas de conteo podrían
+  divergir de las del panel. Descartada.
+- Mandarlo a todos los asesores con Telegram (coherente con DT-41): cada asesor recibiría cada semana las
+  cifras de toda la inmobiliaria sin haberlo pedido. Descartada; se puede sumar después con la misma
+  variable.
+
+**Consecuencias.**
+- `N-8` tiene que publicar su vista en `/panel/<token>/negocio`, o cambiar `BUSINESS_PATH` en
+  `services/core/app/weekly_report.py`.
+- Un reporte que falla tres veces queda en `failed` y esa semana no se reenvía sola.
+- Pendiente de verificar en vivo: poner un chat en `WEEKLY_REPORT_CHAT_IDS`, adelantar el `run_at` del
+  plan pendiente y ver llegar el mensaje.

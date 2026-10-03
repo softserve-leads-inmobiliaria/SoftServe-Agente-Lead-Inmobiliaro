@@ -49,7 +49,7 @@ NOTIFICATION_KINDS = ("calificado", "traspaso")
 DEAL_KINDS = ("renta", "venta")
 INTEREST_KINDS = ("anuncio", "consulta", "busqueda", "visita")
 # Tareas diferidas (A-17, DT-44). Cada historia que agregue una clase de *job* la suma aquí y en una migración.
-JOB_KINDS = ("no_response", "visit_reminder", "alert_scan", "property_alert")
+JOB_KINDS = ("no_response", "visit_reminder", "alert_scan", "property_alert", "weekly_report_plan", "weekly_report")
 JOB_STATUSES = ("pending", "done", "failed", "cancelled")
 
 # Dimensión del vector de la FAQ. Valor de partida (modelos de sentence embeddings habituales usan
