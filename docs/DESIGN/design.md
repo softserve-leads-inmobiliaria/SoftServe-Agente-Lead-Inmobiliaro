@@ -247,6 +247,10 @@ Las cajas con borde punteado no están construidas.
   - El mensaje deja la propiedad como la de interés de la conversación. `/stop` desactiva la alerta.
   - Hoy ningún código da de alta propiedades: quien lo haga tiene que pasar por `db/property_history.py`
     para que la alerta las vea.
+- **Reintento del envío al lead por Telegram** (#161): si la respuesta del turno no sale por un fallo de
+  conexión, el bot la reenvía hasta 3 veces, tras 1 y 2 segundos. Con `RetryAfter`, espera lo que pide
+  Telegram, hasta 30 segundos. No reintenta un `TimedOut` (el mensaje pudo llegar y saldría duplicado) ni
+  `BadRequest` o `Forbidden`. Agotados los intentos, queda en el log; el turno no se repite.
 - **Trazas por turno** hacia Phoenix sin texto de los leads (DT-18) y **logs JSON** en los 3 servicios
   (DT-27).
 - **Métricas del funnel**: una fila de `funnel_events` por transición real (DT-17).
