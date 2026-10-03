@@ -146,9 +146,9 @@ def test_al_calificar_el_asesor_de_la_zona_recibe_la_tarjeta_una_vez(engine):
     assert row.status == "mql" and row.advisor_id == advisor.id
 
 
-def test_la_propiedad_va_en_la_tarjeta_solo_si_el_turno_que_califica_la_miro(engine):
-    """Limitación conocida: `last_tool_results` se sobrescribe cada turno (A-9). La zona sí
-    persiste (#81), la propiedad concreta no; se declara en el PR de B-7."""
+def test_la_propiedad_que_el_lead_miro_antes_sigue_en_la_tarjeta(engine):
+    """`last_tool_results` se sobrescribe cada turno (A-9), pero la propiedad de interés se arrastra
+    (B-8): la tarjeta la muestra aunque el turno que califica no la haya mirado."""
     _limpiar_asesores(engine)
     _advisor(engine, zone="Providencia", chat_id="chat-valeria")
     bot = AsyncMock()
@@ -160,7 +160,7 @@ def test_la_propiedad_va_en_la_tarjeta_solo_si_el_turno_que_califica_la_miro(eng
 
     texto = bot.send_message.await_args.kwargs["text"]
     assert "Zona: Providencia" in texto
-    assert "Propiedad de interés" not in texto
+    assert "Propiedad de interés: Depa en Providencia (prop_00231)" in texto
 
 
 def test_sin_asesor_registrado_el_turno_sigue_y_el_lead_queda_marcado(engine):

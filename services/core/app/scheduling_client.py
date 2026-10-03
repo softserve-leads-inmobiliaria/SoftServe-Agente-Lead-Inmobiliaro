@@ -53,6 +53,17 @@ class SchedulingClient:
             body["zone"] = zone
         return await self._post("assign_advisor", body)
 
+    async def get_slots(self, advisor_id: str, date_from: str, days: int = 7) -> dict[str, Any]:
+        """Horarios libres del asesor (`date_from` en hora local, ISO `YYYY-MM-DD`), en orden (B-8)."""
+        return await self._post("get_slots", {"advisor_id": advisor_id, "date_from": date_from, "days": days})
+
+    async def book(self, idempotency_key: str, lead_id: str, property_id: str, advisor_id: str,
+                   scheduled_at: str) -> dict[str, Any]:
+        """Reserva la visita (B-8). Repetir la misma `idempotency_key` devuelve la misma visita."""
+        return await self._post("book", {"idempotency_key": idempotency_key, "lead_id": lead_id,
+                                         "property_id": property_id, "advisor_id": advisor_id,
+                                         "scheduled_at": scheduled_at})
+
 
 @lru_cache(maxsize=1)
 def get_scheduling() -> SchedulingClient:

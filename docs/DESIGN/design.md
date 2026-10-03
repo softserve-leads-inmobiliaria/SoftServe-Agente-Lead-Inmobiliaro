@@ -168,8 +168,11 @@ Las cajas con borde punteado no están construidas.
   por red.
 - **Agenda en el catálogo** (`C-2`, DT-32): `assign_advisor`, `get_slots` y `book` por HTTP en
   `/scheduling`, fuera de MCP para que el LLM no las vea. `book` es idempotente, y la base impide dos
-  visitas del mismo asesor a la misma hora. `core` usa `assign_advisor`; `get_slots` y `book`, todavía
-  no: ver §5.3.
+  visitas del mismo asesor a la misma hora. `core` usa las tres: `assign_advisor` para el ruteo, y
+  `get_slots` y `book` para agendar la visita.
+- **Visita agendada desde la conversación** (`B-8`, DT-39): al pedirla, el lead elige entre 3 horarios
+  numerados de su asesor y `core` la reserva con `book`. Si la agenda no responde, el lead deja su horario
+  preferido y el asesor lo ve en la ficha de traspaso.
 - **Ruteo del lead al asesor** (`A-10`, DT-33): la tarjeta y la ficha de traspaso van al asesor que
   elige la agenda, por zona, idioma y reparto por turnos, solo entre los que ya abrieron el bot. Si el
   catálogo no responde, se usa la regla local de `B-7`. Verificado en el stack con Docker llamando a
@@ -185,7 +188,6 @@ Las cajas con borde punteado no están construidas.
 
 | Qué | Dónde está diseñado | Qué pasa hoy |
 | :--- | :--- | :--- |
-| Agendar la visita de verdad (proveedor de calendario, reserva desde la conversación) | `B-8`; entidad `Visit` en §1 | `get_slots` y `book` ya existen en el catálogo (`C-2`, DT-32), pero `core` no los llama: `SCHEDULE -> HANDOFF` lo dispara la intención `agendar_visita` del lead sin reservar nada, así que la ficha de traspaso nunca muestra una visita |
 | *Scheduler* de *nurturing* (`DISCOVERY -> NURTURE -> LOST`) | DT-3, DT-12 | Las aristas `no_response` existen en la FSM y en sus tests, pero nada las dispara: ningún lead llega a `NURTURE` ni a `LOST` |
 | FAQ con embeddings | `FaqEntry` en §1, DT-7, `C-5` | La tabla y `pgvector` existen; no hay modelo de embeddings ni búsqueda |
 | Cancelar los *jobs* de un lead en `/stop` | `guardrails.md` §1 | No hay *jobs* que cancelar hasta que exista el *scheduler* |

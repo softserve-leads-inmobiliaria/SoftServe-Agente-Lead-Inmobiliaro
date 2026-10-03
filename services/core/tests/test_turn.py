@@ -25,6 +25,7 @@ SAY = {
     "agendar_visita": "Quiero agendar una visita",
     "solicitud_humano": "Quiero hablar con un asesor",
     "otro": "¿Cómo va el clima hoy?",
+    "horario_preferido": "Mañana a las 10",  # B-8: respuesta a la agenda, sin intención propia
 }
 
 
@@ -55,7 +56,7 @@ class Conversation:
 def test_a_conversation_walks_the_whole_happy_path_and_persists_each_step(engine):
     chat = Conversation(engine)
     path = [("saludo", "DISCOVERY"), ("busqueda_propiedad", "QUALIFY"), ("consulta_precio", "RECOMMEND"),
-            ("agendar_visita", "SCHEDULE"), ("agendar_visita", "HANDOFF")]
+            ("agendar_visita", "SCHEDULE"), ("horario_preferido", "HANDOFF")]
     for intent, expected in path:
         reply = chat.say(intent)
         assert reply["direction"] == "outbound"
@@ -231,11 +232,13 @@ def test_tool_results_are_kept_only_for_the_last_turn(engine):
             return connection.execute(text("SELECT last_tool_results FROM fsm_context WHERE conversation_id = :c"),
                                       {"c": chat.conversation_id}).scalar()
 
+    remembered = {"property_of_interest": {"id": PROPERTY["id"], "title": PROPERTY["title"]}}
     chat.say("busqueda_propiedad")
     assert last_results() == {"search_properties": {"properties": [PROPERTY | {"availability_checked_at": CHECKED_AT}],
-                                                    "unavailable": []}}
+                                                    "unavailable": []}} | remembered
     chat.say("saludo")
-    assert last_results() == {}
+    # B-8: de un turno a otro solo se arrastra la propiedad de interés, sin su `status`.
+    assert last_results() == remembered
 
 
 def test_a_turn_without_a_search_keeps_the_matches_counted_before(engine):

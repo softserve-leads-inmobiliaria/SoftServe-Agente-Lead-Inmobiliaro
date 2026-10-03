@@ -20,6 +20,7 @@ from sqlalchemy import Engine, func, select, update
 from app import scheduling_client
 from app.interest import property_of_interest
 from app.scheduling_client import SchedulingClient, SchedulingError
+from app.visits import LOCAL_TZ, VISIT_KEY
 from db.models import Advisor, FsmContext, Lead, Message, Visit
 from db.session import session_scope
 
@@ -32,6 +33,7 @@ HANDOFF_REASONS = {
     "fuera_de_alcance": "consulta fuera del alcance del agente",
     "frustration": "varios turnos seguidos sin resolver (frustración)",
     "visit_scheduled": "visita agendada, el lead pasa al asesor",
+    "visit_requested": "el lead pidió una visita y la agenda no la pudo reservar: coordinar su horario",
 }
 _ROLE_LABELS = {"user": "Lead", "assistant": "Agente"}
 
@@ -50,6 +52,7 @@ class LeadCard:
     property_id: str | None
     visit_at: str | None
     reasons: tuple[str, ...]
+    preferred_time: str | None = None  # lo que pidió el lead cuando la agenda no pudo reservar (B-8)
 
 
 # `_agenda_advisor` devuelve esto cuando la agenda no respondió: se decide con `pick_advisor`.
@@ -91,7 +94,9 @@ def build_card(session, lead_id: uuid.UUID, conversation_id: uuid.UUID,
                score: Mapping[str, Any]) -> LeadCard:
     lead = session.get(Lead, lead_id)
     context = session.get(FsmContext, conversation_id)
-    prop = property_of_interest(context.last_tool_results if context else {})
+    last = context.last_tool_results if context else {}
+    prop = property_of_interest(last)
+    requested = last.get(VISIT_KEY) if isinstance(last.get(VISIT_KEY), Mapping) else {}
     visit = session.execute(
         select(Visit).where(Visit.lead_id == lead_id).order_by(Visit.scheduled_at)).scalars().first()
     return LeadCard(
@@ -101,8 +106,9 @@ def build_card(session, lead_id: uuid.UUID, conversation_id: uuid.UUID,
         score_band=str(score["band"]),
         property_title=prop.get("title") if prop else None,
         property_id=prop.get("id") if prop else None,
-        visit_at=visit.scheduled_at.strftime("%d/%m/%Y %H:%M") if visit else None,
+        visit_at=visit.scheduled_at.astimezone(LOCAL_TZ).strftime("%d/%m/%Y %H:%M") if visit else None,
         reasons=tuple(score.get("reasons") or ()),
+        preferred_time=requested.get("preferred_time") or None,
     )
 
 
@@ -116,6 +122,8 @@ def render(card: LeadCard) -> str:
         lines.append(f"Propiedad de interés: {card.property_title} ({card.property_id})")
     if card.visit_at:
         lines.append(f"Visita agendada: {card.visit_at}")
+    if card.preferred_time:
+        lines.append(f"Horario preferido para la visita: {card.preferred_time}")
     if card.reasons:
         lines.append("Por qué: " + "; ".join(card.reasons))
     lines.append(f"Ficha: /panel/<tu token>/leads/{card.lead_id}")
@@ -163,6 +171,8 @@ def render_handoff(handoff: HandoffFile) -> list[str]:
         lines.append(f"Propiedad de interés: {card.property_title} ({card.property_id})")
     if card.visit_at:
         lines.append(f"Visita agendada: {card.visit_at}")
+    if card.preferred_time:
+        lines.append(f"Horario preferido para la visita: {card.preferred_time}")
     if card.reasons:
         lines.append("Por qué el score: " + "; ".join(card.reasons))
     lines.append(f"Ficha: /panel/<tu token>/leads/{card.lead_id}")
