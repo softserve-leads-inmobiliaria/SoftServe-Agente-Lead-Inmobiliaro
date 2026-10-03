@@ -41,8 +41,8 @@ CLASSIFIER_SYSTEM = (
     '  "solicitud_humano" = pide hablar con una persona; "fuera_de_alcance" = queja, reclamo o asunto '
     'de un contrato o cuenta ya existente; "otro" = no encaja en ninguna de las demás.\n'
     '- "budget_hint": el presupuesto que el lead declara en el mensaje actual, en texto libre, o null.\n'
-    '- "decision_maker": "solo", "pareja", "familia" o "no_declarado" según quién decide, SOLO si el '
-    "mensaje actual lo dice.\n"
+    '- "decision_maker": "declarado" si el mensaje actual dice cómo se toma la decisión de compra (la '
+    'toma solo o con otras personas), o "no_declarado". No distingas con quién decide.\n'
     '- "urgency": "inmediata", "3_meses", "explorando" o "no_declarada", SOLO si el mensaje actual lo dice.\n'
     "Extrae únicamente del MENSAJE ACTUAL. No infieras nada sobre origen, religión, género, nacionalidad "
     "ni situación familiar de la persona."
