@@ -40,14 +40,20 @@ from app.input_guard import (
     InputVerdict,
     inspect_input,
 )
-from app.interest import listing_greeting, property_of_interest, remember_property, zone_of_interest
+from app.interest import (
+    interactions,
+    listing_greeting,
+    property_of_interest,
+    remember_property,
+    zone_of_interest,
+)
 from app.lead_scoring import TurnEvidence, score_turn
 from app.qualification import just_qualified
 from app.scoring import Score
 from app.skeleton import Catalog, respond
 from app.state_store import GuardContext, StateStore
 from app.tracing import SPAN_KIND, get_tracer
-from app.visits import OFFER_KEY, VisitStep
+from app.visits import OFFER_KEY, VISIT_KEY, VisitStep
 from db.session import session_scope
 
 logger = logging.getLogger("core.turn")
@@ -135,6 +141,8 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         zone = zone_of_interest(evidence.tool_results)
         if zone:
             store.set_zone_if_unknown(lead_id, zone)
+        booked_property = visit.tool_results[VISIT_KEY].get("property") if booked else None
+        store.record_interest(lead_id, interactions(evidence.tool_results, evidence.listing, booked_property))
         previous_band = state.score["band"] if state.score else None
         qualified = just_qualified(previous_band, score.band) and store.qualify(conversation_id, lead_id)
         _write_audits(store, event, audits)
