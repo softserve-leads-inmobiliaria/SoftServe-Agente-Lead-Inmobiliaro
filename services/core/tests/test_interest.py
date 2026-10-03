@@ -5,7 +5,7 @@ import uuid
 
 from sqlalchemy import text
 
-from app.interest import property_of_interest, zone_of_interest
+from app.interest import property_of_interest, remember_property, zone_of_interest
 from app.turn import process_turn
 from db.repo_root import repo_root
 
@@ -16,6 +16,30 @@ BUSQUEDA = {"search_properties": {"properties": [
     {"id": "prop_00240", "title": "Casa en Zapopan", "zone": "Zapopan"},
 ]}}
 FICHA = {"get_property": {"id": "prop_00240", "title": "Casa en Zapopan", "zone": "Zapopan"}}
+FICHA_CON_ESTADO = {"get_property": FICHA["get_property"] | {"status": "disponible", "price": 2350000}}
+
+
+def test_la_propiedad_se_recuerda_de_un_turno_a_otro_sin_su_estado():
+    """B-8: `last_tool_results` se sobrescribe cada turno y la visita se pide turnos después."""
+    turno = remember_property(FICHA_CON_ESTADO, {})
+    assert turno["property_of_interest"] == {"id": "prop_00240", "title": "Casa en Zapopan", "zone": "Zapopan"}
+    siguiente = remember_property({}, turno)
+    assert siguiente == {"property_of_interest": turno["property_of_interest"]}
+    assert property_of_interest(siguiente)["id"] == "prop_00240"
+
+
+def test_la_propiedad_del_turno_manda_sobre_la_recordada():
+    recordada = remember_property(FICHA, {})
+    assert property_of_interest(remember_property(BUSQUEDA, recordada))["id"] == "prop_00231"
+
+
+def test_sin_ninguna_propiedad_no_se_recuerda_nada():
+    assert remember_property({"get_promotions": {"promotions": []}}, {}) == {"get_promotions": {"promotions": []}}
+
+
+def test_la_propiedad_de_una_visita_cuenta_como_interes():
+    visita = {"visit": {"property": {"id": "prop_00231", "title": "Depa", "zone": "Providencia"}}}
+    assert zone_of_interest(visita) == "Providencia"
 
 
 def test_sin_tools_no_hay_zona():
