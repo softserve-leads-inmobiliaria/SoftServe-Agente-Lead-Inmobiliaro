@@ -1794,3 +1794,63 @@ deterministas hacían que una segunda corrida sobre la misma base heredara conve
   registraba como aviso y seguía, así que el guion pasaba sin probar el deep-link (#122). Ahora usa
   `prop_00233`. Por Telegram, una falla de red transitoria al enviar la respuesta a `STOP` dejó al lead
   sin respuesta, aunque la baja se guardó: el canal no reintenta el envío. Queda como hallazgo para B-1.
+
+## DT-44 — *Scheduler* dentro de `core` con los *jobs* en Postgres; seguimientos antes de `no_response`
+
+**Estado:** propuesta
+
+**Contexto.** `A-17` pide un *scheduler* que dispare las aristas `no_response` (`DISCOVERY -> NURTURE ->
+LOST`, design.md §2), que cancele los *jobs* del lead con `/stop` y que reintente un *job* fallido sin
+ejecutar ninguno dos veces. DT-3 ya había decidido un *scheduler* embebido, sin Redis. Faltaba decidir
+dónde se guardan los *jobs*, cómo se evita la doble ejecución y qué significa "sin respuesta tras N
+intentos". También es la base de `B-13`, `A-18` y `N-10`.
+
+**Decisión.**
+- **Dónde corre:** dentro de `core`, como dice DT-3. Es un bucle en el `lifespan` que cada
+  `SCHEDULER_POLL_SECONDS` (30 por defecto; 0 lo apaga) llama a `Scheduler.run_due` en un hilo. Envía por
+  el mismo bot de Telegram de `core`. La primera pasada espera un intervalo, así que arrancar `core` no
+  dispara nada.
+- **Dónde viven los *jobs*:** en la tabla `scheduled_jobs` (migración `0009`). Cada *job* tiene clase,
+  `dedupe_key`, `run_at`, `payload`, estado e intentos fallidos. Un índice único parcial impide dos
+  pendientes con la misma clase y clave. Una historia que agregue una clase la suma a `JOB_KINDS` con su
+  migración.
+- **Una sola ejecución:** el *job* se toma con `FOR UPDATE SKIP LOCKED`, y su efecto y su `done` van en
+  la misma transacción. Dos *schedulers* a la vez nunca toman el mismo *job*.
+  - El mensaje al lead se envía al final, justo antes del commit. Si el commit falla después de un envío
+    exitoso, el reintento repite el mensaje: es el único duplicado posible, y se acepta.
+  - Al bloquear la conversación se usa `NOWAIT`. Un turno en curso tiene la conversación y espera al
+    *job* para cancelarlo, así que esperar sería un *deadlock*. Si la conversación está ocupada, el *job*
+    queda para la próxima pasada sin contar como fallo.
+- **Reintentos:** un *job* que falla revierte todo y se reintenta a 1 y a 5 minutos. Al tercer fallo queda
+  en `failed`, con el tipo de la excepción en `last_error` (nunca el texto, que podría traer datos del
+  lead) y un `error` en el log.
+- **"Sin respuesta tras N intentos":** cada intento es un seguimiento al lead.
+  - En `DISCOVERY`, con 24 horas de silencio el bot envía un seguimiento fijo, sin LLM, que termina
+    recordando cómo darse de baja. Tras 2 seguimientos sin respuesta, la conversación pasa a `NURTURE`.
+  - En `NURTURE` se repite lo mismo cada 7 días, y la conversación termina en `LOST`.
+  - Cada mensaje del lead cancela el pendiente y reinicia la cuenta, en la transacción del turno.
+  - Los tiempos y N se cambian con `SCHEDULER_DISCOVERY_HOURS`, `SCHEDULER_NURTURE_DAYS` y
+    `SCHEDULER_FOLLOW_UPS`.
+  - Un lead sin chat de Telegram (los del arnés) no recibe nada, pero el intento cuenta.
+- **`/stop`:** las dos bajas, la del canal (`consent.withdraw_consent`) y la de `core`
+  (`StateStore.withdraw_consent`), cancelan todo lo pendiente del lead. Además, el *job* revisa el
+  consentimiento y el estado de la conversación antes de actuar. Si cambió, se cancela.
+
+**Alternativas.**
+- Un proceso aparte en el *compose*: necesitaría un segundo cliente del bot con el mismo token, y DT-3
+  ya lo descartó para este volumen. Descartada.
+- APScheduler con su *job store* en SQLAlchemy: no conoce la transacción del turno ni la conversación
+  bloqueada. Habría que envolverlo para lo mismo que hace `SKIP LOCKED`. Descartada.
+- `pg_cron` o `LISTEN/NOTIFY`: `pg_cron` no está en la imagen de pgvector, y `LISTEN` no funciona a
+  través de un *pooler* en modo transacción, como el de Supabase. Una tabla con `SKIP LOCKED` funciona
+  igual en local y en una base administrada. Descartada.
+- Mover la FSM tras X tiempo, sin escribirle al lead: no reactiva a nadie, y design.md habla de
+  "intentos". Descartada.
+
+**Consecuencias.**
+- `NURTURE` y `LOST` empiezan a usarse: el funnel del panel los cuenta desde la primera transición.
+- Los leads del arnés en la base local también avanzan solos a `NURTURE` y `LOST` con el tiempo.
+- Pasar a `LOST` no cambia `leads.status`: cerrar al lead sigue siendo decisión del asesor.
+- Las conversaciones que se quedan en silencio en `QUALIFY`, `RECOMMEND` o `SCHEDULE` no tienen
+  seguimiento: la FSM no tiene arista `no_response` ahí.
+- Pendiente de verificar en vivo con Telegram, con tiempos cortos (`SCHEDULER_DISCOVERY_HOURS=0.01`).

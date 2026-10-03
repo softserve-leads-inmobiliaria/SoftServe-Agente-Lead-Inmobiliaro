@@ -26,6 +26,7 @@ Usado por `CT-3` (contrato `FsmState`/`LeadScore`/`Conversation`) y `C-3` (migra
 | `Deal` | id, property_id, lead_id, advisor_id, kind (renta/venta), price, closed_at, synthetic | Operación cerrada desde la ficha (`N-3`). La propiedad queda en `cerrado` |
 | `PropertyInterest` | id, lead_id, property_id, kind (anuncio/consulta/busqueda/visita), created_at, synthetic | Qué propiedades tocó cada lead con el bot (`N-4`); base de la atribución (DT-41). Sin texto del lead |
 | `UnmetSearch` | id, zone, type, bedrooms, budget_min, budget_max, created_at, synthetic | Búsqueda sin resultados (`N-5`), sin lead ni texto |
+| `ScheduledJob` | id, kind (no_response), dedupe_key, lead_id, payload, run_at, status (pending/done/failed/cancelled), attempts, last_error, created_at, finished_at | Tarea diferida del *scheduler* de `core` (`A-17`, DT-44). Un solo pendiente por clase y `dedupe_key` |
 | `FaqEntry` | id, question, answer, embedding vector(N) | N = dimensión del modelo de embeddings elegido |
 | `FunnelEvent` | id, lead_id, event_type, created_at | Tabla *append-only* para métricas del funnel |
 | `AuditLog` | id, actor, action, payload, created_at | Trazabilidad de guardrails e intentos de abuso |
@@ -133,7 +134,8 @@ flowchart LR
     CORE -- avisos --> PG
     CORE -. avisos, opcional .-> ADV[Asesor<br/>por Telegram]
     CORE -- agenda HTTP --> CAT
-    SCHED[scheduler<br/>de nurturing]:::nobuilt -.-> CORE
+    SCHED[scheduler<br/>dentro de core] -- scheduled_jobs --> PG
+    SCHED -- seguimientos --> TG
     FAQ[FAQ con<br/>embeddings]:::nobuilt -.-> PG
     classDef nobuilt stroke-dasharray: 5 5
 ```
@@ -222,6 +224,12 @@ Las cajas con borde punteado no están construidas.
   - Retorno por `utm_campaign`: leads, calificados y cierres.
   Las dos primeras toman los cierres del periodo; las dos últimas, los leads creados en él. Cada una
   excluye lo sintético salvo que se pida (`include_synthetic=True`), y ninguna devuelve un lead.
+- **Scheduler de tareas diferidas** (`A-17`, DT-44): corre dentro de `core` y toma de `scheduled_jobs` los
+  *jobs* vencidos. Hoy hace los seguimientos de *nurturing*. Con 24 horas de silencio en `DISCOVERY`, le
+  envía al lead un seguimiento fijo, sin LLM. Tras 2 seguimientos sin respuesta, la conversación pasa a
+  `NURTURE`; ahí se repite lo mismo cada 7 días y termina en `LOST`. Cada mensaje del lead reinicia la
+  cuenta, y `/stop` cancela todo lo pendiente. Un *job* que falla se reintenta 2 veces y luego queda en
+  `failed`; ninguno se ejecuta dos veces. Los tiempos se cambian con `SCHEDULER_*` (`.env.example`).
 - **Trazas por turno** hacia Phoenix sin texto de los leads (DT-18) y **logs JSON** en los 3 servicios
   (DT-27).
 - **Métricas del funnel**: una fila de `funnel_events` por transición real (DT-17).
@@ -233,9 +241,7 @@ Las cajas con borde punteado no están construidas.
 
 | Qué | Dónde está diseñado | Qué pasa hoy |
 | :--- | :--- | :--- |
-| *Scheduler* de *nurturing* (`DISCOVERY -> NURTURE -> LOST`) | DT-3, DT-12 | Las aristas `no_response` existen en la FSM y en sus tests, pero nada las dispara: ningún lead llega a `NURTURE` ni a `LOST` |
 | FAQ con embeddings | `FaqEntry` en §1, DT-7, `C-5` | La tabla y `pgvector` existen; no hay modelo de embeddings ni búsqueda |
-| Cancelar los *jobs* de un lead en `/stop` | `guardrails.md` §1 | No hay *jobs* que cancelar hasta que exista el *scheduler* |
 | *Claim* 6 completo (promoción genérica sin número) | `guardrails.md` §2.2, DT-26 | Solo se bloquea si trae un número inventado |
 | Gold sets y *contract tests* como *gate* de merge | `guardrails.md` §4, `OBS-4`, `OBS-5` | Corren en CI y un fallo deja el PR en rojo, pero nada impide hacer merge igual: ver §5.4 |
 | Plan B de observabilidad | `OBS-8`, DT-31 | Documentado y probado una vez: Jaeger recibe las trazas de `core` cambiando solo `OTEL_EXPORTER_OTLP_ENDPOINT`. No está en el compose, a propósito |
