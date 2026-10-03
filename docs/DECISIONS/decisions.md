@@ -1534,3 +1534,58 @@ defectos en la dimensión Authority, que llegaban a 6 pares con `xfail(strict=Tr
   señal con ella.
 - La aserción de banda del gold set sigue sin morder: el control está en 100 y todos los pares también
   (DT-35). Una fuga chica se ve en el total y en la dimensión, no en la banda.
+
+## DT-39 — Agendar la visita: la agenda del catálogo es el proveedor, y el código ofrece horarios numerados
+
+**Estado:** aceptada
+
+**Contexto.** `B-8` (#23) pide agendar la visita desde la conversación, con `get_slots` y `book` contra el
+asesor del lead, y un respaldo de "hora preferida" si el calendario no responde. DT-32 dejó a esta historia
+elegir el proveedor de calendario. Hasta ahora `SCHEDULE -> HANDOFF` lo disparaba la intención
+`agendar_visita` sin reservar nada, y `last_tool_results` se sobrescribía cada turno, así que la propiedad
+que el lead miró (por ejemplo, la del anuncio, #122) ya no se conocía cuando pedía la visita.
+
+**Decisión.**
+- **El proveedor es la agenda del catálogo** (`get_slots` y `book`, DT-32): horario fijo de lunes a sábado,
+  de 9:00 a 18:00, y las visitas en `visits`. No se integra un calendario externo.
+- **Lo decide el código, no el LLM** (`services/core/app/visits.py`). Al pedir la visita en `RECOMMEND`,
+  `core` pide el asesor con `assign_advisor(registered_only=true)`, como DT-33, y le ofrece al lead los
+  3 primeros horarios libres de los próximos 7 días, numerados. La oferta queda en `last_tool_results`
+  (`visit_offer`). En `SCHEDULE`, la respuesta del lead se lee con reglas: el número ("2", "la 2"), el
+  ordinal ("la segunda") o la hora en 24 horas ("16:00", "a las 16"). Si no elige exactamente uno, se le vuelven a
+  ofrecer. La respuesta de la agenda reemplaza la del agente en esos turnos.
+- **`SCHEDULE -> HANDOFF` lo dispara la visita resuelta**, no una intención (`trigger_for(...,
+  visit_settled=True)`). Resuelta es reservada con `book`, o con el horario preferido del lead. Una
+  reserva pasa `Lead.status` a `visit_scheduled`. El turno que la resuelve reinicia la racha de
+  frustración: "la 2" cae en `otro`.
+- **`book` va con `idempotency_key = <conversation_id>:<horario>`**: el reintento de un webhook o un "la 2"
+  repetido devuelven la misma visita. Con `SLOT_TAKEN` se ofrecen horarios nuevos.
+- **Respaldo de horario preferido.** Si la agenda no responde, no hay asesor con Telegram, no quedan
+  horarios, `book` falla por otro motivo o no se sabe qué propiedad visitar, se le pide al lead su día y
+  hora preferidos. El siguiente mensaje que mencione un día u hora ("mañana en la tarde", "el sábado") se
+  pasa al asesor en la ficha ("Horario preferido para la visita: ..."), con el motivo `visit_requested`.
+  Un "ok" no cuenta: se vuelve a preguntar.
+- **La propiedad de interés se arrastra** en `last_tool_results` (`property_of_interest`: id, título y
+  zona, sin `status`) mientras ningún turno traiga otra. El guardrail de factualidad (A-5) no la ve: usa
+  solo las tools del turno en curso. La tarjeta y la ficha del asesor ahora la muestran aunque el turno que
+  las dispara no la haya consultado.
+- La visita se muestra en la ficha en hora de Guadalajara.
+
+**Alternativas.**
+- Integrar Google Calendar u otro proveedor externo, descartada: necesita credenciales y cuentas de los
+  asesores y multiplica el esfuerzo de la historia. `get_slots` sigue siendo el punto donde se conectaría.
+- Que el LLM entienda la fecha en texto libre ("el martes en la tarde") y el código la valide contra
+  `get_slots`, descartada por ahora: depende del modelo y obliga a cambiar el prompt y el contrato de
+  clasificación. Las opciones numeradas son deterministas y se prueban sin Bedrock.
+- Publicar `get_slots` y `book` como tools del LLM, descartada por DT-32.
+- Guardar la propiedad de interés en una columna nueva, descartada para esta historia: necesita una
+  migración, y `N-4` (#144) va a guardar el interés por propiedad en su propia tabla.
+
+**Consecuencias.**
+- El camino feliz necesita un mensaje más en `SCHEDULE`. Los tests y el guion del arnés
+  `flujo_completo_hasta_handoff` responden con un horario. En los tests de `core` la agenda está caída
+  (`conftest.py`), así que toman el respaldo; la reserva real se prueba en `test_visits_turn.py` con una
+  agenda falsa que valida cada pedido contra el contrato.
+- Un lead en `SCHEDULE` que pregunta otra cosa recibe de nuevo los horarios, no la respuesta del agente.
+  Si insiste tres veces sin elegir, la racha de frustración lo pasa a un asesor (A-13).
+- Cancelar o mover una visita sigue fuera de alcance (DT-32).
