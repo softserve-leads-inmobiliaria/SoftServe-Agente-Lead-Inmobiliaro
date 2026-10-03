@@ -203,7 +203,7 @@ def test_the_persisted_signal_and_score_form_a_valid_fsm_state_contract(engine):
         state = StateStore(session).lock(uuid.UUID(chat.conversation_id), uuid.UUID(chat.lead_id))
     contract = state.to_contract()
     Draft202012Validator(_fsm_state_contract(), format_checker=FormatChecker()).validate(contract)
-    assert contract["score_signal"] == {"budget_hint": "presupuesto es 2 millones", "decision_maker": "solo",
+    assert contract["score_signal"] == {"budget_hint": "presupuesto es 2 millones", "decision_maker": "declarado",
                                         "urgency": "inmediata", "matching_properties": 1,
                                         "meets_requirements": None}
     assert contract["score"]["total"] == 10 + 20 + 20 + 20 and contract["score"]["band"] == "WARM"

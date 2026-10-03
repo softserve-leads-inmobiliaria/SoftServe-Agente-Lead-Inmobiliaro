@@ -97,11 +97,11 @@ def test_the_tool_config_follows_the_converse_shape():
 # --- clasificación -------------------------------------------------------------------------------------
 
 def test_classify_returns_the_intent_and_the_raw_signal():
-    client = ScriptedBedrock(classification("busqueda_propiedad", budget_hint="3 millones", decision_maker="solo",
+    client = ScriptedBedrock(classification("busqueda_propiedad", budget_hint="3 millones", decision_maker="declarado",
                                             urgency="inmediata"))
     result = run(llm(client).classify("Busco casa, decido yo"))
     assert result.intent == "busqueda_propiedad"
-    assert result.signal == {"budget_hint": "3 millones", "decision_maker": "solo", "urgency": "inmediata"}
+    assert result.signal == {"budget_hint": "3 millones", "decision_maker": "declarado", "urgency": "inmediata"}
 
 
 def test_classify_uses_the_light_model_with_no_randomness_and_only_the_last_assistant_message_as_context():

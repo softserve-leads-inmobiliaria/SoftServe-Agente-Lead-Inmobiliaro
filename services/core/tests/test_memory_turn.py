@@ -230,7 +230,7 @@ def test_a_deep_link_without_text_saves_only_the_reply(engine):
 
 def test_the_llm_reply_reaches_the_lead_and_drives_the_fsm_and_the_score(engine):
     client = ScriptedBedrock(classification("saludo"), text("¡Hola! ¿Qué buscas?"),
-                             classification("busqueda_propiedad", budget_hint="3 millones", decision_maker="solo",
+                             classification("busqueda_propiedad", budget_hint="3 millones", decision_maker="declarado",
                                             urgency="inmediata"),
                              tool_use("search_properties", {"zone": "Providencia"}),
                              text("Tengo una casa en Providencia."))

@@ -45,7 +45,7 @@ def test_budget(hint, points):
 
 # --- Authority --------------------------------------------------------------
 @pytest.mark.parametrize("dm,points", [
-    ("solo", 20), ("pareja", 20), ("familia", 20), ("no_declarado", 0),
+    ("declarado", 20), ("no_declarado", 0),
 ])
 def test_authority(dm, points):
     assert score_authority(dm)[0] == points
@@ -109,7 +109,7 @@ def test_empty_signal_is_cold_zero():
 
 def test_max_signal_is_hot_100():
     s = compute_score(signal(
-        budget_hint="2M", decision_maker="solo", urgency="inmediata",
+        budget_hint="2M", decision_maker="declarado", urgency="inmediata",
         matching_properties=5, meets_requirements=True,
     ))
     assert (s.total, s.band) == (100, "HOT")
@@ -117,7 +117,7 @@ def test_max_signal_is_hot_100():
 
 def test_total_is_sum_of_dimensions_and_band_matches():
     s = compute_score(signal(
-        budget_hint="1.5M", decision_maker="pareja", urgency="3_meses",
+        budget_hint="1.5M", decision_maker="declarado", urgency="3_meses",
         matching_properties=2, meets_requirements=None,
     ))
     assert (s.need_fit, s.budget, s.authority, s.timing, s.eligibility) == (10, 20, 20, 12, 0)
@@ -129,7 +129,7 @@ def test_each_dimension_has_a_reason():
 
 
 def test_is_deterministic():
-    sig = signal(budget_hint="1M", decision_maker="familia", urgency="explorando")
+    sig = signal(budget_hint="1M", decision_maker="declarado", urgency="explorando")
     assert compute_score(sig) == compute_score(sig)
 
 

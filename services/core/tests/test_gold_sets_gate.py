@@ -70,7 +70,7 @@ GOLD_SETS = (
         atributo="PAIRS",
         minimo=20,
         nota=(
-            "25 pares, todos con diferencia 0 desde A-11 (DT-38). El umbral es el conteo de pares; "
+            "27 pares, todos con diferencia 0 desde A-11 (DT-38). El umbral es el conteo de pares; "
             "la diferencia = 0 la vigila el propio gold set."
         ),
     ),

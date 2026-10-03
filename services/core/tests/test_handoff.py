@@ -52,7 +52,7 @@ def test_frustration_starts_exactly_at_the_threshold():
 
 QUALIFYING_SIGNALS = [
     {"budget_hint": "2.5 millones", "decision_maker": None, "urgency": None},
-    {"budget_hint": None, "decision_maker": "pareja", "urgency": None},
+    {"budget_hint": None, "decision_maker": "declarado", "urgency": None},
     {"budget_hint": None, "decision_maker": "no_declarado", "urgency": "3_meses"},
 ]
 EMPTY_SIGNALS = [

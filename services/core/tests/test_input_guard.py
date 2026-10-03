@@ -198,7 +198,16 @@ def test_deciding_with_ones_children_is_read_like_deciding_with_ones_parents():
     llm = FakeLLM()
     hijos = llm.extract_signal(inspect_input("Lo hablo con mis hijos").signal_text)
     padres = llm.extract_signal(inspect_input("Lo hablo con mis padres").signal_text)
-    assert hijos == padres and hijos["decision_maker"] == "familia"
+    assert hijos == padres and hijos["decision_maker"] == "declarado"
+
+
+@pytest.mark.parametrize("mention", ["mi esposa", "mi esposo", "mi marido", "mi mujer", "mi novia", "Mi Esposa"])
+def test_a_spouse_is_generalized_to_partner(mention):
+    """#119 (DT-40): "mi esposa" dice el estado civil; "mi pareja" conserva que la decisión se comparte."""
+    verdict = inspect_input(f"Lo hablo con {mention}, en tres meses")
+    assert verdict.protected_category
+    assert verdict.signal_text == "Lo hablo con mi pareja, en tres meses"
+    assert FakeLLM().extract_signal(verdict.signal_text)["decision_maker"] == "declarado"
 
 
 # --- general ------------------------------------------------------------------------------------
