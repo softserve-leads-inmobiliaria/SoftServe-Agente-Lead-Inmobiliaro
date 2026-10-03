@@ -225,6 +225,17 @@ Las cajas con borde punteado no están construidas.
   - Retorno por `utm_campaign`: leads, calificados y cierres.
   Las dos primeras toman los cierres del periodo; las dos últimas, los leads creados en él. Cada una
   excluye lo sintético salvo que se pida (`include_synthetic=True`), y ninguna devuelve un lead.
+- **Inventario y rotación** (`N-6`): `services/panel/app/inventory.py`, de solo lectura y sin vista
+  todavía (la arma `N-8`). Por periodo (`week_of`, `month_of` o un rango):
+  - Colocadas: operaciones de `deals`, por zona, tipo de propiedad y asesor.
+  - Días en el mercado, del primer `disponible` al cierre: mediana por zona y por tipo.
+  - Estancadas: `disponible` hace más de 30, 60 o 90 días desde su último paso a `disponible`, con sus
+    consultas y visitas del periodo ("sin consultas", "consultas sin visitas").
+  - Ranking por cierres, visitas y consultas, y las combinaciones de zona, tipo y recámaras más
+    buscadas sin resultado.
+  Consultas y visitas cuentan leads distintos de `property_interest`. Una propiedad sin historial de
+  estados no se puede medir: hoy es el caso del inventario del *seed*, hasta `N-9`. Cada consulta excluye
+  lo sintético salvo que se pida, y ninguna devuelve un lead.
 - **Scheduler de tareas diferidas** (`A-17`, DT-44): corre dentro de `core` y toma de `scheduled_jobs` los
   *jobs* vencidos. Hoy hace los seguimientos de *nurturing*. Con 24 horas de silencio en `DISCOVERY`, le
   envía al lead un seguimiento fijo, sin LLM. Tras 2 seguimientos sin respuesta, la conversación pasa a

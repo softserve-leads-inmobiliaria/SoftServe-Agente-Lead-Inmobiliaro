@@ -165,6 +165,6 @@ unas 75 h: cabe con poco margen. Si hay que recortar, se recorta §4 y §5 antes
 | §4 Para el asesor | [`A-16`](../STORIES/A-16.md) resumen, [`B-12`](../STORIES/B-12.md) SLA (P2) |
 | §5 Agenda real y recordatorio | `B-8` (ya existía), [`B-13`](../STORIES/B-13.md) recordatorio (P2) |
 | §5 Fotos y botones | [`B-10`](../STORIES/B-10.md) foto, [`B-11`](../STORIES/B-11.md) botones |
-| §5 Alertas y notas de voz | [`A-18`](../STORIES/A-18.md), [`B-14`](../STORIES/B-14.md) (P2) |
+| §5 Alertas y notas de voz | [`A-18`](../STORIES/A-18.md), [`B-14`](../STORIES/B-14.md) (P2, tarea futura: fuera del capstone) |
 | *Scheduler* (lo piden §3 y §5) | [`A-17`](../STORIES/A-17.md) (P2) |
 | §8 `need_fit` | [`A-15`](../STORIES/A-15.md) |

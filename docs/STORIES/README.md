@@ -83,7 +83,7 @@ El orden recomendado para avanzar las historias con 3 personas en paralelo, mini
 | [`B-11`](B-11.md) | Botones "Agendar visita" y "Hablar con un asesor" | P1 | 3 | 6h | B-8 |
 | [`B-12`](B-12.md) | SLA de atención del asesor | P2 | 2 | 4h | N-8 |
 | [`B-13`](B-13.md) | Recordatorio de la visita el día anterior | P2 | 1 | 2h | B-8, A-17 |
-| [`B-14`](B-14.md) | Notas de voz transcritas | P2 | 3 | 6h | — |
+| [`B-14`](B-14.md) | Notas de voz transcritas (tarea futura, fuera del capstone) | P2 | 3 | 6h | — |
 | [`B-15`](B-15.md) | Avisos al asesor en el panel, con Telegram opcional | P1 | 3 | 6h | — |
 
 ### E3 — Datos y conocimiento
