@@ -205,6 +205,26 @@ python harness/scripts/live_run.py            # 8/8 contra los 3 servicios, desd
   con otras palabras, así que no se exigen las frases fijas de los guiones, pero sí el contrato, que la
   respuesta no llegue vacía, el estado final y el panel. Cada turno espera hasta `HARNESS_HTTP_TIMEOUT`
   segundos (60 por defecto: con Bedrock un turno puede esperar cupo y reintentos).
+- **Con Bedrock, dar más espera de cupo a `core`.** La corrida manda turnos seguidos de 2 o 3 llamadas, y
+  con el límite local por defecto (10 por minuto, 15 s de espera, DT-19) el cupo se agota desde el segundo
+  guion: los turnos responden con el texto de respaldo y dejan un `warning` `LocalRateLimit` en el log.
+  Sin subir el límite, alcanza con dejar esperar más a cada turno (la corrida tarda unos 6 minutos):
+
+  ```
+  LLM_MAX_QUEUE_WAIT_SECONDS=60 docker compose up -d --wait core
+  HARNESS_HTTP_TIMEOUT=120 python harness/scripts/live_run.py --sin-frases
+  docker compose up -d --wait core          # al terminar, vuelve a los valores del .env
+  ```
+
+  Los estados finales esperados son los del agente *fake*. Con Bedrock, el modelo suele pedir la zona
+  antes de buscar: `saludo_y_busqueda` y `deep_link_solo_precio` pueden terminar en `QUALIFY`, y
+  `flujo_completo_hasta_handoff` en `SCHEDULE` (pide la visita sin haber visto una propiedad y queda
+  esperando su horario preferido). Con `--sin-frases` esos estados también se aceptan
+  (`ALSO_VALID_WITH_LLM` en `harness/scripts/expectations.py`), y el panel se comprueba con el estado al que
+  llegó. El modelo no siempre elige igual, así que dos corridas pueden diferir. Corridas del 3-oct: ningún
+  turno al texto de respaldo (#48).
+- Si el `panel` se publica en otro puerto (`PANEL_PORT` en el `.env`), pasarlo con `PANEL_URL`, por
+  ejemplo `PANEL_URL=http://127.0.0.1:8081`.
 - `CORE_URL`, `PANEL_URL` y `DATABASE_URL` (o `POSTGRES_*`) cambian a dónde apunta. Por defecto, al stack
   de `docker compose`.
 

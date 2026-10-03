@@ -30,7 +30,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from expectations import EXPECTED_FINAL_STATE  # noqa: E402
+from expectations import EXPECTED_FINAL_STATE, accepted_final_states  # noqa: E402
 from replay import (  # noqa: E402
     ROOT,
     RUN_ERRORS,
@@ -125,8 +125,11 @@ def run_script(path: Path, *, run_id: str, core_url: str, panel_url: str, engine
                                       {"l": event["lead_id"]}).scalar()
         token = connection.execute(text("SELECT access_token FROM advisors WHERE zone = :z ORDER BY id LIMIT 1"),
                                    {"z": run.zone}).scalar() if run.zone else None
-    if expected and run.final_state != expected:
+    accepted = accepted_final_states(run.name, real_llm=not check_replies)
+    if expected and run.final_state not in accepted:
         run.failures.append(f"estado final {run.final_state!r} en Postgres, se esperaba {expected!r}")
+    elif expected:
+        expected = run.final_state  # el panel tiene que mostrar el estado al que llegó, si es uno aceptado
     if run.zone and token is None:
         run.failures.append(f"no hay asesor para la zona {run.zone!r} (¿falta `docker compose run --rm seed`?)")
     elif run.zone:

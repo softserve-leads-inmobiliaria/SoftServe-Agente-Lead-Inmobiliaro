@@ -172,6 +172,9 @@ class BedrockLLM:
                 await self._limits.for_model(model_id).acquire(wait)
                 return await run_in_threadpool(self._client.converse, modelId=model_id, **request)
             except RateLimited as exc:
+                # El cupo local (DT-19) no se liberó a tiempo: sin esta línea, el turno caía al texto seguro
+                # sin dejar rastro en el log (lo encontró la corrida de OBS-6 con Bedrock).
+                _report_failure("LocalRateLimit", attempt, "local_rate_limit")
                 raise LLMError(str(exc)) from exc
             except (ClientError, BotoCoreError) as exc:
                 decision = self._retrier.decide(exc, attempt, budget)

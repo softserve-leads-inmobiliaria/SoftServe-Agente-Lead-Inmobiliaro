@@ -150,6 +150,7 @@ Las cajas con borde punteado no están construidas.
 | `Lead.zone` derivada de la propiedad que consulta el lead: el lead aparece en la cola del asesor de su zona y no en las demás | PR #82 |
 | Cola del panel priorizada por score (HOT arriba) y "tomar lead" que lo deja en `sql` (`B-6`) | PR #85 |
 | Dashboard del funnel (`B-9`): los conteos por etapa coinciden con la consulta de DT-17 en `psql` | PR #86 |
+| Conversaciones E2E contra los 3 servicios (`OBS-6`): con el agente *fake*, 8/8 guiones comprobados en Postgres y en la cola del panel, más una conversación manual por Telegram (deep-link, traspaso, `STOP`); con Bedrock (Haiku 4.5, 3-oct, `--sin-frases`), ningún turno al texto de respaldo. El modelo suele pedir la zona antes de buscar, así que algunos guiones terminan en `QUALIFY` o `SCHEDULE` en vez del estado del agente *fake*: caminos válidos que la corrida con el LLM real acepta | DT-43, #48 |
 | Llamadas reales a Bedrock con reintentos (`A-14`): ráfaga de 8 turnos, 36 `ThrottlingException` reintentadas, ningún turno cayó al texto de respaldo (Haiku 4.5, `us-east-1`) | DT-30 |
 | La conversación nueva tras un traspaso conserva el score del lead (#84): el caso se vio en vivo y quedó cubierto por un test | DT-29 |
 
@@ -225,7 +226,8 @@ Las cajas con borde punteado no están construidas.
   (DT-27).
 - **Métricas del funnel**: una fila de `funnel_events` por transición real (DT-17).
 - **Límite de tasa local** por modelo (DT-19). Con el valor por defecto (10 por minuto) corta las ráfagas
-  antes que los reintentos de DT-30: ver el final de esa entrada.
+  antes que los reintentos de DT-30: ver el final de esa entrada. Un turno que no consigue cupo responde
+  con el texto de respaldo y deja un `warning` `LocalRateLimit` en el log de `core`.
 
 ### 5.3 Diseñado pero no construido
 
@@ -236,7 +238,6 @@ Las cajas con borde punteado no están construidas.
 | Cancelar los *jobs* de un lead en `/stop` | `guardrails.md` §1 | No hay *jobs* que cancelar hasta que exista el *scheduler* |
 | *Claim* 6 completo (promoción genérica sin número) | `guardrails.md` §2.2, DT-26 | Solo se bloquea si trae un número inventado |
 | Gold sets y *contract tests* como *gate* de merge | `guardrails.md` §4, `OBS-4`, `OBS-5` | Corren en CI y un fallo deja el PR en rojo, pero nada impide hacer merge igual: ver §5.4 |
-| Conversaciones E2E contra el bot real | `OBS-6` | Corrida real hecha el 2-oct con el agente *fake*: 8/8 guiones contra `core`, `catalog` y `panel` en Docker, comprobados en Postgres y en la cola del asesor (`harness/scripts/live_run.py`, DT-43), más una conversación manual por Telegram (deep-link, traspaso con tarjeta al asesor, `STOP`). Falta la corrida con Bedrock (`--sin-frases`), que espera credenciales |
 | Plan B de observabilidad | `OBS-8`, DT-31 | Documentado y probado una vez: Jaeger recibe las trazas de `core` cambiando solo `OTEL_EXPORTER_OTLP_ENDPOINT`. No está en el compose, a propósito |
 
 ### 5.4 Límites conocidos de lo construido
