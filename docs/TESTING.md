@@ -183,9 +183,10 @@ bash scripts/demo/down.sh     # exporta las conversaciones a txt y apaga borrand
 
 - `up.sh` no levanta el arnés: sus guiones esperan el agente *fake* y con Bedrock fallan y gastan cupo.
   Tampoco crea leads de prueba, así que la cola del panel arranca vacía. Sí siembra la historia sintética
-  de N-9, que solo se ve en la vista de negocio. Al final imprime la URL del panel y el enlace de registro
-  de cada asesor (cambian en cada `seed`), la de la vista de negocio con la historia y el enlace del
-  anuncio para empezar como lead.
+  de N-9, que solo se ve en la vista de negocio. Al final imprime la URL del panel de cada asesor
+  (cambia en cada `seed`), la de la vista de negocio con la historia y el enlace del anuncio para
+  empezar como lead. También el enlace de Telegram de cada asesor, que es opcional: los avisos quedan en
+  el panel y el enlace solo agrega una copia al chat (DT-42).
 - `python scripts/demo/conversar.py [escenario ...]`: ensayo automático por `POST /events` contra el LLM
   del `.env` (deep-link hasta el asesor, búsqueda y recomendación, guardrails), con pausas para no pasar
   el cupo de 10 llamadas por minuto. Los avisos al asesor no salen por esta vía: solo por Telegram.
