@@ -2130,6 +2130,45 @@ de algún lado:
 - Los tests de canal que espían el turno parchean `telegram.process_turn_reply`.
 - B-11 usa el mismo `TurnReply` para decidir los botones.
 
+## DT-51 — Un botón de Telegram es un mensaje del lead con texto fijo, y solo se ofrece donde funciona
+
+**Estado:** propuesta (B-11, #137).
+
+**Contexto.** B-11 pone botones "Agendar visita" y "Hablar con un asesor" bajo la respuesta cuando el turno
+trata de una propiedad. Tocar un botón llega como `callback_query`, no como un mensaje de texto. Dos
+riesgos:
+- Un camino propio para el botón podría saltarse el guardrail de entrada, la FSM o el score, o pedir un
+  campo nuevo en el evento CT-1.
+- Pedir la visita solo arranca la reserva de B-8 en `RECOMMEND`. Después del *deep-link* el lead suele
+  estar en `DISCOVERY` o `QUALIFY`: ahí el texto "Quiero agendar una visita" recibe una respuesta genérica
+  y la FSM no se mueve.
+
+**Decisión.**
+- El canal traduce el botón al texto fijo "Quiero agendar una visita" o "Quiero hablar con un asesor", y
+  ese texto hace un turno normal por `reply_turn`. El evento CT-1 no cambia.
+- "Hablar con un asesor" sale siempre que el turno trata de una propiedad (la misma regla que la foto,
+  DT-50). "Agendar visita" sale solo si la conversación quedó en `RECOMMEND`.
+- Al tocarlo, el canal contesta el `callback_query` y quita el teclado de ese mensaje. Si Telegram no deja
+  quitarlo, el turno se responde igual.
+- La respuesta va al chat y no sobre el mensaje del botón, porque Telegram puede ya no entregar ese
+  mensaje.
+- Un segundo toque no duplica la reserva. En `SCHEDULE` el texto no trae horario y se vuelven a ofrecer.
+  Ya agendada, la conversación terminó en `HANDOFF`. `book` es idempotente por `idempotency_key` (B-8).
+
+**Alternativas.**
+- **Mostrar los dos botones en cualquier estado**, como decía la historia. Descartada: "Agendar visita"
+  antes de `RECOMMEND` respondería sin agendar, y en la demo parece un botón roto.
+- **Que "Agendar visita" lleve la conversación a `SCHEDULE` desde cualquier estado.** Descartada: es
+  cambiar la FSM de la sección 2 (track A) y saltarse la calificación que la precede.
+- **Un tipo de evento nuevo para los botones.** Descartada: cambia CT-1 (DT-8) y abre un camino que podría
+  no pasar por el guardrail de entrada.
+
+**Consecuencias.**
+- Con el agente *fake*, `RECOMMEND` se alcanza con búsquedas, no con una sola propiedad, así que
+  "Agendar visita" casi no aparece. Con Bedrock aparece cuando el agente consulta la ficha en `RECOMMEND`.
+- El bot tiene dos manejadores: uno para el texto y otro para los botones, filtrado por el
+  `callback_data` `lead:visita` / `lead:asesor`.
+
 ## DT-52 — Cerrar una operación: quién puede, en qué orden se escribe y a qué hora queda
 
 **Estado:** propuesta (N-3, #143).

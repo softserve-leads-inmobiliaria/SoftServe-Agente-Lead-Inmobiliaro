@@ -190,6 +190,9 @@ Las cajas con borde punteado no están construidas.
   *deep-link* o un `get_property` sin búsqueda), el bot manda su foto con el texto del turno como
   *caption*. Sin foto, con un texto que no cabe en un *caption* o si Telegram la rechaza, va solo el
   texto. Las fotos de la demo son URLs de Unsplash que siembra `seed_catalog.py`.
+- **Botones en Telegram** (`B-11`, DT-51): bajo una respuesta sobre una propiedad van "Hablar con un
+  asesor" y, en `RECOMMEND`, "Agendar visita". Tocar uno es lo mismo que escribir su texto fijo: pasa por
+  el guardrail de entrada, la FSM y el score, y el evento CT-1 no cambia.
 - **Ruteo del lead al asesor** (`A-10`, DT-33): la tarjeta y la ficha de traspaso van al asesor que
   elige la agenda, por zona, idioma y reparto por turnos, entre todos los asesores (DT-42). Si el
   catálogo no responde, se usa la regla local de `B-7`. Verificado en el stack con Docker llamando a
