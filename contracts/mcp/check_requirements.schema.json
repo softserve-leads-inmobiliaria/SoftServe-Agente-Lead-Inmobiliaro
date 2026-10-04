@@ -16,15 +16,16 @@
           "down_payment": {
             "type": "number",
             "minimum": 0,
-            "description": "Enganche disponible."
+            "description": "Enganche disponible, en pesos."
           },
           "monthly_income": {
             "type": "number",
             "minimum": 0,
-            "description": "Ingreso mensual declarado."
+            "description": "Ingreso mensual declarado, en pesos."
           },
           "has_references": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Si el lead puede dar referencias (las pide la renta)."
           }
         },
         "required": [
