@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Mapping
 
@@ -23,7 +24,7 @@ from app.channels import advisor_registration, canonical, consent, notifications
 from app.channels.identity import resolve_identity
 from app.channels.notifications import Sender
 from app.skeleton import Catalog
-from app.turn import Transition, process_turn
+from app.turn import Transition, process_turn_reply
 
 logger = logging.getLogger("core.channels.telegram")
 
@@ -34,12 +35,22 @@ ERROR_REPLY = "Perdona, tuve un problema para responderte. ¿Me lo puedes repeti
 SEND_RETRY_DELAYS: tuple[float, ...] = (1.0, 2.0)
 # Si Telegram pide esperar más que esto, no se reintenta: la respuesta ya llegaría fuera de contexto.
 MAX_RETRY_AFTER_SECONDS = 30.0
+# Tope de Telegram para el texto que acompaña una foto (en unidades UTF-16); un mensaje admite 4096.
+CAPTION_MAX_CHARS = 1024
 
 _ENGINE_KEY = "engine"
 _CATALOG_KEY = "catalog"
 _AGENT_KEY = "agent"
 
 _application: Application | None = None
+
+
+@dataclass(frozen=True)
+class ChannelReply:
+    """Lo que el canal le manda al lead: el texto que ya pasó los guardrails y, si el turno trata de
+    una propiedad con foto, su URL (B-10)."""
+    text: str
+    photo_url: str | None = None
 
 
 def _quiet_http_logs() -> None:
@@ -100,7 +111,7 @@ async def _on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
     text, deep_link = canonical.split_command(message.text or "")
     try:
-        reply = await reply_to(
+        reply = await reply_turn(
             context.application.bot_data[_ENGINE_KEY],
             context.application.bot_data[_CATALOG_KEY],
             telegram_user_id=str(user.id),
@@ -112,11 +123,34 @@ async def _on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     except Exception:
         # Un turno que falla no puede tumbar el polling ni dejar al lead sin respuesta.
         logger.exception("fallo al procesar un mensaje de Telegram")
-        reply = ERROR_REPLY
+        reply = ChannelReply(ERROR_REPLY)
     try:
-        await send_with_retry(lambda: message.reply_text(reply))
+        await send_reply(message, reply)
     except Exception:
         logger.exception("no se pudo enviar la respuesta por Telegram")
+
+
+async def send_reply(message: Any, reply: ChannelReply) -> None:
+    """Manda la respuesta al lead; con la foto de la propiedad como cabecera si la hay (B-10, DT-50).
+
+    El *caption* es el mismo texto que ya pasó los guardrails. Si no hay foto, si el texto no cabe en un
+    *caption* o si Telegram rechaza la foto (URL caída, formato), se manda solo el texto. Un `TimedOut`
+    no cae al texto: la foto pudo llegar y el lead recibiría la respuesta dos veces (#161).
+    """
+    if reply.photo_url and _utf16_len(reply.text) <= CAPTION_MAX_CHARS:
+        try:
+            await send_with_retry(lambda: message.reply_photo(reply.photo_url, caption=reply.text))
+            return
+        except TimedOut:
+            raise
+        except Exception:
+            logger.warning("no se pudo mandar la foto de la propiedad; va solo el texto", exc_info=True)
+    await send_with_retry(lambda: message.reply_text(reply.text))
+
+
+def _utf16_len(text: str) -> int:
+    # Telegram mide el texto en unidades UTF-16: un emoji fuera del plano básico cuenta como dos.
+    return len(text.encode("utf-16-le")) // 2
 
 
 async def send_with_retry(send: Callable[[], Awaitable[Any]],
@@ -157,19 +191,28 @@ async def reply_to(engine: Engine, catalog: Catalog, *, telegram_user_id: str, t
                    deep_link: str | None = None, timestamp: datetime | None = None,
                    agent: Agent | None = None, bot: Sender | None = None) -> str:
     """Un turno completo del canal, sin tipos de Telegram: es el punto de prueba del bot."""
+    reply = await reply_turn(engine, catalog, telegram_user_id=telegram_user_id, text=text,
+                             deep_link=deep_link, timestamp=timestamp, agent=agent, bot=bot)
+    return reply.text
+
+
+async def reply_turn(engine: Engine, catalog: Catalog, *, telegram_user_id: str, text: str,
+                     deep_link: str | None = None, timestamp: datetime | None = None,
+                     agent: Agent | None = None, bot: Sender | None = None) -> ChannelReply:
+    """Como `reply_to`, pero con lo que el canal arma alrededor del texto (la foto, B-10)."""
     # B-7: un asesor abriendo su enlace de registro no es un lead; no genera turno ni score.
     token = canonical.advisor_token(deep_link)
     if token is not None:
         advisor = await run_in_threadpool(advisor_registration.register, engine,
                                           access_token=token, chat_id=telegram_user_id)
-        return advisor_registration.reply_for(advisor)
+        return ChannelReply(advisor_registration.reply_for(advisor))
 
     identity = await run_in_threadpool(resolve_identity, engine, telegram_user_id)
 
     # B-2: la baja es determinista y corta antes del LLM.
     if consent.is_opt_out(text):
         await run_in_threadpool(consent.withdraw_consent, engine, identity.lead_id)
-        return consent.OPT_OUT_CONFIRMATION
+        return ChannelReply(consent.OPT_OUT_CONFIRMATION)
 
     # Se consulta antes del turno: `process_turn` marca actividad en la conversación.
     first_turn = await run_in_threadpool(consent.is_first_turn, engine, identity.conversation_id)
@@ -193,6 +236,8 @@ async def reply_to(engine: Engine, catalog: Catalog, *, telegram_user_id: str, t
             engine, handoff_event, transition.score.to_lead_score(str(identity.lead_id)),
             transition.after, transition.handoff_reason or "", bot if bot is not None else get_bot())
 
-    outbound = await process_turn(engine, event, catalog, agent, on_qualified, on_handoff)
-    reply = canonical.from_canonical(outbound)
-    return consent.with_privacy_notice(reply) if first_turn else reply
+    turn = await process_turn_reply(engine, event, catalog, agent, on_qualified, on_handoff)
+    reply = canonical.from_canonical(turn.outbound)
+    photo = turn.property.get("photo_url") if turn.property else None
+    return ChannelReply(consent.with_privacy_notice(reply) if first_turn else reply,
+                        photo if isinstance(photo, str) and photo else None)

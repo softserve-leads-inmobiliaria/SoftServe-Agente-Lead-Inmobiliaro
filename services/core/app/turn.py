@@ -78,6 +78,18 @@ class Transition:
     handoff_reason: str | None = None  # solo en el turno en que llegó a HANDOFF/HUMAN_HANDOFF (A-12)
 
 
+@dataclass(frozen=True)
+class TurnReply:
+    """El turno tal como lo ve el canal (B-10, DT-50): el evento CT-1 de salida y lo que no viaja en él.
+
+    `property` es la propiedad de la que trata el turno cuando es una sola (para la foto); `fsm_state`,
+    el estado en que quedó la conversación. El `POST /events` solo devuelve `outbound`: CT-1 no cambia.
+    """
+    outbound: dict[str, Any]
+    property: Mapping[str, Any] | None = None
+    fsm_state: str | None = None
+
+
 OnQualified = Callable[[Mapping[str, Any], "Transition"], Awaitable[None]]
 OnHandoff = Callable[[Mapping[str, Any], "Transition"], Awaitable[None]]
 
@@ -221,6 +233,22 @@ def _with_listing(result: AgentResult, listing: dict[str, Any], greet: bool) -> 
     return replace(result, tool_results=tool_results, text=listing_greeting(listing) if greet else result.text)
 
 
+def _featured_property(result: AgentResult, listing: Mapping[str, Any] | None, visit: VisitStep | None,
+                       replaced: bool) -> Mapping[str, Any] | None:
+    """La propiedad de la que trata la respuesta, si es una sola (B-10), o None.
+
+    Cuenta la del anuncio (*deep-link*) o la que consultó el agente con `get_property`, salvo que en
+    el mismo turno también haya buscado: entonces la respuesta habla de varias. No cuenta si el código
+    reemplazó la respuesta (agenda, alerta, traspaso a humano, frustración): ya no habla de la propiedad.
+    """
+    prop = result.tool_results.get("get_property")
+    if visit is not None or replaced or result.intent in HUMAN_INTENTS:
+        return None
+    if listing is None and "search_properties" in result.tool_results:
+        return None
+    return prop if isinstance(prop, Mapping) and prop.get("id") else None
+
+
 async def _visit_step(event: Mapping[str, Any], context: GuardContext, result: AgentResult,
                       text: str) -> VisitStep | None:
     """El paso de agenda de este turno (B-8), o None si el turno no tiene que ver con la visita.
@@ -273,7 +301,7 @@ def _lead_message(verdict: InputVerdict, original: str) -> list[SavedMessage]:
 
 async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, span: Any,
                     agent: Agent, on_qualified: OnQualified | None = None,
-                    on_handoff: OnHandoff | None = None) -> dict[str, Any]:
+                    on_handoff: OnHandoff | None = None) -> TurnReply:
     FakeCore().validate(event)  # evento incompleto o no inbound -> ValueError (422)
     with get_tracer().start_as_current_span("guardrail.input") as guard:
         verdict = inspect_input(event["text"])
@@ -289,10 +317,10 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     if verdict.opt_out:
         span.set_attribute("turn.outcome", "opt_out")
         await run_in_threadpool(withdraw, engine, event, audits)
-        return (await respond(event, catalog, intent="otro", text=OPT_OUT_REPLY)).outbound
+        return TurnReply((await respond(event, catalog, intent="otro", text=OPT_OUT_REPLY)).outbound)
     if context.consent_status == "withdrawn":
         span.set_attribute("turn.outcome", "withdrawn")
-        return (await respond(event, catalog, intent="otro", text=WITHDRAWN_REPLY)).outbound
+        return TurnReply((await respond(event, catalog, intent="otro", text=WITHDRAWN_REPLY)).outbound)
 
     span.set_attribute("turn.outcome", "out_of_domain" if verdict.out_of_domain
                        else "jailbreak" if verdict.jailbreak else "normal")
@@ -338,8 +366,9 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
                             tool_results=remember_property(result.tool_results, context.last_tool_results))
     streak = next_streak(context.unresolved_streak, result.intent, raw_signal=evidence.raw_signal,
                          resolved=visit is not None and visit.settled)
-    if (counts and context.fsm_state not in TERMINAL_STATES and result.intent not in HUMAN_INTENTS
-            and is_frustrated(streak)):
+    frustrated = (counts and context.fsm_state not in TERMINAL_STATES and result.intent not in HUMAN_INTENTS
+                  and is_frustrated(streak))
+    if frustrated:
         outbound["text"] = FRUSTRATION_REPLY  # esta racha dispara el traspaso: se le avisa al lead
 
     span.set_attributes({"turn.intent": result.intent, "turn.tools": sorted(result.tool_results),
@@ -371,12 +400,21 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
             await on_handoff(event, transition)
         except Exception:
             logger.exception("fallo al enviar la ficha del traspaso")
-    return outbound
+    replaced = frustrated or alerts.is_request(verdict.signal_text)  # la alerta (A-18) cambia la respuesta
+    featured = None if transition.after in TERMINAL_STATES else _featured_property(result, listing, visit, replaced)
+    return TurnReply(outbound, featured, transition.after)
 
 
 async def process_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog,
                        agent: Agent | None = None, on_qualified: OnQualified | None = None,
                        on_handoff: OnHandoff | None = None) -> dict[str, Any]:
+    """Un turno completo; devuelve el evento CT-1 de salida. Ver `process_turn_reply`."""
+    return (await process_turn_reply(engine, event, catalog, agent, on_qualified, on_handoff)).outbound
+
+
+async def process_turn_reply(engine: Engine, event: Mapping[str, Any], catalog: Catalog,
+                             agent: Agent | None = None, on_qualified: OnQualified | None = None,
+                             on_handoff: OnHandoff | None = None) -> TurnReply:
     """Un turno completo dentro de un span `turn`. El span no lleva el texto del mensaje.
 
     `on_qualified` se invoca, después del commit, solo en el turno en que el lead pasa a calificado

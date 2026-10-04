@@ -12,9 +12,10 @@ Las amenidades de estas propiedades están dentro del vocabulario cerrado de
 `services/core/app/promise_guard.py`: si aparece una amenidad fuera de las canónicas, el guardrail la
 marca como alucinación sobre una propiedad que sí la tiene.
 
-Idempotente: se puede correr en cada `docker compose up` sin duplicar. Ojo — `on_conflict_do_nothing`
-no actualiza filas que ya existen, así que este script siembra, no repara: para corregir un dato
-hay que editarlo en la base o tirar el volumen de datos.
+Idempotente: se puede correr en cada `docker compose up` sin duplicar. Ojo — una propiedad que ya
+existe no se actualiza, así que este script siembra, no repara: para corregir un dato hay que editarlo
+en la base o tirar el volumen de datos. La única excepción es `photo_url` (B-10): una base sembrada
+antes de que existieran las fotos la recibe, pero una foto que ya tiene la fila nunca se pisa.
 
 Uso:  python scripts/seed_catalog.py
 """
@@ -25,6 +26,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -52,10 +54,10 @@ def seed(engine=None) -> tuple[list[Property], list[Promotion]]:
     """Inserta el inventario que falte y devuelve las filas tal como quedaron en la base."""
     with session_scope(engine or get_engine()) as session:
         for prop in PROPERTIES:
-            session.execute(
-                insert(Property)
-                .values(**_to_row(prop))
-                .on_conflict_do_nothing(index_elements=["id"]))
+            row = insert(Property).values(**_to_row(prop))
+            session.execute(row.on_conflict_do_update(
+                index_elements=["id"],
+                set_={"photo_url": func.coalesce(Property.photo_url, row.excluded.photo_url)}))
         session.flush()
 
         for promo in PROMOTIONS:

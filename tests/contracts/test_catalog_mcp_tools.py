@@ -89,6 +89,17 @@ def test_get_property_requires_address_exact_key_nullable():
     assert "null" in out["properties"]["address_exact"]["type"]
 
 
+@pytest.mark.parametrize("photo", ["omitida", None, "https://images.unsplash.com/photo-1?w=1024"])
+def test_get_property_photo_url_is_optional_and_nullable(photo):
+    out = tool("get_property")["outputSchema"]
+    assert "photo_url" not in out["required"]
+    item = example("get_property", "output")
+    item.pop("photo_url", None)
+    if photo != "omitida":
+        item["photo_url"] = photo
+    validator(out).validate(item)
+
+
 def test_get_property_input_requires_lead_qualified():
     assert "lead_qualified" in tool("get_property")["inputSchema"]["required"]
 

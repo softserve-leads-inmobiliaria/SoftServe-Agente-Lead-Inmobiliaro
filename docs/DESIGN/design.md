@@ -186,6 +186,10 @@ Las cajas con borde punteado no están construidas.
 - **Visita agendada desde la conversación** (`B-8`, DT-39): al pedirla, el lead elige entre 3 horarios
   numerados de su asesor y `core` la reserva con `book`. Si la agenda no responde, el lead deja su horario
   preferido y el asesor lo ve en la ficha de traspaso.
+- **Foto de la propiedad en Telegram** (`B-10`, DT-50): cuando el turno trata de una sola propiedad (el
+  *deep-link* o un `get_property` sin búsqueda), el bot manda su foto con el texto del turno como
+  *caption*. Sin foto, con un texto que no cabe en un *caption* o si Telegram la rechaza, va solo el
+  texto. Las fotos de la demo son URLs de Unsplash que siembra `seed_catalog.py`.
 - **Ruteo del lead al asesor** (`A-10`, DT-33): la tarjeta y la ficha de traspaso van al asesor que
   elige la agenda, por zona, idioma y reparto por turnos, entre todos los asesores (DT-42). Si el
   catálogo no responde, se usa la regla local de `B-7`. Verificado en el stack con Docker llamando a
