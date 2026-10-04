@@ -23,7 +23,9 @@ _STAGES = text("""
     GROUP BY event_type
 """)
 
-_TOTAL_LEADS = text("SELECT count(*) FROM leads")
+# Sin los leads de la historia sintética (N-9): el funnel es de la operación real, y esos leads no tienen
+# conversaciones ni `funnel_events`.
+_TOTAL_LEADS = text("SELECT count(*) FROM leads WHERE NOT synthetic")
 
 # Tiempo hasta la primera respuesta del agente en cada conversación: mediana y p90, en segundos.
 _FIRST_RESPONSE = text("""
@@ -52,6 +54,7 @@ _BY_ZONE = text("""
            count(*) FILTER (WHERE l.status IN ('sql', 'visit_scheduled', 'closed_won')) AS managed
     FROM leads l
     LEFT JOIN lead_scores s ON s.lead_id = l.id
+    WHERE NOT l.synthetic
     GROUP BY coalesce(l.zone, 'sin zona')
     ORDER BY leads DESC, zone
 """)
@@ -66,6 +69,7 @@ _BY_ADVISOR = text("""
     FROM leads l
     LEFT JOIN advisors a ON a.id = l.advisor_id
     LEFT JOIN lead_scores s ON s.lead_id = l.id
+    WHERE NOT l.synthetic
     GROUP BY a.id, a.name, a.zone
     ORDER BY (a.id IS NULL), leads DESC, advisor
 """)

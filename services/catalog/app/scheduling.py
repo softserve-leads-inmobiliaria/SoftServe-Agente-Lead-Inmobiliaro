@@ -91,7 +91,9 @@ class SchedulingService:
                 return self._assignment(lead, _advisor(db, lead.advisor_id), "existing")
 
             zone = zone or lead.zone
-            load = (select(Lead.advisor_id, func.count().label("leads")).where(Lead.advisor_id.is_not(None))
+            # La historia sintética (N-9) no es carga: sus leads no los atiende nadie.
+            load = (select(Lead.advisor_id, func.count().label("leads"))
+                    .where(Lead.advisor_id.is_not(None), Lead.synthetic.is_(False))
                     .group_by(Lead.advisor_id).subquery())
             candidates = select(Advisor).outerjoin(load, load.c.advisor_id == Advisor.id)
             if registered_only:

@@ -196,8 +196,8 @@ Las cajas con borde punteado no están construidas.
 - **Esquema de inteligencia comercial** (`N-1`, migración `0008`): `property_status_events`, `deals`,
   `property_interest` y `unmet_searches`, más `leads.utm_campaign`, `properties.photo_url` y `synthetic`.
   `db/property_history.py` es la única vía para cambiar el estado de una propiedad. Hoy se escriben
-  `property_interest` (`N-4`), `unmet_searches` y `leads.utm_campaign` (`N-5`); `deals` y el historial de
-  estados esperan a `N-3` y `N-9`.
+  `property_interest` (`N-4`), `unmet_searches` y `leads.utm_campaign` (`N-5`). `deals` y el historial de
+  estados reales esperan a `N-3`; hoy solo los siembra la historia sintética de `N-9`.
 - **Interés del lead por propiedad** (`N-4`): cada turno guarda, en su misma transacción, las propiedades
   que el lead tocó: `anuncio` (el *deep-link*), `consulta` (`get_property`), `busqueda` (cada resultado de
   `search_properties`) y `visita` (la visita reservada). Sin texto del lead. Es la base de la atribución de
@@ -234,7 +234,7 @@ Las cajas con borde punteado no están construidas.
   - Ranking por cierres, visitas y consultas, y las combinaciones de zona, tipo y recámaras más
     buscadas sin resultado.
   Consultas y visitas cuentan leads distintos de `property_interest`. Una propiedad sin historial de
-  estados no se puede medir: hoy es el caso del inventario del *seed*, hasta `N-9`. Cada consulta excluye
+  estados no se puede medir: hoy es el caso del inventario del *seed* sin la historia de `N-9`. Cada consulta excluye
   lo sintético salvo que se pida, y ninguna devuelve un lead.
 - **Scheduler de tareas diferidas** (`A-17`, DT-44): corre dentro de `core` y toma de `scheduled_jobs` los
   *jobs* vencidos. Hoy hace los seguimientos de *nurturing*. Con 24 horas de silencio en `DISCOVERY`, le
@@ -279,6 +279,17 @@ Las cajas con borde punteado no están construidas.
   más repetidas, con el enlace a la vista de `N-8`. Usa las mismas consultas que el panel (`db/metrics/`).
   Solo agregados. Un reporte por semana y destinatario: si Telegram falla se reintenta, y una semana
   enviada no se repite. Sin chats configurados no se programa nada.
+- **Historia sintética para la demo** (`N-9`, DT-49): `scripts/seed_history.py` siembra seis meses, hasta
+  ayer, sobre el inventario de `C-9`: el historial de estados de cada propiedad, 6 cierres, unos 170 leads
+  con su puntaje, su toma por el asesor y su interés por propiedades, y búsquedas sin resultado. Todo con
+  `synthetic = true`.
+  - El historial de cada propiedad termina en el estado que ya tiene (`record_past`), así que el seed no
+    cambia el inventario. Una propiedad con historial real, o en otro estado, no se toca.
+  - Determinista e idempotente: semilla fija, y cada corrida borra la historia anterior y la vuelve a
+    sembrar. `--borrar` la quita sin tocar datos reales.
+  - Solo la ven las vistas agregadas con "Incluir historia de demo" (`N-8`) o con
+    `WEEKLY_REPORT_INCLUDE_SYNTHETIC=1` (`N-10`). La cola, la ficha, el funnel, el reparto de leads y las
+    alertas de propiedades nuevas la excluyen.
 - **Resumen del traspaso para el asesor** (`A-16`, DT-46): al llegar a `HANDOFF` o `HUMAN_HANDOFF`, el
   turno genera un resumen de la conversación: qué busca el lead, sus objeciones y el siguiente paso. Con
   Bedrock lo redacta el LLM; con el agente *fake*, una plantilla. Pasa por los guardrails de salida y no

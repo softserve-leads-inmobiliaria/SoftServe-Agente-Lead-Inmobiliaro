@@ -1905,8 +1905,9 @@ decidir cuatro cosas:
 
 **Consecuencias.**
 - Hoy ningún código de producción da de alta propiedades. El inventario sale del *seed*, que no deja
-  eventos, y la historia sintética de N-9 usa `record_listing` con fechas pasadas. Quien agregue el alta
-  de propiedades tiene que pasar por `db/property_history.py`, o las alertas no la verán.
+  eventos, y la historia sintética de N-9 escribe la suya con `record_past`; sus eventos no cuentan para
+  las alertas (DT-49). Quien agregue el alta de propiedades tiene que pasar por `db/property_history.py`,
+  o las alertas no la verán.
 - Con el agente *fake*, que busca sin filtros, la alerta nunca se ofrece; se ve con Bedrock.
 - Pendiente de verificar en vivo: buscar algo que no exista por Telegram, pedir la alerta y publicar una
   propiedad con `record_listing`.
@@ -2045,3 +2046,45 @@ agrandaba.
 - Un ajuste nuevo se agrega en el default del código y en `config/<servicio>.env`, no en `.env.example`.
 - El entorno que recibe cada contenedor no cambia: se comparó `docker compose config` antes y después.
 - Cambiar un ajuste para todo el equipo es un cambio en `config/`, con su PR.
+
+## DT-49 — La historia sintética de la demo no cambia el inventario y solo la ven las vistas agregadas
+
+**Estado:** propuesta (N-9, #149).
+
+**Contexto.** Sin historia, la vista de negocio (`N-8`) y el reporte semanal (`N-10`) salen en cero. `N-9`
+siembra seis meses sintéticos sobre las 12 propiedades reales de `C-9`. Dos problemas:
+- `set_status` parte del estado actual de la propiedad: no puede sembrar el alta como `disponible` de una
+  propiedad que hoy está `apartado` o `cerrado` sin cambiarla primero.
+- Los leads y eventos sintéticos viven en las mismas tablas que los reales, y varias consultas operativas
+  no miraban `synthetic`: la cola y la ficha del asesor, el funnel, el reparto de leads entre asesores
+  (cuenta su carga) y las alertas de propiedades nuevas (un "volvió a `disponible`" sembrado le habría
+  escrito a un lead real).
+
+**Decisión.**
+- `db/property_history.record_past` escribe el historial pasado de una propiedad sin cambiar su estado:
+  el último paso tiene que ser el estado que ya tiene. El seed sigue un guion fijo por propiedad que
+  termina en el estado del catálogo, así que no cambia el inventario.
+- Una propiedad con historial real, o en otro estado que el del guion, no se toca: la historia sembrada
+  podría contradecirla. Si era la de un cierre, el cierre y su lead tampoco se siembran.
+- Lo sintético solo existe para las vistas agregadas, y solo si se pide (`demo=1`,
+  `WEEKLY_REPORT_INCLUDE_SYNTHETIC=1`). La cola, la ficha, "marcar en gestión", el funnel, el reparto de
+  leads y las alertas lo excluyen.
+- Determinista e idempotente: semilla fija, ids de leads y cierres con `uuid5`, y fechas contadas hacia
+  atrás desde el día de la demo. Cada corrida borra lo sintético y lo vuelve a sembrar en una transacción.
+
+**Alternativas.**
+- **Propiedades sintéticas propias**, aparte del catálogo. Descartada: `properties` no tiene la marca, el
+  catálogo del bot las ofrecería a leads reales, y la demo hablaría de propiedades que el bot no conoce.
+- **Recorrer la historia con `set_status`**, forzando antes el estado inicial. Descartada: forzarlo sería
+  cambiar `Property.status` fuera de `db/property_history.py`, o dejar un evento falso (`apartado` →
+  `disponible`) como alta.
+- **Una base aparte para la demo.** Descartada: el panel y el bot tendrían que apuntar a otra base, y la
+  demo dejaría de mostrar la operación real junto a la historia.
+
+**Consecuencias.**
+- Una consulta nueva sobre `leads` o `property_status_events` que no sea una vista agregada tiene que
+  excluir `synthetic`.
+- La historia ocupa los días en que la demo corre: hay que volver a sembrarla el día de la demo para que
+  "la última semana" tenga algo (`scripts/demo/up.sh` lo hace).
+- `N-3` registrará cierres reales; una propiedad cerrada desde el panel tendrá historial real y el seed ya
+  no la tocará.

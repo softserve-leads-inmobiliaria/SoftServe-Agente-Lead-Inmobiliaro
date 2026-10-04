@@ -249,6 +249,21 @@ def test_a_property_back_to_available_is_announced(engine, zone):
     assert len(channel.sent) == 1 and property_id in channel.sent[0]
 
 
+def test_the_synthetic_history_never_makes_a_property_new(engine, zone):
+    # N-9 siembra eventos en propiedades reales; un "volvió a disponible" sembrado no es noticia para nadie.
+    property_id = _list(engine, zone, at=datetime.now(UTC) - timedelta(days=1))
+    with session_scope(engine) as session:
+        set_status(session, property_id, "apartado", "seed", at=datetime.now(UTC) - timedelta(hours=1))
+    lead = Lead(engine)
+    lead.search(zone)
+    lead.say("avísame")
+    with session_scope(engine) as session:
+        set_status(session, property_id, "disponible", "seed", synthetic=True)
+    channel = Channel()
+    _run(engine, channel)
+    assert channel.sent == []
+
+
 @pytest.mark.parametrize("listing", [{"price": 25000}, {"type_": "venta"}, {"status": "apartado"}])
 def test_a_property_outside_the_filters_is_not_announced(engine, zone, listing):
     _, _, channel = _alerted(engine, zone, **listing)

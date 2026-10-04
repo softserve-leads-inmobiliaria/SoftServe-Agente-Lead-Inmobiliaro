@@ -76,12 +76,13 @@ inventado y un lead de otra zona dan el mismo 404.
 
 La vista de inventario y negocio (N-8) está en `http://localhost:8080/panel/<token>/negocio`, enlazada desde
 el funnel. Sin cierres ni historial de estados cada sección dice "sin datos": para verla con datos hay que
-cargar la historia sintética de N-9 y marcar "Incluir historia de demo".
+sembrar la historia sintética de N-9 (ver "Historia sintética para la demo") y marcar "Incluir historia de
+demo".
 
 Tiempo de atención (B-12): un lead HOT que calificó hace más de `SLA_HOT_MINUTES` (30 por defecto) y que
 nadie marcó "en gestión" sale resaltado en la cola, con cuánto lleva esperando. Para verlo sin esperar,
 poner `SLA_HOT_MINUTES=1` en `.env` y reiniciar el panel. La mediana por asesor aparece en la vista de
-negocio una vez que alguien toma un lead calificado.
+negocio una vez que alguien toma un lead calificado, o con la historia de N-9 y "Incluir historia de demo".
 
 ### Avisos al asesor: en el panel, y por Telegram si lo registró (B-7, A-12, B-15)
 
@@ -181,9 +182,10 @@ bash scripts/demo/down.sh     # exporta las conversaciones a txt y apaga borrand
 ```
 
 - `up.sh` no levanta el arnés: sus guiones esperan el agente *fake* y con Bedrock fallan y gastan cupo.
-  Tampoco crea leads de prueba, así que la cola del panel arranca vacía. Al final imprime la URL del
-  panel y el enlace de registro de cada asesor (cambian en cada `seed`) y el enlace del anuncio para
-  empezar como lead.
+  Tampoco crea leads de prueba, así que la cola del panel arranca vacía. Sí siembra la historia sintética
+  de N-9, que solo se ve en la vista de negocio. Al final imprime la URL del panel y el enlace de registro
+  de cada asesor (cambian en cada `seed`), la de la vista de negocio con la historia y el enlace del
+  anuncio para empezar como lead.
 - `python scripts/demo/conversar.py [escenario ...]`: ensayo automático por `POST /events` contra el LLM
   del `.env` (deep-link hasta el asesor, búsqueda y recomendación, guardrails), con pausas para no pasar
   el cupo de 10 llamadas por minuto. Los avisos al asesor no salen por esta vía: solo por Telegram.
@@ -464,6 +466,43 @@ alucinación sobre una propiedad que sí la tiene: al agregar una propiedad, agr
 vocabulario en el mismo PR.
 
 `prop_00240` (estudio) también tiene `bedrooms: 0`, así que son tres propiedades sin recámaras, no dos.
+
+### Historia sintética para la demo (N-9)
+
+`scripts/seed_history.py` siembra seis meses, hasta ayer, sobre el inventario de C-9: el historial de
+estados de cada propiedad, 6 cierres, unos 170 leads (con su puntaje, su toma por el asesor y las
+propiedades que buscaron, consultaron o visitaron) y 90 búsquedas sin resultado. Necesita los asesores y
+el inventario, así que va después del servicio `seed`:
+
+```
+docker compose run --rm seed                                         # asesores e inventario
+docker compose run --rm seed python scripts/seed_history.py          # siembra, o vuelve a sembrar
+docker compose run --rm seed python scripts/seed_history.py --borrar # la borra sin tocar datos reales
+```
+
+- Todo lleva `synthetic = true`. Solo lo ven la vista de negocio con "Incluir historia de demo"
+  (`/panel/<token>/negocio?demo=1`) y el reporte semanal con `WEEKLY_REPORT_INCLUDE_SYNTHETIC=1`. La
+  cola, la ficha, el funnel, el reparto de leads y las alertas no lo ven (DT-49).
+- No cambia el inventario: el historial de cada propiedad termina en el estado que ya tiene. Una propiedad
+  con historial real, o en otro estado, no se toca, y el script lo dice.
+- Las fechas se cuentan hacia atrás desde hoy y cada corrida reemplaza la anterior, así que conviene
+  volver a sembrarla el día de la demo. `--hoy AAAA-MM-DD` fija el día. `up.sh` ya lo hace.
+- Los leads no tienen teléfono ni correo, su `telegram_user_id` empieza con `synthetic-` y no tienen
+  `funnel_events`, así que se pueden borrar.
+
+Qué se ve en la vista de negocio, con el periodo de los últimos seis meses:
+
+| Caso (propuestas.md §2.2) | Dónde |
+| :--- | :--- |
+| Zonas que rotan rápido | Rentas de Chapalita y Providencia: se rentan en menos de dos semanas |
+| Zonas que rotan lento | Tlaquepaque (venta) y Andares (preventa): meses en el mercado |
+| Estancada con consultas y sin visitas | `prop_00231`: se cayó el apartado y lleva más de 90 días disponible |
+| Estancada sin consultas | `prop_00232` (más de 30 días) y `prop_00233` (más de 90) |
+| Cierres atribuibles y no atribuibles al bot | 4 de los 6 cierres: el lead consultó o visitó esa propiedad con el bot |
+| Tiempo de atención por asesor (B-12) | Valeria toma en minutos, Camila en media hora y Andrés en horas |
+| Búsquedas sin resultado | Renta de 3 recámaras en Providencia, la más pedida ("providencia" se junta con "Providencia") |
+
+La última semana tiene al menos un cierre (una unidad de la preventa de Andares).
 
 ### Suite de transiciones de la FSM
 

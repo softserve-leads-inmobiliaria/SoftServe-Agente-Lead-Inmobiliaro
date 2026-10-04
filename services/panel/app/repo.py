@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import case, func, or_, select, update
+from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from db.models import AdvisorNotification, Conversation, Lead, LeadScore, Message, Visit
@@ -43,8 +43,9 @@ _BAND_RANK = case((LeadScore.band == "HOT", 0), (LeadScore.band == "WARM", 1),
 
 
 def _visible_to(advisor):
-    """Los leads que el asesor puede ver: los de su zona y los que tiene asignados."""
-    return or_(Lead.zone == advisor.zone, Lead.advisor_id == advisor.id)
+    """Los leads que el asesor puede ver: los de su zona y los que tiene asignados. Nunca los de la historia
+    sintética (N-9): solo existen para las vistas agregadas de la demo, no son gente a la que atender."""
+    return and_(or_(Lead.zone == advisor.zone, Lead.advisor_id == advisor.id), Lead.synthetic.is_(False))
 
 
 def leads_for_advisor(session: Session, advisor) -> list[LeadSummary]:

@@ -8,7 +8,8 @@
 #   1. Arranca el daemon de Docker si no responde (`docker desktop start`).
 #   2. Levanta core, panel y phoenix sin el arnés: sus guiones esperan el agente fake y con Bedrock
 #      fallan y gastan cupo.
-#   3. Corre el seed (asesores, propiedades y promociones), que `up` de esos servicios no ejecuta.
+#   3. Corre el seed (asesores, propiedades y promociones), que `up` de esos servicios no ejecuta, y
+#      siembra la historia sintética de seis meses (N-9) para la vista de negocio. La cola no la ve.
 #   4. Comprueba core, panel, catálogo y bot sin crear leads, para que la cola del panel quede limpia.
 #   5. Imprime la URL del panel y el enlace de registro de cada asesor (cambian en cada seed) y el
 #      enlace del anuncio para empezar la conversación.
@@ -66,6 +67,8 @@ fi
 
 echo "==> Seed: asesores e inventario de demo"
 docker compose --progress quiet run --rm --build seed >/dev/null
+echo "==> Historia sintética de seis meses para la vista de negocio (N-9)"
+docker compose --progress quiet run --rm seed python scripts/seed_history.py >/dev/null
 
 echo "==> Comprobaciones"
 wait_for "core (http://localhost:$CORE_PORT/health)" 120 curl -sf "http://localhost:$CORE_PORT/health"
@@ -106,6 +109,8 @@ echo
 if [[ -n "$bot" ]]; then
   echo "Lead, entrando por el anuncio: https://t.me/$bot?start=prop_00231"
 fi
+token=$(psql_value "select access_token from advisors order by id limit 1")
+echo "Negocio, con la historia demo: http://localhost:$PANEL_PORT/panel/$token/negocio?demo=1"
 echo "Trazas (Phoenix):              http://localhost:$PHOENIX_PORT"
 echo "Ensayo automático:             python scripts/demo/conversar.py"
 echo "Al terminar:                   bash scripts/demo/down.sh"
