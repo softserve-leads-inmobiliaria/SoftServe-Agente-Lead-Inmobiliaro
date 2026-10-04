@@ -2001,8 +2001,8 @@ es `db/`. Además, `N-2` (DT-41) no definió un rol de gerente, así que no hay 
   variable.
 
 **Consecuencias.**
-- `N-8` tiene que publicar su vista en `/panel/<token>/negocio`, o cambiar `BUSINESS_PATH` en
-  `services/core/app/weekly_report.py`.
+- La vista de `N-8` vive en `/panel/<token>/negocio`, la ruta de `BUSINESS_PATH` en
+  `services/core/app/weekly_report.py`. Si una de las dos cambia, hay que cambiar la otra.
 - Un reporte que falla tres veces queda en `failed` y esa semana no se reenvía sola.
 - Pendiente de verificar en vivo: poner un chat en `WEEKLY_REPORT_CHAT_IDS`, adelantar el `run_at` del
   plan pendiente y ver llegar el mensaje.
