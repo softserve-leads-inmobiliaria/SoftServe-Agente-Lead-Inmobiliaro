@@ -67,6 +67,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-leads_dev_password}
       POSTGRES_DB: ${POSTGRES_DB:-leads}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Minutos que un lead HOT puede esperar sin que nadie lo tome antes de marcarse en la cola (B-12).
+      SLA_HOT_MINUTES: ${SLA_HOT_MINUTES:-30}
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${PANEL_PORT:-8080}:8080"
     depends_on:

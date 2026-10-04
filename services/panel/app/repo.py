@@ -25,6 +25,7 @@ class LeadSummary:
     score_band: str | None
     last_message_at: datetime | None
     advisor_id: str | None = None
+    qualified_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -78,6 +79,7 @@ def leads_for_advisor(session: Session, advisor) -> list[LeadSummary]:
             score_band=score.band if score else None,
             last_message_at=conversation.last_message_at if conversation else None,
             advisor_id=lead.advisor_id,
+            qualified_at=lead.qualified_at,
         )
         for lead, conversation, score in rows
     ]
@@ -88,7 +90,7 @@ def claim_lead(session: Session, advisor, lead_id: uuid.UUID) -> bool:
 
     Devuelve False si el lead no existe o no lo puede ver (mismo 404 uniforme que la ficha).
     Idempotente: marcarlo dos veces no cambia nada. Si nadie lo tenía asignado, queda con quien
-    lo tomó; si B-7 ya lo asignó a otro, se respeta esa asignación.
+    lo tomó; si B-7 ya lo asignó a otro, se respeta esa asignación. Guarda cuándo se tomó (B-12).
     """
     exists = session.execute(
         select(Lead.id).where(Lead.id == lead_id, _visible_to(advisor))).scalar_one_or_none()
@@ -98,7 +100,7 @@ def claim_lead(session: Session, advisor, lead_id: uuid.UUID) -> bool:
         update(Lead)
         .where(Lead.id == lead_id, Lead.status.in_(("nuevo", "mql")))
         .values(status="sql", advisor_id=func.coalesce(Lead.advisor_id, advisor.id),
-                updated_at=func.now()))
+                claimed_at=func.coalesce(Lead.claimed_at, func.now()), updated_at=func.now()))
     return True
 
 

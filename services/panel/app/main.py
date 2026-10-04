@@ -28,6 +28,7 @@ from app.repo import (
     open_notice,
     unread_notices,
 )
+from app.sla import hot_wait_from_env, overdue
 from db.logging_config import configure_json_logging
 from db.models import Advisor
 from db.session import get_engine, session_scope
@@ -39,6 +40,7 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 NOT_FOUND = HTTPException(status_code=404, detail="No encontrado")
 REFRESH_SECONDS = 30  # los avisos no llegan solos al navegador: la página se recarga (B-15)
+SLA_HOT_WAIT = hot_wait_from_env()  # B-12: un valor inválido falla al arrancar
 
 
 def get_session() -> Session:
@@ -66,10 +68,15 @@ def health() -> dict[str, str]:
 
 @app.get("/panel/{advisor_token}", response_class=HTMLResponse)
 def leads_list(request: Request, advisor: CurrentAdvisor, session: DbSession) -> HTMLResponse:
+    now = datetime.now(UTC)
+    leads = leads_for_advisor(session, advisor)
     return templates.TemplateResponse(request, "leads_list.html", {
         "advisor": advisor,
         "token": advisor.access_token,
-        "leads": leads_for_advisor(session, advisor),
+        "leads": leads,
+        # B-12: los HOT sin tomar que pasaron el umbral, con cuánto llevan esperando.
+        "overdue": {lead.id: wait for lead in leads if (wait := overdue(lead, now, SLA_HOT_WAIT))},
+        "sla_minutes": int(SLA_HOT_WAIT.total_seconds() // 60),
         "unread": unread_notices(session, advisor),
     })
 

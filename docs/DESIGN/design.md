@@ -264,6 +264,15 @@ Las cajas con borde punteado no están construidas.
   muestra la última semana con un aviso. "Incluir historia de demo" suma lo sintético de `N-9`. Solo
   agregados: las estancadas y el ranking listan propiedades, nunca leads ni enlaces a una ficha. Con la
   base vacía, cada sección dice "sin datos". Enlazada desde el funnel y de vuelta.
+- **Tiempo de atención del asesor** (`B-12`): "Marcar en gestión" guarda la primera toma en
+  `leads.claimed_at` (migración `0014`). La vista de `N-8` muestra, por asesor, la mediana de `qualified_at`
+  a la toma (de todos los calificados y solo de los HOT), con `db/metrics/sla.py`.
+  - Cuenta los leads tomados en el periodo. El asesor es el del lead (`advisor_id`), aunque lo haya tomado
+    otro de la zona.
+  - No cuentan los tomados antes de calificar ni los que nunca se tomaron desde el panel, como los que
+    pasaron a `visit_scheduled` directo desde el bot.
+  - En la cola, un HOT sin tomar que calificó hace más de `SLA_HOT_MINUTES` (30 por defecto) se marca con
+    cuánto lleva esperando. Solo se marca: el aviso por Telegram queda fuera de B-12.
 - **Reporte semanal al gerente** (`N-10`, DT-47): cada lunes a las 9:00 (hora local), un *job* del
   *scheduler* le manda por Telegram a cada chat de `WEEKLY_REPORT_CHAT_IDS` lo de la semana anterior: las
   colocadas por zona, las estancadas de más de 60 días con su demanda y las tres búsquedas sin resultado

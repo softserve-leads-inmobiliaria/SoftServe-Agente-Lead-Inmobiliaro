@@ -76,6 +76,11 @@ La vista de inventario y negocio (N-8) está en `http://localhost:8080/panel/<to
 el funnel. Sin cierres ni historial de estados cada sección dice "sin datos": para verla con datos hay que
 cargar la historia sintética de N-9 y marcar "Incluir historia de demo".
 
+Tiempo de atención (B-12): un lead HOT que calificó hace más de `SLA_HOT_MINUTES` (30 por defecto) y que
+nadie marcó "en gestión" sale resaltado en la cola, con cuánto lleva esperando. Para verlo sin esperar,
+poner `SLA_HOT_MINUTES=1` en `.env` y reiniciar el panel. La mediana por asesor aparece en la vista de
+negocio una vez que alguien toma un lead calificado.
+
 ### Avisos al asesor: en el panel, y por Telegram si lo registró (B-7, A-12, B-15)
 
 El asesor recibe dos avisos, cada uno una sola vez por lead y en el turno exacto de la transición. Los dos
