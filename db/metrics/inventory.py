@@ -9,8 +9,10 @@ Reglas de conteo:
   el de la propiedad (`venta`, `renta`, `preventa`), igual en todas las consultas.
 - **Días en el mercado:** de la primera vez que la propiedad entró a `disponible` (`property_status_events`)
   al cierre. Una propiedad sin ese evento no se puede medir y no cuenta.
-- **Estancada:** `disponible` hoy, desde su último paso a `disponible`, hace más de 30, 60 o 90 días a la
-  fecha de corte (`as_of`). Una propiedad sin historial no se puede medir y no aparece: hoy es el caso del
+- **Estancada:** `disponible` a la fecha de corte (`as_of`), desde hace más de 30, 60 o 90 días. El estado al
+  corte es el del último evento de `property_status_events` hasta esa fecha, no el de hoy: el reporte semanal
+  corta el domingo anterior, y una propiedad que entonces estaba rentada no estaba estancada aunque hoy haya
+  vuelto al mercado (#177). Una propiedad sin historial no se puede medir y no aparece: hoy es el caso del
   inventario del *seed* sin la historia sintética de N-9, que es la única que lo tiene.
 - **Consultas** son leads distintos con `anuncio` o `consulta` en `property_interest`; **visitas**, leads
   distintos con `visita`. Se cuentan leads, no filas: la misma consulta en dos turnos es un lead (N-4).
@@ -65,11 +67,12 @@ _DAYS_ON_MARKET = """
     ORDER BY name
 """
 
+# El estado de cada propiedad al corte: su último evento hasta esa fecha.
 _STAGNANT = text("""
-    WITH since AS (
-        SELECT DISTINCT ON (e.property_id) e.property_id, e.changed_at, e.synthetic
+    WITH at_cutoff AS (
+        SELECT DISTINCT ON (e.property_id) e.property_id, e.to_status, e.changed_at
         FROM property_status_events e
-        WHERE e.to_status = 'disponible' AND e.changed_at <= :as_of
+        WHERE e.changed_at <= :as_of AND (:synthetic OR NOT e.synthetic)
         ORDER BY e.property_id, e.changed_at DESC, e.id DESC
     ),
     interest AS (
@@ -83,10 +86,9 @@ _STAGNANT = text("""
     SELECT p.id, p.title, p.zone, p.type, p.price, s.changed_at AS since,
            coalesce(i.inquiries, 0) AS inquiries, coalesce(i.visits, 0) AS visits
     FROM properties p
-    JOIN since s ON s.property_id = p.id
+    JOIN at_cutoff s ON s.property_id = p.id
     LEFT JOIN interest i ON i.property_id = p.id
-    WHERE p.status = 'disponible' AND s.changed_at <= :as_of - make_interval(days => :min_days)
-      AND (:synthetic OR NOT s.synthetic)
+    WHERE s.to_status = 'disponible' AND s.changed_at <= :as_of - make_interval(days => :min_days)
     ORDER BY s.changed_at, p.id
 """)
 

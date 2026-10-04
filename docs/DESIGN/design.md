@@ -229,8 +229,9 @@ Las cajas con borde punteado no están construidas.
   panel con `N-8`. Por periodo (`week_of`, `month_of` o un rango):
   - Colocadas: operaciones de `deals`, por zona, tipo de propiedad y asesor.
   - Días en el mercado, del primer `disponible` al cierre: mediana por zona y por tipo.
-  - Estancadas: `disponible` hace más de 30, 60 o 90 días desde su último paso a `disponible`, con sus
-    consultas y visitas del periodo ("sin consultas", "consultas sin visitas").
+  - Estancadas: `disponible` a la fecha de corte desde hace más de 30, 60 o 90 días, con sus consultas y
+    visitas del periodo ("sin consultas", "consultas sin visitas"). El estado es el del último evento hasta
+    el corte, no el de hoy: el reporte semanal corta en el pasado (#177).
   - Ranking por cierres, visitas y consultas, y las combinaciones de zona, tipo y recámaras más
     buscadas sin resultado.
   Consultas y visitas cuentan leads distintos de `property_interest`. Una propiedad sin historial de
