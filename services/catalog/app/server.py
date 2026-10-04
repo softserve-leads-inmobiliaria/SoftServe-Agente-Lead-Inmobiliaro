@@ -14,6 +14,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import CallToolResult, TextContent
+from mcp.types import Tool as MCPTool
 from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -38,20 +39,31 @@ def _ok_result(payload: dict[str, Any]) -> CallToolResult:
                           structuredContent=payload)
 
 
-def _input_validators() -> dict[str, Draft202012Validator]:
+def _input_schemas() -> dict[str, dict[str, Any]]:
     """El `inputSchema` de cada tool sale de contracts/mcp: el contrato es la única fuente de verdad."""
-    validators = {}
+    schemas = {}
     for path in (repo_root() / "contracts" / "mcp").glob("*.schema.json"):
         schema = json.loads(path.read_text(encoding="utf-8"))
         if "inputSchema" in schema:
-            validators[schema["name"]] = Draft202012Validator(schema["inputSchema"])
-    return validators
+            schemas[schema["name"]] = schema["inputSchema"]
+    return schemas
 
 
 class _CatalogMCP(FastMCP):
-    """Valida los argumentos contra el contrato y traduce los rechazos del SDK a `catalog_error`."""
+    """Publica y valida los argumentos con el contrato, y traduce los rechazos del SDK a `catalog_error`."""
 
-    _validators = _input_validators()
+    _schemas = _input_schemas()
+    _validators = {name: Draft202012Validator(schema) for name, schema in _schemas.items()}
+
+    async def list_tools(self) -> list[MCPTool]:
+        # El SDK deriva el esquema de la firma de Python, más laxo que el contrato: `lead_profile` saldría
+        # como un objeto cualquiera y el LLM no sabría qué campos pide `check_requirements` (#182). Se
+        # publica el mismo esquema contra el que se valida.
+        tools = await super().list_tools()
+        for tool in tools:
+            if tool.name in self._schemas:
+                tool.inputSchema = self._schemas[tool.name]
+        return tools
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
         validator = self._validators.get(name)
@@ -106,7 +118,10 @@ def create_mcp(service: CatalogService | None = None) -> FastMCP:
 
     @mcp.tool()
     def check_requirements(property_id: str, lead_profile: dict[str, Any]) -> Any:
-        """Verifica requisitos de compra/renta contra el perfil declarado del lead."""
+        """Verifica si el lead cumple los requisitos de compra o renta de una propiedad: enganche mínimo
+        (venta y preventa), ingreso mensual mínimo (renta) y referencias (renta). Úsala cuando el lead ya
+        dijo cuánto tiene de enganche o cuánto gana al mes. Los tres campos de lead_profile van siempre,
+        en pesos; si uno no aplica a esa operación o el lead no lo dijo, 0 o false."""
         return run(service.check_requirements, property_id=property_id, lead_profile=lead_profile)
 
     return mcp

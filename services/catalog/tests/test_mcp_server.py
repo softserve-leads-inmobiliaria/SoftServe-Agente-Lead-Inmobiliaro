@@ -67,6 +67,17 @@ def test_lists_the_five_tools_over_streamable_http(base_url):
     assert sorted(t.name for t in listed.tools) == sorted(TOOLS)
 
 
+def test_each_tool_publishes_the_input_schema_of_its_contract(base_url):
+    # #182: el esquema que deriva el SDK de la firma de Python es más laxo que el contrato. Con él, el LLM no
+    # sabía qué campos lleva `lead_profile` y cada `check_requirements` que intentaba se rechazaba.
+    listed = _with_session(base_url, lambda session: session.list_tools())
+    published = {t.name: t.inputSchema for t in listed.tools}
+    for tool in TOOLS:
+        assert published[tool] == _load(CONTRACTS / "mcp" / f"{tool}.schema.json")["inputSchema"], tool
+    profile = published["check_requirements"]["properties"]["lead_profile"]
+    assert profile["required"] == ["down_payment", "monthly_income", "has_references"]
+
+
 @pytest.mark.parametrize("tool", TOOLS)
 def test_valid_example_input_returns_a_contract_valid_output(base_url, tool):
     contract = _load(CONTRACTS / "mcp" / f"{tool}.schema.json")

@@ -143,6 +143,12 @@ def test_the_prompt_forbids_inferring_protected_categories():
     assert "origen, religión, género, nacionalidad" in CHAT_SYSTEM
 
 
+def test_the_prompt_asks_for_the_data_that_check_requirements_needs():
+    # #182: sin enganche, ingreso y referencias el LLM no puede llamar a check_requirements, y un lead que
+    # entra por el anuncio no pasa de 70 puntos (WARM).
+    assert all(word in CHAT_SYSTEM for word in ("enganche", "gana al mes", "referencias", "check_requirements"))
+
+
 # --- conversación y tool calling -----------------------------------------------------------------------
 
 def test_a_plain_reply_uses_the_chat_model_and_returns_the_text():
