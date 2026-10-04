@@ -11,7 +11,7 @@ Reglas de conteo:
   al cierre. Una propiedad sin ese evento no se puede medir y no cuenta.
 - **Estancada:** `disponible` hoy, desde su último paso a `disponible`, hace más de 30, 60 o 90 días a la
   fecha de corte (`as_of`). Una propiedad sin historial no se puede medir y no aparece: hoy es el caso del
-  inventario del *seed*, hasta que N-9 siembre su historia.
+  inventario del *seed* sin la historia sintética de N-9, que es la única que lo tiene.
 - **Consultas** son leads distintos con `anuncio` o `consulta` en `property_interest`; **visitas**, leads
   distintos con `visita`. Se cuentan leads, no filas: la misma consulta en dos turnos es un lead (N-4).
 

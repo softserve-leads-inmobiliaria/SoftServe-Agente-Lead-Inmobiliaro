@@ -4,7 +4,7 @@ Igual que test_migrations.py: base temporal migrada a `head`, y cada test dentro
 que se revierte. Sin Postgres se omiten; en CI (`REQUIRE_DB=1`) fallan.
 """
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -22,7 +22,13 @@ from db.models import (
     PropertyStatusEvent,
     UnmetSearch,
 )
-from db.property_history import StatusUnchanged, UnknownProperty, record_listing, set_status
+from db.property_history import (
+    StatusUnchanged,
+    UnknownProperty,
+    record_listing,
+    record_past,
+    set_status,
+)
 from db.testing import alembic_config, temporary_database
 
 
@@ -126,6 +132,45 @@ def test_record_listing_marks_the_start_without_changing_the_status(session):
     record_listing(session, "prop_n1", "seed")
     assert session.get(Property, "prop_n1").status == "disponible"
     assert _events(session, "prop_n1") == [(None, "disponible", "seed")]
+
+
+def test_record_past_writes_the_history_up_to_the_current_status(session):
+    _property(session, status="apartado")
+    start = datetime(2026, 4, 1, 17, tzinfo=UTC)
+    steps = [(start, "disponible"), (start + timedelta(days=9), "apartado"),
+             (start + timedelta(days=12), "cerrado"), (start + timedelta(days=90), "disponible"),
+             (start + timedelta(days=100), "apartado")]
+
+    events = record_past(session, "prop_n1", steps, "seed", synthetic=True)
+
+    assert session.get(Property, "prop_n1").status == "apartado"
+    assert _events(session, "prop_n1") == [(None, "disponible", "seed"), ("disponible", "apartado", "seed"),
+                                           ("apartado", "cerrado", "seed"), ("cerrado", "disponible", "seed"),
+                                           ("disponible", "apartado", "seed")]
+    assert [e.changed_at for e in events] == [at for at, _ in steps]
+    assert all(e.synthetic for e in events)
+
+
+@pytest.mark.parametrize("steps,error", [
+    ([], ValueError),
+    ([(datetime(2026, 4, 1, tzinfo=UTC), "apartado")], ValueError),  # no termina en el estado actual
+    ([(datetime(2026, 4, 1, tzinfo=UTC), "disponible"), (datetime(2026, 4, 2, tzinfo=UTC), "disponible")],
+     StatusUnchanged),
+    ([(datetime(2026, 4, 2, tzinfo=UTC), "apartado"), (datetime(2026, 4, 1, tzinfo=UTC), "disponible")],
+     ValueError),  # fuera de orden
+    ([(datetime(2026, 4, 1, tzinfo=UTC), "vendida"), (datetime(2026, 4, 2, tzinfo=UTC), "disponible")],
+     ValueError),
+])
+def test_record_past_rejects_a_history_that_does_not_fit(session, steps, error):
+    _property(session)
+    with pytest.raises(error):
+        record_past(session, "prop_n1", steps, "seed")
+    assert _events(session, "prop_n1") == []
+
+
+def test_record_past_rejects_an_unknown_property(session):
+    with pytest.raises(UnknownProperty):
+        record_past(session, "prop_no_existe", [(datetime(2026, 4, 1, tzinfo=UTC), "disponible")], "seed")
 
 
 # --- tablas nuevas ---------------------------------------------------------------------------------

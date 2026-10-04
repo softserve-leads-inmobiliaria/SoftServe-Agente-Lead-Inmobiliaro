@@ -2,11 +2,12 @@
 
 `set_status` es la única vía para cambiar `Property.status`: lo cambia y escribe su fila en
 `property_status_events` en la misma sesión, así el historial nunca queda desfasado del estado. La
-usan el cierre de operaciones del panel (N-3) y la historia sintética (N-9). No hace commit: la
-transacción es de quien llama.
+usa el cierre de operaciones del panel (N-3). La historia sintética (N-9) usa `record_past`, que escribe
+el pasado de una propiedad hasta el estado que ya tiene. No hace commit: la transacción es de quien llama.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -63,3 +64,36 @@ def record_listing(session: Session, property_id: str, actor: str, *,
     session.add(event)
     session.flush()
     return event
+
+
+def record_past(session: Session, property_id: str, steps: Sequence[tuple[datetime, str]], actor: str, *,
+                synthetic: bool = False) -> list[PropertyStatusEvent]:
+    """Escribe el historial pasado de una propiedad, del alta al estado que tiene hoy (N-9).
+
+    `steps` son `(fecha, estado)` en orden: el primero es el alta (`from_status` nulo) y cada uno de los
+    demás cambia de estado. No cambia `Property.status`: el último paso tiene que ser el estado actual, así
+    el historial termina donde está la propiedad. `set_status` no sirve para esto: parte del estado actual,
+    y una propiedad que hoy está `apartado` no puede sembrar un alta como `disponible`.
+    """
+    if not steps:
+        raise ValueError("el historial necesita al menos el alta")
+    prop = session.get(Property, property_id, with_for_update=True)
+    if prop is None:
+        raise UnknownProperty(property_id)
+    if steps[-1][1] != prop.status:
+        raise ValueError(f"{property_id} está en {prop.status!r}; el historial termina en {steps[-1][1]!r}")
+    events = []
+    previous: tuple[datetime, str] | None = None
+    for at, status in steps:
+        if status not in PROPERTY_STATUSES:
+            raise ValueError(f"estado desconocido: {status!r}")
+        if previous is not None and status == previous[1]:
+            raise StatusUnchanged(f"{property_id} ya está en {status!r} el {at:%Y-%m-%d}")
+        if previous is not None and at <= previous[0]:
+            raise ValueError("los pasos del historial tienen que ir en orden de fecha")
+        events.append(PropertyStatusEvent(property_id=property_id, from_status=previous and previous[1],
+                                          to_status=status, changed_at=at, actor=actor, synthetic=synthetic))
+        previous = (at, status)
+    session.add_all(events)
+    session.flush()
+    return events
