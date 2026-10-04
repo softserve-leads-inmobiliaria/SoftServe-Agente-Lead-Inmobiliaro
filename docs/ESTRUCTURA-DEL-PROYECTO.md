@@ -18,7 +18,8 @@ SoftServe-Agente-Lead-Inmobiliaro/
 ├── README.md                    # Qué es, dónde empezar a leer, cómo correr los tests
 ├── CONTRIBUTING.md              # Reglas de trabajo del equipo
 ├── docker-compose.yml           # Stack completo: postgres, phoenix, migrate, seed, catalog, core, panel, harness
-├── .env.example                 # Variables de entorno con sus defaults de desarrollo
+├── .env.example                 # Secretos y valores de cada máquina, con sus defaults de desarrollo
+├── config/                      # Ajustes del producto por servicio (core.env, panel.env), sin secretos (DT-48)
 ├── .dockerignore / .gitignore / .gitattributes
 ├── pyproject.toml               # Configuración de ruff y pytest
 ├── requirements-dev.txt         # Todo lo necesario para correr las suites en local y en CI
