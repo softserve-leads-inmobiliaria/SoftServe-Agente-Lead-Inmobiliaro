@@ -253,6 +253,7 @@ def test_the_form_marks_a_closed_property_and_does_not_let_it_be_picked(client, 
     ("price", "mucho", "tiene que ser un número"),
     ("price", "NaN", "tiene que ser un número"),
     ("price", "1e15", "demasiado alto"),
+    ("price", "1e30", "demasiado alto"),  # más dígitos de los que `quantize` puede redondear
     ("kind", "permuta", "renta o venta"),
     ("closed_on", "ayer", "no es válida"),
     ("closed_on", (date.today() + timedelta(days=2)).isoformat(), "no puede ser futura"),

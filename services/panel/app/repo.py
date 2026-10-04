@@ -280,11 +280,11 @@ def close_deal(session: Session, advisor, lead_id: uuid.UUID, closing: Closing, 
         price = None
     if price is None or not price.is_finite():
         raise ClosingRejected("El precio de cierre tiene que ser un número.")
-    price = price.quantize(Decimal("0.01"))
     if price < 0:
         raise ClosingRejected("El precio de cierre no puede ser negativo.")
-    if price > MAX_PRICE:
+    if price > MAX_PRICE:  # antes de redondear: `quantize` de un número enorme lanza InvalidOperation
         raise ClosingRejected("El precio de cierre es demasiado alto.")
+    price = price.quantize(Decimal("0.01"))
     try:
         closed_on = date.fromisoformat(closing.closed_on.strip())
     except (ValueError, AttributeError):
