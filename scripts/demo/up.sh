@@ -11,7 +11,7 @@
 #   3. Corre el seed (asesores, propiedades y promociones), que `up` de esos servicios no ejecuta, y
 #      siembra la historia sintética de seis meses (N-9) para la vista de negocio. La cola no la ve.
 #   4. Comprueba core, panel, catálogo y bot sin crear leads, para que la cola del panel quede limpia.
-#   5. Imprime la URL del panel y el enlace de registro de cada asesor (cambian en cada seed) y el
+#   5. Imprime la URL del panel de cada asesor (cambia en cada seed), su enlace opcional de Telegram y el
 #      enlace del anuncio para empezar la conversación.
 #
 # El puerto del panel sale de PANEL_PORT en el .env. Para apagar: bash scripts/demo/down.sh.
@@ -98,12 +98,13 @@ echo "==========================================================================
 echo " Listo para la demo (LLM: $LLM_PROVIDER)"
 echo "================================================================================"
 echo
-echo "Asesores: abrir el enlace de registro una vez desde Telegram, después el panel."
+echo "Asesores: trabajan desde el panel; los avisos de cada lead quedan en su sección Avisos (DT-42)."
+[[ -n "$bot" ]] && echo "Telegram es opcional: el enlace solo agrega una copia de cada aviso al chat de quien lo abra."
 echo
 while IFS='|' read -r id name zone token; do
   echo "  $id  $name ($zone)"
   echo "      panel:    http://localhost:$PANEL_PORT/panel/$token"
-  [[ -n "$bot" ]] && echo "      registro: https://t.me/$bot?start=adv_$token"
+  [[ -n "$bot" ]] && echo "      telegram: https://t.me/$bot?start=adv_$token   (opcional)"
 done < <(psql_value "select id, name, zone, access_token from advisors order by id")
 echo
 if [[ -n "$bot" ]]; then
