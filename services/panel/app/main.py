@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -20,8 +20,11 @@ from app.business import business_view, parse_period
 from app.funnel import funnel_report
 from app.inventory import LOCAL_TZ
 from app.repo import (
+    Closing,
+    ClosingRejected,
     as_context,
     claim_lead,
+    close_deal,
     lead_detail,
     leads_for_advisor,
     notices_for_advisor,
@@ -84,12 +87,19 @@ def leads_list(request: Request, advisor: CurrentAdvisor, session: DbSession) ->
 @app.get("/panel/{advisor_token}/leads/{lead_id}", response_class=HTMLResponse)
 def lead_card(request: Request, lead_id: uuid.UUID, advisor: CurrentAdvisor,
               session: DbSession) -> HTMLResponse:
+    return _lead_page(request, session, advisor, lead_id)
+
+
+def _lead_page(request: Request, session: Session, advisor: Advisor, lead_id: uuid.UUID, *,
+               closing: Closing | None = None, close_error: str | None = None) -> HTMLResponse:
     detail = lead_detail(session, advisor, lead_id)
     if detail is None:  # no existe, o es de otra zona: la misma respuesta para los dos
         raise NOT_FOUND
     return templates.TemplateResponse(request, "lead_detail.html", {
         "advisor": advisor, "token": advisor.access_token, **as_context(detail),
-    })
+        "today": datetime.now(UTC).astimezone(LOCAL_TZ).date().isoformat(),
+        "closing": closing, "close_error": close_error,
+    }, status_code=422 if close_error else 200)
 
 
 @app.get("/panel/{advisor_token}/funnel", response_class=HTMLResponse)
@@ -136,5 +146,22 @@ def notice(notice_id: uuid.UUID, advisor: CurrentAdvisor, session: DbSession) ->
 def take_lead(lead_id: uuid.UUID, advisor: CurrentAdvisor, session: DbSession) -> RedirectResponse:
     """"Marcar en gestión" (B-6). Vuelve a la ficha; 303 para que el navegador haga GET."""
     if not claim_lead(session, advisor, lead_id):
+        raise NOT_FOUND
+    return RedirectResponse(url=f"/panel/{advisor.access_token}/leads/{lead_id}", status_code=303)
+
+
+@app.post("/panel/{advisor_token}/leads/{lead_id}/cerrar", response_class=HTMLResponse)
+def close_operation(request: Request, lead_id: uuid.UUID, advisor: CurrentAdvisor, session: DbSession,
+                    property_id: Annotated[str, Form()] = "", kind: Annotated[str, Form()] = "",
+                    price: Annotated[str, Form()] = "", closed_on: Annotated[str, Form()] = ""):
+    """"Cerrar operación" (N-3). Vuelve a la ficha con un 303, como "Marcar en gestión"; si el formulario
+    no es válido, la ficha muestra el error y no se escribió nada."""
+    closing = Closing(property_id, kind, price, closed_on)
+    try:
+        closed = close_deal(session, advisor, lead_id, closing, now=datetime.now(UTC))
+    except ClosingRejected as error:
+        session.rollback()  # nada de un cierre rechazado llega al commit del request
+        return _lead_page(request, session, advisor, lead_id, closing=closing, close_error=str(error))
+    if not closed:
         raise NOT_FOUND
     return RedirectResponse(url=f"/panel/{advisor.access_token}/leads/{lead_id}", status_code=303)

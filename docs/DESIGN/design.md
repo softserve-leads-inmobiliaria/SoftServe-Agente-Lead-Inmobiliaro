@@ -199,11 +199,16 @@ Las cajas con borde punteado no están construidas.
   un canal adicional para el asesor que registró su chat.
 - **Panel de asesores** con ficha, etapa y transcripción (`B-5`), autenticado por token (DT-5). Cada
   asesor ve los leads de su zona y los que tiene asignados (DT-42).
+- **Cerrar operación desde la ficha** (`N-3`, DT-52): el asesor elige la propiedad (primero las que el lead
+  tocó, después las disponibles o apartadas de su zona), renta o venta, precio y fecha. En una
+  transacción quedan la fila en `deals`, el lead en `closed_won` y la propiedad en `cerrado` con su
+  evento. Una propiedad ya cerrada no se vuelve a cerrar, y un cierre rechazado no escribe nada.
 - **Esquema de inteligencia comercial** (`N-1`, migración `0008`): `property_status_events`, `deals`,
   `property_interest` y `unmet_searches`, más `leads.utm_campaign`, `properties.photo_url` y `synthetic`.
   `db/property_history.py` es la única vía para cambiar el estado de una propiedad. Hoy se escriben
   `property_interest` (`N-4`), `unmet_searches` y `leads.utm_campaign` (`N-5`). `deals` y el historial de
-  estados reales esperan a `N-3`; hoy solo los siembra la historia sintética de `N-9`.
+  estados reales los escribe "Cerrar operación" (`N-3`); la historia sintética de `N-9` siembra los suyos
+  aparte.
 - **Interés del lead por propiedad** (`N-4`): cada turno guarda, en su misma transacción, las propiedades
   que el lead tocó: `anuncio` (el *deep-link*), `consulta` (`get_property`), `busqueda` (cada resultado de
   `search_properties`) y `visita` (la visita reservada). Sin texto del lead. Es la base de la atribución de

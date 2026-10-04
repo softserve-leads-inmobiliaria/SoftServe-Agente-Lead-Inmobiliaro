@@ -1,4 +1,6 @@
 fastapi==0.141.1
 uvicorn==0.53.0
 jinja2==3.1.6
+# Formularios del panel: "Cerrar operación" (N-3). FastAPI lo necesita para leer `Form`.
+python-multipart==0.0.32
 -r ../../db/requirements.txt

@@ -3,14 +3,28 @@ general le puede asignar un lead de otra zona o sin zona, y su aviso tiene que l
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import date, datetime, time
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.orm import Session
 
-from db.models import AdvisorNotification, Conversation, Lead, LeadScore, Message, Visit
+from app.inventory import LOCAL_TZ
+from db.models import (
+    DEAL_KINDS,
+    AdvisorNotification,
+    Conversation,
+    Deal,
+    Lead,
+    LeadScore,
+    Message,
+    Property,
+    PropertyInterest,
+    Visit,
+)
+from db.property_history import StatusUnchanged, UnknownProperty, set_status
 
 
 @dataclass(frozen=True)
@@ -29,12 +43,44 @@ class LeadSummary:
 
 
 @dataclass(frozen=True)
+class PropertyOption:
+    """Una propiedad del selector de "Cerrar operación" (N-3)."""
+    id: str
+    title: str
+    type: str
+    status: str
+    touched: bool  # el lead la vio, consultó o visitó (`property_interest`)
+
+    @property
+    def closable(self) -> bool:
+        return self.status != "cerrado"
+
+    @property
+    def kind(self) -> str:
+        """El tipo de operación que sugiere la propiedad: una preventa se cierra como venta."""
+        return "renta" if self.type == "renta" else "venta"
+
+
+@dataclass(frozen=True)
+class DealRow:
+    """Una operación cerrada, como la muestra la ficha."""
+    closed_on: date
+    property_id: str
+    title: str
+    kind: str
+    price: Decimal
+    advisor_id: str
+
+
+@dataclass(frozen=True)
 class LeadDetail:
     lead: Lead
     score: LeadScore | None
     conversations: list[Conversation]
     visits: list[Visit]
     messages: list[Message]
+    deals: list[DealRow] = field(default_factory=list)
+    close_options: list[PropertyOption] = field(default_factory=list)
 
 
 # Orden de la cola (B-6): primero por calidad del lead, no por fecha de llegada.
@@ -133,6 +179,8 @@ def lead_detail(session: Session, advisor, lead_id: uuid.UUID) -> LeadDetail | N
         conversations=conversations,
         visits=visits,
         messages=messages,
+        deals=lead_deals(session, lead.id),
+        close_options=close_options(session, lead),
     )
 
 
@@ -142,7 +190,124 @@ def as_context(detail: LeadDetail) -> dict[str, Any]:
         "lead": detail.lead, "score": detail.score, "visits": detail.visits,
         "messages": detail.messages,
         "fsm_state": detail.conversations[-1].fsm_state if detail.conversations else None,
+        "deals": detail.deals,
+        "close_options": detail.close_options,
     }
+
+
+# --- cerrar operación (N-3) ------------------------------------------------------------------------
+
+MAX_PRICE = Decimal("999999999999.99")  # lo que cabe en `deals.price` (Numeric(14, 2))
+
+
+class ClosingRejected(ValueError):
+    """El cierre no se registró: el mensaje es para el asesor, en el formulario."""
+
+
+@dataclass(frozen=True)
+class Closing:
+    """Lo que el asesor llenó en el formulario, tal como llegó."""
+    property_id: str
+    kind: str
+    price: str
+    closed_on: str
+
+
+def close_options(session: Session, lead: Lead) -> list[PropertyOption]:
+    """El selector de "Cerrar operación": primero las propiedades que el lead tocó, la más reciente arriba
+    (en cualquier estado, para que el asesor vea si ya se cerró); después las `disponible` o `apartado`
+    de su zona."""
+    touched = (
+        select(PropertyInterest.property_id, func.max(PropertyInterest.created_at).label("last_seen"))
+        .where(PropertyInterest.lead_id == lead.id, PropertyInterest.synthetic.is_(False))
+        .group_by(PropertyInterest.property_id)
+        .subquery()
+    )
+    first = session.execute(
+        select(Property).join(touched, touched.c.property_id == Property.id)
+        .order_by(touched.c.last_seen.desc(), Property.id)
+    ).scalars().all()
+    rest: list[Property] = []
+    if lead.zone:
+        rest = session.execute(
+            select(Property)
+            .where(Property.zone == lead.zone, Property.status.in_(("disponible", "apartado")),
+                   Property.id.not_in([prop.id for prop in first]))
+            .order_by(Property.id)
+        ).scalars().all()
+    touched_ids = {prop.id for prop in first}
+    return [PropertyOption(prop.id, prop.title, prop.type, prop.status, touched=prop.id in touched_ids)
+            for prop in [*first, *rest]]
+
+
+def lead_deals(session: Session, lead_id: uuid.UUID) -> list[DealRow]:
+    """Las operaciones cerradas del lead, la más reciente primero. Nunca las de la historia sintética."""
+    rows = session.execute(
+        select(Deal, Property.title).join(Property, Property.id == Deal.property_id)
+        .where(Deal.lead_id == lead_id, Deal.synthetic.is_(False))
+        .order_by(Deal.closed_at.desc())
+    ).all()
+    return [DealRow(deal.closed_at.astimezone(LOCAL_TZ).date(), deal.property_id, title, deal.kind,
+                    deal.price, deal.advisor_id)
+            for deal, title in rows]
+
+
+def closing_time(closed_on: date, now: datetime) -> datetime:
+    """Cuándo se cerró: ahora si es hoy (hora local); si es un día pasado, a mediodía de ese día, para que
+    el alta de la propiedad (`disponible`) quede antes del cierre en los días en el mercado (N-6)."""
+    if closed_on == now.astimezone(LOCAL_TZ).date():
+        return now
+    return datetime.combine(closed_on, time(12), tzinfo=LOCAL_TZ)
+
+
+def close_deal(session: Session, advisor, lead_id: uuid.UUID, closing: Closing, *, now: datetime) -> bool:
+    """"Cerrar operación" (N-3): en la transacción del request, la fila en `deals`, el lead a `closed_won`
+    y la propiedad a `cerrado` por `db/property_history.py`, con el asesor como actor.
+
+    Devuelve False si el lead no existe o el asesor no lo puede ver (el mismo 404 que la ficha, DT-5).
+    Lanza `ClosingRejected` sin haber escrito nada si el formulario no es válido o la propiedad ya está
+    cerrada: el cambio de estado va primero y es lo único que puede fallar por la base.
+    """
+    lead = session.execute(
+        select(Lead).where(Lead.id == lead_id, _visible_to(advisor))).scalar_one_or_none()
+    if lead is None:
+        return False
+    if closing.kind not in DEAL_KINDS:
+        raise ClosingRejected("Elige si la operación es renta o venta.")
+    try:
+        price = Decimal(closing.price.strip().replace(",", ""))
+    except (InvalidOperation, AttributeError):
+        price = None
+    if price is None or not price.is_finite():
+        raise ClosingRejected("El precio de cierre tiene que ser un número.")
+    if price < 0:
+        raise ClosingRejected("El precio de cierre no puede ser negativo.")
+    if price > MAX_PRICE:  # antes de redondear: `quantize` de un número enorme lanza InvalidOperation
+        raise ClosingRejected("El precio de cierre es demasiado alto.")
+    price = price.quantize(Decimal("0.01"))
+    try:
+        closed_on = date.fromisoformat(closing.closed_on.strip())
+    except (ValueError, AttributeError):
+        raise ClosingRejected("La fecha de cierre no es válida.") from None
+    if closed_on > now.astimezone(LOCAL_TZ).date():
+        raise ClosingRejected("La fecha de cierre no puede ser futura.")
+    if closing.property_id not in {option.id for option in close_options(session, lead)}:
+        raise ClosingRejected("Esa propiedad no está entre las de este lead.")
+
+    closed_at = closing_time(closed_on, now)
+    try:
+        set_status(session, closing.property_id, "cerrado", actor=advisor.id, at=closed_at)
+    except StatusUnchanged:
+        raise ClosingRejected("Esa propiedad ya está cerrada: no se registró nada.") from None
+    except UnknownProperty:
+        raise ClosingRejected("Esa propiedad no está entre las de este lead.") from None
+    session.add(Deal(property_id=closing.property_id, lead_id=lead.id, advisor_id=advisor.id,
+                     kind=closing.kind, price=price, closed_at=closed_at))
+    session.execute(
+        update(Lead).where(Lead.id == lead.id)
+        .values(status="closed_won", advisor_id=func.coalesce(Lead.advisor_id, advisor.id),
+                updated_at=func.now()))
+    return True
 
 
 # --- avisos (B-15) ---------------------------------------------------------------------------------

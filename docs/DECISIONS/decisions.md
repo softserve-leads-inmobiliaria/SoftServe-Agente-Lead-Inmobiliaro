@@ -2129,3 +2129,42 @@ de algún lado:
   se puede cambiar por otra URL editando `photo_url` en la base.
 - Los tests de canal que espían el turno parchean `telegram.process_turn_reply`.
 - B-11 usa el mismo `TurnReply` para decidir los botones.
+
+## DT-52 — Cerrar una operación: quién puede, en qué orden se escribe y a qué hora queda
+
+**Estado:** propuesta (N-3, #143).
+
+**Contexto.** N-3 agrega "Cerrar operación" a la ficha del lead. La historia dice que solo cierra "el
+asesor de la zona del lead". Desde DT-42, el panel también le muestra el lead al asesor que lo tiene
+asignado, aunque sea de otra zona, y ese asesor ya puede "Marcar en gestión". Además, el formulario pide
+una fecha y no una hora, y las métricas de N-6 cuentan los días en el mercado desde un `disponible`
+anterior al cierre.
+
+**Decisión.**
+- Puede cerrar quien puede ver el lead: el asesor de su zona o el asignado (`_visible_to`, DT-42). Nunca
+  un lead sintético (DT-49). Cualquier otro caso es el mismo 404 que el resto del panel (DT-5).
+- **Orden de las escrituras.** Primero se valida el formulario y que la propiedad esté en el selector del
+  lead. Después se cambia la propiedad a `cerrado` con `set_status`, que bloquea su fila. Al final van la
+  fila en `deals` y el lead a `closed_won`. Si la propiedad ya estaba cerrada, `set_status` falla antes de
+  escribir nada. La ruta hace `rollback` y muestra el error en el formulario (422).
+- **Hora del cierre.** Si la fecha es hoy (hora local), se usa el momento del cierre. Si es un día pasado,
+  las 12:00 de ese día en hora local. El evento de la propiedad y la operación llevan el mismo instante.
+- **Selector.** Primero las propiedades que el lead tocó (`property_interest` no sintético), la más
+  reciente arriba y en cualquier estado: las cerradas aparecen marcadas y deshabilitadas. Después las
+  `disponible` o `apartado` de su zona. Solo se puede cerrar una propiedad de esa lista.
+- El panel lee formularios, así que su imagen instala `python-multipart`.
+
+**Alternativas.**
+- **Solo el asesor de la zona**, como decía la historia. Descartada: el asignado ve la ficha y la gestiona
+  (DT-42), pero recibiría 404 justo al cerrar su propio lead.
+- **Pedir también la hora del cierre.** Descartada: es un campo más para el asesor y las métricas solo
+  miran el día.
+- **Medianoche para las fechas pasadas.** Descartada: un alta hecha ese mismo día quedaría después del
+  cierre y la propiedad no contaría en los días en el mercado.
+
+**Consecuencias.**
+- Un lead puede tener más de una operación. La ficha las lista todas y el lead sigue en `closed_won`.
+- Un cierre del panel cuenta en `/negocio` y en el reporte semanal sin cambios: esas consultas ya leen
+  `deals` sin la marca sintética.
+- Una propiedad cerrada desde el panel ya tiene historial real, y la historia sintética de N-9 no la toca
+  (DT-49).

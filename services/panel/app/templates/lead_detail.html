@@ -12,7 +12,7 @@
     <dt>Estado</dt>
     <dd>
       <span class="pill pill-{{ lead.status }}">
-        {% if lead.status == "sql" %}en gestión{% elif lead.status == "mql" %}calificado{% else %}{{ lead.status }}{% endif %}
+        {% if lead.status == "sql" %}en gestión{% elif lead.status == "mql" %}calificado{% elif lead.status == "closed_won" %}operación cerrada{% else %}{{ lead.status }}{% endif %}
       </span>
       {% if lead.status in ("nuevo", "mql") %}
       <form class="inline" method="post" action="/panel/{{ token }}/leads/{{ lead.id }}/gestionar">
@@ -68,6 +68,78 @@
   </table>
   {% else %}
   <p class="muted">Sin visitas agendadas.</p>
+  {% endif %}
+</div>
+
+<div class="card" id="operacion">
+  <h2 style="font-size:15px;margin:0 0 12px">Operación</h2>
+  {% if deals %}
+  <table>
+    <thead><tr><th>Fecha</th><th>Propiedad</th><th>Tipo</th><th>Precio</th><th>Asesor</th></tr></thead>
+    <tbody>
+      {% for deal in deals %}
+      <tr>
+        <td>{{ deal.closed_on.strftime("%d/%m/%Y") }}</td>
+        <td>{{ deal.title }} <span class="muted">({{ deal.property_id }})</span></td>
+        <td>{{ deal.kind }}</td>
+        <td>${{ "{:,.2f}".format(deal.price) }}</td>
+        <td>{{ deal.advisor_id }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Sin operación cerrada.</p>
+  {% endif %}
+
+  {% if close_error %}<p class="error">{{ close_error }}</p>{% endif %}
+  {% if close_options %}
+  <details class="close"{% if close_error %} open{% endif %}>
+    <summary>Cerrar operación</summary>
+    <form class="close" method="post" action="/panel/{{ token }}/leads/{{ lead.id }}/cerrar">
+      <label>Propiedad
+        <select name="property_id" required>
+          <option value="" disabled{% if not closing %} selected{% endif %}>Elige la propiedad</option>
+          {% for touched, label in ((true, "Las que le interesaron al lead"), (false, "Disponibles en su zona")) %}
+          {% set group = close_options | selectattr("touched", "equalto", touched) | list %}
+          {% if group %}
+          <optgroup label="{{ label }}">
+            {% for option in group %}
+            <option value="{{ option.id }}" data-kind="{{ option.kind }}"
+                    {%- if not option.closable %} disabled{% endif %}
+                    {%- if closing and closing.property_id == option.id %} selected{% endif %}>
+              {{ option.title }} ({{ option.id }}) · {{ "ya cerrada" if not option.closable else option.status }}
+            </option>
+            {% endfor %}
+          </optgroup>
+          {% endif %}
+          {% endfor %}
+        </select>
+      </label>
+      <label>Tipo
+        <select name="kind" required>
+          <option value="" disabled{% if not closing %} selected{% endif %}>Renta o venta</option>
+          {% for kind in ("renta", "venta") %}
+          <option value="{{ kind }}"{% if closing and closing.kind == kind %} selected{% endif %}>{{ kind }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Precio de cierre
+        <input type="number" name="price" min="0" step="0.01" required value="{{ closing.price if closing else '' }}">
+      </label>
+      <label>Fecha de cierre
+        <input type="date" name="closed_on" max="{{ today }}" required value="{{ closing.closed_on if closing else today }}">
+      </label>
+      <button type="submit">Cerrar operación</button>
+    </form>
+  </details>
+  <script>
+    // Elegir la propiedad sugiere el tipo (una preventa se cierra como venta); el asesor lo puede cambiar.
+    document.querySelector('form.close select[name=property_id]').addEventListener('change', (event) => {
+      const kind = event.target.selectedOptions[0].dataset.kind;
+      if (kind) document.querySelector('form.close select[name=kind]').value = kind;
+    });
+  </script>
   {% endif %}
 </div>
 
