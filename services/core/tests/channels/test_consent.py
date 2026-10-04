@@ -65,13 +65,13 @@ def test_is_first_turn_solo_es_cierto_antes_del_primer_turno(engine):
 
 
 def test_la_baja_corta_antes_del_llm(engine, monkeypatch):
-    """El AC pide que el opt-out nunca dependa del modelo: `process_turn` no debe ejecutarse."""
+    """El AC pide que el opt-out nunca dependa del modelo: `process_turn_reply` no debe ejecutarse."""
     asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="tg-consent-3", text="hola"))
 
     async def no_debe_llamarse(*args, **kwargs):
         raise AssertionError("el opt-out no puede pasar por el turno del LLM")
 
-    monkeypatch.setattr(telegram, "process_turn", no_debe_llamarse)
+    monkeypatch.setattr(telegram, "process_turn_reply", no_debe_llamarse)
     reply = asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="tg-consent-3",
                                  text="STOP"))
 

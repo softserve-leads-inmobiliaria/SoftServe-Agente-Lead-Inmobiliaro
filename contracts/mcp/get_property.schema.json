@@ -79,6 +79,14 @@
           "null"
         ],
         "description": "null salvo que el input haya traído lead_qualified=true."
+      },
+      "photo_url": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uri",
+        "description": "Foto pública de la propiedad para el canal (B-10). Opcional: sin foto, el canal manda solo el texto. Nunca delata la dirección exacta (A-6)."
       }
     },
     "required": [

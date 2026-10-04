@@ -133,6 +133,7 @@ class CatalogService:
         }
 
         result["address_exact"] = prop.address_exact if lead_qualified else None
+        result["photo_url"] = prop.photo_url  # B-10: opcional; sin foto el canal manda solo el texto
 
         return result
 

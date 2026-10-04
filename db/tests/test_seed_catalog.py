@@ -7,7 +7,7 @@ import importlib.util
 from datetime import date
 
 import pytest
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, func, select, update
 
 from db.models import Promotion, Property
 from db.repo_root import repo_root
@@ -47,3 +47,20 @@ def test_seed_is_idempotent(engine):
 
     assert _count(engine, Property) == len(seed_catalog.PROPERTIES)
     assert _count(engine, Promotion) == len(seed_catalog.PROMOTIONS)
+
+
+def test_seed_fills_missing_photos_without_touching_anything_else(engine):
+    """B-10: una base sembrada antes de las fotos las recibe; el resto de la fila no se repara."""
+    seed_catalog.seed(engine)
+    with engine.begin() as connection:
+        connection.execute(update(Property).where(Property.id == "prop_00231")
+                           .values(photo_url=None, title="Editado a mano"))
+        connection.execute(update(Property).where(Property.id == "prop_00232")
+                           .values(photo_url="https://example.com/propia.jpg"))
+
+    props = {p.id: p for p in seed_catalog.seed(engine)[0]}
+
+    expected = {p["id"]: p["photo_url"] for p in seed_catalog.PROPERTIES}
+    assert props["prop_00231"].photo_url == expected["prop_00231"]
+    assert props["prop_00231"].title == "Editado a mano"
+    assert props["prop_00232"].photo_url == "https://example.com/propia.jpg"

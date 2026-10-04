@@ -57,6 +57,12 @@ def test_every_property_serializes_to_the_contract(service):
         # Probamos contra la BD real
         validator.validate(service.get_property(prop["id"], lead_qualified=True))
 
+def test_get_property_returns_the_photo_but_search_does_not(service):
+    # B-10: la foto viaja en la ficha; la búsqueda no la trae (su contrato no la admite).
+    prop = data.PROPERTIES[0]
+    assert service.get_property(prop["id"], lead_qualified=False)["photo_url"] == prop["photo_url"]
+    assert all("photo_url" not in p for p in service.search_properties()["properties"])
+
 def test_search_without_filters_returns_everything_without_exact_address(service):
     result = service.search_properties()
     output_validator("search_properties").validate(result)

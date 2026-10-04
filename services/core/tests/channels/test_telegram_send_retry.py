@@ -147,13 +147,13 @@ def test_the_stop_confirmation_arrives_after_a_transient_connection_error(engine
 
 def test_the_turn_is_not_repeated_when_the_send_is_retried(engine, waits, monkeypatch):
     turns = []
-    real = telegram.process_turn
+    real = telegram.process_turn_reply
 
     async def spy(*args, **kwargs):
         turns.append(1)
         return await real(*args, **kwargs)
 
-    monkeypatch.setattr(telegram, "process_turn", spy)
+    monkeypatch.setattr(telegram, "process_turn_reply", spy)
     message = FlakyMessage(NetworkError("caída"), NetworkError("caída"))
     dispatch(engine, message, user_id=931)
     assert len(turns) == 1 and len(message.replies) == 1 and message.attempts == 3

@@ -34,13 +34,13 @@ def test_un_mensaje_crea_el_lead_y_devuelve_respuesta(engine):
 
 def test_el_deep_link_de_propiedad_llega_al_turno(engine, monkeypatch):
     capturados: list[dict[str, Any]] = []
-    real_process_turn = telegram.process_turn
+    real_process_turn = telegram.process_turn_reply
 
     async def spy(engine_, event, catalog_, agent_=None, on_qualified=None, on_handoff=None):
         capturados.append(dict(event))
         return await real_process_turn(engine_, event, catalog_, agent_, on_qualified, on_handoff)
 
-    monkeypatch.setattr(telegram, "process_turn", spy)
+    monkeypatch.setattr(telegram, "process_turn_reply", spy)
     asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="tg-bot-2", text="",
                          deep_link="prop_00231"))
 

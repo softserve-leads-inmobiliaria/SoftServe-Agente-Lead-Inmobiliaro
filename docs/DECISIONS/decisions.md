@@ -2088,3 +2088,44 @@ siembra seis meses sintéticos sobre las 12 propiedades reales de `C-9`. Dos pro
   "la última semana" tenga algo (`scripts/demo/up.sh` lo hace).
 - `N-3` registrará cierres reales; una propiedad cerrada desde el panel tendrá historial real y el seed ya
   no la tocará.
+
+## DT-50 — La foto de la propiedad viaja del turno al canal fuera del evento CT-1
+
+**Estado:** propuesta (B-10, #136).
+
+**Contexto.** B-10 pide que el bot mande la foto de la propiedad con el texto del turno como *caption*
+cuando el turno trata de una sola propiedad. Hasta ahora el canal solo recibía el evento CT-1 de salida,
+que tiene `additionalProperties: false` y no dice de qué propiedad habló el turno. La foto tiene que salir
+de algún lado:
+- `get_property` no devolvía `photo_url`, aunque la columna existe desde N-1.
+- La foto la descarga Telegram desde una URL pública. El stack es local (DT-4) y no sirve archivos.
+
+**Decisión.**
+- `get_property` devuelve `photo_url` como campo opcional y nullable del contrato del catálogo.
+  `search_properties` no la trae: la foto solo acompaña la ficha de una propiedad.
+- `process_turn_reply` devuelve un `TurnReply`: el evento CT-1 de salida, la propiedad del turno y el
+  estado de la FSM. `process_turn` y `POST /events` siguen devolviendo solo el evento: CT-1 no cambia.
+- El turno trata de una sola propiedad cuando trae la del anuncio (*deep-link*) o cuando el agente llamó
+  `get_property` sin buscar en el mismo turno. No cuenta si el código reemplazó la respuesta: agenda, alerta,
+  traspaso a humano, frustración, o un turno que dejó la conversación en un estado terminal.
+- El canal manda la foto con `reply_photo` y, como *caption*, el mismo texto que habría mandado solo.
+  Cae al texto sin foto si no hay foto, si el texto pasa el tope de 1024 unidades UTF-16 de un *caption*,
+  o si Telegram rechaza la foto. Un `TimedOut` no cae al texto, por la misma razón que en #161: la foto
+  pudo llegar y el lead recibiría la respuesta dos veces.
+- Las fotos de la demo son URLs de Unsplash (uso libre). Son interiores, un terreno y un local por
+  dentro; ninguna muestra fachada ni número de calle (A-6). El seed completa `photo_url` en las bases ya
+  sembradas sin pisar una foto existente ni el resto de la fila.
+
+**Alternativas.**
+- **Agregar `photo_url` al evento CT-1 de salida.** Descartada: es un cambio de contrato (DT-8) que obliga
+  a todos los consumidores y al arnés a convivir con un campo que solo usa Telegram.
+- **Que el canal vuelva a consultar el catálogo.** Descartada: el canal tendría que adivinar de qué
+  propiedad habló el turno, y sería una segunda llamada al catálogo por mensaje.
+- **Fotos sintéticas dentro del repo, subidas como archivo.** Descartada: `photo_url` dejaría de ser una
+  URL, y el contrato y el seed tendrían que distinguir rutas locales de URLs.
+
+**Consecuencias.**
+- Sin acceso a Unsplash el bot sigue respondiendo, solo con el texto. Para una demo sin internet, la foto
+  se puede cambiar por otra URL editando `photo_url` en la base.
+- Los tests de canal que espían el turno parchean `telegram.process_turn_reply`.
+- B-11 usa el mismo `TurnReply` para decidir los botones.

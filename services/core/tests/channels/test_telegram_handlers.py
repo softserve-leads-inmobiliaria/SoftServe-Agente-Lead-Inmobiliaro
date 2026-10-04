@@ -126,13 +126,13 @@ def test_the_opt_out_leaves_an_audit_trail_like_the_one_the_core_writes(engine):
 
 def test_start_with_a_deep_link_sends_the_property_and_an_empty_text(engine, monkeypatch):
     seen = []
-    real = telegram.process_turn
+    real = telegram.process_turn_reply
 
     async def spy(engine_, event, catalog_, agent_=None, on_qualified=None, on_handoff=None):
         seen.append(dict(event))
         return await real(engine_, event, catalog_, agent_, on_qualified, on_handoff)
 
-    monkeypatch.setattr(telegram, "process_turn", spy)
+    monkeypatch.setattr(telegram, "process_turn_reply", spy)
     dispatch(engine, "/start prop_00231", user_id=914)
     assert seen[0]["text"] == "" and seen[0]["property_id"] == "prop_00231"
 
@@ -178,7 +178,7 @@ def test_a_failing_turn_answers_the_lead_instead_of_staying_silent(engine, monke
     async def broken(*args, **kwargs):
         raise RuntimeError("catálogo caído")
 
-    monkeypatch.setattr(telegram, "process_turn", broken)
+    monkeypatch.setattr(telegram, "process_turn_reply", broken)
     assert dispatch(engine, "Busco casa", user_id=919) == [ERROR_REPLY]
 
 
