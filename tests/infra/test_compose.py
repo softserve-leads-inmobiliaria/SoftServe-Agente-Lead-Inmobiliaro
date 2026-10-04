@@ -8,6 +8,15 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 COMPOSE = yaml.safe_load((ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
 SERVICES = COMPOSE["services"]
+CONFIG_FILES = sorted((ROOT / "config").glob("*.env"))
+# Nombres que delatan un secreto: nunca van en config/, que está versionado (#174).
+SECRET_HINTS = ("TOKEN", "PASSWORD", "SECRET", "KEY", "AWS_")
+
+
+def _assignments(path: Path) -> dict[str, str]:
+    """Las líneas CLAVE=valor de un archivo de entorno, sin comentarios ni líneas vacías."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return dict(line.split("=", 1) for line in lines if "=" in line and not line.lstrip().startswith("#"))
 
 
 def test_base_stack_has_postgres_observability_and_panel():
@@ -53,6 +62,37 @@ def test_env_example_documents_every_compose_variable():
         if "=" in line and not line.startswith("#")
     }
     assert used <= documented
+
+
+def test_each_service_config_file_exists():
+    """#174: los ajustes del producto van en config/<servicio>.env, cargado con env_file."""
+    referenced = {SERVICES[name]["env_file"] for name in SERVICES if "env_file" in SERVICES[name]}
+    assert referenced == {"config/core.env", "config/panel.env"}
+    assert {f"config/{path.name}" for path in CONFIG_FILES} == referenced
+
+
+@pytest.mark.parametrize("path", CONFIG_FILES, ids=lambda p: p.name)
+def test_config_values_keep_a_default_and_can_be_overridden(path):
+    """Cada valor es `${CLAVE:-valor}` con su misma CLAVE: sale de este archivo salvo que `.env` o la shell
+    la pisen (Compose interpola los env_file)."""
+    for name, value in _assignments(path).items():
+        assert re.fullmatch(rf"\$\{{{name}:-[^}}]+\}}", value), f"{name}={value}"
+
+
+@pytest.mark.parametrize("path", CONFIG_FILES, ids=lambda p: p.name)
+def test_config_files_hold_no_secrets(path):
+    for name in _assignments(path):
+        assert not any(hint in name for hint in SECRET_HINTS), name
+
+
+def test_each_variable_lives_in_one_place():
+    """Un ajuste en config/ no se repite en .env.example ni en `environment:`, que lo pisaría sin avisar."""
+    in_example = set(_assignments(ROOT / ".env.example"))
+    for path in CONFIG_FILES:
+        in_config = set(_assignments(path))
+        service = SERVICES[path.stem]
+        assert not in_config & in_example
+        assert not in_config & set(service.get("environment", {}))
 
 
 def test_e2e_skeleton_services_are_wired_in_order():
@@ -104,7 +144,7 @@ def test_core_uses_the_fake_llm_unless_told_otherwise():
     """A-2: sin credenciales el stack sigue funcionando; el LLM real se activa por variable de entorno."""
     env = SERVICES["core"]["environment"]
     assert env["LLM_PROVIDER"] == "${LLM_PROVIDER:-fake}"
-    assert env["LLM_RATE_LIMIT_PER_MINUTE"] == "${LLM_RATE_LIMIT_PER_MINUTE:-10}"
+    assert _assignments(ROOT / "config" / "core.env")["LLM_RATE_LIMIT_PER_MINUTE"] == "${LLM_RATE_LIMIT_PER_MINUTE:-10}"
     for name in ("BEDROCK_MODEL_ID_CHAT", "BEDROCK_MODEL_ID_CLASSIFIER", "AWS_ACCESS_KEY_ID"):
         assert env[name].endswith(":-}")  # sin valor por defecto: nunca hay un ID ni una credencial en el repo
 
