@@ -5,6 +5,7 @@ import asyncio
 from typing import Any
 
 from sqlalchemy import select
+from telegram.ext import CallbackQueryHandler, MessageHandler
 
 from app.channels import telegram
 from app.channels.consent import PRIVACY_NOTICE
@@ -64,4 +65,5 @@ def test_sin_token_el_bot_no_arranca(engine, monkeypatch):
 
 def test_la_aplicacion_registra_los_handlers(engine):
     application = build_application("123:fake-token", engine=engine, catalog=StubCatalog())
-    assert len(application.handlers[0]) == 1  # un solo manejador para todo texto, comandos incluidos
+    # Un solo manejador para todo texto, comandos incluidos, y otro para los botones de B-11.
+    assert [type(h) for h in application.handlers[0]] == [MessageHandler, CallbackQueryHandler]

@@ -15,16 +15,23 @@ from typing import Any, Awaitable, Callable, Mapping
 
 from sqlalchemy import Engine
 from starlette.concurrency import run_in_threadpool
-from telegram import Bot, Update
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest, NetworkError, RetryAfter, TimedOut
-from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageHandler, filters
+from telegram.ext import (
+    Application,
+    ApplicationBuilder,
+    CallbackQueryHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
 from app.agent import Agent
 from app.channels import advisor_registration, canonical, consent, notifications
 from app.channels.identity import resolve_identity
 from app.channels.notifications import Sender
 from app.skeleton import Catalog
-from app.turn import Transition, process_turn_reply
+from app.turn import Transition, TurnReply, process_turn_reply
 
 logger = logging.getLogger("core.channels.telegram")
 
@@ -38,6 +45,14 @@ MAX_RETRY_AFTER_SECONDS = 30.0
 # Tope de Telegram para el texto que acompaña una foto (en unidades UTF-16); un mensaje admite 4096.
 CAPTION_MAX_CHARS = 1024
 
+# B-11 (DT-51): cada botón se traduce a un mensaje del lead con texto fijo, que sigue el flujo normal
+# (guardrail de entrada, FSM y score) igual que si lo hubiera escrito.
+VISIT_BUTTON, ADVISOR_BUTTON = "visita", "asesor"
+BUTTON_LABELS: Mapping[str, str] = {VISIT_BUTTON: "Agendar visita", ADVISOR_BUTTON: "Hablar con un asesor"}
+BUTTON_TEXTS: Mapping[str, str] = {VISIT_BUTTON: "Quiero agendar una visita",
+                                   ADVISOR_BUTTON: "Quiero hablar con un asesor"}
+_BUTTON_PREFIX = "lead:"
+
 _ENGINE_KEY = "engine"
 _CATALOG_KEY = "catalog"
 _AGENT_KEY = "agent"
@@ -47,10 +62,11 @@ _application: Application | None = None
 
 @dataclass(frozen=True)
 class ChannelReply:
-    """Lo que el canal le manda al lead: el texto que ya pasó los guardrails y, si el turno trata de
-    una propiedad con foto, su URL (B-10)."""
+    """Lo que el canal le manda al lead: el texto que ya pasó los guardrails, la foto de la propiedad del
+    turno si la tiene (B-10) y los botones que van debajo (B-11)."""
     text: str
     photo_url: str | None = None
+    buttons: tuple[str, ...] = ()
 
 
 def _quiet_http_logs() -> None:
@@ -68,6 +84,8 @@ def build_application(token: str, *, engine: Engine, catalog: Catalog, agent: Ag
     application.bot_data[_CATALOG_KEY] = catalog
     application.bot_data[_AGENT_KEY] = agent
     application.add_handler(MessageHandler(filters.TEXT, _on_message))
+    application.add_handler(CallbackQueryHandler(
+        _on_button, pattern=rf"^{_BUTTON_PREFIX}({VISIT_BUTTON}|{ADVISOR_BUTTON})$"))
     return application
 
 
@@ -110,14 +128,38 @@ async def _on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if message is None or user is None:
         return
     text, deep_link = canonical.split_command(message.text or "")
+    await _answer(context, message, str(user.id), text, deep_link=deep_link, timestamp=message.date)
+
+
+async def _on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Un botón de B-11: se contesta como si el lead hubiera escrito su texto fijo."""
+    query = update.callback_query
+    user, chat = update.effective_user, update.effective_chat
+    if query is None or user is None or chat is None:
+        return
+    text = BUTTON_TEXTS.get((query.data or "").removeprefix(_BUTTON_PREFIX))
+    try:
+        await query.answer()  # quita el "cargando" del botón en el cliente
+        # Sin el teclado, un segundo toque no vuelve a pedir lo mismo.
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        logger.warning("no se pudo cerrar el botón de Telegram", exc_info=True)
+    if text is None:
+        return
+    # Se responde en el chat y no sobre el mensaje del botón: Telegram puede ya no entregarlo.
+    await _answer(context, _ChatReplier(chat), str(user.id), text)
+
+
+async def _answer(context: ContextTypes.DEFAULT_TYPE, target: Any, telegram_user_id: str, text: str, *,
+                  deep_link: str | None = None, timestamp: datetime | None = None) -> None:
     try:
         reply = await reply_turn(
             context.application.bot_data[_ENGINE_KEY],
             context.application.bot_data[_CATALOG_KEY],
-            telegram_user_id=str(user.id),
+            telegram_user_id=telegram_user_id,
             text=text,
             deep_link=deep_link,
-            timestamp=message.date,
+            timestamp=timestamp,
             agent=context.application.bot_data.get(_AGENT_KEY),
         )
     except Exception:
@@ -125,9 +167,22 @@ async def _on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         logger.exception("fallo al procesar un mensaje de Telegram")
         reply = ChannelReply(ERROR_REPLY)
     try:
-        await send_reply(message, reply)
+        await send_reply(target, reply)
     except Exception:
         logger.exception("no se pudo enviar la respuesta por Telegram")
+
+
+class _ChatReplier:
+    """`reply_text`/`reply_photo` sobre un chat, con la misma forma que un `Message`."""
+
+    def __init__(self, chat: Any) -> None:
+        self._chat = chat
+
+    async def reply_text(self, text: str, **kwargs: Any) -> Any:
+        return await self._chat.send_message(text, **kwargs)
+
+    async def reply_photo(self, photo: str, **kwargs: Any) -> Any:
+        return await self._chat.send_photo(photo, **kwargs)
 
 
 async def send_reply(message: Any, reply: ChannelReply) -> None:
@@ -137,15 +192,34 @@ async def send_reply(message: Any, reply: ChannelReply) -> None:
     *caption* o si Telegram rechaza la foto (URL caída, formato), se manda solo el texto. Un `TimedOut`
     no cae al texto: la foto pudo llegar y el lead recibiría la respuesta dos veces (#161).
     """
+    markup = {"reply_markup": keyboard(reply.buttons)} if reply.buttons else {}
     if reply.photo_url and _utf16_len(reply.text) <= CAPTION_MAX_CHARS:
         try:
-            await send_with_retry(lambda: message.reply_photo(reply.photo_url, caption=reply.text))
+            await send_with_retry(lambda: message.reply_photo(reply.photo_url, caption=reply.text, **markup))
             return
         except TimedOut:
             raise
         except Exception:
             logger.warning("no se pudo mandar la foto de la propiedad; va solo el texto", exc_info=True)
-    await send_with_retry(lambda: message.reply_text(reply.text))
+    await send_with_retry(lambda: message.reply_text(reply.text, **markup))
+
+
+def keyboard(buttons: tuple[str, ...]) -> InlineKeyboardMarkup:
+    """Los botones de B-11, uno por fila para que el texto completo quepa en un teléfono."""
+    return InlineKeyboardMarkup([[InlineKeyboardButton(BUTTON_LABELS[button],
+                                                       callback_data=_BUTTON_PREFIX + button)]
+                                 for button in buttons])
+
+
+def buttons_for(turn: TurnReply) -> tuple[str, ...]:
+    """Los botones bajo la respuesta (B-11, DT-51): solo si el turno trata de una propiedad.
+
+    "Agendar visita" solo cuando la FSM queda en `RECOMMEND`, el único estado en que pedir la visita
+    arranca la reserva (B-8): en otro, el botón contestaría algo genérico sin agendar nada.
+    """
+    if turn.property is None:
+        return ()
+    return (VISIT_BUTTON, ADVISOR_BUTTON) if turn.fsm_state == "RECOMMEND" else (ADVISOR_BUTTON,)
 
 
 def _utf16_len(text: str) -> int:
@@ -199,7 +273,7 @@ async def reply_to(engine: Engine, catalog: Catalog, *, telegram_user_id: str, t
 async def reply_turn(engine: Engine, catalog: Catalog, *, telegram_user_id: str, text: str,
                      deep_link: str | None = None, timestamp: datetime | None = None,
                      agent: Agent | None = None, bot: Sender | None = None) -> ChannelReply:
-    """Como `reply_to`, pero con lo que el canal arma alrededor del texto (la foto, B-10)."""
+    """Como `reply_to`, pero con lo que el canal arma alrededor del texto (la foto y los botones)."""
     # B-7: un asesor abriendo su enlace de registro no es un lead; no genera turno ni score.
     token = canonical.advisor_token(deep_link)
     if token is not None:
@@ -240,4 +314,4 @@ async def reply_turn(engine: Engine, catalog: Catalog, *, telegram_user_id: str,
     reply = canonical.from_canonical(turn.outbound)
     photo = turn.property.get("photo_url") if turn.property else None
     return ChannelReply(consent.with_privacy_notice(reply) if first_turn else reply,
-                        photo if isinstance(photo, str) and photo else None)
+                        photo if isinstance(photo, str) and photo else None, buttons_for(turn))

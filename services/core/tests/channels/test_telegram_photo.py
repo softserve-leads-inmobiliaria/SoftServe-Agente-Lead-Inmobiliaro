@@ -135,14 +135,17 @@ class FakeMessage:
         self.photo_error = photo_error
         self.photos: list[tuple[str, str]] = []
         self.replies: list[str] = []
+        self.markups: list[Any] = []
 
-    async def reply_photo(self, photo, caption=None):
+    async def reply_photo(self, photo, caption=None, reply_markup=None):
         if self.photo_error is not None:
             raise self.photo_error
         self.photos.append((photo, caption))
+        self.markups.append(reply_markup)
 
-    async def reply_text(self, value):
+    async def reply_text(self, value, reply_markup=None):
         self.replies.append(value)
+        self.markups.append(reply_markup)
 
 
 def test_with_photo_the_text_goes_as_caption():
