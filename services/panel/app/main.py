@@ -6,6 +6,7 @@ nunca 401/403, para que el código de estado no revele si un token o un lead exi
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -15,7 +16,9 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.auth import resolve_advisor
+from app.business import business_view, parse_period
 from app.funnel import funnel_report
+from app.inventory import LOCAL_TZ
 from app.repo import (
     as_context,
     claim_lead,
@@ -87,6 +90,19 @@ def funnel(request: Request, advisor: CurrentAdvisor, session: DbSession) -> HTM
     """Dashboard del funnel (B-9): global, lo ve cualquier asesor con token válido."""
     return templates.TemplateResponse(request, "funnel.html", {
         "advisor": advisor, "token": advisor.access_token, "report": funnel_report(session),
+    })
+
+
+@app.get("/panel/{advisor_token}/negocio", response_class=HTMLResponse)
+def business(request: Request, advisor: CurrentAdvisor, session: DbSession, periodo: str | None = None,
+             desde: str | None = None, hasta: str | None = None, demo: bool = False) -> HTMLResponse:
+    """Inventario y negocio (N-8): global como el funnel (DT-41), solo agregados. `demo` suma la historia
+    sintética de N-9."""
+    now = datetime.now(UTC)
+    period = parse_period(periodo, desde, hasta, today=now.astimezone(LOCAL_TZ).date())
+    return templates.TemplateResponse(request, "negocio.html", {
+        "advisor": advisor, "token": advisor.access_token,
+        "view": business_view(session, period, now=now, include_synthetic=demo),
     })
 
 

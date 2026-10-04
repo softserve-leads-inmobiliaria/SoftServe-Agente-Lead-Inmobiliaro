@@ -72,6 +72,10 @@ primera propiedad que el lead consulta (#81; el ruteo por zona al asesor es A-10
 pasar por una búsqueda, asignar la zona a mano (`update leads set zone='Providencia' where ...`). Un token
 inventado y un lead de otra zona dan el mismo 404.
 
+La vista de inventario y negocio (N-8) está en `http://localhost:8080/panel/<token>/negocio`, enlazada desde
+el funnel. Sin cierres ni historial de estados cada sección dice "sin datos": para verla con datos hay que
+cargar la historia sintética de N-9 y marcar "Incluir historia de demo".
+
 ### Avisos al asesor: en el panel, y por Telegram si lo registró (B-7, A-12, B-15)
 
 El asesor recibe dos avisos, cada uno una sola vez por lead y en el turno exacto de la transición. Los dos

@@ -216,7 +216,7 @@ Las cajas con borde punteado no están construidas.
   disponibilidad. La misma búsqueda repetida en un turno es una fila; en dos turnos, dos. Un filtro que la
   tabla rechazaría queda vacío en vez de tumbar el turno.
 - **Atribución al bot y conversión** (`N-7`, DT-41): `db/metrics/attribution.py` (DT-47), de solo lectura,
-  con cuatro consultas por periodo. Todavía no hay vista: la arma `N-8`.
+  con cuatro consultas por periodo. Se ven en el panel con `N-8`.
   - Cierres atribuidos al bot sobre el total del periodo, con la regla de DT-41 (ventana de 60 días en
     `ATTRIBUTION_WINDOW_DAYS`).
   - Tiempo del primer contacto al cierre: mediana y p90. El primer contacto es `leads.created_at`, porque
@@ -225,8 +225,8 @@ Las cajas con borde punteado no están construidas.
   - Retorno por `utm_campaign`: leads, calificados y cierres.
   Las dos primeras toman los cierres del periodo; las dos últimas, los leads creados en él. Cada una
   excluye lo sintético salvo que se pida (`include_synthetic=True`), y ninguna devuelve un lead.
-- **Inventario y rotación** (`N-6`): `db/metrics/inventory.py` (DT-47), de solo lectura y sin vista
-  todavía (la arma `N-8`). Por periodo (`week_of`, `month_of` o un rango):
+- **Inventario y rotación** (`N-6`): `db/metrics/inventory.py` (DT-47), de solo lectura; se ve en el
+  panel con `N-8`. Por periodo (`week_of`, `month_of` o un rango):
   - Colocadas: operaciones de `deals`, por zona, tipo de propiedad y asesor.
   - Días en el mercado, del primer `disponible` al cierre: mediana por zona y por tipo.
   - Estancadas: `disponible` hace más de 30, 60 o 90 días desde su último paso a `disponible`, con sus
@@ -258,6 +258,12 @@ Las cajas con borde punteado no están construidas.
   - El mensaje deja la propiedad como la de interés de la conversación. `/stop` desactiva la alerta.
   - Hoy ningún código da de alta propiedades: quien lo haga tiene que pasar por `db/property_history.py`
     para que la alerta las vea.
+- **Vista de inventario y negocio** (`N-8`, DT-41): `/panel/<token>/negocio`, con las consultas de `N-6` y
+  `N-7`. Como el funnel de `B-9`, la ve cualquier token de asesor y un token que no existe da 404. Periodo:
+  la última semana (por defecto), el último mes o un rango de fechas, en hora local; un rango inválido
+  muestra la última semana con un aviso. "Incluir historia de demo" suma lo sintético de `N-9`. Solo
+  agregados: las estancadas y el ranking listan propiedades, nunca leads ni enlaces a una ficha. Con la
+  base vacía, cada sección dice "sin datos". Enlazada desde el funnel y de vuelta.
 - **Reporte semanal al gerente** (`N-10`, DT-47): cada lunes a las 9:00 (hora local), un *job* del
   *scheduler* le manda por Telegram a cada chat de `WEEKLY_REPORT_CHAT_IDS` lo de la semana anterior: las
   colocadas por zona, las estancadas de más de 60 días con su demanda y las tres búsquedas sin resultado
