@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}Inventario y negocio{% endblock %}
+{% block heading %}Inventario y negocio{% endblock %}
+{% block subheading %}
+  Vista global · <a href="/panel/{{ token }}/funnel">Funnel</a> · <a href="/panel/{{ token }}">&larr; Mis leads</a>
+{% endblock %}
+
+{% set period = view.period %}
+{% set inv = view.inventory %}
+{% set att = view.attribution %}
+
+{% macro money(value) -%}${{ "{:,.0f}".format(value) }}{%- endmacro %}
+{% macro pct(value) -%}{% if value is none %}—{% else %}{{ "%.0f"|format(value * 100) }}%{% endif %}{%- endmacro %}
+{% macro days(value) -%}
+  {%- if value is none -%}—{%- else -%}{{ "%.1f"|format(value.total_seconds() / 86400) }} días{%- endif -%}
+{%- endmacro %}
+{% macro empty() %}<p class="empty">Sin datos en este periodo.</p>{% endmacro %}
+{% macro placed_table(title, rows) %}
+  <table>
+    <thead><tr><th>{{ title }}</th><th>Cierres</th><th>Monto</th></tr></thead>
+    <tbody>
+      {% for row in rows %}<tr><td>{{ row.name }}</td><td>{{ row.deals }}</td><td>{{ money(row.amount) }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+{% endmacro %}
+{% macro market_table(title, rows) %}
+  <table>
+    <thead><tr><th>{{ title }}</th><th>Mediana</th><th>Cierres medidos</th></tr></thead>
+    <tbody>
+      {% for row in rows %}<tr><td>{{ row.name }}</td><td>{{ row.median_days }} días</td><td>{{ row.deals }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+{% endmacro %}
+
+{% block content %}
+<div class="card">
+  <form method="get" class="period">
+    <label><input type="radio" name="periodo" value="semana"{% if period.kind == "semana" %} checked{% endif %}> Última semana</label>
+    <label><input type="radio" name="periodo" value="mes"{% if period.kind == "mes" %} checked{% endif %}> Último mes</label>
+    <label><input type="radio" name="periodo" value="rango"{% if period.kind == "rango" %} checked{% endif %}> Rango</label>
+    <input type="date" name="desde" value="{{ period.first_day.isoformat() }}" aria-label="Desde">
+    <input type="date" name="hasta" value="{{ period.last_day.isoformat() }}" aria-label="Hasta">
+    <label><input type="checkbox" name="demo" value="1"{% if view.include_synthetic %} checked{% endif %}> Incluir historia de demo</label>
+    <button type="submit">Ver</button>
+  </form>
+  <p class="muted" style="margin:8px 0 0">
+    Del {{ period.first_day.strftime("%d/%m/%Y") }} al {{ period.last_day.strftime("%d/%m/%Y") }}, hora local.
+    {% if view.include_synthetic %}Incluye la historia sintética de la demo.{% endif %}
+  </p>
+  {% if period.error %}<p class="error">{{ period.error }}</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2 style="font-size:15px;margin:0 0 12px">Colocadas</h2>
+  {% if inv.placements.deals %}
+  <p>{{ inv.placements.deals }} operaciones cerradas por {{ money(inv.placements.amount) }}.</p>
+  {{ placed_table("Zona", inv.placements.by_zone) }}
+  {{ placed_table("Tipo", inv.placements.by_type) }}
+  {{ placed_table("Asesor", inv.placements.by_advisor) }}
+  {% else %}{{ empty() }}{% endif %}
+</div>
+
+<div class="card">
+  <h2 style="font-size:15px;margin:0 0 12px">Días en el mercado</h2>
+  <p class="muted">Del primer paso a disponible hasta el cierre. Un cierre sin historial de estados no se mide.</p>
+  {% if inv.days_on_market_by_zone %}
+  {{ market_table("Zona", inv.days_on_market_by_zone) }}
+  {{ market_table("Tipo", inv.days_on_market_by_type) }}
+  {% else %}{{ empty() }}{% endif %}
+</div>
+
+<div class="card">
+  <h2 style="font-size:15px;margin:0 0 12px">Estancadas</h2>
+  <p class="muted">Disponibles hace más de 30 días al {{ inv.as_of.astimezone(view.period.start.tzinfo).strftime("%d/%m/%Y") }}, con las consultas y visitas del periodo.</p>
+  {% if inv.stagnant %}
+  <table>
+    <thead><tr><th>Propiedad</th><th>Zona</th><th>Tipo</th><th>Precio</th><th>Días</th><th>Demanda</th></tr></thead>
+    <tbody>
+      {% for prop in inv.stagnant %}
+      <tr>
+        <td>{{ prop.title }} <span class="muted">{{ prop.property_id }}</span></td>
+        <td>{{ prop.zone }}</td><td>{{ prop.type }}</td><td>{{ money(prop.price) }}</td>
+        <td>{{ prop.days }} <span class="pill">+{{ prop.threshold }}</span></td>
+        <td>{{ prop.demand or "%d visitas"|format(prop.visits) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}{{ empty() }}{% endif %}
+</div>
+
+<div class="card">
+  <h2 style="font-size:15px;margin:0 0 12px">Propiedades con más movimiento</h2>
+  {% if inv.ranking %}
+  <table>
+    <thead><tr><th>Propiedad</th><th>Zona</th><th>Cierres</th><th>Visitas</th><th>Consultas</th></tr></thead>
+    <tbody>
+      {% for prop in inv.ranking %}
+      <tr>
+        <td>{{ prop.title }} <span class="muted">{{ prop.property_id }}</span></td><td>{{ prop.zone }}</td>
+        <td>{{ prop.deals }}</td><td>{{ prop.visits }}</td><td>{{ prop.inquiries }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}{{ empty() }}{% endif %}
+</div>
+
+<div class="card">
+  <h2 style="font-size:15px;margin:0 0 12px">Búsquedas sin resultado</h2>
+  {% if inv.unmet_demand %}
+  <table>
+    <thead><tr><th>Zona</th><th>Tipo</th><th>Recámaras</th><th>Búsquedas</th></tr></thead>
+    <tbody>
+      {% for row in inv.unmet_demand %}
+      <tr>
+        <td>{{ row.zone or "cualquiera" }}</td><td>{{ row.type or "cualquiera" }}</td>
+        <td>{{ row.bedrooms if row.bedrooms is not none else "cualquiera" }}</td><td>{{ row.searches }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}{{ empty() }}{% endif %}
+</div>
+
+<div class="card">
+  <h2 style="font-size:15px;margin:0 0 12px">Atribución al bot</h2>
+  {% if att.attribution.deals %}
+  <dl>
+    <dt>Cierres del bot</dt>
+    <dd>{{ pct(att.attribution.rate) }}
+        <span class="muted">({{ att.attribution.attributed }} de {{ att.attribution.deals }}: el lead tocó esa
+        propiedad con el bot en los 60 días previos, DT-41)</span></dd>
+    <dt>Del primer contacto al cierre (mediana)</dt>
+    <dd>{{ days(att.time_to_close.p50) }}</dd>
+    <dt>Del primer contacto al cierre (p90)</dt>
+    <dd>{{ days(att.time_to_close.p90) }}</dd>
+  </dl>
+  {% else %}{{ empty() }}{% endif %}
+</div>
+
+<div class="card">
+  <h2 style="font-size:15px;margin:0 0 12px">Conversión por banda</h2>
+  <p class="muted">Leads creados en el periodo, con su banda actual, y cuántos llegaron a cerrar.</p>
+  {% if att.by_band | sum(attribute="leads") %}
+  <table>
+    <thead><tr><th>Banda</th><th>Leads</th><th>Cerrados</th><th>Conversión</th></tr></thead>
+    <tbody>
+      {% for row in att.by_band %}
+      <tr><td class="band band-{{ row.band }}">{{ row.band }}</td><td>{{ row.leads }}</td><td>{{ row.won }}</td><td>{{ pct(row.rate) }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}{{ empty() }}{% endif %}
+</div>
+
+<div class="card">
+  <h2 style="font-size:15px;margin:0 0 12px">Por campaña</h2>
+  {% if att.by_campaign %}
+  <table>
+    <thead><tr><th>Campaña</th><th>Leads</th><th>Calificados</th><th>Cerrados</th><th>Cierre</th></tr></thead>
+    <tbody>
+      {% for row in att.by_campaign %}
+      <tr{% if row.campaign is none %} class="muted"{% endif %}>
+        <td>{{ row.campaign or "sin campaña" }}</td><td>{{ row.leads }}</td><td>{{ row.qualified }}</td>
+        <td>{{ row.closed }}</td><td>{{ pct(row.close_rate) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}{{ empty() }}{% endif %}
+</div>
+{% endblock %}
