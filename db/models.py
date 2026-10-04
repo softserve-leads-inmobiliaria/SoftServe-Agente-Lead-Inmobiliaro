@@ -110,6 +110,8 @@ class Lead(Base):
     # Cuándo cruzó a calificado (#89): guarda de idempotencia de StateStore.qualify(), independiente
     # de `status` — B-6 puede mover `status` a `sql` antes de que el score llegue a calificar.
     qualified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Cuándo un asesor lo marcó "en gestión" desde el panel por primera vez (B-6, B-12). No se pisa.
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     budget: Mapped[str | None] = mapped_column(Text)  # texto libre, como budget_hint (design.md §3)
     timing: Mapped[str | None] = mapped_column(Text)
     # Campaña del primer contacto (`?start=camp_…`, N-5). Una campaña posterior no la pisa.
