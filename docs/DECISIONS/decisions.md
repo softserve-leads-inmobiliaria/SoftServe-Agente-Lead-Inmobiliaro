@@ -2006,3 +2006,42 @@ es `db/`. Además, `N-2` (DT-41) no definió un rol de gerente, así que no hay 
 - Un reporte que falla tres veces queda en `failed` y esa semana no se reenvía sola.
 - Pendiente de verificar en vivo: poner un chat en `WEEKLY_REPORT_CHAT_IDS`, adelantar el `run_at` del
   plan pendiente y ver llegar el mensaje.
+
+## DT-48 — Los ajustes del producto van en `config/<servicio>.env`; `.env` queda para secretos y la máquina
+
+**Estado:** propuesta (#174).
+
+**Contexto.** `.env.example` llegó a 36 variables de tres clases distintas: secretos (`POSTGRES_PASSWORD`,
+`TELEGRAM_BOT_TOKEN`, `AWS_*`), valores que cambian según la máquina o el despliegue (puertos, proveedor y
+modelos del LLM, URL del panel, chats del reporte) y ajustes del producto, que son reglas del sistema
+iguales para todo el equipo (reintentos y límites del LLM, *scheduler*, alertas, horario del reporte,
+umbral de atención). Cada ajuste estaba escrito en tres lugares (default del código, `${VAR:-default}` en
+el compose y `.env.example`), y un test de infra exigía sumarlo a `.env.example`, así que cada historia lo
+agrandaba.
+
+**Decisión.**
+- Los ajustes del producto viven en `config/core.env` y `config/panel.env`, versionados y comentados, y el
+  compose los carga con `env_file` en su servicio. Cada servicio recibe solo los suyos.
+- Cada valor se escribe `CLAVE=${CLAVE:-valor}`. Compose interpola los `env_file`, así que el valor sale
+  del archivo salvo que la misma variable esté en `.env` o en la shell: un ajuste se puede cambiar en una
+  máquina sin tocar el repo (`LLM_MAX_QUEUE_WAIT_SECONDS=60 docker compose up -d core`).
+- `.env.example` documenta solo los secretos y lo que depende de la máquina o el despliegue.
+  `WEEKLY_REPORT_CHAT_IDS` se queda ahí: no es secreto, pero son chats de personas reales.
+- El código conserva sus defaults, iguales a los de `config/`, así que fuera de Docker se comporta igual.
+- `tests/infra/test_compose.py` exige que cada variable viva en un solo lugar, que `config/` no tenga
+  nada con forma de secreto y que cada valor tenga default y se pueda pisar.
+
+**Alternativas.**
+- **Un YAML con un *loader*** (PyYAML o pydantic-settings). Descartada por ahora: suma una dependencia,
+  cambia los ~9 módulos que leen `os.environ` y los tests que usan `monkeypatch.setenv`, y los secretos
+  seguirían en variables de entorno, con dos mecanismos a la vez. Conviene cuando la configuración tenga
+  estructura (listas, anidamiento); hoy todo son escalares.
+- **Dejar solo los defaults del código**, sin listarlos en ningún archivo. Descartada: cambiar un ajuste
+  en Docker exigiría editar el compose, y nadie vería qué se puede ajustar.
+- **Valores fijos en `config/`, sin `${CLAVE:-...}`.** Descartada: un `env_file` pisa lo que venga de
+  `.env` o de la shell, y se perdían los overrides que ya usan `TESTING.md` y la verificación de B-12.
+
+**Consecuencias.**
+- Un ajuste nuevo se agrega en el default del código y en `config/<servicio>.env`, no en `.env.example`.
+- El entorno que recibe cada contenedor no cambia: se comparó `docker compose config` antes y después.
+- Cambiar un ajuste para todo el equipo es un cambio en `config/`, con su PR.

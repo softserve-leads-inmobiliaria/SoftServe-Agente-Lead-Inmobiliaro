@@ -59,6 +59,8 @@ services:
       # Contexto en la raíz del repo para poder copiar db/ y contracts/ (patrón de todos los servicios).
       context: .
       dockerfile: services/panel/Dockerfile
+    # Ajustes del producto (#174): versionados, sin secretos. Se pisan con la misma variable en `.env`.
+    env_file: config/panel.env
     environment:
       # El panel lee leads, scores, visitas y la transcripción directo de Postgres (B-5).
       POSTGRES_HOST: postgres
@@ -67,8 +69,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-leads_dev_password}
       POSTGRES_DB: ${POSTGRES_DB:-leads}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      # Minutos que un lead HOT puede esperar sin que nadie lo tome antes de marcarse en la cola (B-12).
-      SLA_HOT_MINUTES: ${SLA_HOT_MINUTES:-30}
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${PANEL_PORT:-8080}:8080"
     depends_on:
@@ -133,6 +133,9 @@ services:
     build:
       context: .
       dockerfile: services/core/Dockerfile
+    # Ajustes del producto (#174): reintentos y límites del LLM, scheduler, alertas y horario del reporte.
+    # Versionados, sin secretos; se pisan con la misma variable en `.env`.
+    env_file: config/core.env
     environment:
       CATALOG_SERVICE_URL: http://catalog:8000
       # El estado de las conversaciones vive en Postgres (DT-1): sin base no hay core.
@@ -153,27 +156,12 @@ services:
       BEDROCK_REGION: ${BEDROCK_REGION:-us-east-1}
       BEDROCK_MODEL_ID_CHAT: ${BEDROCK_MODEL_ID_CHAT:-}
       BEDROCK_MODEL_ID_CLASSIFIER: ${BEDROCK_MODEL_ID_CLASSIFIER:-}
-      LLM_RATE_LIMIT_PER_MINUTE: ${LLM_RATE_LIMIT_PER_MINUTE:-10}
-      LLM_MAX_QUEUE_WAIT_SECONDS: ${LLM_MAX_QUEUE_WAIT_SECONDS:-15}
-      # Reintentos ante errores transitorios de Bedrock (A-14).
-      LLM_RETRY_MAX_ATTEMPTS: ${LLM_RETRY_MAX_ATTEMPTS:-4}
-      LLM_RETRY_BASE_DELAY_SECONDS: ${LLM_RETRY_BASE_DELAY_SECONDS:-0.5}
-      LLM_RETRY_MAX_DELAY_SECONDS: ${LLM_RETRY_MAX_DELAY_SECONDS:-8}
-      LLM_RETRY_MAX_TOTAL_SECONDS: ${LLM_RETRY_MAX_TOTAL_SECONDS:-20}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
-      # Seguimientos y no_response (A-17, DT-44). SCHEDULER_POLL_SECONDS=0 apaga el scheduler.
-      SCHEDULER_POLL_SECONDS: ${SCHEDULER_POLL_SECONDS:-30}
-      SCHEDULER_DISCOVERY_HOURS: ${SCHEDULER_DISCOVERY_HOURS:-24}
-      SCHEDULER_NURTURE_DAYS: ${SCHEDULER_NURTURE_DAYS:-7}
-      SCHEDULER_FOLLOW_UPS: ${SCHEDULER_FOLLOW_UPS:-2}
-      # Alertas de propiedades nuevas (A-18, DT-45).
-      ALERT_SCAN_MINUTES: ${ALERT_SCAN_MINUTES:-10}
-      # Reporte semanal al gerente (N-10, DT-47). Sin chats no se programa.
+      # Reporte semanal al gerente (N-10, DT-47): a quién va y si suma la historia de demo. Sin chats no se
+      # programa. El día y la hora están en config/core.env.
       WEEKLY_REPORT_CHAT_IDS: ${WEEKLY_REPORT_CHAT_IDS:-}
-      WEEKLY_REPORT_WEEKDAY: ${WEEKLY_REPORT_WEEKDAY:-0}
-      WEEKLY_REPORT_HOUR: ${WEEKLY_REPORT_HOUR:-9}
       WEEKLY_REPORT_INCLUDE_SYNTHETIC: ${WEEKLY_REPORT_INCLUDE_SYNTHETIC:-0}
       PANEL_PUBLIC_URL: ${PANEL_PUBLIC_URL:-http://localhost:8080}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}

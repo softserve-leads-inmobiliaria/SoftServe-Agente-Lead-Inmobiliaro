@@ -9,7 +9,9 @@ docker compose up --build
 ```
 
 No hace falta crear un `.env`: `docker-compose.yml` trae defaults de desarrollo. Copiar
-`.env.example` a `.env` solo si se quiere cambiar algún puerto o credencial.
+`.env.example` a `.env` solo si se quiere cambiar algún puerto o credencial. Los ajustes del producto
+(reintentos del LLM, *scheduler*, alertas, umbral de atención) están en `config/core.env` y
+`config/panel.env` (DT-48); para cambiar uno solo en tu máquina, poné la misma variable en `.env`.
 
 | Servicio | URL / puerto | Qué es |
 | :--- | :--- | :--- |
@@ -126,7 +128,7 @@ Bedrock exigen un *inference profile* y el error solo aparece en la primera llam
 agota, el turno responde con un texto seguro en vez de dejar al lead esperando. Una cuenta con cuota baja
 recibe `ThrottlingException` de Bedrock tras pocas llamadas seguidas (el limitador local no lo evita): los
 errores transitorios (throttling, servicio no disponible, timeout, error interno, fallos de conexión) se
-reintentan con espera exponencial y *jitter* (A-14, DT-30; límites en `LLM_RETRY_*`, ver `.env.example`).
+reintentan con espera exponencial y *jitter* (A-14, DT-30; límites en `LLM_RETRY_*`, ver `config/core.env`).
 Cada reintento y el fallo definitivo quedan en el log como `warning` con el código del error y el número
 de intento, y el fallo definitivo también en la traza del turno. Ojo: con `LLM_RATE_LIMIT_PER_MINUTE=10`
 (igual a la cuota de Bedrock) el limitador local corta las ráfagas antes de que Bedrock haga *throttling*
