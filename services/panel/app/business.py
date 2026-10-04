@@ -1,6 +1,6 @@
-"""Vista de inventario y negocio (N-8): el periodo que pide el gerente y los dos reportes de ese periodo.
+"""Vista de inventario y negocio (N-8): el periodo que pide el gerente y los reportes de ese periodo.
 
-Las consultas son las de N-6 y N-7 (`db/metrics/`, DT-47), las mismas del reporte semanal de N-10. Solo
+Las consultas son las de N-6, N-7 y B-12 (`db/metrics/`, DT-47); las de N-6 son las del reporte semanal de N-10. Solo
 agregados (DT-41): ninguna devuelve un lead, y la lista de estancadas lista propiedades.
 
 El periodo se elige con `periodo`:
@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.attribution import AttributionReport, attribution_report
 from app.inventory import LOCAL_TZ, InventoryReport, inventory_report
+from db.metrics.sla import ClaimTime, claim_times
 
 PERIODS = {"semana": 7, "mes": 30}
 DEFAULT_PERIOD = "semana"
@@ -44,6 +45,7 @@ class BusinessView:
     include_synthetic: bool
     inventory: InventoryReport
     attribution: AttributionReport
+    claim_times: list[ClaimTime]  # B-12
 
 
 def _midnight(day: date) -> datetime:
@@ -78,10 +80,11 @@ def parse_period(kind: str | None, since: str | None, until: str | None, *, toda
 
 def business_view(session: Session, period: Period, *, now: datetime,
                   include_synthetic: bool = False) -> BusinessView:
-    """Los reportes de N-6 y N-7 del periodo. Las estancadas se miden a hoy si el periodo llega a hoy."""
+    """Los reportes de N-6, N-7 y B-12 del periodo. Las estancadas se miden a hoy si el periodo llega a hoy."""
     options = {"include_synthetic": include_synthetic}
     return BusinessView(
         period=period, include_synthetic=include_synthetic,
         inventory=inventory_report(session, period.start, period.end, as_of=min(period.end, now), **options),
         attribution=attribution_report(session, period.start, period.end, **options),
+        claim_times=claim_times(session, period.start, period.end, **options),
     )

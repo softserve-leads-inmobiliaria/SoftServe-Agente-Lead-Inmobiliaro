@@ -11,6 +11,12 @@
 
 {% macro money(value) -%}${{ "{:,.0f}".format(value) }}{%- endmacro %}
 {% macro pct(value) -%}{% if value is none %}—{% else %}{{ "%.0f"|format(value * 100) }}%{% endif %}{%- endmacro %}
+{% macro wait(value) -%}
+  {%- if value is none -%}—
+  {%- elif value.total_seconds() < 7200 -%}{{ (value.total_seconds() / 60)|round|int }} min
+  {%- else -%}{{ "%.1f"|format(value.total_seconds() / 3600) }} h
+  {%- endif -%}
+{%- endmacro %}
 {% macro days(value) -%}
   {%- if value is none -%}—{%- else -%}{{ "%.1f"|format(value.total_seconds() / 86400) }} días{%- endif -%}
 {%- endmacro %}
@@ -136,6 +142,22 @@
     <dt>Del primer contacto al cierre (p90)</dt>
     <dd>{{ days(att.time_to_close.p90) }}</dd>
   </dl>
+  {% else %}{{ empty() }}{% endif %}
+</div>
+
+<div class="card">
+  <h2 style="font-size:15px;margin:0 0 12px">Tiempo de atención del asesor</h2>
+  <p class="muted">De que el lead califica a que el asesor lo marca en gestión, de los tomados en el periodo.
+  Los más lentos arriba.</p>
+  {% if view.claim_times %}
+  <table>
+    <thead><tr><th>Asesor</th><th>Mediana</th><th>Mediana HOT</th><th>Leads tomados</th><th>HOT</th></tr></thead>
+    <tbody>
+      {% for row in view.claim_times %}
+      <tr><td>{{ row.advisor }}</td><td>{{ wait(row.median) }}</td><td>{{ wait(row.median_hot) }}</td><td>{{ row.leads }}</td><td>{{ row.hot }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
   {% else %}{{ empty() }}{% endif %}
 </div>
 
