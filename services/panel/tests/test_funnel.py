@@ -134,6 +134,19 @@ def test_el_corte_por_zona_y_por_asesor(session_factory, mundo):
     assert report.by_advisor[-1].label == "sin asignar"  # los no asignados van al final
 
 
+def test_la_historia_sintetica_no_cuenta_en_el_funnel(session_factory, mundo):
+    # N-9 siembra leads sintéticos para la vista de negocio; el funnel es de la operación real.
+    with session_factory() as session:
+        session.add(Lead(telegram_user_id="synthetic-0001", zone="Providencia", advisor_id=mundo.id,
+                         status="sql", synthetic=True))
+        session.commit()
+        report = funnel_report(session)
+
+    assert report.total_leads == 4
+    assert {row.label: row.leads for row in report.by_zone}["Providencia"] == 2
+    assert {row.label: row.leads for row in report.by_advisor}["Valeria"] == 1
+
+
 def test_con_la_base_vacia_renderiza_sin_romper(client, session_factory):
     with session_factory() as session:
         session.add(Advisor(id="adv_solo", name="Sola", zone="Andares", access_token="tok-solo"))

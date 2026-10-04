@@ -153,3 +153,19 @@ def test_la_lista_y_la_ficha_muestran_el_boton_solo_si_corresponde(client, sessi
     assert "Marcar en gestión" not in ficha_tomado
     ficha_abierto = client.get(f"/panel/{valeria.access_token}/leads/{abierto.id}").text
     assert "Marcar en gestión" in ficha_abierto
+
+
+def test_la_historia_sintetica_no_aparece_en_la_cola_ni_se_abre(client, session_factory, zona):
+    # N-9: sus leads solo existen para la vista de negocio; nadie los atiende.
+    with session_factory() as session:
+        valeria = _advisor(session, zona)
+        real = _lead(session, zona, status="mql")
+        sintetico = Lead(id=uuid.uuid4(), telegram_user_id=f"synthetic-{uuid.uuid4().hex[:4]}", zone=zona,
+                         status="mql", advisor_id=valeria.id, synthetic=True)
+        session.add(sintetico)
+        session.commit()
+        assert [lead.id for lead in leads_for_advisor(session, valeria)] == [real.id]
+
+    token = valeria.access_token
+    assert client.get(f"/panel/{token}/leads/{sintetico.id}").status_code == 404
+    assert client.post(f"/panel/{token}/leads/{sintetico.id}/gestionar", follow_redirects=False).status_code == 404

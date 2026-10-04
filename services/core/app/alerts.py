@@ -77,7 +77,8 @@ def deactivate_for_lead(session: Session, lead_id: uuid.UUID) -> None:
 
 
 # Mismos criterios que `search_properties` del catálogo: zona por coincidencia parcial, recámaras exactas y
-# precio dentro del rango. "Nueva" = entró a `disponible` después de crearse la alerta.
+# precio dentro del rango. "Nueva" = entró a `disponible` después de crearse la alerta, en el historial real:
+# un evento de la historia sintética (N-9) no es una propiedad nueva para nadie.
 _NEW_MATCHES = text("""
     SELECT a.id AS alert_id, a.lead_id, a.conversation_id, p.id AS property_id
     FROM property_alerts a
@@ -90,7 +91,8 @@ _NEW_MATCHES = text("""
         AND (a.budget_max IS NULL OR p.price <= a.budget_max)
     WHERE a.active AND a.expires_at > :now
       AND EXISTS (SELECT 1 FROM property_status_events e
-                  WHERE e.property_id = p.id AND e.to_status = 'disponible' AND e.changed_at > a.created_at)
+                  WHERE e.property_id = p.id AND e.to_status = 'disponible' AND e.changed_at > a.created_at
+                    AND NOT e.synthetic)
       AND NOT EXISTS (SELECT 1 FROM scheduled_jobs j
                       WHERE j.kind = 'property_alert' AND j.dedupe_key = a.id::text || ':' || p.id)
     ORDER BY a.created_at, p.id

@@ -50,9 +50,9 @@ def add_advisor(factory, advisor_id, zone, language="es", chat_id=None):
         db.commit()
 
 
-def add_lead(factory, zone=None, advisor_id=None):
+def add_lead(factory, zone=None, advisor_id=None, synthetic=False):
     with factory() as db:
-        lead = Lead(telegram_user_id=uuid.uuid4().hex, zone=zone, advisor_id=advisor_id)
+        lead = Lead(telegram_user_id=uuid.uuid4().hex, zone=zone, advisor_id=advisor_id, synthetic=synthetic)
         db.add(lead)
         db.commit()
         return str(lead.id)
@@ -113,6 +113,16 @@ def test_leads_of_one_zone_are_shared_in_turns(factory, service):
     chosen = [service.assign_advisor(add_lead(factory, zone="Providencia"))["advisor_id"] for _ in range(4)]
 
     assert chosen == ["adv_a", "adv_b", "adv_a", "adv_b"]
+
+
+def test_the_synthetic_history_is_not_load(factory, service):
+    # N-9 le asigna leads sintéticos a los asesores; no los atiende nadie, así que no cuentan en el reparto.
+    add_advisor(factory, "adv_a", "Providencia")
+    add_advisor(factory, "adv_b", "Providencia")
+    for _ in range(3):
+        add_lead(factory, zone="Providencia", advisor_id="adv_a", synthetic=True)
+
+    assert service.assign_advisor(add_lead(factory, zone="Providencia"))["advisor_id"] == "adv_a"
 
 
 def test_zone_given_by_the_caller_wins_and_ignores_case(factory, service):
