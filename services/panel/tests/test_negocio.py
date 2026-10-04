@@ -21,7 +21,7 @@ TODAY = date(2026, 10, 3)  # sábado
 WEEK = "/panel/tok-v/negocio?periodo=rango&desde=2026-09-14&hasta=2026-09-20"
 IN_WEEK = datetime(2026, 9, 16, 18, tzinfo=UTC)
 EMPTY = "Sin datos en este periodo."
-SECTIONS = 8
+SECTIONS = 9
 TOTALS = {"HOT": 90, "WARM": 50, "COLD": 10}  # el total tiene que caer en la banda
 
 PHONE, EMAIL, TELEGRAM = "3312345678", "lead@ejemplo.com", "tg-secreto-n8"
@@ -202,3 +202,15 @@ def test_an_invalid_range_shows_the_week_with_a_notice(client):
 def test_the_funnel_links_to_the_view_and_back(client):
     assert 'href="/panel/tok-v/negocio"' in client.get("/panel/tok-v/funnel").text
     assert 'href="/panel/tok-v/funnel"' in client.get("/panel/tok-v/negocio").text
+
+
+def test_the_view_shows_how_long_each_advisor_takes_to_claim(client, session_factory):
+    with session_factory() as session:
+        _lead(session, status="sql", advisor_id="adv_v", qualified_at=IN_WEEK,
+              claimed_at=IN_WEEK + timedelta(minutes=20))
+        session.commit()
+
+    page = client.get(WEEK).text
+
+    section = page.split("Tiempo de atención del asesor")[1].split("</table>")[0]
+    assert "Valeria" in section and "20 min" in section
