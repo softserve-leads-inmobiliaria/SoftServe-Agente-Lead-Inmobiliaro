@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 CORE = "http://localhost:8000/events"
-PAUSA_S = 8  # cupo local de 10 llamadas por minuto y modelo
+PAUSA_S = 20  # cupo local de 10 llamadas por minuto y modelo; un turno con herramientas hace 3 o 4
 REPO = Path(__file__).resolve().parents[2]
 SALIDA = REPO / "tmp" / "demo" / "transcripciones"  # tmp/ no se versiona
 
