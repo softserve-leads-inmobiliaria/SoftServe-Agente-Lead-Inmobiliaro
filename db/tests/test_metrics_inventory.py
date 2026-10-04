@@ -183,7 +183,7 @@ def test_stagnant_properties_are_those_available_for_more_than_30_days_with_thei
         ("d95", 95, 90), ("d65", 65, 60), ("d35", 35, 30)]
 
 
-def test_only_currently_available_properties_count_and_since_their_last_return(session):
+def test_only_properties_available_at_the_cutoff_count_and_since_their_last_return(session):
     _property(session, "cerrada", listed=END - timedelta(days=100))
     _close(session, "cerrada")
     _property(session, "volvio", listed=END - timedelta(days=100))
@@ -192,6 +192,20 @@ def test_only_currently_available_properties_count_and_since_their_last_return(s
     _property(session, "sin_historial")  # disponible, pero no se puede medir
 
     assert [(s.property_id, s.days) for s in stagnant(session, START, END)] == [("volvio", 40)]
+
+
+def test_the_status_is_the_one_at_the_cutoff_not_today(session):
+    # #177: el reporte semanal corta en el pasado; lo que pasó después del corte no cuenta.
+    _property(session, "rentada_y_de_vuelta", listed=END - timedelta(days=170))
+    _close(session, "rentada_y_de_vuelta", closed=END - timedelta(days=160))
+    set_status(session, "rentada_y_de_vuelta", "disponible", "test", at=END + timedelta(days=2))
+    _property(session, "apartada_y_de_vuelta", listed=END - timedelta(days=150))
+    set_status(session, "apartada_y_de_vuelta", "apartado", "test", at=END - timedelta(days=40))
+    set_status(session, "apartada_y_de_vuelta", "disponible", "test", at=END + timedelta(days=1))
+    _property(session, "vendida_despues", listed=END - timedelta(days=100))
+    _close(session, "vendida_despues", closed=END + timedelta(days=3))
+
+    assert [(s.property_id, s.days) for s in stagnant(session, START, END)] == [("vendida_despues", 100)]
 
 
 def test_the_cutoff_date_can_be_moved(session):
