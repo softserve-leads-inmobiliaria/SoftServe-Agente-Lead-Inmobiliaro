@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://softserve.local/contracts/mcp/search_faq.schema.json",
+  "name": "search_faq",
+  "description": "Busca en la FAQ del negocio por similitud semántica (embeddings en pgvector, C-5/DT-7) y devuelve las respuestas más parecidas a `query`. Es para preguntas generales (requisitos, enganche, crédito, visitas, comisiones), no para datos de una propiedad concreta: para eso están search_properties/get_property/check_requirements. Sin coincidencias o con la FAQ vacía devuelve matches: [], no un error.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "minLength": 1,
+        "description": "La pregunta del lead, en lenguaje natural."
+      },
+      "top_k": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 10,
+        "default": 3,
+        "description": "Cuántas respuestas devolver, ordenadas de más a menos parecida."
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "matches": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "question": {
+              "type": "string"
+            },
+            "answer": {
+              "type": "string"
+            },
+            "score": {
+              "type": "number",
+              "minimum": -1,
+              "maximum": 1,
+              "description": "Similitud coseno entre la consulta y la pregunta (1 = idénticas)."
+            }
+          },
+          "required": [
+            "question",
+            "answer",
+            "score"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "matches"
+    ],
+    "additionalProperties": false
+  },
+  "errorSchema": "catalog_error.schema.json",
+  "errors": {
+    "INVALID_INPUT": "query vacía o top_k fuera del rango 1..10",
+    "UPSTREAM_UNAVAILABLE": "La fuente de datos (Postgres/servicio) no está disponible"
+  },
+  "errors_not_applicable": {
+    "NOT_FOUND": "Sin coincidencias (o FAQ vacía) se responde matches: [], no un error."
+  }
+}

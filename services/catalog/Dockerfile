@@ -20,6 +20,15 @@ RUN pip install --no-cache-dir -r services/catalog/requirements.txt \
 COPY db/ db/
 COPY contracts/ contracts/
 COPY services/catalog/ services/catalog/
+# `scripts/seed_faq.py` (C-5) siembra la FAQ desde la imagen del catálogo: `make seed-faq`.
+COPY scripts/ scripts/
+
+# C-5: modelo de embeddings autoalojado (DT-7). Se descarga al construir la imagen y queda dentro:
+# en ejecución no hay llamada a ningún proveedor ni descarga. `EMBEDDINGS_LOCAL_ONLY=1` solo deja
+# usarlo desde la caché ya presente.
+ENV FASTEMBED_CACHE_PATH=/app/.fastembed
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding(model_name='sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2', cache_dir='/app/.fastembed')"
+ENV EMBEDDINGS_LOCAL_ONLY=1
 
 ENV PYTHONPATH=/app:/app/services/catalog
 

@@ -159,6 +159,12 @@ el pipeline de FAQ a la disponibilidad/cuota de ese proveedor para algo que no l
 **Consecuencias.** `C-5` fija el nombre exacto del modelo y su dimensión al implementarse; ese
 valor es el que define `N` en el esquema de `FaqEntry`.
 
+**Implementación (C-5).** Modelo `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (384
+dimensiones, 50 idiomas, licencia Apache-2.0), servido con `fastembed` (ONNX, sin `torch` ni GPU)
+dentro de la imagen del catálogo. Coincide con el valor de partida `EMBEDDING_DIM=384`, así que no
+requiere migración. El modelo se descarga al construir la imagen y en ejecución corre en local
+(`EMBEDDINGS_LOCAL_ONLY=1`); los tests usan un encoder determinista (`EMBEDDINGS_FAKE=1`), sin red.
+
 ---
 
 ## DT-8 — Versionado de los contratos: `schema_version` en el evento, archivo nuevo si es incompatible

@@ -13,6 +13,9 @@ from db.models import Promotion, Property
 from db.settings import database_url as default_url
 from db.testing import _admin_engine, alembic_config
 
+# C-5: los tests no bajan el modelo real de embeddings ni tocan la red; usan el encoder determinista.
+os.environ.setdefault("EMBEDDINGS_FAKE", "1")
+
 _temp_db_url = None
 
 def pytest_configure(config):

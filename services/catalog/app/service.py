@@ -12,7 +12,8 @@ from typing import Any, Callable
 from sqlalchemy.orm import Session
 
 from app import data
-from db.models import Promotion, Property
+from app.embeddings import Encoder, create_encoder
+from db.models import FaqEntry, Promotion, Property
 
 # Campos públicos: `address_exact` nunca sale de aquí salvo en get_property con lead_qualified=true.
 _SUMMARY_FIELDS = ("id", "title", "price", "type", "zone", "m2", "bedrooms", "bathrooms",
@@ -36,12 +37,16 @@ class CatalogService:
         today: Callable[[], date] = date.today,
         now: Callable[[], datetime] = lambda: datetime.now().astimezone(),
         available: Callable[[], bool] = lambda: True,
+        encoder: Encoder | None = None,
     ) -> None:
         self._db_session_factory = db_session_factory
         self._today = today
         self._now = now
         # Permite a los tests simular la caída de la fuente de datos (UPSTREAM_UNAVAILABLE).
         self._available = available
+        # Codifica la consulta de la FAQ (C-5). Sin encoder explícito se usa el real (DT-7), salvo
+        # `EMBEDDINGS_FAKE=1`, que devuelve el determinista de tests.
+        self._encoder = encoder or create_encoder()
 
     def _check_upstream(self) -> None:
         if not self._available():
@@ -216,4 +221,41 @@ class CatalogService:
                     "references_ok": references_ok,
                     "notes": " ".join(notes) or "Cumple los requisitos."
                 },
+            }
+
+    def search_faq(self, query: str, top_k: int = 3) -> dict[str, Any]:
+        """Las respuestas de la FAQ más parecidas a `query` (C-5, DT-7).
+
+        Codifica la consulta con el modelo de embeddings y ordena por distancia coseno en pgvector.
+        Sin filas en la FAQ (o sin coincidencias) devuelve `matches: []`, no un error.
+        """
+        self._check_upstream()
+
+        if not isinstance(query, str) or not query.strip():
+            raise CatalogError("INVALID_INPUT", "query debe ser un texto no vacío.")
+        if isinstance(top_k, bool) or not isinstance(top_k, int) or not 1 <= top_k <= 10:
+            raise CatalogError("INVALID_INPUT", "top_k debe ser un entero entre 1 y 10.")
+
+        with self._db_session_factory() as db:
+            if db.query(FaqEntry.id).first() is None:
+                return {"matches": []}
+
+            query_vector = self._encoder.encode([query])[0]
+            distance = FaqEntry.embedding.cosine_distance(query_vector)
+            rows = (
+                db.query(FaqEntry, distance.label("distance"))
+                .order_by(distance)
+                .limit(top_k)
+                .all()
+            )
+            return {
+                "matches": [
+                    {
+                        "question": entry.question,
+                        "answer": entry.answer,
+                        # Distancia coseno en [0, 2] -> similitud en [-1, 1]; redondeado para el contrato.
+                        "score": round(1.0 - float(dist), 6),
+                    }
+                    for entry, dist in rows
+                ]
             }

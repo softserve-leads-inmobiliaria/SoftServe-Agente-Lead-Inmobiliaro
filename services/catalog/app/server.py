@@ -124,4 +124,11 @@ def create_mcp(service: CatalogService | None = None) -> FastMCP:
         en pesos; si uno no aplica a esa operación o el lead no lo dijo, 0 o false."""
         return run(service.check_requirements, property_id=property_id, lead_profile=lead_profile)
 
+    @mcp.tool()
+    def search_faq(query: str, top_k: int = 3) -> Any:
+        """Responde preguntas frecuentes del negocio (requisitos, enganche, crédito, visitas,
+        comisiones). Úsala para preguntas generales que no son de una propiedad concreta. Devuelve
+        las respuestas más parecidas a `query`; sin coincidencias devuelve matches: []."""
+        return run(service.search_faq, query=query, top_k=top_k)
+
     return mcp

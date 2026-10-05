@@ -20,7 +20,8 @@ from app.main import app
 from db.repo_root import repo_root
 
 CONTRACTS = repo_root() / "contracts"
-TOOLS = ["search_properties", "get_property", "get_availability", "get_promotions", "check_requirements"]
+TOOLS = ["search_properties", "get_property", "get_availability", "get_promotions",
+         "check_requirements", "search_faq"]
 
 
 def _load(path):
@@ -62,7 +63,7 @@ def test_health_answers_next_to_mcp(base_url):
     assert json.loads(urllib.request.urlopen(f"{base_url}/health").read()) == {"status": "ok"}
 
 
-def test_lists_the_five_tools_over_streamable_http(base_url):
+def test_lists_every_tool_over_streamable_http(base_url):
     listed = _with_session(base_url, lambda session: session.list_tools())
     assert sorted(t.name for t in listed.tools) == sorted(TOOLS)
 

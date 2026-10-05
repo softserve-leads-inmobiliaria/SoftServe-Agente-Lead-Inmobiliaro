@@ -12,6 +12,7 @@ TOOLS = [
     "get_availability",
     "get_promotions",
     "check_requirements",
+    "search_faq",
 ]
 ERROR_CODES = {"NOT_FOUND", "INVALID_INPUT", "UPSTREAM_UNAVAILABLE"}
 

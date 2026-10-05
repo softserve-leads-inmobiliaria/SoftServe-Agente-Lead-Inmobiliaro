@@ -52,8 +52,9 @@ INTEREST_KINDS = ("anuncio", "consulta", "busqueda", "visita")
 JOB_KINDS = ("no_response", "visit_reminder", "alert_scan", "property_alert", "weekly_report_plan", "weekly_report")
 JOB_STATUSES = ("pending", "done", "failed", "cancelled")
 
-# Dimensión del vector de la FAQ. Valor de partida (modelos de sentence embeddings habituales usan
-# 384); C-5 fija el modelo real (DT-7) y, si cambia, lo ajusta con una migración nueva.
+# Dimensión del vector de la FAQ. Fijada por C-5 (DT-7): el modelo es
+# `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, que produce 384 dimensiones. Cambiar
+# de modelo a otro de distinta dimensión obliga a una migración nueva.
 EMBEDDING_DIM = 384
 
 

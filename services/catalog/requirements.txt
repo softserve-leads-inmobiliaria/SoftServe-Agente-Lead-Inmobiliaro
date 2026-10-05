@@ -2,4 +2,6 @@ fastapi==0.141.1
 uvicorn==0.53.0
 mcp==1.30.0
 jsonschema==4.26.0
+# Embeddings de la FAQ (C-5, DT-7): `fastembed` corre el modelo en ONNX, sin arrastrar torch ni GPU.
+fastembed==0.8.1
 -r ../../db/requirements.txt
