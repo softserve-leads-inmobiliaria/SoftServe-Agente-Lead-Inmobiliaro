@@ -137,13 +137,13 @@ class FakeMessage:
         self.replies: list[str] = []
         self.markups: list[Any] = []
 
-    async def reply_photo(self, photo, caption=None, reply_markup=None):
+    async def reply_photo(self, photo, caption=None, reply_markup=None, parse_mode=None):
         if self.photo_error is not None:
             raise self.photo_error
         self.photos.append((photo, caption))
         self.markups.append(reply_markup)
 
-    async def reply_text(self, value, reply_markup=None):
+    async def reply_text(self, value, reply_markup=None, parse_mode=None):
         self.replies.append(value)
         self.markups.append(reply_markup)
 

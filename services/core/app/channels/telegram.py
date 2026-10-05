@@ -16,6 +16,7 @@ from typing import Any, Awaitable, Callable, Mapping
 from sqlalchemy import Engine
 from starlette.concurrency import run_in_threadpool
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.constants import ParseMode
 from telegram.error import BadRequest, NetworkError, RetryAfter, TimedOut
 from telegram.ext import (
     Application,
@@ -27,7 +28,7 @@ from telegram.ext import (
 )
 
 from app.agent import Agent
-from app.channels import advisor_registration, canonical, consent, notifications
+from app.channels import advisor_registration, canonical, consent, formatting, notifications
 from app.channels.identity import resolve_identity
 from app.channels.notifications import Sender
 from app.skeleton import Catalog
@@ -191,17 +192,27 @@ async def send_reply(message: Any, reply: ChannelReply) -> None:
     El *caption* es el mismo texto que ya pasó los guardrails. Si no hay foto, si el texto no cabe en un
     *caption* o si Telegram rechaza la foto (URL caída, formato), se manda solo el texto. Un `TimedOut`
     no cae al texto: la foto pudo llegar y el lead recibiría la respuesta dos veces (#161).
+
+    El Markdown del agente va como HTML de Telegram (#187, DT-53). El tope del *caption* se mide sobre el
+    texto visible, que es como lo cuenta Telegram; si rechaza el HTML del mensaje, va el texto plano.
     """
+    rendered = formatting.render(reply.text)
     markup = {"reply_markup": keyboard(reply.buttons)} if reply.buttons else {}
-    if reply.photo_url and _utf16_len(reply.text) <= CAPTION_MAX_CHARS:
+    if reply.photo_url and _utf16_len(rendered.plain) <= CAPTION_MAX_CHARS:
         try:
-            await send_with_retry(lambda: message.reply_photo(reply.photo_url, caption=reply.text, **markup))
+            await send_with_retry(lambda: message.reply_photo(
+                reply.photo_url, caption=rendered.html, parse_mode=ParseMode.HTML, **markup))
             return
         except TimedOut:
             raise
         except Exception:
             logger.warning("no se pudo mandar la foto de la propiedad; va solo el texto", exc_info=True)
-    await send_with_retry(lambda: message.reply_text(reply.text, **markup))
+    try:
+        await send_with_retry(lambda: message.reply_text(rendered.html, parse_mode=ParseMode.HTML,
+                                                         **markup))
+    except BadRequest:
+        logger.warning("Telegram rechazó el formato de la respuesta; va en texto plano", exc_info=True)
+        await send_with_retry(lambda: message.reply_text(rendered.plain, **markup))
 
 
 def keyboard(buttons: tuple[str, ...]) -> InlineKeyboardMarkup:

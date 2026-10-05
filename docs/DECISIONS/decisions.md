@@ -2207,3 +2207,37 @@ anterior al cierre.
   `deals` sin la marca sintética.
 - Una propiedad cerrada desde el panel ya tiene historial real, y la historia sintética de N-9 no la toca
   (DT-49).
+
+## DT-53 — El Markdown del agente se manda a Telegram como HTML
+
+**Estado:** propuesta (#187).
+
+**Contexto.** El agente arma sus respuestas en Markdown (`**negritas**`, viñetas con `-`) y el canal las
+mandaba sin `parse_mode`: el lead veía los asteriscos literales. Los guardrails de salida revisan el texto
+del agente, y el *caption* de la foto (B-10, DT-50) tiene un tope de 1024.
+
+**Decisión.**
+- **Renderizar, no quitar el formato.** `app/channels/formatting.py` convierte el Markdown al subconjunto
+  que acepta `parse_mode="HTML"`: `**negritas**` a `<b>`, `*itálicas*` y `_itálicas_` a `<i>`, `` `código` ``
+  a `<code>`, títulos `#` a negritas, viñetas `-`/`*`/`+` a `•` y los enlaces de Markdown a `texto (url)`. Todo lo
+  demás se escapa, así que un `<`, `&`, `_` o `*` suelto no rompe el envío.
+- **Mismo texto visible.** Solo cambian las marcas, así que el lead lee lo mismo que revisaron los
+  guardrails. Lo que se guarda en `messages` sigue siendo el texto del agente, sin cambios.
+- **Marcas cruzadas** (`**a *b** c*`), que darían HTML mal anidado, se mandan como texto plano escapado.
+- **Si Telegram rechaza el HTML** (`BadRequest`), el mensaje se manda en texto plano, sin las marcas. La
+  foto ya caía al texto ante cualquier error (DT-50), y el texto va primero en HTML y después en plano.
+- **El tope del *caption*** se mide sobre el texto visible, que es como lo cuenta Telegram (después de
+  parsear las entidades). Las `**` ya no sacan la foto de una respuesta que cabe.
+- Solo cambia lo que se le manda al lead (`send_reply`). Las fichas del asesor y los mensajes del
+  *scheduler* siguen en texto plano.
+
+**Alternativas.**
+- **Pedirle texto plano al agente y limpiar lo que se cuele.** Descartada: el prompt no garantiza nada, y
+  la limpieza en el canal sería el mismo análisis del Markdown sin la ventaja del formato.
+- **`parse_mode="MarkdownV2"`.** Descartada: exige escapar 18 caracteres (`.`, `-`, `(`, `!`…) que el
+  agente usa en cualquier precio o frase, y el Markdown del agente no es MarkdownV2 (`**` no es negrita).
+
+**Consecuencias.**
+- La transcripción y el resumen de la ficha de traspaso al asesor (A-16) todavía pueden traer `**`. Si
+  molesta, se usa el mismo `formatting.render` en `notifications.py`.
+- Los *fakes* de Telegram de los tests aceptan `parse_mode`.

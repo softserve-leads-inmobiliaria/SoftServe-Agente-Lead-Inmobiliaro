@@ -83,7 +83,7 @@ class FakeMessage:
         self.date = None
         self.replies = []
 
-    async def reply_text(self, value):
+    async def reply_text(self, value, parse_mode=None):
         self.replies.append(value)
 
 
@@ -184,7 +184,7 @@ def test_a_failing_turn_answers_the_lead_instead_of_staying_silent(engine, monke
 
 def test_a_failure_sending_the_reply_does_not_crash_the_bot(engine):
     class Broken(FakeMessage):
-        async def reply_text(self, value):
+        async def reply_text(self, value, parse_mode=None):
             raise ConnectionError("Telegram no responde")
 
     message = Broken("hola")
