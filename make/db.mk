@@ -2,9 +2,6 @@
 
 .PHONY: db-up migrate seed seed-history seed-history-clear seed-all db-reset psql migration
 
-# El volumen de la base: <proyecto de compose>_pgdata.
-COMPOSE_PROJECT ?= $(shell $(COMPOSE) config 2>/dev/null | awk '/^name:/ {print $$2; exit}')
-
 db-up: docker-ready ## Solo postgres (lo que piden los tests)
 	$(COMPOSE) up -d --wait postgres
 

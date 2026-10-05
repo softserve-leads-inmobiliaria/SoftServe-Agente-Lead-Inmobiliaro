@@ -35,8 +35,8 @@ valiendo igual. Funciona con el `make` de macOS y en Windows desde Git Bash.
 ```
 make help          # todos los objetivos, por sección
 make start         # stack (core, panel, phoenix) + asesores, catálogo e historia N-9 + URLs
-make install       # .venv con las dependencias de desarrollo
-make test          # las 7 suites como CI (levanta postgres)
+make install       # .venv (Python 3.12+) con las dependencias de desarrollo
+make test          # las 7 suites como CI; usa el Postgres que ya responda o levanta el del compose
 ```
 
 | Para | Objetivos |
@@ -47,7 +47,9 @@ make test          # las 7 suites como CI (levanta postgres)
 | Demo y arnés | `demo`, `demo-down`, `demo-purge`, `harness`, `live-run`, `conversar`, `exportar`, `smoke` |
 
 Los argumentos extra van en `ARGS`: `make test-core ARGS="-k consent"`,
-`make seed-history ARGS="--hoy 2026-10-01"`, `make live-run ARGS="--sin-frases"`.
+`make seed-history ARGS="--hoy 2026-10-01"`, `make live-run ARGS="--sin-frases"`. Los puertos salen del
+`.env`. `make harness` corre en un stack aparte y efímero (sin bot, agente *fake*), así que no toca el
+stack ni la cola del panel.
 
 ## Correr los tests
 
