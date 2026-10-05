@@ -212,13 +212,15 @@ El rediseño conserva o ajusta (en el mismo PR) los textos que los tests buscan 
 - `test_panel.py` / `test_avisos.py`: el `telegram_user_id` visible en la cola (si se cambia a
   `Lead <short>`, el test se ajusta a propósito en el PR).
 
-## 12. Preguntas abiertas (a acordar con el equipo)
+## 12. Decisiones acordadas
 
-1. **Navegación:** ¿barra lateral en escritorio o barra superior para todos los tamaños?
-2. **Modo oscuro:** ¿solo automático por `prefers-color-scheme`, o además un toggle manual?
-3. **Gráficas:** ¿alcanza con SVG inline, o se quiere una librería por CDN?
-4. **Identificador del lead:** ¿`Lead <short>` es suficiente, o se prefiere otro esquema?
-5. **Auto-refresh:** ¿se mantiene a 30 s, o se sube/baja con el rediseño?
+Se acordaron al implementar (#178) y son las que aplica el código:
+
+1. **Navegación:** barra lateral en escritorio (≥1024px) y barra superior desplegable (`<details>`) en móvil.
+2. **Modo oscuro:** automático por `prefers-color-scheme`, sin toggle ni JavaScript.
+3. **Gráficas:** SVG inline generado en Jinja, sin librería ni CDN.
+4. **Identificador del lead:** `Lead <short>` (6 del UUID) + zona; el `telegram_user_id` queda en el `title` y en la ficha.
+5. **Auto-refresh:** se mantiene a 30 s (`REFRESH_SECONDS`).
 
 ## 13. Mapeo con #178
 
