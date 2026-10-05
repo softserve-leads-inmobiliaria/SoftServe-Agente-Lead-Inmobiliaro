@@ -100,9 +100,10 @@ por red, y `stdio` asume que el cliente lanza al servidor como proceso hijo habl
 conecta apuntando a `${CATALOG_SERVICE_URL}/mcp`. Ver `decisions.md` para el detalle y el
 *gotcha* de *lifespan* al montar el sub-app.
 
-Las 5 tools (`search_properties`, `get_property`, `get_availability`, `get_promotions`,
-`check_requirements`) y sus schemas de input/output son responsabilidad de `CT-2` — este
-documento solo fija el transporte, no el contenido de cada tool. El servidor publica en `list_tools` el
+Las tools (`search_properties`, `get_property`, `get_availability`, `get_promotions`,
+`check_requirements`, `search_faq`) y sus schemas de input/output son responsabilidad de `CT-2` (las
+cinco del catálogo) y `C-5` (`search_faq`) — este documento solo fija el transporte, no el contenido de
+cada tool. El servidor publica en `list_tools` el
 `inputSchema` del contrato, el mismo contra el que valida, y no el que el SDK deriva de la firma de Python,
 que es más laxo: con ese, el LLM no sabía qué campos lleva `lead_profile` (#182).
 
@@ -177,7 +178,7 @@ Las cajas con borde punteado no están construidas.
 - **Ficha de traspaso** al asesor en `HANDOFF` y `HUMAN_HANDOFF`, con la transcripción completa partida
   en varios mensajes (`A-12`, DT-28). Usa el mismo envío que la tarjeta de `B-7`, que sí se verificó en
   vivo.
-- **Catálogo sobre Postgres** con las 5 tools por MCP (`C-1`). El arnés E2E recorre `core` → `catalog`
+- **Catálogo sobre Postgres** con las 6 tools por MCP (`C-1`, `C-5`). El arnés E2E recorre `core` → `catalog`
   por red.
 - **Agenda en el catálogo** (`C-2`, DT-32): `assign_advisor`, `get_slots` y `book` por HTTP en
   `/scheduling`, fuera de MCP para que el LLM no las vea. `book` es idempotente, y la base impide dos
