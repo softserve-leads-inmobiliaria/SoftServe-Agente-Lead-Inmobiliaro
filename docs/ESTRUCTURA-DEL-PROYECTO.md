@@ -79,6 +79,7 @@ SoftServe-Agente-Lead-Inmobiliaro/
     ├── DESIGN/
     │   ├── design.md            # Referencia compartida y estado real del sistema (§5)
     │   ├── guardrails.md        # Guardrails de entrada y salida, y su cobertura
+    │   ├── panel-ui.md          # Boceto de UI/UX del panel de asesores (#178)
     │   └── propuestas.md        # Funcionalidades propuestas, todavía sin historias
     ├── STORIES/                 # Épicas, roadmap e historias de usuario, un archivo por historia
     └── presentations/           # Presentaciones de avance, una por fecha
