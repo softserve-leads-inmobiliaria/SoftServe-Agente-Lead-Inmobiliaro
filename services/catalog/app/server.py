@@ -1,4 +1,4 @@
-"""Servidor MCP del catálogo (C-1b): las 5 tools catalog.* por streamable HTTP en /mcp (DT-2).
+"""Servidor MCP del catálogo (C-1b): las 6 tools catalog.* por streamable HTTP en /mcp (DT-2).
 
 Mismo transporte y mismo código cliente que el catálogo falso de CT-8: lo único que cambió al
 migrar el catálogo a Postgres (C-1) fue la fuente de datos detrás de `CatalogService`, nunca el

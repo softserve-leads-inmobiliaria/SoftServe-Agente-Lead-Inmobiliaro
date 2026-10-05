@@ -1,4 +1,5 @@
-"""Lógica del catálogo (C-1): las 5 tools `catalog.*` sobre Postgres (`properties` y `promotions`).
+"""Lógica del catálogo (C-1) y de la FAQ (C-5): las 6 tools `catalog.*` sobre Postgres
+(`properties`, `promotions` y `faq_entries`).
 
 Sin MCP ni red: `server.py` lo expone por MCP. Las reglas de `check_requirements` siguen en `app/data.py`. Cada método devuelve un dict que cumple
 el `outputSchema` de contracts/mcp/<tool>.schema.json o lanza `CatalogError` con uno de los códigos
