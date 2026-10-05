@@ -1,6 +1,6 @@
 # Presentación
 
-Diapositivas en [Slidev](https://sli.dev): todo el contenido está en `slides.md` y los estilos en `style.css`.
+Diapositivas en [Slidev](https://sli.dev): todo el contenido está en [`slides.md`](slides.md) y los estilos en `style.css`.
 El guion completo, con los datos de cada diapositiva, es
 [`2026-10-05-estado-del-proyecto.md`](../2026-10-05-estado-del-proyecto.md).
 
