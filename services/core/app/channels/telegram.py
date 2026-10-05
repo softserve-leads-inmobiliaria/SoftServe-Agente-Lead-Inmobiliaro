@@ -289,7 +289,7 @@ async def reply_turn(engine: Engine, catalog: Catalog, *, telegram_user_id: str,
         return ChannelReply(consent.OPT_OUT_CONFIRMATION)
 
     # Se consulta antes del turno: `process_turn` marca actividad en la conversación.
-    first_turn = await run_in_threadpool(consent.is_first_turn, engine, identity.conversation_id)
+    first_turn = await run_in_threadpool(consent.is_first_turn, engine, identity.lead_id)
 
     event: dict[str, Any] = canonical.to_canonical(
         lead_id=identity.lead_id,
