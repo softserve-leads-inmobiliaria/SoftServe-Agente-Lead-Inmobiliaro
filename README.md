@@ -30,7 +30,9 @@ equipo: [`docs/ONBOARDING.md`](docs/ONBOARDING.md).
 
 El `Makefile` de la raíz (módulos en `make/`) junta los comandos de este README, de
 [`docs/TESTING.md`](docs/TESTING.md) y de CI. Es opcional: los comandos de `docker compose` siguen
-valiendo igual. Funciona con el `make` de macOS y en Windows desde Git Bash.
+valiendo igual. Necesita `make`, que viene en macOS y Linux. En Windows no hace falta instalarlo: Git Bash
+no lo trae, y `bash scripts/demo/up.sh` / `down.sh` y los comandos de [`docs/TESTING.md`](docs/TESTING.md)
+hacen lo mismo.
 
 ```
 make help          # todos los objetivos, por sección
