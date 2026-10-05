@@ -26,6 +26,33 @@ equipo: [`docs/ONBOARDING.md`](docs/ONBOARDING.md).
 | `tests/` | Contract tests, pruebas del arnés E2E y validación del compose y los Dockerfiles |
 | `docs/` | Único árbol de documentación |
 
+## Comandos rápidos con make
+
+El `Makefile` de la raíz (módulos en `make/`) junta los comandos de este README, de
+[`docs/TESTING.md`](docs/TESTING.md) y de CI. Es opcional: los comandos de `docker compose` siguen
+valiendo igual. Necesita `make`, que viene en macOS y Linux. En Windows no hace falta instalarlo: Git Bash
+no lo trae, y `bash scripts/demo/up.sh` / `down.sh` y los comandos de [`docs/TESTING.md`](docs/TESTING.md)
+hacen lo mismo.
+
+```
+make help          # todos los objetivos, por sección
+make start         # stack (core, panel, phoenix) + asesores, catálogo e historia N-9 + URLs
+make install       # .venv (Python 3.12+) con las dependencias de desarrollo
+make test          # las 7 suites como CI; usa el Postgres que ya responda o levanta el del compose
+```
+
+| Para | Objetivos |
+| :--- | :--- |
+| Stack | `up`, `down` / `stop`, `clean` (borra volúmenes), `reset`, `rebuild s=core`, `logs s=core`, `ps`, `shell s=core`, `info` |
+| Base de datos | `db-up`, `migrate`, `seed`, `seed-history`, `seed-history-clear`, `seed-all`, `db-reset`, `psql`, `migration m="..."` |
+| Calidad | `lint`, `test`, `test-<suite>` (`contracts infra db core catalog panel harness`), `ci` |
+| Demo y arnés | `demo`, `demo-down`, `demo-purge`, `harness`, `live-run`, `conversar`, `exportar`, `smoke` |
+
+Los argumentos extra van en `ARGS`: `make test-core ARGS="-k consent"`,
+`make seed-history ARGS="--hoy 2026-10-01"`, `make live-run ARGS="--sin-frases"`. Los puertos salen del
+`.env`. `make harness` corre en un stack aparte y efímero (sin bot, agente *fake*), así que no toca el
+stack ni la cola del panel.
+
 ## Correr los tests
 
 ```
