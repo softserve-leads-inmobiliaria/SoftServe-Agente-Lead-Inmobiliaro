@@ -118,10 +118,10 @@ class FakeMessage:
         self.text, self.date = text, None
         self.sent: list[tuple[str, str, Any]] = []
 
-    async def reply_text(self, value, reply_markup=None):
+    async def reply_text(self, value, reply_markup=None, parse_mode=None):
         self.sent.append(("text", value, reply_markup))
 
-    async def reply_photo(self, photo, caption=None, reply_markup=None):
+    async def reply_photo(self, photo, caption=None, reply_markup=None, parse_mode=None):
         self.sent.append(("photo", caption, reply_markup))
 
 
@@ -146,10 +146,10 @@ class FakeChat:
     def __init__(self):
         self.sent: list[tuple[str, Any]] = []
 
-    async def send_message(self, text, reply_markup=None):
+    async def send_message(self, text, reply_markup=None, parse_mode=None):
         self.sent.append((text, reply_markup))
 
-    async def send_photo(self, photo, caption=None, reply_markup=None):
+    async def send_photo(self, photo, caption=None, reply_markup=None, parse_mode=None):
         self.sent.append((caption, reply_markup))
 
 

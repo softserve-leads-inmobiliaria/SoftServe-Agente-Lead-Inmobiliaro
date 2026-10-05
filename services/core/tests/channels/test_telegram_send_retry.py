@@ -119,7 +119,7 @@ class FlakyMessage:
         self.attempts = 0
         self.replies = []
 
-    async def reply_text(self, value):
+    async def reply_text(self, value, parse_mode=None):
         self.attempts += 1
         if self.errors:
             raise self.errors.pop(0)
