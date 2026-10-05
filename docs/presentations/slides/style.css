@@ -1,0 +1,113 @@
+:root {
+  --accent: #0f766e;
+}
+
+.slidev-layout h1 {
+  color: var(--accent);
+}
+
+.slidev-layout.cover h1,
+.slidev-layout.statement h1 {
+  color: inherit;
+}
+
+.slidev-layout.fact h1 {
+  font-size: 6rem;
+  color: var(--accent);
+}
+
+.card {
+  border: 1px solid #e5e7eb;
+  border-top: 4px solid var(--accent);
+  border-radius: 0.5rem;
+  padding: 1.25rem;
+  font-size: 0.9rem;
+}
+
+.card h3 {
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.kpi {
+  border-radius: 0.5rem;
+  background: #f0fdfa;
+  padding: 1.25rem 0.75rem;
+}
+
+.kpi-n {
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.kpi-l {
+  font-size: 0.8rem;
+  opacity: 0.8;
+  margin-top: 0.25rem;
+}
+
+table {
+  width: 100%;
+}
+
+.slidev-layout.cover {
+  background: linear-gradient(135deg, #0f766e 0%, #134e4a 100%);
+  color: #ffffff;
+}
+
+.flow {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+.flow-step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  padding: 0.75rem 0.5rem;
+  text-align: center;
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.flow-step span {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.flow-hl {
+  border: 2px solid var(--accent);
+  background: #f0fdfa;
+}
+
+.flow-arrow {
+  display: flex;
+  align-items: center;
+  color: var(--accent);
+  font-size: 1.25rem;
+}
+
+.slidev-layout.cover p,
+.slidev-layout.cover div {
+  color: rgba(255, 255, 255, 0.85);
+  opacity: 1;
+}
+
+.slidev-layout.statement h1 {
+  font-size: 2.6rem;
+  line-height: 1.3;
+  font-weight: 500;
+  max-width: 52rem;
+  margin: 0 auto;
+}
+
+.slidev-layout.statement strong {
+  color: var(--accent);
+  font-weight: 700;
+}

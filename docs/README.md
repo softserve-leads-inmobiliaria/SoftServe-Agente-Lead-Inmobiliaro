@@ -19,6 +19,7 @@ segundo árbol de documentación.
 | [`STORIES/EPICAS.md`](STORIES/EPICAS.md) | Objetivo de cada épica |
 | [`presentations/2026-09-24-revision-de-avance.md`](presentations/2026-09-24-revision-de-avance.md) | Presentación de avance del equipo: objetivo, arquitectura, backlog, próxima semana y guion de demo |
 | [`presentations/2026-10-01-estado-del-proyecto.md`](presentations/2026-10-01-estado-del-proyecto.md) | Estado del proyecto al 1 de octubre: backlog, qué funciona en vivo, qué falta por persona, riesgos y cómo preparar la demo |
+| [`presentations/2026-10-05-estado-del-proyecto.md`](presentations/2026-10-05-estado-del-proyecto.md) | Guion de la presentación del 5 de octubre: objetivo, próxima semana, backlog, historia típica, arquitectura, demo y preguntas. Sus diapositivas están en [`presentations/slides/`](presentations/slides/README.md) |
 
 El estado de cada historia (To Do / In Progress / Done) vive solo en GitHub Issues y en el
 [Project](https://github.com/orgs/softserve-leads-inmobiliaria/projects/1), nunca en estos
