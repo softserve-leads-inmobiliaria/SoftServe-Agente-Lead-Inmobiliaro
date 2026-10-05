@@ -9,7 +9,7 @@
     :root {
       --bg: #f4f6f8; --surface: #ffffff; --surface-2: #f0f2f5;
       --ink: #1b1f24; --muted: #525a66; --line: #e3e6ea;
-      --brand: #1f4e79; --brand-soft: #e8f0f8;
+      --brand: #1f4e79; --brand-soft: #e8f0f8; --on-brand: #ffffff;
       --hot: #b3261e; --warm: #8a5200; --cold: #33566e;
       --danger: #b3261e; --ok: #1e6b3a;
       --radius: 12px; --radius-sm: 8px;
@@ -20,7 +20,7 @@
       :root {
         --bg: #12151a; --surface: #1b1f24; --surface-2: #232830;
         --ink: #e8eaed; --muted: #9aa4b2; --line: #2c323b;
-        --brand: #8ab4f8; --brand-soft: #1e2b3d;
+        --brand: #8ab4f8; --brand-soft: #1e2b3d; --on-brand: #10151b;
         --hot: #f2b8b5; --warm: #f0c36d; --cold: #9ec1d6;
         --danger: #f2b8b5; --ok: #7fd0a0;
       }
@@ -88,10 +88,10 @@
     .badge-warm { color: var(--warm); border-color: var(--warm); }
     .badge-cold { color: var(--cold); border-color: var(--cold); }
     .badge-status { color: var(--muted); }
-    .badge-count { background: var(--brand); color: #fff; border-color: var(--brand); }
+    .badge-count { background: var(--brand); color: var(--on-brand); border-color: var(--brand); }
 
     .btn { font: inherit; font-size: var(--text-sm); padding: 6px 12px; border-radius: var(--radius-sm);
-      cursor: pointer; border: 1px solid var(--brand); background: var(--brand); color: #fff; }
+      cursor: pointer; border: 1px solid var(--brand); background: var(--brand); color: var(--on-brand); }
     .btn:hover { filter: brightness(1.08); }
     .btn[disabled] { opacity: .5; cursor: not-allowed; }
     .btn-ghost { background: transparent; color: var(--brand); }
