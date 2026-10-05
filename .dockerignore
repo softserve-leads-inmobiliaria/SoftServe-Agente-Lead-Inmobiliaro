@@ -7,6 +7,9 @@
 **/.pytest_cache/
 **/.ruff_cache/
 docs/
+# Atajos de desarrollo (#192): no van a ninguna imagen.
+Makefile
+make/
 scripts/
 # Excepción: los seeds de demo sí van a la imagen de db/ (servicio `seed` del compose, B-5, C-9 y N-9).
 !scripts/seed_advisors.py

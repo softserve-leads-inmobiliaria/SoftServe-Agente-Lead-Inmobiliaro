@@ -26,6 +26,29 @@ equipo: [`docs/ONBOARDING.md`](docs/ONBOARDING.md).
 | `tests/` | Contract tests, pruebas del arnés E2E y validación del compose y los Dockerfiles |
 | `docs/` | Único árbol de documentación |
 
+## Comandos rápidos con make
+
+El `Makefile` de la raíz (módulos en `make/`) junta los comandos de este README, de
+[`docs/TESTING.md`](docs/TESTING.md) y de CI. Es opcional: los comandos de `docker compose` siguen
+valiendo igual. Funciona con el `make` de macOS y en Windows desde Git Bash.
+
+```
+make help          # todos los objetivos, por sección
+make start         # stack (core, panel, phoenix) + asesores, catálogo e historia N-9 + URLs
+make install       # .venv con las dependencias de desarrollo
+make test          # las 7 suites como CI (levanta postgres)
+```
+
+| Para | Objetivos |
+| :--- | :--- |
+| Stack | `up`, `down` / `stop`, `clean` (borra volúmenes), `reset`, `rebuild s=core`, `logs s=core`, `ps`, `shell s=core`, `info` |
+| Base de datos | `db-up`, `migrate`, `seed`, `seed-history`, `seed-history-clear`, `seed-all`, `db-reset`, `psql`, `migration m="..."` |
+| Calidad | `lint`, `test`, `test-<suite>` (`contracts infra db core catalog panel harness`), `ci` |
+| Demo y arnés | `demo`, `demo-down`, `demo-purge`, `harness`, `live-run`, `conversar`, `exportar`, `smoke` |
+
+Los argumentos extra van en `ARGS`: `make test-core ARGS="-k consent"`,
+`make seed-history ARGS="--hoy 2026-10-01"`, `make live-run ARGS="--sin-frases"`.
+
 ## Correr los tests
 
 ```
