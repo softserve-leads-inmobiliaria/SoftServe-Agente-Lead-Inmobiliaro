@@ -17,3 +17,6 @@ tmp/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Node (diapositivas en docs/presentations/slides)
+node_modules/
