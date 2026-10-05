@@ -87,18 +87,21 @@ def leads_list(request: Request, advisor: CurrentAdvisor, session: DbSession) ->
 @app.get("/panel/{advisor_token}/leads/{lead_id}", response_class=HTMLResponse)
 def lead_card(request: Request, lead_id: uuid.UUID, advisor: CurrentAdvisor,
               session: DbSession) -> HTMLResponse:
-    return _lead_page(request, session, advisor, lead_id)
+    return _lead_page(request, session, advisor, lead_id,
+                      gestionado=request.query_params.get("gestionado") == "1")
 
 
 def _lead_page(request: Request, session: Session, advisor: Advisor, lead_id: uuid.UUID, *,
-               closing: Closing | None = None, close_error: str | None = None) -> HTMLResponse:
+               closing: Closing | None = None, close_error: str | None = None,
+               gestionado: bool = False) -> HTMLResponse:
     detail = lead_detail(session, advisor, lead_id)
     if detail is None:  # no existe, o es de otra zona: la misma respuesta para los dos
         raise NOT_FOUND
     return templates.TemplateResponse(request, "lead_detail.html", {
         "advisor": advisor, "token": advisor.access_token, **as_context(detail),
         "today": datetime.now(UTC).astimezone(LOCAL_TZ).date().isoformat(),
-        "closing": closing, "close_error": close_error,
+        "closing": closing, "close_error": close_error, "gestionado": gestionado,
+        "unread": unread_notices(session, advisor),
     }, status_code=422 if close_error else 200)
 
 
@@ -107,6 +110,7 @@ def funnel(request: Request, advisor: CurrentAdvisor, session: DbSession) -> HTM
     """Dashboard del funnel (B-9): global, lo ve cualquier asesor con token válido."""
     return templates.TemplateResponse(request, "funnel.html", {
         "advisor": advisor, "token": advisor.access_token, "report": funnel_report(session),
+        "unread": unread_notices(session, advisor),
     })
 
 
@@ -120,6 +124,7 @@ def business(request: Request, advisor: CurrentAdvisor, session: DbSession, peri
     return templates.TemplateResponse(request, "negocio.html", {
         "advisor": advisor, "token": advisor.access_token,
         "view": business_view(session, period, now=now, include_synthetic=demo),
+        "unread": unread_notices(session, advisor),
     })
 
 
@@ -144,10 +149,12 @@ def notice(notice_id: uuid.UUID, advisor: CurrentAdvisor, session: DbSession) ->
 
 @app.post("/panel/{advisor_token}/leads/{lead_id}/gestionar")
 def take_lead(lead_id: uuid.UUID, advisor: CurrentAdvisor, session: DbSession) -> RedirectResponse:
-    """"Marcar en gestión" (B-6). Vuelve a la ficha; 303 para que el navegador haga GET."""
+    """"Marcar en gestión" (B-6). Vuelve a la ficha; 303 para que el navegador haga GET. El
+    `gestionado=1` hace que la ficha muestre la confirmación (una vez)."""
     if not claim_lead(session, advisor, lead_id):
         raise NOT_FOUND
-    return RedirectResponse(url=f"/panel/{advisor.access_token}/leads/{lead_id}", status_code=303)
+    return RedirectResponse(url=f"/panel/{advisor.access_token}/leads/{lead_id}?gestionado=1",
+                            status_code=303)
 
 
 @app.post("/panel/{advisor_token}/leads/{lead_id}/cerrar", response_class=HTMLResponse)

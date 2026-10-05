@@ -1,25 +1,27 @@
 {% extends "base.html" %}
-{% block title %}Lead {{ lead.telegram_user_id }}{% endblock %}
-{% block heading %}Lead {{ lead.telegram_user_id }}{% endblock %}
-{% block subheading %}
-  <a href="/panel/{{ token }}">&larr; Volver a mis leads</a>
+{% import "_macros.html" as ui %}
+{% block title %}Lead {{ (lead.id|string|replace('-', ''))[:6] }}{% endblock %}
+{% block heading %}
+  Lead {{ (lead.id|string|replace('-', ''))[:6] }}
+  {{ ui.status_badge(lead.status) }}
 {% endblock %}
+{% block subheading %}{{ lead.zone or "sin zona" }} · {{ lead.advisor_id or "sin asignar" }}{% endblock %}
 
 {% block content %}
 <div class="card">
+  <h2 class="section-title">Datos</h2>
   <dl>
     <dt>Etapa</dt><dd>{{ fsm_state or "—" }}</dd>
     <dt>Estado</dt>
     <dd>
-      <span class="pill pill-{{ lead.status }}">
-        {% if lead.status == "sql" %}en gestión{% elif lead.status == "mql" %}calificado{% elif lead.status == "closed_won" %}operación cerrada{% else %}{{ lead.status }}{% endif %}
-      </span>
+      {{ ui.status_badge(lead.status) }}
       {% if lead.status in ("nuevo", "mql") %}
       <form class="inline" method="post" action="/panel/{{ token }}/leads/{{ lead.id }}/gestionar">
-        <button type="submit">Marcar en gestión</button>
+        <button type="submit" class="btn">Marcar en gestión</button>
       </form>
       {% endif %}
     </dd>
+    <dt>Telegram</dt><dd class="muted">{{ lead.telegram_user_id }}</dd>
     <dt>Asesor</dt><dd>{{ lead.advisor_id or "sin asignar" }}</dd>
     <dt>Zona</dt><dd>{{ lead.zone or "—" }}</dd>
     <dt>Presupuesto</dt><dd>{{ lead.budget or "—" }}</dd>
@@ -31,19 +33,23 @@
 </div>
 
 <div class="card">
-  <h2 style="font-size:15px;margin:0 0 12px">Score BANT-E</h2>
+  <h2 class="section-title">Score BANT-E</h2>
   {% if score %}
-  <p>
-    <span class="band band-{{ score.band }}">{{ score.band }}</span>
-    <span class="muted">{{ score.total }}/100</span>
-  </p>
-  <dl>
-    <dt>Necesidad</dt><dd>{{ score.need_fit }}</dd>
-    <dt>Presupuesto</dt><dd>{{ score.budget }}</dd>
-    <dt>Decisión</dt><dd>{{ score.authority }}</dd>
-    <dt>Plazo</dt><dd>{{ score.timing }}</dd>
-    <dt>Elegibilidad</dt><dd>{{ score.eligibility }}</dd>
-  </dl>
+  <p>{{ ui.band_badge(score.band, score.total ~ "/100") }}</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Dimensión</th><th scope="col">Puntos</th><th scope="col">Proporción</th></tr></thead>
+      <tbody>
+        {% for label, value in (("Necesidad", score.need_fit), ("Presupuesto", score.budget),
+                                ("Decisión", score.authority), ("Plazo", score.timing),
+                                ("Elegibilidad", score.eligibility)) %}
+        <tr>
+          <td>{{ label }}</td><td>{{ value }}</td><td>{{ ui.bar(value, 20, label ~ ": " ~ value) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% if score.reasons %}
   <ul class="muted">{% for reason in score.reasons %}<li>{{ reason }}</li>{% endfor %}</ul>
   {% endif %}
@@ -53,41 +59,45 @@
 </div>
 
 <div class="card">
-  <h2 style="font-size:15px;margin:0 0 12px">Visitas</h2>
+  <h2 class="section-title">Visitas</h2>
   {% if visits %}
-  <table>
-    <thead><tr><th>Fecha</th><th>Propiedad</th></tr></thead>
-    <tbody>
-      {% for visit in visits %}
-      <tr>
-        <td>{{ visit.scheduled_at.strftime("%d/%m/%Y %H:%M") }}</td>
-        <td>{{ visit.property_id }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Fecha</th><th scope="col">Propiedad</th></tr></thead>
+      <tbody>
+        {% for visit in visits %}
+        <tr>
+          <td>{{ visit.scheduled_at.strftime("%d/%m/%Y %H:%M") }}</td>
+          <td>{{ visit.property_id }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% else %}
   <p class="muted">Sin visitas agendadas.</p>
   {% endif %}
 </div>
 
 <div class="card" id="operacion">
-  <h2 style="font-size:15px;margin:0 0 12px">Operación</h2>
+  <h2 class="section-title">Operación</h2>
   {% if deals %}
-  <table>
-    <thead><tr><th>Fecha</th><th>Propiedad</th><th>Tipo</th><th>Precio</th><th>Asesor</th></tr></thead>
-    <tbody>
-      {% for deal in deals %}
-      <tr>
-        <td>{{ deal.closed_on.strftime("%d/%m/%Y") }}</td>
-        <td>{{ deal.title }} <span class="muted">({{ deal.property_id }})</span></td>
-        <td>{{ deal.kind }}</td>
-        <td>${{ "{:,.2f}".format(deal.price) }}</td>
-        <td>{{ deal.advisor_id }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Fecha</th><th scope="col">Propiedad</th><th scope="col">Tipo</th><th scope="col">Precio</th><th scope="col">Asesor</th></tr></thead>
+      <tbody>
+        {% for deal in deals %}
+        <tr>
+          <td>{{ deal.closed_on.strftime("%d/%m/%Y") }}</td>
+          <td>{{ deal.title }} <span class="muted">({{ deal.property_id }})</span></td>
+          <td>{{ deal.kind }}</td>
+          <td>${{ "{:,.2f}".format(deal.price) }}</td>
+          <td>{{ deal.advisor_id }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% else %}
   <p class="muted">Sin operación cerrada.</p>
   {% endif %}
@@ -97,7 +107,7 @@
   <details class="close"{% if close_error %} open{% endif %}>
     <summary>Cerrar operación</summary>
     <form class="close" method="post" action="/panel/{{ token }}/leads/{{ lead.id }}/cerrar">
-      <label>Propiedad
+      <label class="field">Propiedad
         <select name="property_id" required>
           <option value="" disabled{% if not closing %} selected{% endif %}>Elige la propiedad</option>
           {% for touched, label in ((true, "Las que le interesaron al lead"), (false, "Disponibles en su zona")) %}
@@ -116,7 +126,7 @@
           {% endfor %}
         </select>
       </label>
-      <label>Tipo
+      <label class="field">Tipo
         <select name="kind" required>
           <option value="" disabled{% if not closing %} selected{% endif %}>Renta o venta</option>
           {% for kind in ("renta", "venta") %}
@@ -124,13 +134,13 @@
           {% endfor %}
         </select>
       </label>
-      <label>Precio de cierre
+      <label class="field">Precio de cierre
         <input type="number" name="price" min="0" step="0.01" required value="{{ closing.price if closing else '' }}">
       </label>
-      <label>Fecha de cierre
+      <label class="field">Fecha de cierre
         <input type="date" name="closed_on" max="{{ today }}" required value="{{ closing.closed_on if closing else today }}">
       </label>
-      <button type="submit">Cerrar operación</button>
+      <button type="submit" class="btn">Cerrar operación</button>
     </form>
   </details>
   <script>
@@ -145,7 +155,7 @@
 
 {% if lead.handoff_summary %}
 <div class="card">
-  <h2 style="font-size:15px;margin:0 0 12px">Resumen del traspaso</h2>
+  <h2 class="section-title">Resumen del traspaso</h2>
   <p style="white-space:pre-line;margin:0">{{ lead.handoff_summary }}</p>
   {% if lead.handoff_summary_at %}
   <p class="muted" style="margin:8px 0 0">Generado el {{ lead.handoff_summary_at.strftime("%d/%m %H:%M") }}</p>
@@ -154,7 +164,7 @@
 {% endif %}
 
 <div class="card">
-  <h2 style="font-size:15px;margin:0 0 12px">Conversación</h2>
+  <h2 class="section-title">Conversación</h2>
   {% if messages %}
     {% for message in messages %}
     <div class="msg msg-{{ message.role }}">

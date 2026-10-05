@@ -80,7 +80,7 @@ def test_el_asesor_ve_sus_avisos_los_nuevos_primero_y_no_los_de_otros(client, mu
 def test_la_lista_de_leads_cuenta_los_avisos_sin_leer(client, mundo):
     page = client.get(f"/panel/{mundo['valeria'].access_token}")
 
-    assert "Avisos (1 sin leer)" in page.text
+    assert "1 sin leer" in page.text  # el contador de Avisos de la navegación (#178)
 
 
 def test_abrir_un_aviso_lo_marca_leido_y_lleva_a_la_ficha(client, mundo):

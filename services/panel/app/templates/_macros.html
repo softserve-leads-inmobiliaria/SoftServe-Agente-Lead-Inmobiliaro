@@ -1,0 +1,45 @@
+{% macro stat(value, label, sub=None) -%}
+<div class="stat">
+  <span class="stat-value">{{ value }}</span>
+  <span class="stat-label">{{ label }}</span>
+  {% if sub %}<span class="stat-sub">{{ sub }}</span>{% endif %}
+</div>
+{%- endmacro %}
+
+{# Barra de proporción en SVG inline: sin librería ni CDN. `maximum` es el valor de la serie más alta. #}
+{% macro bar(value, maximum, label=None) -%}
+<svg class="bar" width="120" height="8" viewBox="0 0 120 8" role="img"
+     aria-label="{{ label if label is not none else value }}">
+  <rect width="120" height="8" rx="4" fill="var(--line)"></rect>
+  <rect width="{{ ((value / maximum * 120) if maximum else 0)|round(1) }}" height="8" rx="4"
+        fill="var(--brand)"></rect>
+</svg>
+{%- endmacro %}
+
+{# Banda del score: badge con texto, no solo color (accesibilidad). #}
+{% macro band_badge(score_band, score_total=None) -%}
+  {%- if score_band -%}
+    <span class="badge badge-{{ score_band|lower }}">{{ score_band }}</span>
+    {%- if score_total is not none %} <span class="muted">{{ score_total }}</span>{% endif %}
+  {%- else -%}
+    <span class="muted">sin calificar</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro status_badge(status) -%}
+  <span class="badge badge-status">
+    {%- if status == "sql" %}en gestión
+    {%- elif status == "mql" %}calificado
+    {%- elif status == "closed_won" %}operación cerrada
+    {%- else %}{{ status }}{% endif -%}
+  </span>
+{%- endmacro %}
+
+{# Identificador legible del lead (#178): el `telegram_user_id` queda en el `title` y en la ficha. #}
+{% macro lead_link(lead, token) -%}
+<a href="/panel/{{ token }}/leads/{{ lead.id }}" title="{{ lead.telegram_user_id }}">Lead {{ (lead.id|string|replace('-', ''))[:6] }}{% if lead.zone %} · {{ lead.zone }}{% endif %}</a>
+{%- endmacro %}
+
+{% macro sla_badge(wait, sla_minutes) -%}
+{% set minutes = (wait.total_seconds() // 60)|int %}<span class="sla" title="Umbral: {{ sla_minutes }} min">HOT sin tomar hace {% if minutes < 120 %}{{ minutes }} min{% else %}{{ minutes // 60 }} h{% endif %}</span>
+{%- endmacro %}
