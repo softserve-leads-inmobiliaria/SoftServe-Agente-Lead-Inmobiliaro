@@ -50,7 +50,7 @@ def mundo(session_factory):
         ajeno = Lead(id=uuid.uuid4(), telegram_user_id=f"tg-{uuid.uuid4().hex[:8]}",
                      zone=ZAPOPAN, status="nuevo")
         propiedad = Property(id=f"prop_{uuid.uuid4().hex[:6]}", title="Depa en Providencia",
-                             price=3_000_000, type="venta", zone=PROVIDENCIA, m2=90,
+                             price=3_000_000, type="venta", kind="departamento", zone=PROVIDENCIA, m2=90,
                              bedrooms=2, bathrooms=2, address_approx="Av. Providencia",
                              address_exact="Av. Providencia 1234")
         # Los modelos usan FK sin relationship(), así que el orden de inserción es cosa nuestra:

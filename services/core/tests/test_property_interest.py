@@ -69,8 +69,8 @@ def _inventory(engine):
     with engine.begin() as connection:
         for prop in (ANUNCIO, OTRA, PROPERTY):
             connection.execute(text(
-                "INSERT INTO properties (id, title, price, type, zone, m2, bedrooms, bathrooms, address_approx,"
-                " address_exact) VALUES (:id, :title, 1, 'renta', 'Providencia', 1, 1, 1, 'a', 'b')"
+                "INSERT INTO properties (id, title, price, type, kind, zone, m2, bedrooms, bathrooms, address_approx,"
+                " address_exact) VALUES (:id, :title, 1, 'renta', 'departamento', 'Providencia', 1, 1, 1, 'a', 'b')"
                 " ON CONFLICT (id) DO NOTHING"), {"id": prop["id"], "title": prop["title"]})
 
 

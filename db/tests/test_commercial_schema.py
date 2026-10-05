@@ -50,7 +50,7 @@ def session(engine):
 
 
 def _property(session, pid="prop_n1", status="disponible") -> Property:
-    prop = Property(id=pid, title="t", price=1, type="renta", zone="Providencia", m2=1, bedrooms=1,
+    prop = Property(id=pid, title="t", price=1, type="renta", kind="casa", zone="Providencia", m2=1, bedrooms=1,
                     bathrooms=1, address_approx="a", address_exact="b", status=status)
     session.add(prop)
     session.flush()

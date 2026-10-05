@@ -261,7 +261,7 @@ def test_lead_defaults_and_invalid_consent(session):
 def test_visit_idempotency_key_prevents_duplicates(session):
     lead = new_lead(session)
     session.add_all([
-        Property(id="prop_x", title="t", price=1, type="venta", zone="z", m2=1, bedrooms=1,
+        Property(id="prop_x", title="t", price=1, type="venta", kind="casa", zone="z", m2=1, bedrooms=1,
                  bathrooms=1, address_approx="a", address_exact="b"),
         Advisor(id="adv_x", name="n", zone="z", access_token="tok"),
     ])
@@ -277,8 +277,8 @@ def test_visit_idempotency_key_prevents_duplicates(session):
 
 
 def test_property_status_and_type_are_constrained(session):
-    for field, value in (("status", "vendida"), ("type", "traspaso")):
-        kwargs = dict(id=f"p_{field}", title="t", price=1, type="venta", zone="z", m2=1, bedrooms=1,
+    for field, value in (("status", "vendida"), ("type", "traspaso"), ("kind", "casa de campo")):
+        kwargs = dict(id=f"p_{field}", title="t", price=1, type="venta", kind="casa", zone="z", m2=1, bedrooms=1,
                       bathrooms=1, address_approx="a", address_exact="b") | {field: value}
         with pytest.raises(IntegrityError), session.begin_nested():
             session.add(Property(**kwargs))
@@ -329,7 +329,7 @@ def test_message_role_is_constrained_and_tool_calls_are_json(session):
 
 def test_audit_log_and_promotions_basics(session):
     session.add(AuditLog(actor="guardrail", action="jailbreak_attempt", payload={"turn": 3}))
-    session.add(Property(id="prop_p", title="t", price=1, type="renta", zone="z", m2=1, bedrooms=0,
+    session.add(Property(id="prop_p", title="t", price=1, type="renta", kind="casa", zone="z", m2=1, bedrooms=0,
                          bathrooms=1, address_approx="a", address_exact="b"))
     session.flush()
     session.execute(text("INSERT INTO promotions (id, property_id, title, description, valid_until) "

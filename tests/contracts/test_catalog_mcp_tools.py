@@ -112,3 +112,17 @@ def test_promotion_requires_valid_until():
 def test_status_enum_matches_design_doc():
     props = tool("get_availability")["outputSchema"]["properties"]
     assert props["status"]["enum"] == ["disponible", "apartado", "cerrado"]
+
+
+def test_kind_is_a_closed_vocabulary_apart_from_the_operation():
+    # #188: `type` es la operación y `kind` el inmueble; son filtros distintos y ambos cerrados.
+    kinds = ["departamento", "casa", "terreno", "local", "estudio"]
+    search_in = tool("search_properties")["inputSchema"]["properties"]
+    assert search_in["kind"]["enum"] == kinds
+    assert search_in["type"]["enum"] == ["venta", "renta", "preventa"]
+    item = tool("search_properties")["outputSchema"]["properties"]["properties"]["items"]
+    assert item["properties"]["kind"]["enum"] == kinds
+    assert "kind" in item["required"]
+    out = tool("get_property")["outputSchema"]
+    assert out["properties"]["kind"]["enum"] == kinds
+    assert "kind" in out["required"]

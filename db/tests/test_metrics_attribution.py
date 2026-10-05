@@ -45,9 +45,9 @@ def session(engine):
         transaction = connection.begin()
         with Session(bind=connection) as session:
             session.add_all([
-                Property(id="prop_a", title="A", price=1, type="renta", zone="Providencia", m2=1, bedrooms=1,
+                Property(id="prop_a", title="A", price=1, type="renta", kind="casa", zone="Providencia", m2=1, bedrooms=1,
                          bathrooms=1, address_approx="a", address_exact="b"),
-                Property(id="prop_b", title="B", price=1, type="venta", zone="Zapopan", m2=1, bedrooms=1,
+                Property(id="prop_b", title="B", price=1, type="venta", kind="casa", zone="Zapopan", m2=1, bedrooms=1,
                          bathrooms=1, address_approx="a", address_exact="b"),
                 Advisor(id="adv_a", name="Valeria", zone="Providencia", access_token=f"t-{uuid.uuid4().hex}"),
             ])

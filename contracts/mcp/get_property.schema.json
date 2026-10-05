@@ -39,7 +39,19 @@
           "venta",
           "renta",
           "preventa"
-        ]
+        ],
+        "description": "Operación: venta, renta o preventa."
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "departamento",
+          "casa",
+          "terreno",
+          "local",
+          "estudio"
+        ],
+        "description": "Tipo de inmueble."
       },
       "zone": {
         "type": "string"
@@ -94,6 +106,7 @@
       "title",
       "price",
       "type",
+      "kind",
       "zone",
       "m2",
       "bedrooms",

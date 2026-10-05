@@ -12,10 +12,10 @@ from typing import Any, Callable
 from sqlalchemy.orm import Session
 
 from app import data
-from db.models import Promotion, Property
+from db.models import PROPERTY_KINDS, Promotion, Property
 
 # Campos públicos: `address_exact` nunca sale de aquí salvo en get_property con lead_qualified=true.
-_SUMMARY_FIELDS = ("id", "title", "price", "type", "zone", "m2", "bedrooms", "bathrooms",
+_SUMMARY_FIELDS = ("id", "title", "price", "type", "kind", "zone", "m2", "bedrooms", "bathrooms",
                    "amenities", "status", "address_approx")
 
 
@@ -64,7 +64,8 @@ class CatalogService:
         zone: str | None = None,
         budget_range: dict[str, float] | None = None,
         type: str | None = None,
-        bedrooms: int | None = None
+        bedrooms: int | None = None,
+        kind: str | None = None,
     ) -> dict[str, Any]:
         """Busca propiedades en PostgreSQL aplicando filtros y devolviendo los campos de resumen."""
         self._check_upstream()
@@ -72,6 +73,9 @@ class CatalogService:
         # Validamos el rango de presupuesto según las reglas de negocio
         if budget_range is not None and budget_range["min"] > budget_range["max"]:
             raise CatalogError("INVALID_INPUT", "budget_range.min no puede ser mayor que max.")
+        # `type` es la operación (venta/renta/preventa); `kind`, el inmueble (#188).
+        if kind is not None and kind not in PROPERTY_KINDS:
+            raise CatalogError("INVALID_INPUT", f"kind debe ser uno de: {', '.join(PROPERTY_KINDS)}.")
 
         with self._db_session_factory() as db:
             query = db.query(Property)
@@ -83,6 +87,8 @@ class CatalogService:
                 query = query.filter(Property.type == type)
             if bedrooms is not None:
                 query = query.filter(Property.bedrooms == bedrooms)
+            if kind is not None:
+                query = query.filter(Property.kind == kind)
             if budget_range is not None:
                 query = query.filter(
                     Property.price >= budget_range["min"],
@@ -98,6 +104,7 @@ class CatalogService:
                     "title": prop.title,
                     "price": float(prop.price) if prop.price is not None else None,
                     "type": prop.type,
+                    "kind": prop.kind,
                     "zone": prop.zone,
                     "m2": float(prop.m2) if prop.m2 is not None else None,
                     "bedrooms": prop.bedrooms,
@@ -123,6 +130,7 @@ class CatalogService:
             "title": prop.title,
             "price": float(prop.price) if prop.price is not None else None,
             "type": prop.type,
+            "kind": prop.kind,
             "zone": prop.zone,
             "m2": float(prop.m2) if prop.m2 is not None else None,
             "bedrooms": prop.bedrooms,

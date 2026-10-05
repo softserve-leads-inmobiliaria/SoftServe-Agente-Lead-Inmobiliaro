@@ -24,6 +24,7 @@ from db.repo_root import repo_root
 from db.settings import database_url as _database_url
 
 PropertyType = Literal["venta", "renta", "preventa"]
+PropertyKind = Literal["departamento", "casa", "terreno", "local", "estudio"]
 
 engine = create_engine(_database_url())
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -96,10 +97,13 @@ def create_mcp(service: CatalogService | None = None) -> FastMCP:
 
     @mcp.tool()
     def search_properties(zone: str | None = None, budget_range: dict[str, float] | None = None,
-                          type: PropertyType | None = None, bedrooms: int | None = None) -> Any:
-        """Busca propiedades por filtros opcionales. Sin coincidencias devuelve properties: []."""
+                          type: PropertyType | None = None, bedrooms: int | None = None,
+                          kind: PropertyKind | None = None) -> Any:
+        """Busca propiedades por filtros opcionales. `type` es la operación (venta/renta/preventa);
+        `kind` es el inmueble (departamento/casa/terreno/local/estudio). Si el lead dice "depa" o
+        "departamento", usa kind=departamento. Sin coincidencias devuelve properties: []."""
         return run(service.search_properties, zone=zone, budget_range=budget_range, type=type,
-                   bedrooms=bedrooms)
+                   bedrooms=bedrooms, kind=kind)
 
     @mcp.tool()
     def get_property(property_id: str, lead_qualified: bool) -> Any:

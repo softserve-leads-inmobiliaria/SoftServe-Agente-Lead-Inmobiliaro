@@ -45,14 +45,27 @@ def client(monkeypatch, engine):
 def test_search_message_consults_the_catalog_over_mcp():
     catalog = StubCatalog()
     out = asyncio.run(handle_event(INBOUND | {"text": "Busco un departamento"}, catalog))
-    assert catalog.calls == [("search_properties", {})]
+    assert catalog.calls == [("search_properties", {"kind": "departamento"})]
     assert out["text"].endswith("Por ejemplo: Casa de prueba.")
     VALIDATOR.validate(out)
 
 
 def test_search_without_results_keeps_the_fixed_reply():
-    out = asyncio.run(handle_event(INBOUND | {"text": "Busco casa"}, StubCatalog(properties=[])))
+    # Sin tipo de inmueble, una búsqueda sin resultados no cambia la respuesta fija.
+    out = asyncio.run(handle_event(INBOUND | {"text": "Busco algo"}, StubCatalog(properties=[])))
     assert "Por ejemplo" not in out["text"]
+
+
+def test_search_of_a_kind_without_results_says_so():
+    # #188: "busco depa" no debe ofrecer casas; si no hay del tipo pedido, lo dice.
+    out = asyncio.run(handle_event(INBOUND | {"text": "Busco un depa"}, StubCatalog(properties=[])))
+    assert "departamentos" in out["text"]
+
+
+def test_search_without_a_kind_sends_no_kind_filter():
+    catalog = StubCatalog()
+    asyncio.run(handle_event(INBOUND | {"text": "Busco algo en Providencia"}, catalog))
+    assert catalog.calls == [("search_properties", {})]
 
 
 def test_other_intents_do_not_touch_the_catalog():

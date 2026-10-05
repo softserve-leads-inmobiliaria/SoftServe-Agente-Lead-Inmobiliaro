@@ -60,7 +60,7 @@ def session(engine):
 
 def _property(session, pid, *, zone="Providencia", type_="venta", price=1_000_000,
               listed: datetime | None = None, synthetic=False) -> Property:
-    prop = Property(id=pid, title=f"Casa {pid}", price=price, type=type_, zone=zone, m2=100, bedrooms=2,
+    prop = Property(id=pid, title=f"Casa {pid}", price=price, type=type_, kind="casa", zone=zone, m2=100, bedrooms=2,
                     bathrooms=1, address_approx="a", address_exact="b")
     session.add(prop)
     session.flush()

@@ -116,8 +116,8 @@ def _list(engine, zone, *, price=15000, bedrooms=2, type_="renta", status="dispo
     property_id = f"prop_{uuid.uuid4().hex[:8]}"
     with session_scope(engine) as session:
         session.execute(text(
-            "INSERT INTO properties (id, title, price, type, zone, m2, bedrooms, bathrooms, address_approx,"
-            " address_exact, status) VALUES (:id, 'Depto nuevo', :price, :type, :zone, 80, :bedrooms, 1,"
+            "INSERT INTO properties (id, title, price, type, kind, zone, m2, bedrooms, bathrooms, address_approx,"
+            " address_exact, status) VALUES (:id, 'Depto nuevo', :price, :type, 'departamento', :zone, 80, :bedrooms, 1,"
             " 'Col. Centro', 'Calle Falsa 123', :status)"),
             {"id": property_id, "price": price, "type": type_, "zone": zone, "bedrooms": bedrooms, "status": status})
         record_listing(session, property_id, "test", at=at)

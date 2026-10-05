@@ -24,13 +24,13 @@ def unmet_filters(arguments: Mapping[str, Any] | None) -> UnmetSearch:
     deja en None: un argumento raro del LLM no puede tumbar el turno."""
     arguments = arguments or {}
     zone = arguments.get("zone")
-    kind = arguments.get("type")
+    property_type = arguments.get("type")  # la operación (venta/renta/preventa); `kind` es el inmueble
     bedrooms = arguments.get("bedrooms")
     budget = arguments.get("budget_range")
     budget = budget if isinstance(budget, Mapping) else {}
     return {
         "zone": zone.strip() if isinstance(zone, str) and zone.strip() else None,
-        "type": kind if kind in PROPERTY_TYPES else None,
+        "type": property_type if property_type in PROPERTY_TYPES else None,
         "bedrooms": bedrooms if isinstance(bedrooms, int) and not isinstance(bedrooms, bool) and bedrooms >= 0
         else None,
         "budget_min": _number(budget.get("min")),
