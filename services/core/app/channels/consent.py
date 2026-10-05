@@ -53,20 +53,22 @@ def is_opt_out(text: str) -> bool:
             or core_is_opt_out(text))
 
 
-def is_first_turn(engine: Engine, conversation_id: uuid.UUID) -> bool:
-    """True mientras la conversación no haya registrado actividad.
+def is_first_turn(engine: Engine, lead_id: uuid.UUID) -> bool:
+    """True mientras ninguna conversación del lead haya registrado actividad (B-2: una vez por lead).
+
+    Es por lead y no por conversación: tras un estado terminal (p. ej. `HUMAN_HANDOFF`) el canal abre
+    una conversación nueva, y el lead que ya vio el aviso no debe recibirlo otra vez (#189).
 
     Se consulta ANTES de `process_turn`: `StateStore.touch()` mueve `last_message_at` en cada turno.
     """
     with session_scope(engine) as session:
-        row = session.execute(
-            select(Conversation.started_at, Conversation.last_message_at)
-            .where(Conversation.id == conversation_id)
-        ).one_or_none()
-        if row is None:
-            return True
-        started_at, last_message_at = row
-        return last_message_at <= started_at
+        active = session.execute(
+            select(Conversation.id)
+            .where(Conversation.lead_id == lead_id,
+                   Conversation.last_message_at > Conversation.started_at)
+            .limit(1)
+        ).first()
+        return active is None
 
 
 def withdraw_consent(engine: Engine, lead_id: uuid.UUID) -> None:
