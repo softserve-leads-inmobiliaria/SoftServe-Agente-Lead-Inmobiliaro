@@ -1192,7 +1192,7 @@ registrado la mitad de los leads calificados quedaría sin aviso.
 
 ## DT-34 — Inventario de demo sintético, en México, sembrado desde el catálogo
 
-**Estado:** aceptada
+**Estado:** aceptada; el país y la moneda los reemplaza DT-55 (Colombia, USD). Lo de datos sintéticos y no *scraping* sigue vigente
 
 **Contexto.** `C-9` (#35) pide un inventario de demo con casos borde a propósito. Hasta ahora el
 servicio `seed` solo sembraba asesores, así que el catálogo del stack arrancaba vacío y toda búsqueda
@@ -2266,3 +2266,84 @@ no se puede filtrar en SQL. Un enum de Postgres — descartado: el esquema usa `
 `unmet_searches` (N-5), el ranking de N-6 y `property_alerts` (A-18) agrupen o filtren también por
 `kind`: hoy una alerta nacida de una búsqueda con `kind` no lo guarda y podría avisar de otro inmueble.
 
+---
+
+## DT-55 — La experiencia del producto es en inglés, el inventario está en Colombia y se cobra en dólares
+
+**Estado:** aceptada (#202). Reemplaza el país y la moneda de DT-34.
+
+**Contexto.** Todo lo que ve una persona y todo lo que lee el LLM estaba en español: la conversación
+con el lead, los prompts, los mensajes fijos, los guardrails que reconocen lo que escribe el lead, el
+panel, los avisos al asesor y el reporte al gerente. El inventario de demo estaba en Guadalajara, con
+precios en pesos mexicanos. Se decidió que el producto se presente en inglés, con propiedades en
+Colombia y precios en dólares. Traducir también el código, los identificadores y la documentación
+multiplicaría el trabajo sin cambiar nada de lo que se ve.
+
+**Decisión.**
+
+*Idioma.* Pasa a inglés todo lo que lee una persona del producto o el LLM:
+
+- Los prompts (agente, clasificador de señales BANT-E y resumen del traspaso), las descripciones de las
+  herramientas MCP y los textos que el catálogo devuelve en sus resultados (requisitos, mensajes de
+  error, títulos y descripciones del inventario).
+- Los mensajes fijos al lead: saludo, aviso de privacidad, respuestas de respaldo, oferta de asesor,
+  botones de Telegram (B-11), alertas, recordatorios y seguimientos.
+- Los guardrails y los reconocedores de texto del lead (`input_guard`, `promise_guard`,
+  `address_guard`, las palabras de estado de `factuality`, la baja, el "avísame" de las alertas y la
+  fecha de visita): reconocen inglés, y sus *gold sets* se traducen con los mismos umbrales (fair
+  housing en diferencia 0).
+- El panel, los avisos y la ficha de traspaso al asesor, y el reporte semanal al gerente.
+
+Se quedan en español el código, los identificadores, los comentarios y *docstrings*, los mensajes de
+log y de excepción (los lee el equipo, no un usuario del producto) y `docs/`.
+
+*Solo se conversa en inglés.* Si el mensaje del lead está en español, el guardrail de entrada lo
+detiene antes del LLM, la FSM y el score, y responde un texto fijo en inglés: solo se puede conversar
+en inglés y que lo intente de nuevo. El turno queda en `audit_log` con su motivo, no cuenta como turno
+sin resolver (frustración) y no cambia el estado de la conversación. La detección es determinista y
+local, sin LLM ni servicio externo: proporción de palabras funcionales del español y caracteres que
+solo usa el español (`ñ`, `¿`, `¡`, tildes), sin contar los nombres de zonas, calles y propiedades del
+inventario, para que "Do you have apartments in El Poblado?" pase. Tiene su propio *gold set*: mensajes
+en inglés con nombres propios en español que deben pasar, y mensajes cortos en español ("hola",
+"cuánto cuesta") que deben detenerse. Tres cosas se procesan antes del filtro de idioma y siguen
+reconociendo español:
+
+- La **baja** ("dame de baja", "no me escribas"): retirar el consentimiento no puede depender del
+  idioma.
+- La **redacción de PII**: un dato personal no se guarda aunque el mensaje se rechace.
+- Las **categorías protegidas** (fair housing): un mensaje en inglés con un gentilicio en español
+  ("I'm colombiano") pasa el filtro de idioma y tiene que detectarse igual.
+
+*Mercado.* Las propiedades están en Colombia: el inventario de demo, las zonas, las calles y el formato
+de dirección son colombianos, y la hora local de la agenda y de las métricas pasa a la de Colombia
+(UTC-5, sin horario de verano) en lugar de la de Guadalajara (DT-32). Los precios, los montos de
+requisitos (enganche, ingreso mensual) y los montos de cierre son en dólares estadounidenses (USD). La
+columna `price` sigue siendo un número: la moneda es una convención del producto, la dicen los prompts,
+las descripciones de las herramientas y las plantillas, y no se guarda por fila. No hay que recalibrar el *scoring* que DT-34 anticipaba
+para un cambio de país: el puntaje de presupuesto solo mira si el lead lo declaró (`score_budget`), y
+los requisitos del catálogo son proporciones del precio (`down_payment_ratio`, `income_multiple`), que
+no dependen de la moneda.
+
+**Los valores de los contratos no cambian:** `type` (`venta/renta/preventa`), `kind`, `status` de
+propiedad, los estados de la FSM, las intenciones y los valores de las señales (`declarado`,
+`inmediata`...). Son vocabulario interno congelado por los *contract tests* y viven en la base. El
+prompt le indica al LLM que nunca los muestre tal cual al lead, sino en inglés, y `factuality` reconoce
+las formas en inglés ("available", "reserved", "sold"...) como el mismo estado canónico.
+
+**Alternativas.** Traducir también código y documentación — descartado: el costo se dispara y no cambia
+nada visible. Un producto bilingüe que responda en el idioma del lead — descartado: duplica prompts,
+mensajes y *gold sets*. Dejar que el LLM responda en inglés a un mensaje en español — descartado: el
+lead no se entera de que debe escribir en inglés, y los guardrails en inglés no ven lo que escribió.
+Detectar el idioma con una librería (`langdetect`, `lingua`) — descartado: con mensajes de chat de dos
+o tres palabras y nombres propios en español fallan o pesan demasiado, y la regla se puede ajustar con
+un *gold set*. Un campo de moneda por propiedad — descartado: todo el inventario está en una sola
+moneda y agregarlo cambia el contrato sin necesidad.
+
+**Consecuencias.** Los guardrails son la parte delicada: se traducen primero y con sus *gold sets*,
+antes que los prompts. La PII se adapta a Colombia (cédula de ciudadanía, NIT, teléfonos +57) y
+`address_guard` a sus direcciones ("Calle 10 # 43-12", "Carrera 43A"). El inventario de demo se
+reescribe, con precios en USD, y cambian los escenarios de `scripts/demo/conversar.py`, el arnés y las
+ciudades de ejemplo de #194. Los tests que buscan texto en español se ajustan en el mismo PR que cambia
+ese texto. #200 (gentilicios con errata) y #201 (enumerar requisitos) se resuelven ya en inglés. El
+idioma por omisión del ruteo de asesores (`DEFAULT_LANGUAGE = "es"`, DT-42) se revisa junto con los
+asesores del seed. Esto no es un *bugfix*: la semana de *hardening* (Z-1, #51) empieza cuando termine.
