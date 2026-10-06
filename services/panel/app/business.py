@@ -26,7 +26,7 @@ PERIODS = {"semana": 7, "mes": 30}
 DEFAULT_PERIOD = "semana"
 RANGE = "rango"
 MAX_RANGE_DAYS = 366
-INVALID_RANGE = "El rango no es válido: se muestra la última semana."
+INVALID_RANGE = "That date range is invalid: showing the last week."
 
 
 @dataclass(frozen=True)

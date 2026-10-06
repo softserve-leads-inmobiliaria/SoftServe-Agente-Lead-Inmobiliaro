@@ -32,16 +32,19 @@ from app.repo import (
     unread_notices,
 )
 from app.sla import hot_wait_from_env, overdue
+from db.labels import label
 from db.logging_config import configure_json_logging
 from db.models import Advisor
 from db.session import get_engine, session_scope
 
 configure_json_logging()
 
-app = FastAPI(title="Panel de asesores")
+app = FastAPI(title="Agent panel")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+# El panel se lee en inglés (#202): los valores de la base (`venta`, `disponible`, `nuevo`...) pasan por `label`.
+templates.env.globals["label"] = label
 
-NOT_FOUND = HTTPException(status_code=404, detail="No encontrado")
+NOT_FOUND = HTTPException(status_code=404, detail="Not found")
 REFRESH_SECONDS = 30  # los avisos no llegan solos al navegador: la página se recarga (B-15)
 SLA_HOT_WAIT = hot_wait_from_env()  # B-12: un valor inválido falla al arrancar
 
