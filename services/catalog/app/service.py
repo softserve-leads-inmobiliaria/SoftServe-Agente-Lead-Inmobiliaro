@@ -46,17 +46,17 @@ class CatalogService:
 
     def _check_upstream(self) -> None:
         if not self._available():
-            raise CatalogError("UPSTREAM_UNAVAILABLE", "El catálogo no está disponible por ahora.")
+            raise CatalogError("UPSTREAM_UNAVAILABLE", "The catalog is not available right now.")
 
     def _find(self, db: Session, property_id: Any) -> Property:
         """Busca una propiedad en la base de datos; lanza error si es inválida o no existe."""
         if not isinstance(property_id, str) or not property_id:
-            raise CatalogError("INVALID_INPUT", "property_id debe ser un texto no vacío.")
+            raise CatalogError("INVALID_INPUT", "property_id must be a non-empty string.")
         
         prop = db.query(Property).filter(Property.id == property_id).first()
 
         if not prop:
-            raise CatalogError("NOT_FOUND", f"No existe la propiedad {property_id}.")
+            raise CatalogError("NOT_FOUND", f"Property {property_id} does not exist.")
         
         return prop
 
@@ -73,10 +73,10 @@ class CatalogService:
 
         # Validamos el rango de presupuesto según las reglas de negocio
         if budget_range is not None and budget_range["min"] > budget_range["max"]:
-            raise CatalogError("INVALID_INPUT", "budget_range.min no puede ser mayor que max.")
+            raise CatalogError("INVALID_INPUT", "budget_range.min cannot be greater than max.")
         # `type` es la operación (venta/renta/preventa); `kind`, el inmueble (#188).
         if kind is not None and kind not in PROPERTY_KINDS:
-            raise CatalogError("INVALID_INPUT", f"kind debe ser uno de: {', '.join(PROPERTY_KINDS)}.")
+            raise CatalogError("INVALID_INPUT", f"kind must be one of: {', '.join(PROPERTY_KINDS)}.")
 
         with self._db_session_factory() as db:
             query = db.query(Property)
@@ -214,11 +214,11 @@ class CatalogService:
 
             notes = []
             if not down_ok:
-                notes.append(f"Se requiere un enganche de al menos {int(ratio * 100)}% del precio.")
+                notes.append(f"A down payment of at least {int(ratio * 100)}% of the price is required.")
             if not income_ok:
-                notes.append(f"Se requiere un ingreso mensual de al menos {multiple} veces la renta.")
+                notes.append(f"A monthly income of at least {multiple} times the rent is required.")
             if not references_ok:
-                notes.append("Se requieren referencias.")
+                notes.append("References are required.")
             
             return {
                 "meets_requirements": down_ok and income_ok and references_ok,
@@ -226,6 +226,6 @@ class CatalogService:
                     "down_payment_ok": down_ok, 
                     "income_ok": income_ok,
                     "references_ok": references_ok,
-                    "notes": " ".join(notes) or "Cumple los requisitos."
+                    "notes": " ".join(notes) or "Meets the requirements."
                 },
             }
