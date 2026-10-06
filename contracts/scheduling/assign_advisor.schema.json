@@ -22,7 +22,7 @@
       "language": {
         "type": "string",
         "minLength": 2,
-        "description": "Idioma de la conversación. Por defecto 'es'."
+        "description": "Idioma de la conversación. Por defecto 'en' (DT-55)."
       },
       "registered_only": {
         "type": "boolean",
