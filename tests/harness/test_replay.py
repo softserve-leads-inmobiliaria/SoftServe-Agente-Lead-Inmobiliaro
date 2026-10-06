@@ -32,13 +32,13 @@ def test_every_discovered_script_passes(path):
 
 
 def test_new_fixture_is_discovered_without_code_changes(tmp_path):
-    (tmp_path / "nuevo.jsonl").write_text('{"text": "Hola"}\n', encoding="utf-8")
+    (tmp_path / "nuevo.jsonl").write_text('{"text": "Hi"}\n', encoding="utf-8")
     (tmp_path / "ignorado.txt").write_text("no soy un guion", encoding="utf-8")
     assert [p.name for p in run_all.discover(tmp_path)] == ["nuevo.jsonl"]
 
 
 def test_built_events_are_valid_and_deterministic():
-    turns = [{"text": "Hola", "property_id": "prop_1"}, {"text": "Adiós"}]
+    turns = [{"text": "Hi", "property_id": "prop_1"}, {"text": "Bye"}]
     events = build_events("demo", turns)
     for event in events:
         VALIDATOR.validate(event)
@@ -80,25 +80,25 @@ def test_blank_lines_are_ignored(tmp_path):
 
 
 def test_failed_expectation_is_reported(tmp_path):
-    path = _write(tmp_path, json.dumps({"text": "Hola", "expect_reply_contains": "inexistente"}))
+    path = _write(tmp_path, json.dumps({"text": "Hi", "expect_reply_contains": "inexistente"}))
     with pytest.raises(AssertionError, match="inexistente"):
         replay(path, default_responder())
 
 
 def test_invalid_responder_output_is_reported(tmp_path):
-    path = _write(tmp_path, '{"text": "Hola"}\n')
+    path = _write(tmp_path, '{"text": "Hi"}\n')
     with pytest.raises(jsonschema.ValidationError):
         replay(path, lambda event: {"texto": "no canónico"})
 
 
 def test_turn_without_expectations_replays_fine(tmp_path):
-    path = _write(tmp_path, '{"text": "Hola"}\n')
+    path = _write(tmp_path, '{"text": "Hi"}\n')
     (reply,) = replay(path, default_responder())
     assert reply["direction"] == "outbound"
 
 
 def test_run_id_gives_each_run_its_own_conversation():
-    turns = [{"text": "Hola"}]
+    turns = [{"text": "Hi"}]
     first, second = build_events("demo", turns, "corrida-1")[0], build_events("demo", turns, "corrida-2")[0]
     default = build_events("demo", turns)[0]
     assert len({first["conversation_id"], second["conversation_id"], default["conversation_id"]}) == 3
@@ -108,13 +108,13 @@ def test_run_id_gives_each_run_its_own_conversation():
 
 
 def test_without_checking_replies_the_phrases_are_not_required(tmp_path):
-    path = _write(tmp_path, json.dumps({"text": "Hola", "expect_reply_contains": "inexistente"}))
+    path = _write(tmp_path, json.dumps({"text": "Hi", "expect_reply_contains": "inexistente"}))
     (reply,) = replay(path, default_responder(), check_replies=False)
     assert reply["text"]
 
 
 def test_an_empty_reply_fails_even_without_checking_phrases(tmp_path):
-    path = _write(tmp_path, '{"text": "Hola"}\n')
+    path = _write(tmp_path, '{"text": "Hi"}\n')
     responder = default_responder()
     with pytest.raises(AssertionError, match="vacía"):
         replay(path, lambda event: responder(event) | {"text": "  "}, check_replies=False)
@@ -129,7 +129,7 @@ def _not_json(event):
 def test_run_all_reports_every_script_instead_of_aborting(tmp_path, monkeypatch, capsys, responder):
     """OBS-6: una respuesta fuera de contrato o que no es JSON cortaba la corrida sin informe."""
     for name in ("a", "b"):
-        (tmp_path / f"{name}.jsonl").write_text('{"text": "Hola"}\n', encoding="utf-8")
+        (tmp_path / f"{name}.jsonl").write_text('{"text": "Hi"}\n', encoding="utf-8")
     monkeypatch.setattr(run_all, "discover", lambda: sorted(tmp_path.glob("*.jsonl")))
     monkeypatch.setattr(run_all, "configured_responder", lambda: responder)
     assert run_all.main() == 1
