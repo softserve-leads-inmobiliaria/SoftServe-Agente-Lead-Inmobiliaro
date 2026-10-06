@@ -1,4 +1,4 @@
-"""B-11: botones "Agendar visita" y "Hablar con un asesor" bajo la respuesta del bot.
+"""B-11: botones "Schedule a visit" y "Talk to an agent" bajo la respuesta del bot.
 
 Tocar un botón es, para el turno, lo mismo que escribir su texto fijo (DT-51): pasa por el guardrail de
 entrada, la FSM y el score, y el evento CT-1 no cambia.
@@ -37,7 +37,7 @@ from db.repo_root import repo_root
 from db.session import session_scope
 
 EVENT_SCHEMA = json.loads((repo_root() / "contracts" / "event.schema.json").read_text(encoding="utf-8"))
-TO_RECOMMEND = ("Hola", "Busco un departamento", "¿Cuánto cuesta?")
+TO_RECOMMEND = ("Hi", "I'm looking for an apartment", "How much does it cost?")
 
 
 class StubCatalog:
@@ -74,7 +74,7 @@ def callback_update(data):
     return Update.de_json({"update_id": 3, "callback_query": {
         "id": "cb1", "chat_instance": "ci", "data": data,
         "from": {"id": 7, "is_bot": False, "first_name": "x"},
-        "message": {"message_id": 5, "date": 1700000000, "chat": {"id": 7, "type": "private"}, "text": "hola"}}},
+        "message": {"message_id": 5, "date": 1700000000, "chat": {"id": 7, "type": "private"}, "text": "hi"}}},
         None)
 
 
@@ -110,7 +110,7 @@ def test_the_visit_button_only_shows_where_asking_for_a_visit_books_it(prop, sta
 def test_each_button_carries_its_label_and_callback():
     markup = keyboard((VISIT_BUTTON, ADVISOR_BUTTON))
     rows = [[(b.text, b.callback_data) for b in row] for row in markup.inline_keyboard]
-    assert rows == [[("Agendar visita", "lead:visita")], [("Hablar con un asesor", "lead:asesor")]]
+    assert rows == [[("Schedule a visit", "lead:visita")], [("Talk to an agent", "lead:asesor")]]
 
 
 class FakeMessage:
@@ -128,16 +128,16 @@ class FakeMessage:
 @pytest.mark.parametrize("photo", [None, "https://images.unsplash.com/photo-1?w=1024"])
 def test_the_buttons_go_under_the_text_or_the_photo(photo):
     message = FakeMessage()
-    asyncio.run(send_reply(message, ChannelReply("Hola", photo, (ADVISOR_BUTTON,))))
+    asyncio.run(send_reply(message, ChannelReply("Hi", photo, (ADVISOR_BUTTON,))))
     ((kind, value, markup),) = message.sent
-    assert kind == ("photo" if photo else "text") and value == "Hola"
+    assert kind == ("photo" if photo else "text") and value == "Hi"
     assert markup.inline_keyboard[0][0].callback_data == "lead:asesor"
 
 
 def test_without_buttons_no_keyboard_is_sent():
     message = FakeMessage()
-    asyncio.run(send_reply(message, ChannelReply("Hola")))
-    assert message.sent == [("text", "Hola", None)]
+    asyncio.run(send_reply(message, ChannelReply("Hi")))
+    assert message.sent == [("text", "Hi", None)]
 
 
 # --- el flujo completo por los manejadores del bot --------------------------------------------------------------
@@ -230,14 +230,14 @@ def test_in_recommend_the_property_reply_carries_both_buttons(engine, agenda):
 
 def test_before_recommend_only_the_advisor_button_shows(engine, agenda):
     lead = Lead_(engine, 961)
-    lead.say("Hola")
-    lead.say("¿Cuánto cuesta?")
+    lead.say("Hi")
+    lead.say("How much does it cost?")
     assert lead.state == "DISCOVERY" and lead.buttons() == ["lead:asesor"]
 
 
 def test_a_reply_that_is_not_about_a_property_has_no_buttons(engine, agenda):
     lead = Lead_(engine, 962)
-    lead.say("Hola")
+    lead.say("Hi")
     assert lead.buttons() == []
 
 
@@ -269,8 +269,8 @@ def test_tapping_the_visit_button_twice_books_a_single_visit(engine, agenda):
 
 def test_the_advisor_button_hands_the_lead_to_a_human(engine, agenda, spy_events):
     lead = Lead_(engine, 965)
-    lead.say("Hola")
-    lead.say("¿Cuánto cuesta?")
+    lead.say("Hi")
+    lead.say("How much does it cost?")
     lead.tap(ADVISOR_BUTTON)
 
     assert lead.state == "HUMAN_HANDOFF"

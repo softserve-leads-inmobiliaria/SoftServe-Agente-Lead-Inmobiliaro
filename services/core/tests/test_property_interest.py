@@ -128,28 +128,28 @@ def test_the_deep_link_writes_anuncio(engine):
 
 def test_a_search_writes_busqueda_for_each_result(engine):
     lead = Lead(engine)
-    lead.say("Busco un departamento", Catalog(found=(PROPERTY, OTRA)))
+    lead.say("I'm looking for an apartment", Catalog(found=(PROPERTY, OTRA)))
     assert lead.interest() == [("prop_otra", "busqueda"), ("prop_test", "busqueda")]
 
 
 def test_a_get_property_writes_consulta(engine):
     lead = Lead(engine)
-    lead.say("¿Y la casa de Usaquen?", agent=LooksUp())
+    lead.say("What about the house in Usaquen?", agent=LooksUp())
     assert lead.interest() == [("prop_otra", "consulta")]
 
 
 def test_the_same_search_in_two_turns_is_two_rows(engine):
     # Una fila por turno: dos búsquedas son dos interacciones, y N-6 las cuenta así.
     lead = Lead(engine)
-    lead.say("Busco un departamento")
-    lead.say("Busco otro departamento")
+    lead.say("I'm looking for an apartment")
+    lead.say("I'm looking for another apartment")
     assert lead.interest() == [("prop_test", "busqueda"), ("prop_test", "busqueda")]
 
 
 def test_a_booked_visit_writes_visita(engine, monkeypatch):
     monkeypatch.setattr(scheduling_client, "get_scheduling", lambda: ContractAgenda())
     lead = Lead(engine)
-    for message in ("Hola", "Busco un departamento", "¿Cuánto cuesta?", "Quiero agendar una visita"):
+    for message in ("Hi", "I'm looking for an apartment", "How much does it cost?", "I'd like to schedule a visit"):
         lead.say(message)
     assert ("prop_test", "visita") not in lead.interest()  # ofrecer horarios no es una visita
     lead.say("la 2")
@@ -159,7 +159,7 @@ def test_a_booked_visit_writes_visita(engine, monkeypatch):
 def test_a_property_missing_from_the_inventory_is_skipped_without_breaking_the_turn(engine, caplog):
     lead = Lead(engine)
     with caplog.at_level("WARNING", logger="core.state_store"):
-        reply = lead.say("Busco un departamento", Catalog(found=({"id": "prop_no_existe", "title": "x", "status": "disponible"}, OTRA)))
+        reply = lead.say("I'm looking for an apartment", Catalog(found=({"id": "prop_no_existe", "title": "x", "status": "disponible"}, OTRA)))
     assert reply["text"] and lead.interest() == [("prop_otra", "busqueda")]
     [skipped] = [record for record in caplog.records if record.name == "core.state_store"]
     assert (skipped.property_id, skipped.kind) == ("prop_no_existe", "busqueda")
@@ -172,7 +172,7 @@ def test_if_saving_the_interest_fails_the_whole_turn_fails(engine, monkeypatch):
     monkeypatch.setattr(StateStore, "record_interest", broken)
     lead = Lead(engine)
     with pytest.raises(RuntimeError):
-        lead.say("Busco un departamento")
+        lead.say("I'm looking for an apartment")
     assert lead.messages() == 0 and lead.interest() == []
 
 

@@ -113,7 +113,7 @@ def test_an_unknown_error_is_not_retried(waits):
 
 class FlakyMessage:
     def __init__(self, *errors):
-        self.text = "hola"
+        self.text = "hi"
         self.date = None
         self.errors = list(errors)
         self.attempts = 0

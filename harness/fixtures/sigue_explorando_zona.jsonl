@@ -1,2 +1,2 @@
-{"text": "Hola, buenas tardes", "expect_reply_contains": "asistente"}
-{"text": "Todavía estoy decidiendo qué zona conviene, sigo pensando", "expect_reply_contains": "propiedad"}
+{"text": "Hi, good afternoon", "expect_reply_contains": "asistente"}
+{"text": "I'm still deciding which area suits me, still thinking", "expect_reply_contains": "propiedad"}

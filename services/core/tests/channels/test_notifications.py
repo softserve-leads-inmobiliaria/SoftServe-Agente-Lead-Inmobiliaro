@@ -14,7 +14,7 @@ from app.channels.telegram import reply_to
 from db.models import Advisor, AdvisorNotification, Lead
 from db.session import session_scope
 
-CALIFICA = "Tengo presupuesto de 3 millones, decido yo y es urgente"
+CALIFICA = "My budget is 3 million, I decide and it's urgent"
 
 
 class StubCatalog:
@@ -128,11 +128,11 @@ def test_al_calificar_el_asesor_de_la_zona_recibe_la_tarjeta_una_vez(engine):
     lead = f"tg-{uuid.uuid4().hex[:8]}"
 
     asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id=lead,
-                         text="Busco un departamento", bot=bot))   # fija la zona
+                         text="I'm looking for an apartment", bot=bot))   # fija la zona
     # El turno que califica también busca: así la tarjeta lleva la propiedad de interés.
     asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id=lead,
-                         text=f"Busco un departamento. {CALIFICA}", bot=bot))
-    asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id=lead, text="¿Sigue disponible?",
+                         text=f"I'm looking for an apartment. {CALIFICA}", bot=bot))
+    asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id=lead, text="Is it still available?",
                          bot=bot))
 
     bot.send_message.assert_awaited_once()
@@ -154,7 +154,7 @@ def test_la_propiedad_que_el_lead_miro_antes_sigue_en_la_tarjeta(engine):
     lead = f"tg-{uuid.uuid4().hex[:8]}"
 
     asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id=lead,
-                         text="Busco un departamento", bot=bot))
+                         text="I'm looking for an apartment", bot=bot))
     asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id=lead, text=CALIFICA, bot=bot))
 
     texto = bot.send_message.await_args.kwargs["text"]

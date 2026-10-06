@@ -47,11 +47,12 @@ MAX_RETRY_AFTER_SECONDS = 30.0
 CAPTION_MAX_CHARS = 1024
 
 # B-11 (DT-51): cada botón se traduce a un mensaje del lead con texto fijo, que sigue el flujo normal
-# (guardrail de entrada, FSM y score) igual que si lo hubiera escrito.
+# (guardrail de entrada, FSM y score) igual que si lo hubiera escrito. En inglés, como todo lo que lee el
+# lead (#202): un texto en español lo frenaría el filtro de idioma. El `callback_data` no cambia.
 VISIT_BUTTON, ADVISOR_BUTTON = "visita", "asesor"
-BUTTON_LABELS: Mapping[str, str] = {VISIT_BUTTON: "Agendar visita", ADVISOR_BUTTON: "Hablar con un asesor"}
-BUTTON_TEXTS: Mapping[str, str] = {VISIT_BUTTON: "Quiero agendar una visita",
-                                   ADVISOR_BUTTON: "Quiero hablar con un asesor"}
+BUTTON_LABELS: Mapping[str, str] = {VISIT_BUTTON: "Schedule a visit", ADVISOR_BUTTON: "Talk to an agent"}
+BUTTON_TEXTS: Mapping[str, str] = {VISIT_BUTTON: "I'd like to schedule a visit",
+                                   ADVISOR_BUTTON: "I want to talk to an agent"}
 _BUTTON_PREFIX = "lead:"
 
 _ENGINE_KEY = "engine"
@@ -225,7 +226,7 @@ def keyboard(buttons: tuple[str, ...]) -> InlineKeyboardMarkup:
 def buttons_for(turn: TurnReply) -> tuple[str, ...]:
     """Los botones bajo la respuesta (B-11, DT-51): solo si el turno trata de una propiedad.
 
-    "Agendar visita" solo cuando la FSM queda en `RECOMMEND`, el único estado en que pedir la visita
+    "Schedule a visit" solo cuando la FSM queda en `RECOMMEND`, el único estado en que pedir la visita
     arranca la reserva (B-8): en otro, el botón contestaría algo genérico sin agendar nada.
     """
     if turn.property is None:

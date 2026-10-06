@@ -44,7 +44,7 @@ def client(monkeypatch, engine):
 
 def test_search_message_consults_the_catalog_over_mcp():
     catalog = StubCatalog()
-    out = asyncio.run(handle_event(INBOUND | {"text": "Busco un departamento"}, catalog))
+    out = asyncio.run(handle_event(INBOUND | {"text": "I'm looking for an apartment"}, catalog))
     assert catalog.calls == [("search_properties", {"kind": "departamento"})]
     assert out["text"].endswith("Por ejemplo: Casa de prueba.")
     VALIDATOR.validate(out)
@@ -52,7 +52,7 @@ def test_search_message_consults_the_catalog_over_mcp():
 
 def test_search_without_results_keeps_the_fixed_reply():
     # Sin tipo de inmueble, una búsqueda sin resultados no cambia la respuesta fija.
-    out = asyncio.run(handle_event(INBOUND | {"text": "Busco algo"}, StubCatalog(properties=[])))
+    out = asyncio.run(handle_event(INBOUND | {"text": "I'm looking for something"}, StubCatalog(properties=[])))
     assert "Por ejemplo" not in out["text"]
 
 
@@ -70,7 +70,7 @@ def test_search_without_a_kind_sends_no_kind_filter():
 
 def test_other_intents_do_not_touch_the_catalog():
     catalog = StubCatalog()
-    asyncio.run(handle_event(INBOUND | {"text": "Hola"}, catalog))
+    asyncio.run(handle_event(INBOUND | {"text": "Hi"}, catalog))
     assert catalog.calls == []
 
 
@@ -79,7 +79,7 @@ def test_health(client):
 
 
 def test_post_event_returns_a_canonical_outbound_event(client):
-    response = client.post("/events", json=INBOUND | {"text": "Busco casa"})
+    response = client.post("/events", json=INBOUND | {"text": "I'm looking for a house"})
     assert response.status_code == 200
     VALIDATOR.validate(response.json())
     assert response.json()["direction"] == "outbound"
@@ -95,7 +95,7 @@ def test_invalid_event_is_422(client):
 def test_catalog_failure_is_503_without_details(monkeypatch, engine, error):
     monkeypatch.setattr(main, "catalog", StubCatalog(error=error))
     monkeypatch.setattr(main, "get_engine", lambda: engine)
-    response = TestClient(main.app).post("/events", json=INBOUND | {"text": "Busco casa"})
+    response = TestClient(main.app).post("/events", json=INBOUND | {"text": "I'm looking for a house"})
     assert response.status_code == 503
     assert "caído" not in response.text
 
@@ -106,7 +106,7 @@ def test_database_failure_is_503_without_details(monkeypatch):
     dead = create_engine("postgresql+psycopg://x:secreto@127.0.0.1:1/x", connect_args={"connect_timeout": 1})
     monkeypatch.setattr(main, "catalog", StubCatalog())
     monkeypatch.setattr(main, "get_engine", lambda: dead)
-    response = TestClient(main.app).post("/events", json=INBOUND | {"text": "Hola"})
+    response = TestClient(main.app).post("/events", json=INBOUND | {"text": "Hi"})
     assert response.status_code == 503
     assert "secreto" not in response.text
 
@@ -114,7 +114,7 @@ def test_database_failure_is_503_without_details(monkeypatch):
 def test_post_event_persists_the_new_state(client, engine):
     from sqlalchemy import text
 
-    client.post("/events", json=INBOUND | {"text": "Hola"})
+    client.post("/events", json=INBOUND | {"text": "Hi"})
     with engine.connect() as connection:
         state = connection.execute(text("SELECT fsm_state FROM conversations WHERE id = :c"),
                                    {"c": INBOUND["conversation_id"]}).scalar()

@@ -11,8 +11,8 @@ from app.channels.telegram import reply_to
 from db.models import Conversation, FsmContext, Lead, LeadScore
 from db.session import session_scope
 
-CALIFICA = "Tengo presupuesto de 3 millones, decido yo y es urgente"
-SIGNAL = {"budget_hint": "3 millones", "decision_maker": "declarado", "urgency": "inmediata",
+CALIFICA = "My budget is 3 million, I decide and it's urgent"
+SIGNAL = {"budget_hint": "budget is 3 million", "decision_maker": "declarado", "urgency": "inmediata",
           "matching_properties": 2, "meets_requirements": True}
 
 
@@ -103,9 +103,9 @@ def test_el_lead_que_vuelve_tras_el_traspaso_no_baja_a_frio(engine):
     _decir(engine, lead, CALIFICA)
     antes = _score(engine, lead)
     assert antes.band in ("WARM", "HOT")
-    _decir(engine, lead, "Quiero hablar con un asesor")  # HUMAN_HANDOFF: la conversación termina
+    _decir(engine, lead, "I want to talk to an agent")  # HUMAN_HANDOFF: la conversación termina
 
-    _decir(engine, lead, "Hola de nuevo")  # abre la conversación nueva
+    _decir(engine, lead, "Hi again")  # abre la conversación nueva
 
     despues = _score(engine, lead)
     assert despues.total >= antes.total and despues.band == antes.band
@@ -114,9 +114,9 @@ def test_el_lead_que_vuelve_tras_el_traspaso_no_baja_a_frio(engine):
 def test_el_lead_calificado_que_vuelve_sigue_marcado_como_calificado(engine):
     lead = f"tg-{uuid.uuid4().hex[:8]}"
     _decir(engine, lead, CALIFICA)
-    _decir(engine, lead, "Quiero hablar con un asesor")
+    _decir(engine, lead, "I want to talk to an agent")
 
-    _decir(engine, lead, "Hola de nuevo")
+    _decir(engine, lead, "Hi again")
 
     with session_scope(engine) as session:
         lead_id = session.execute(select(Lead.id).where(Lead.telegram_user_id == lead)).scalar_one()

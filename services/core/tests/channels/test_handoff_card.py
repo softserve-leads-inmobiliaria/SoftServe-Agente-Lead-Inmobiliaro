@@ -18,8 +18,8 @@ from app.channels.telegram import reply_to
 from db.models import Advisor, Lead
 from db.session import session_scope
 
-CALIFICA = "Tengo presupuesto de 3 millones, decido yo y es urgente"
-PIDE_HUMANO = "Quiero hablar con un asesor"
+CALIFICA = "My budget is 3 million, I decide and it's urgent"
+PIDE_HUMANO = "I want to talk to an agent"
 
 
 class StubCatalog:
@@ -71,14 +71,14 @@ def test_la_ficha_lleva_motivo_score_propiedad_visita_y_la_transcripcion_en_orde
                     property_title="Depa en El Poblado", property_id="prop_00231",
                     visit_at="25/09/2026 10:00", reasons=("presupuesto declarado",))
     ficha = HandoffFile(card=card, fsm_state="HUMAN_HANDOFF", reason="solicitud_humano",
-                        transcript=(("user", "Hola"), ("assistant", "¡Hola!"), ("user", "Quiero un asesor")))
+                        transcript=(("user", "Hi"), ("assistant", "Hello!"), ("user", "I want an agent")))
 
     resumen, transcripcion = render_handoff(ficha)
 
     assert "Traspaso de lead (HUMAN_HANDOFF): el lead pidió hablar con una persona" in resumen
     assert "HOT · 80/100" in resumen and "Depa en El Poblado (prop_00231)" in resumen
     assert "Visita agendada: 25/09/2026 10:00" in resumen
-    assert transcripcion == "Transcripción:\nLead: Hola\nAgente: ¡Hola!\nLead: Quiero un asesor"
+    assert transcripcion == "Transcripción:\nLead: Hi\nAgente: Hello!\nLead: I want an agent"
 
 
 def test_una_conversacion_sin_mensajes_lo_dice_en_vez_de_omitir_la_transcripcion():
@@ -119,7 +119,7 @@ def test_al_pedir_un_humano_el_asesor_recibe_la_ficha_una_sola_vez_con_toda_la_c
     bot = AsyncMock()
     lead = _nuevo_lead()
 
-    _decir(engine, lead, "Busco un departamento", bot)
+    _decir(engine, lead, "I'm looking for an apartment", bot)
     bot.send_message.assert_not_awaited()  # un turno sin traspaso no manda nada
     _decir(engine, lead, PIDE_HUMANO, bot)
 
@@ -129,14 +129,14 @@ def test_al_pedir_un_humano_el_asesor_recibe_la_ficha_una_sola_vez_con_toda_la_c
     assert "Zona: El Poblado" in resumen
     completa = "\n".join(transcripcion)
     # Incluye el turno del traspaso: mensaje del lead y respuesta del agente, en orden.
-    assert completa.index("Lead: Busco un departamento") < completa.index(f"Lead: {PIDE_HUMANO}")
+    assert completa.index("Lead: I'm looking for an apartment") < completa.index(f"Lead: {PIDE_HUMANO}")
     assert "Agente: Claro, te comunico con un asesor" in completa
     with session_scope(engine) as session:
         assigned = session.execute(select(Lead.advisor_id).where(Lead.telegram_user_id == lead)).scalar()
     assert assigned == advisor.id
 
     enviados = len(_mensajes(bot))
-    _decir(engine, lead, "gracias", bot)  # ya en estado terminal: no hay segundo traspaso
+    _decir(engine, lead, "thanks", bot)  # ya en estado terminal: no hay segundo traspaso
     assert len(_mensajes(bot)) == enviados
 
 
@@ -162,14 +162,14 @@ def test_una_visita_sin_agenda_manda_la_ficha_con_el_horario_preferido(engine):
     bot = AsyncMock()
     lead = _nuevo_lead()
 
-    for texto in ("Hola", "Busco un departamento", "¿Cuál es el precio?", "Quiero agendar una visita"):
+    for texto in ("Hi", "I'm looking for an apartment", "What's the price?", "I'd like to schedule a visit"):
         _decir(engine, lead, texto, bot)
     bot.send_message.assert_not_awaited()
-    _decir(engine, lead, "Mañana en la tarde", bot)
+    _decir(engine, lead, "Tomorrow afternoon", bot)
 
     assert "Traspaso de lead (HANDOFF)" in _mensajes(bot)[0]
     assert "la agenda no la pudo reservar" in _mensajes(bot)[0]
-    assert "Horario preferido para la visita: Mañana en la tarde" in _mensajes(bot)[0]
+    assert "Horario preferido para la visita: Tomorrow afternoon" in _mensajes(bot)[0]
 
 
 def test_el_traspaso_va_al_asesor_que_ya_tenia_el_lead_no_a_otro(engine):
@@ -178,7 +178,7 @@ def test_el_traspaso_va_al_asesor_que_ya_tenia_el_lead_no_a_otro(engine):
     otro = _advisor(engine, zone="Usaquen", chat_id="chat-otro")
     bot = AsyncMock()
     lead = _nuevo_lead()
-    _decir(engine, lead, "Busco un departamento", bot)
+    _decir(engine, lead, "I'm looking for an apartment", bot)
     _decir(engine, lead, CALIFICA, bot)  # califica: la tarjeta va al asesor de la zona
     with engine.begin() as connection:  # el lead pasa a otro asesor (p. ej. reasignación manual)
         connection.execute(text("UPDATE leads SET advisor_id = :a WHERE telegram_user_id = :t"),

@@ -187,7 +187,7 @@ def test_places_and_words_that_look_like_an_origin_are_not_flagged(text):
 
 
 def test_the_audit_does_not_say_which_protected_category_was_mentioned():
-    kinds = dict(inspect_input("Soy musulmán y busco casa").audit_kinds())
+    kinds = dict(inspect_input("I'm Muslim and I'm looking for a house").audit_kinds())
     assert kinds == {"input.protected_category": {}}
 
 
@@ -229,8 +229,15 @@ def test_a_spouse_is_generalized_to_partner(mention):
 # --- general ------------------------------------------------------------------------------------
 
 def test_a_clean_message_passes_through_unchanged():
-    verdict = inspect_input("Busco un departamento de 2 recámaras en El Poblado")
+    verdict = inspect_input("I'm looking for a 2-bedroom apartment in El Poblado")
     assert not verdict.flagged and verdict.audit_kinds() == []
+    assert verdict.clean_text == "I'm looking for a 2-bedroom apartment in El Poblado"
+
+
+def test_a_clean_spanish_message_is_only_flagged_for_its_language():
+    """En español nada más lo marca: los detectores en español siguen como regresión (DT-55)."""
+    verdict = inspect_input("Busco un departamento de 2 recámaras en El Poblado")
+    assert verdict.audit_kinds() == [("input.not_english", {})]
     assert verdict.clean_text == "Busco un departamento de 2 recámaras en El Poblado"
 
 
@@ -240,7 +247,7 @@ def test_no_script_of_the_harness_is_flagged():
     for path in fixtures:
         for line in path.read_text(encoding="utf-8").splitlines():
             text = json.loads(line)["text"]
-            assert not inspect_input(text).flagged, f"{path.name}: {text}"
+            assert not inspect_input(text).flagged, f"{path.name}: {text}"  # tampoco por idioma (#202)
 
 
 def test_empty_text_is_clean():

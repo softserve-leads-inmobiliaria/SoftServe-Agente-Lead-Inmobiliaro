@@ -110,7 +110,7 @@ def test_every_script_passes_end_to_end(stack, path):
 
 def test_search_reply_carries_data_that_only_the_catalog_has(stack, tmp_path):
     script = tmp_path / "busqueda.jsonl"
-    script.write_text(json.dumps({"text": "Busco un departamento"}) + "\n", encoding="utf-8")
+    script.write_text(json.dumps({"text": "I'm looking for an apartment"}) + "\n", encoding="utf-8")
     (reply,) = replay(script, http_responder(stack))
     assert "Por ejemplo: 2-bedroom apartment in El Poblado." in reply["text"]
 
@@ -165,9 +165,9 @@ def test_stop_withdraws_consent_in_postgres(stack, database_url, tmp_path):
     from sqlalchemy import create_engine, text
 
     script = tmp_path / "baja_del_lead.jsonl"
-    turns = ({"text": "Hola, buenas tardes", "expect_reply_contains": "asistente"},
+    turns = ({"text": "Hi, good afternoon", "expect_reply_contains": "asistente"},
              {"text": "/stop", "expect_reply_contains": "unsubscribed"},
-             {"text": "Busco un departamento", "expect_reply_contains": "unsubscribed"})
+             {"text": "I'm looking for an apartment", "expect_reply_contains": "unsubscribed"})
     script.write_text("".join(json.dumps(turn) + chr(10) for turn in turns), encoding="utf-8")
     replay(script, http_responder(stack))
     lead_id = build_events("baja_del_lead", [{"text": "x"}])[0]["lead_id"]
@@ -200,7 +200,7 @@ def test_a_streak_of_unresolved_turns_hands_off_to_a_human(stack, database_url, 
     from sqlalchemy import create_engine, text
 
     script = tmp_path / "frustracion.jsonl"
-    turns = ({"text": "Hola, buenas tardes", "expect_reply_contains": "asistente"},
+    turns = ({"text": "Hi, good afternoon", "expect_reply_contains": "asistente"},
              {"text": "ok", "expect_reply_contains": "propiedad"},
              {"text": "ok", "expect_reply_contains": "propiedad"},
              {"text": "ok", "expect_reply_contains": "asesor"})
@@ -251,7 +251,7 @@ def test_core_answers_503_when_the_catalog_is_down(database_url):
     core = _start("core", core_port, {"CATALOG_SERVICE_URL": f"http://127.0.0.1:{_free_port()}",
                                       "DATABASE_URL": database_url})
     try:
-        (event,) = build_events("caido", [{"text": "Busco casa"}])
+        (event,) = build_events("caido", [{"text": "I'm looking for a house"}])
         with pytest.raises(urllib.error.HTTPError) as exc:
             http_responder(f"http://127.0.0.1:{core_port}")(event)
         assert exc.value.code == 503

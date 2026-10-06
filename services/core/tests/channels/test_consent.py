@@ -36,7 +36,7 @@ def test_frases_de_baja_reconocidas(text):
 
 
 @pytest.mark.parametrize("text", [
-    "hola", "", "busco departamento", "me interesa la propiedad", "¿cuánto cuesta?",
+    "hi", "", "busco departamento", "me interesa la propiedad", "¿cuánto cuesta?",
 ])
 def test_mensajes_normales_no_son_baja(text):
     assert not is_opt_out(text)
@@ -60,7 +60,7 @@ def test_is_first_turn_solo_es_cierto_antes_del_primer_turno(engine):
     identity = resolve_identity(engine, "tg-consent-2")
     assert is_first_turn(engine, identity.lead_id)
 
-    asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="tg-consent-2", text="hola"))
+    asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="tg-consent-2", text="hi"))
     assert not is_first_turn(engine, identity.lead_id)
 
 
@@ -74,7 +74,7 @@ def _cerrar_conversacion(engine, conversation_id) -> None:
 def test_el_aviso_no_se_repite_en_una_conversacion_nueva_del_mismo_lead(engine):
     """#189: tras un traspaso se abre otra conversación, pero el lead ya vio el aviso."""
     primera = asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="tg-consent-4",
-                                   text="hola"))
+                                   text="hi"))
     anterior = resolve_identity(engine, "tg-consent-4")
     _cerrar_conversacion(engine, anterior.conversation_id)
 
@@ -83,7 +83,7 @@ def test_el_aviso_no_se_repite_en_una_conversacion_nueva_del_mismo_lead(engine):
     assert not is_first_turn(engine, nueva.lead_id)
 
     segunda = asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="tg-consent-4",
-                                   text="busco algo en El Poblado"))
+                                   text="looking for something in El Poblado"))
     assert primera.startswith(PRIVACY_NOTICE)
     assert PRIVACY_NOTICE not in segunda
 
@@ -100,13 +100,13 @@ def test_una_conversacion_terminal_sin_actividad_no_cuenta_como_aviso_visto(engi
     _cerrar_conversacion(engine, identity.conversation_id)
 
     reply = asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="tg-consent-6",
-                                 text="hola"))
+                                 text="hi"))
     assert reply.startswith(PRIVACY_NOTICE)
 
 
 def test_la_baja_corta_antes_del_llm(engine, monkeypatch):
     """El AC pide que el opt-out nunca dependa del modelo: `process_turn_reply` no debe ejecutarse."""
-    asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="tg-consent-3", text="hola"))
+    asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="tg-consent-3", text="hi"))
 
     async def no_debe_llamarse(*args, **kwargs):
         raise AssertionError("el opt-out no puede pasar por el turno del LLM")

@@ -2303,13 +2303,20 @@ notas del catálogo también van en inglés: viajan como resultado de la tool.
 
 *Solo se conversa en inglés.* Si el mensaje del lead está en español, el guardrail de entrada lo
 detiene antes del LLM, la FSM y el score, y responde un texto fijo en inglés: solo se puede conversar
-en inglés y que lo intente de nuevo. El turno queda en `audit_log` con su motivo, no cuenta como turno
-sin resolver (frustración) y no cambia el estado de la conversación. La detección es determinista y
-local, sin LLM ni servicio externo: proporción de palabras funcionales del español y caracteres que
-solo usa el español (`ñ`, `¿`, `¡`, tildes), sin contar los nombres de zonas, calles y propiedades del
-inventario, para que "Do you have apartments in El Poblado?" pase. Tiene su propio *gold set*: mensajes
-en inglés con nombres propios en español que deben pasar, y mensajes cortos en español ("hola",
-"cuánto cuesta") que deben detenerse. Tres cosas se procesan antes del filtro de idioma y siguen
+en inglés y que lo intente de nuevo. El turno queda en `audit_log` (`input.not_english`), no cuenta
+como turno sin resolver (frustración), no suma al score y no avanza la conversación: como un mensaje
+fuera de dominio, es un turno `otro`, así que solo mueve el saludo inicial (`GREETING` -> `DISCOVERY`). El
+mensaje y el aviso quedan en el historial, y una oferta de horarios abierta se conserva. La detección es
+determinista y local, sin LLM ni servicio externo (`services/core/app/language_guard.py`): cuenta las
+palabras que solo son de un idioma, y el mensaje es español si tiene más de español que de inglés. "¿" y
+"¡" cuentan como español; las tildes no, porque también las llevan los nombres propios. Las palabras de
+los dos idiomas ("a", "no", "me", "solo") no cuentan, y ante el empate el mensaje pasa: es peor rechazar
+a quien escribe en inglés. Antes de contar se quitan las ciudades y zonas del inventario y las vías con
+número, y un artículo o preposición solo cuenta si la palabra siguiente va en minúscula ("La
+Candelaria", "Santa Fe de Antioquia" pasan), para que "Do you have apartments in El Poblado?" pase.
+Tiene su propio *gold set*: mensajes en inglés con nombres propios en español que deben pasar, y
+mensajes cortos en español ("hola", "cuánto cuesta") que deben detenerse. Un saludo en español dentro de
+un mensaje en inglés ("Hola! I'm looking for...") pasa. Tres cosas se procesan antes del filtro de idioma y siguen
 reconociendo español:
 
 - La **baja** ("dame de baja", "no me escribas"): retirar el consentimiento no puede depender del
@@ -2327,6 +2334,9 @@ las descripciones de las herramientas y las plantillas, y no se guarda por fila.
 para un cambio de país: el puntaje de presupuesto solo mira si el lead lo declaró (`score_budget`), y
 los requisitos del catálogo son proporciones del precio (`down_payment_ratio`, `income_multiple`), que
 no dependen de la moneda.
+
+Los botones de Telegram (DT-51) también pasan a inglés, etiqueta y texto fijo: el texto es un mensaje
+del lead y pasa por el filtro de idioma. El `callback_data` no cambia.
 
 **Los valores de los contratos no cambian:** `type` (`venta/renta/preventa`), `kind`, `status` de
 propiedad, los estados de la FSM, las intenciones y los valores de las señales (`declarado`,
