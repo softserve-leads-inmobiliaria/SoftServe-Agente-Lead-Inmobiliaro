@@ -44,10 +44,10 @@ class ContractAgenda:
         Draft202012Validator(contract["outputSchema"], format_checker=FormatChecker()).validate(response)
         return response
 
-    async def assign_advisor(self, lead_id, zone=None, language="es", registered_only=False):
+    async def assign_advisor(self, lead_id, zone=None, language="en", registered_only=False):
         body = {"lead_id": lead_id, "language": language, "registered_only": registered_only}
         return self._call("assign_advisor", body, {"lead_id": lead_id, "advisor_id": "adv_poblado",
-                                                   "name": "Valeria", "zone": "El Poblado", "language": "es",
+                                                   "name": "Valeria", "zone": "El Poblado", "language": "en",
                                                    "match": "zone_and_language"})
 
     async def get_slots(self, advisor_id, date_from, days=7):

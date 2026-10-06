@@ -43,7 +43,7 @@ def service(factory):
     return SchedulingService(db_session_factory=factory, now=lambda: NOW)
 
 
-def add_advisor(factory, advisor_id, zone, language="es", chat_id=None):
+def add_advisor(factory, advisor_id, zone, language="en", chat_id=None):
     with factory() as db:
         db.add(Advisor(id=advisor_id, name=f"Asesor {advisor_id}", zone=zone, language=language,
                        access_token=uuid.uuid4().hex, telegram_chat_id=chat_id))

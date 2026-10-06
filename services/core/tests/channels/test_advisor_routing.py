@@ -40,7 +40,7 @@ class FakeAgenda:
         self.engine, self.advisor_id, self.error = engine, advisor_id, error
         self.calls: list[dict[str, Any]] = []
 
-    async def assign_advisor(self, lead_id, zone=None, language="es", registered_only=False):
+    async def assign_advisor(self, lead_id, zone=None, language="en", registered_only=False):
         self.calls.append({"lead_id": lead_id, "registered_only": registered_only})
         if self.error:
             raise SchedulingError(self.error, "falla simulada")
@@ -48,7 +48,7 @@ class FakeAgenda:
             connection.execute(text("UPDATE leads SET advisor_id = :a WHERE id = :l AND advisor_id IS NULL"),
                                {"a": self.advisor_id, "l": lead_id})
         return {"lead_id": lead_id, "advisor_id": self.advisor_id, "name": "x", "zone": "x",
-                "language": "es", "match": "zone_and_language"}
+                "language": "en", "match": "zone_and_language"}
 
 
 @pytest.fixture
@@ -209,7 +209,7 @@ def test_client_posts_to_the_agenda_and_returns_the_assignment():
 
     assert result == {"advisor_id": "adv_001"}
     assert seen["url"] == "http://catalog:8000/scheduling/assign_advisor"
-    assert seen["body"] == {"lead_id": "lead-1", "language": "es", "registered_only": True}
+    assert seen["body"] == {"lead_id": "lead-1", "language": "en", "registered_only": True}
 
 
 @pytest.mark.parametrize("response,code", [
