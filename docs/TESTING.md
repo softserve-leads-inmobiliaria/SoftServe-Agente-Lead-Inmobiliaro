@@ -325,7 +325,7 @@ búsqueda aparecen `catalog.get_availability` además de `catalog.search_propert
 (C-7) hace lo mismo sobre la **salida real** del catálogo de demo: sus fixtures las produce
 `services/core/tests/demo_catalogo.py`, que corre `CatalogService` de verdad contra la base migrada que ya
 monta el `conftest.py` de `core`, sembrada con `scripts/seed_catalog.seed()` — el mismo del compose, así que
-el inventario no está duplicado en ningún lado. **75 casos** (46 que pasan, 29 que bloquean) sobre **27
+el inventario no está duplicado en ningún lado. **93 casos** (57 que pasan, 36 que bloquean) sobre **27
 turnos**, que cubren las 12 propiedades del inventario y las 5 tools. No llama a ningún LLM.
 
 Es el complemento de A-5, no su reemplazo: los 32 casos de A-5 no se tocan (prueban un criterio que sigue
@@ -343,7 +343,7 @@ vivo, DT-23, y la política del repo es no borrar casos antiguos). Lo que C-7 ag
   `availability_checked_at` y `unavailable` (con solo `id`, `title` y `status`), `get_property` más
   `availability_checked_at`, y las otras tres tools pasan intactas. Además comprueba que el estado y el
   timestamp que,A-4 estampa son los de `get_availability` y no los del listado.
-- `test_gold_set_is_100_percent_green`: el gate de los 75 casos.
+- `test_gold_set_is_100_percent_green`: el gate de los 93 casos.
 
 **El catálogo corre en un subproceso.** `core` y `catalog` comparten el nombre de paquete `app` (los dos
 `conftest.py` lo ponen en `sys.path`, y CI corre cada carpeta en un proceso distinto por eso), así que el
