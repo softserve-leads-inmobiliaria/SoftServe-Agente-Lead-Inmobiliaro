@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app import data
 from app.service import CatalogError, CatalogService
+from db.models import PROPERTY_KINDS
 from db.repo_root import repo_root
 from db.settings import database_url
 
@@ -50,6 +51,9 @@ def test_dataset_size_and_status_mix():
     assert len({p["id"] for p in data.PROPERTIES}) == len(data.PROPERTIES)
     statuses = {p["status"] for p in data.PROPERTIES}
     assert "apartado" in statuses and "disponible" in statuses
+    # #188: cada propiedad trae su tipo de inmueble, dentro del vocabulario cerrado.
+    assert all(p["kind"] in PROPERTY_KINDS for p in data.PROPERTIES)
+    assert {p["kind"] for p in data.PROPERTIES} == set(PROPERTY_KINDS)
 
 def test_every_property_serializes_to_the_contract(service):
     validator = output_validator("get_property")
@@ -83,6 +87,31 @@ def test_search_inverted_budget_is_invalid_input(service):
     with pytest.raises(CatalogError) as exc:
         service.search_properties(budget_range={"min": 10, "max": 1})
     assert exc.value.error_code == "INVALID_INPUT"
+
+
+def test_search_by_kind_does_not_return_other_kinds(service):
+    # #188: "busco depa" no debe traer casas ni terrenos.
+    result = service.search_properties(kind="departamento")
+    output_validator("search_properties").validate(result)
+    assert result["properties"]
+    assert {p["kind"] for p in result["properties"]} == {"departamento"}
+    assert not {p["id"] for p in result["properties"]} & {"prop_00233", "prop_00241"}  # casa y terreno
+
+
+def test_search_without_kind_behaves_like_before(service):
+    with_kind = service.search_properties(kind="casa")["properties"]
+    without = service.search_properties()["properties"]
+    assert {p["id"] for p in with_kind} < {p["id"] for p in without}
+
+
+def test_unknown_kind_is_invalid_input(service):
+    with pytest.raises(CatalogError) as exc:
+        service.search_properties(kind="depa")  # el valor normalizado no entra: es "departamento"
+    assert exc.value.error_code == "INVALID_INPUT"
+
+
+def test_get_property_returns_the_kind(service):
+    assert service.get_property("prop_00241", lead_qualified=False)["kind"] == "terreno"
 
 def test_address_exact_only_when_lead_is_qualified(service):
     assert service.get_property("prop_00231", lead_qualified=False)["address_exact"] is None

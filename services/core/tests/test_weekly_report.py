@@ -170,7 +170,7 @@ def _seed_week(engine):
         lead = Lead(telegram_user_id=f"tg-{uuid.uuid4().hex[:8]}")
         session.add_all([advisor, lead])
         ids = {pid: f"{pid}_{uuid.uuid4().hex[:6]}" for pid in ("nr_cerrada", "nr_quieta", "nr_nueva")}
-        session.add_all([Property(id=prop_id, title=f"Casa {pid}", price=1_000_000, type="venta",
+        session.add_all([Property(id=prop_id, title=f"Casa {pid}", price=1_000_000, type="venta", kind="casa",
                                   zone="Providencia", m2=100, bedrooms=2, bathrooms=1, address_approx="a",
                                   address_exact="b") for pid, prop_id in ids.items()])
         session.flush()

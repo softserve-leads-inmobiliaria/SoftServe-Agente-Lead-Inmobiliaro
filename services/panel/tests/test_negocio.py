@@ -62,7 +62,7 @@ def client(session_factory):
 
 
 def _property(session, pid, *, zone, title, listed, status_now="disponible", synthetic=False):
-    session.add(Property(id=pid, title=title, price=2_500_000, type="venta", zone=zone, m2=100, bedrooms=2,
+    session.add(Property(id=pid, title=title, price=2_500_000, type="venta", kind="casa", zone=zone, m2=100, bedrooms=2,
                          bathrooms=1, address_approx="cerca del parque", address_exact="Calle Reservada 123"))
     session.flush()
     record_listing(session, pid, "test", at=listed, synthetic=synthetic)

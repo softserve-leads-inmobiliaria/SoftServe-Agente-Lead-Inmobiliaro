@@ -64,8 +64,8 @@ def _lead(session, zone, *, advisor_id=None, synthetic=False) -> Lead:
 
 
 def _property(session, zone, *, status="disponible", type_="venta", title="Depa") -> Property:
-    prop = Property(id=f"prop_{uuid.uuid4().hex[:8]}", title=title, price=2_500_000, type=type_, zone=zone,
-                    m2=90, bedrooms=2, bathrooms=2, status=status, address_approx=zone,
+    prop = Property(id=f"prop_{uuid.uuid4().hex[:8]}", title=title, price=2_500_000, type=type_, kind="departamento",
+                    zone=zone, m2=90, bedrooms=2, bathrooms=2, status=status, address_approx=zone,
                     address_exact=f"Calle 1, {zone}")
     session.add(prop)
     session.flush()

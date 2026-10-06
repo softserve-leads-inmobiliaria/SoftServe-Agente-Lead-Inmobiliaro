@@ -43,8 +43,8 @@ class Agenda(ContractAgenda):
 def _property(engine):
     with engine.begin() as connection:
         connection.execute(text(
-            "INSERT INTO properties (id, title, price, type, zone, m2, bedrooms, bathrooms, address_approx,"
-            " address_exact) VALUES (:id, :title, 1, 'renta', 'Providencia', 1, 1, 1, :approx, :exact)"
+            "INSERT INTO properties (id, title, price, type, kind, zone, m2, bedrooms, bathrooms, address_approx,"
+            " address_exact) VALUES (:id, :title, 1, 'renta', 'departamento', 'Providencia', 1, 1, 1, :approx, :exact)"
             " ON CONFLICT (id) DO NOTHING"), {"id": PROPERTY["id"], "title": PROPERTY["title"],
                                              "approx": APPROX, "exact": EXACT})
 

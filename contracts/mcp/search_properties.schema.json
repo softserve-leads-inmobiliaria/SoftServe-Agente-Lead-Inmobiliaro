@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://softserve.local/contracts/mcp/search_properties.schema.json",
   "name": "search_properties",
-  "description": "Busca propiedades por filtros. Todos los filtros son opcionales. Sin coincidencias devuelve properties: [] (no es un error). NUNCA incluye address_exact: el output tiene additionalProperties=false para que no pueda colarse en un resumen de búsqueda.",
+  "description": "Busca propiedades por filtros. Todos los filtros son opcionales. `type` es la OPERACIÓN (venta/renta/preventa); `kind` es el INMUEBLE (departamento/casa/terreno/local/estudio). Si el lead pide un tipo de inmueble (\"depa\", \"departamento\", \"casa\", \"terreno\"...), hay que pasar `kind` o la búsqueda trae otros inmuebles. Sin coincidencias devuelve properties: [] (no es un error). NUNCA incluye address_exact: el output tiene additionalProperties=false para que no pueda colarse en un resumen de búsqueda.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -35,11 +35,23 @@
           "venta",
           "renta",
           "preventa"
-        ]
+        ],
+        "description": "Operación: venta, renta o preventa."
       },
       "bedrooms": {
         "type": "integer",
         "minimum": 0
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "departamento",
+          "casa",
+          "terreno",
+          "local",
+          "estudio"
+        ],
+        "description": "Tipo de inmueble. \"depa\"/\"departamento\" -> departamento. Un valor fuera del enum es INVALID_INPUT."
       }
     },
     "required": [],
@@ -69,6 +81,16 @@
                 "venta",
                 "renta",
                 "preventa"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "departamento",
+                "casa",
+                "terreno",
+                "local",
+                "estudio"
               ]
             },
             "zone": {
@@ -109,6 +131,7 @@
             "title",
             "price",
             "type",
+            "kind",
             "zone",
             "m2",
             "bedrooms",

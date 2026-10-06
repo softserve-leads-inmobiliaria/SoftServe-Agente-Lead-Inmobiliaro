@@ -64,6 +64,16 @@ _URGENCY: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 _BUDGET = re.compile(r"presupuesto[^.,;!?\n]*|\$\s?[\d.,]+(?:\s?(?:mil|millones|k))?|\b\d[\d.,]*\s?(?:mil|millones)\b")
 
+# Tipo de inmueble que nombra el lead (#188). "depa" es un prefijo de "departamento", así que caen en
+# el mismo valor. El fake solo mapea `kind`; la zona y el presupuesto los extrae el LLM real.
+_KINDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("departamento", ("depa", "departamento", "penthouse")),
+    ("casa", ("casa",)),
+    ("terreno", ("terreno", "lote")),
+    ("local", ("local",)),
+    ("estudio", ("estudio",)),
+)
+
 
 def _normalize(text: str) -> str:
     decomposed = unicodedata.normalize("NFD", text.lower())
@@ -85,6 +95,11 @@ class FakeLLM:
             return REPLIES[intent]
         except KeyError:
             raise ValueError(f"intención desconocida: {intent!r} (válidas: {INTENTS})") from None
+
+    def extract_property_kind(self, text: str) -> str | None:
+        """El tipo de inmueble que nombra el mensaje (#188), o None si no dice ninguno."""
+        normalized = _normalize(text)
+        return next((kind for kind, words in _KINDS if any(word in normalized for word in words)), None)
 
     def extract_signal(self, text: str) -> dict[str, str | None]:
         """Lo que el mensaje declara sobre presupuesto, quién decide y urgencia (None = no dicho)."""

@@ -5,5 +5,6 @@
     "max": 2500000
   },
   "type": "venta",
-  "bedrooms": 2
+  "bedrooms": 2,
+  "kind": "departamento"
 }

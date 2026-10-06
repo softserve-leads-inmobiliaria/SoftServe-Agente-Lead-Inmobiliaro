@@ -2241,3 +2241,28 @@ del agente, y el *caption* de la foto (B-10, DT-50) tiene un tope de 1024.
 - La transcripción y el resumen de la ficha de traspaso al asesor (A-16) todavía pueden traer `**`. Si
   molesta, se usa el mismo `formatting.render` en `notifications.py`.
 - Los *fakes* de Telegram de los tests aceptan `parse_mode`.
+
+---
+
+## DT-54 — El tipo de inmueble (`kind`) es un campo propio, separado de la operación (`type`)
+
+**Estado:** aceptada (#188).
+
+**Contexto.** `properties.type` guarda la operación (venta/renta/preventa). Qué es el inmueble
+(departamento, casa, terreno, local, estudio) solo se podía adivinar por el `title`, así que
+`search_properties` no podía filtrarlo: "busco depa en Zapopan" ofrecía casas y terrenos de la zona.
+
+**Decisión.** Se agrega `properties.kind` (`String` NOT NULL con `CHECK` contra un vocabulario cerrado,
+migración `0015`), `kind` es un filtro opcional más de `search_properties` y viaja en la salida de
+`search_properties` y `get_property`. Vocabulario: `departamento | casa | terreno | local | estudio`.
+El agente lo usa: el `inputSchema` de la tool lo describe, y el agente falso mapea
+"depa"/"departamento" a `departamento` (la zona y el presupuesto siguen siendo del LLM real).
+
+**Alternativas.** Derivar el tipo del `title` en cada búsqueda — descartado: frágil (un título cambia) y
+no se puede filtrar en SQL. Un enum de Postgres — descartado: el esquema usa `String` + `CHECK` en todo
+(DT-11), por consistencia.
+
+**Consecuencias.** `kind` y `type` conviven y no son intercambiables. Queda pendiente (fuera de #188) que
+`unmet_searches` (N-5), el ranking de N-6 y `property_alerts` (A-18) agrupen o filtren también por
+`kind`: hoy una alerta nacida de una búsqueda con `kind` no lo guarda y podría avisar de otro inmueble.
+

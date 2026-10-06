@@ -17,7 +17,7 @@ Usado por `CT-3` (contrato `FsmState`/`LeadScore`/`Conversation`) y `C-3` (migra
 | `Conversation` | id, lead_id, fsm_state, started_at, last_message_at | Una por hilo de conversación |
 | `Message` | id, conversation_id, role, content, tool_calls, created_at | Historial completo |
 | `LeadScore` | lead_id, need_fit, budget, authority, timing, eligibility, total, band (COLD/WARM/HOT), reasons | Persistido, nunca calculado por el LLM directamente |
-| `Property` | id, title, price, type (venta/renta/preventa), zone, m2, bedrooms, bathrooms, amenities, status (disponible/apartado/cerrado), address_exact, address_approx, photo_url | `address_exact` reservada hasta `lead_qualified=true`. `status` solo cambia por `db/property_history.py` (`N-1`) |
+| `Property` | id, title, price, type (venta/renta/preventa), kind (departamento/casa/terreno/local/estudio), zone, m2, bedrooms, bathrooms, amenities, status (disponible/apartado/cerrado), address_exact, address_approx, photo_url | `type` es la operación y `kind` el inmueble (#188, DT-54). `address_exact` reservada hasta `lead_qualified=true`. `status` solo cambia por `db/property_history.py` (`N-1`) |
 | `Promotion` | id, property_id, title, description, valid_until | Siempre atada a una propiedad; alimenta `catalog.get_promotions` |
 | `Advisor` | id, name, zone, language, access_token | `access_token` = auth del panel (ver `decisions.md`) |
 | `Visit` | id, lead_id, property_id, advisor_id, scheduled_at, idempotency_key | Idempotente para evitar duplicados por reintento de webhook del proveedor de calendario |

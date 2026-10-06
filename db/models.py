@@ -41,6 +41,8 @@ FSM_STATES = ("GREETING", "DISCOVERY", "QUALIFY", "RECOMMEND", "SCHEDULE", "HAND
 LEAD_STATUSES = ("nuevo", "mql", "sql", "visit_scheduled", "closed_won", "closed_lost")
 CONSENT_STATUSES = ("pending", "granted", "withdrawn")
 PROPERTY_TYPES = ("venta", "renta", "preventa")
+# Tipo de inmueble (qué es), distinto de `type` (la operación). #188: sin esto, "busco depa" traía casas.
+PROPERTY_KINDS = ("departamento", "casa", "terreno", "local", "estudio")
 PROPERTY_STATUSES = ("disponible", "apartado", "cerrado")
 SCORE_BANDS = ("COLD", "WARM", "HOT")
 MESSAGE_ROLES = ("user", "assistant", "system", "tool")
@@ -209,6 +211,7 @@ class Property(Base):
     __tablename__ = "properties"
     __table_args__ = (
         _one_of("type", PROPERTY_TYPES, "ck_properties_type"),
+        _one_of("kind", PROPERTY_KINDS, "ck_properties_kind"),
         _one_of("status", PROPERTY_STATUSES, "ck_properties_status"),
         CheckConstraint("price >= 0", name="ck_properties_price"),
         CheckConstraint("bedrooms >= 0", name="ck_properties_bedrooms"),
@@ -217,7 +220,8 @@ class Property(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)  # p. ej. "prop_00231"
     title: Mapped[str] = mapped_column(String, nullable=False)
     price: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    type: Mapped[str] = mapped_column(String, nullable=False)
+    type: Mapped[str] = mapped_column(String, nullable=False)  # operación: venta/renta/preventa
+    kind: Mapped[str] = mapped_column(String, nullable=False)  # inmueble: departamento/casa/terreno/...
     zone: Mapped[str] = mapped_column(String, index=True, nullable=False)
     m2: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False)
     bedrooms: Mapped[int] = mapped_column(Integer, nullable=False)

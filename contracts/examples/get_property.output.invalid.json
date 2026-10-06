@@ -3,6 +3,7 @@
   "title": "Depto 2 rec. en Providencia",
   "price": 2350000,
   "type": "venta",
+  "kind": "departamento",
   "zone": "Providencia",
   "m2": 78.5,
   "bedrooms": 2,
