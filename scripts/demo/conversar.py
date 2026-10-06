@@ -91,6 +91,18 @@ ESCENARIOS: dict[str, dict] = {
             "I have $20,000 for the down payment",
         ],
     },
+    "07_busqueda_vacia_y_alternativas": {
+        "descripcion": ("Entra por el anuncio y pide una casa en renta, que no hay: el agente propone alternativas "
+                        "sin disculparse por la regeneración, y ofrece la alerta una sola vez (#213)"),
+        "property_id": "prop_00231",
+        "turnos": [
+            "",  # /start prop_00231
+            "i want to rent a house in medllin",
+            "where you have houses for renting?",
+            "how much is it?",
+            "you have any property in bogota?",
+        ],
+    },
 }
 
 

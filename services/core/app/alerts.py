@@ -1,8 +1,9 @@
 """Alertas de propiedades nuevas (A-18, DT-45): "avísame si sale algo así".
 
 Lo decide el código, no el LLM, como la agenda (B-8):
-1. Después de una búsqueda con pocos resultados (`FEW_RESULTS` o menos), el turno le ofrece la alerta al
-   lead y deja los filtros de esa búsqueda en `last_tool_results` (`ALERT_KEY`).
+1. Después de una búsqueda con pocos resultados (`FEW_RESULTS` o menos), el turno deja los filtros de esa
+   búsqueda en `last_tool_results` (`ALERT_KEY`) y le ofrece la alerta al lead, una sola vez por
+   conversación (`OFFERED_KEY`, #213).
 2. Si el lead la pide ("avísame", "me avisas"...) en ese turno o en el siguiente, se guarda la alerta en
    `property_alerts` con esos filtros, sin texto del lead. Una activa por lead, por `ALERT_DAYS` días.
 3. Un *job* `alert_scan` del *scheduler* (A-17) busca propiedades `disponible` que cumplan los filtros y que
@@ -29,6 +30,7 @@ ALERT_SCAN_KIND = "alert_scan"
 PROPERTY_ALERT_KIND = "property_alert"
 SCAN_KEY = "all"  # un solo `alert_scan` pendiente para todas las alertas
 ALERT_KEY = "alert_offer"  # en `last_tool_results`: los filtros de la búsqueda que se puede volver alerta
+OFFERED_KEY = "alert_offered"  # en `last_tool_results`: la alerta ya se ofreció en esta conversación (#213)
 FEW_RESULTS = 2
 ALERT_DAYS = 90
 
@@ -37,6 +39,13 @@ CREATED_TEXT = ("Done, I'll let you know here when a property matching what you'
                 "If you'd rather I stop messaging you, reply STOP.")
 NO_SEARCH_TEXT = ("Happy to let you know. First, tell me what you're looking for (area, whether you want to buy "
                   "or rent, and your budget) so I know which properties to notify you about.")
+
+def carry_offered(tool_results: Mapping[str, Any], previous: Mapping[str, Any]) -> dict[str, Any]:
+    """`tool_results` con la marca de que la alerta ya se ofreció, en este turno o en uno anterior (#213)."""
+    if previous.get(OFFERED_KEY) or tool_results.get(OFFERED_KEY):
+        return {**tool_results, OFFERED_KEY: True}
+    return dict(tool_results)
+
 
 # En inglés (#202, DT-55), y el español de antes. Esta regla reemplaza la respuesta del turno, así que va
 # con frases que solo piden un aviso: "let me know" a secas no, porque "let me know the price" es otra cosa.

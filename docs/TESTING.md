@@ -125,6 +125,12 @@ BEDROCK_MODEL_ID_CLASSIFIER=<modelo liviano>
 AWS_ACCESS_KEY_ID=...   AWS_SECRET_ACCESS_KEY=...   (o AWS_PROFILE fuera de Docker)
 ```
 
+La configuración probada (#213) usa Sonnet para la conversación y Haiku para la intención:
+`BEDROCK_MODEL_ID_CHAT=us.anthropic.claude-sonnet-4-5-20250929-v1:0` y
+`BEDROCK_MODEL_ID_CLASSIFIER=us.anthropic.claude-haiku-4-5-20251001-v1:0`. Con Haiku en la conversación,
+el agente no seguía varias reglas del prompt: repetía precios de turnos anteriores, que la factualidad
+bloquea, y no repetía una búsqueda vacía.
+
 Con inferencia entre regiones el ID lleva prefijo (p. ej. `us.anthropic.claude-haiku-4-5-20251001-v1:0`) y
 `BEDROCK_REGION` debe ser una región de EE. UU. Antes de darlos por buenos, probar **una llamada real de un token** con cada ID: algunos modelos de
 Bedrock exigen un *inference profile* y el error solo aparece en la primera llamada. Sin los dos IDs,
@@ -325,7 +331,7 @@ búsqueda aparecen `catalog.get_availability` además de `catalog.search_propert
 (C-7) hace lo mismo sobre la **salida real** del catálogo de demo: sus fixtures las produce
 `services/core/tests/demo_catalogo.py`, que corre `CatalogService` de verdad contra la base migrada que ya
 monta el `conftest.py` de `core`, sembrada con `scripts/seed_catalog.seed()` — el mismo del compose, así que
-el inventario no está duplicado en ningún lado. **93 casos** (57 que pasan, 36 que bloquean) sobre **27
+el inventario no está duplicado en ningún lado. **95 casos** (59 que pasan, 36 que bloquean) sobre **27
 turnos**, que cubren las 12 propiedades del inventario y las 5 tools. No llama a ningún LLM.
 
 Es el complemento de A-5, no su reemplazo: los 32 casos de A-5 no se tocan (prueban un criterio que sigue
@@ -343,7 +349,7 @@ vivo, DT-23, y la política del repo es no borrar casos antiguos). Lo que C-7 ag
   `availability_checked_at` y `unavailable` (con solo `id`, `title` y `status`), `get_property` más
   `availability_checked_at`, y las otras tres tools pasan intactas. Además comprueba que el estado y el
   timestamp que,A-4 estampa son los de `get_availability` y no los del listado.
-- `test_gold_set_is_100_percent_green`: el gate de los 93 casos.
+- `test_gold_set_is_100_percent_green`: el gate de los 95 casos.
 
 **El catálogo corre en un subproceso.** `core` y `catalog` comparten el nombre de paquete `app` (los dos
 `conftest.py` lo ponen en `sys.path`, y CI corre cada carpeta en un proceso distinto por eso), así que el

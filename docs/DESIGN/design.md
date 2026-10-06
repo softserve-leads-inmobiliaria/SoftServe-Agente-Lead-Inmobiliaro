@@ -265,7 +265,7 @@ Las cajas con borde punteado no están construidas.
 - **Alertas de propiedades nuevas** (`A-18`, DT-45). El lead pide "avísame si sale algo así"; lo detecta
   una regla, sin LLM. Se guardan los filtros de la búsqueda de ese turno o del anterior en
   `property_alerts`, sin texto del lead: una alerta activa por lead, durante 90 días. Si una búsqueda con
-  filtros trae 2 propiedades o menos, el turno le ofrece la alerta al lead.
+  filtros trae 2 propiedades o menos, el turno le ofrece la alerta al lead, una sola vez por conversación.
   - Cada `ALERT_SCAN_MINUTES`, un `alert_scan` busca las propiedades `disponible` que cumplen los filtros
     con los mismos criterios que `search_properties`. Solo cuentan las que entraron a `disponible` después
     de crearse la alerta, según `property_status_events`.

@@ -47,7 +47,16 @@ class AvailabilityGuard:
         return (status, availability.get("checked_at")) if isinstance(status, str) else (UNVERIFIED, None)
 
     async def _search(self, result: dict[str, Any]) -> dict[str, Any]:
-        found = result.get("properties", [])
+        offered, unavailable = await self._revalidate(result.get("properties", []))
+        revalidated = {**result, "properties": offered, "unavailable": unavailable}
+        if "alternatives" in result:
+            # #213: las alternativas de una búsqueda vacía se ofrecen igual, así que se revalidan igual. Las
+            # que ya no están disponibles se descartan: el lead no preguntó por ellas.
+            alternatives, _ = await self._revalidate(result["alternatives"])
+            revalidated["alternatives"] = alternatives
+        return revalidated
+
+    async def _revalidate(self, found: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         # Solo lo que el listado da por disponible se revalida: es lo único que puede haberse quedado viejo
         # de forma dañina. Lo demás ya se sabe que no se ofrece, y así se evita una llamada por propiedad.
         current = await asyncio.gather(*(self._status(p.get("id")) if p.get("status") == AVAILABLE else _known(p)
@@ -59,7 +68,7 @@ class AvailabilityGuard:
             else:
                 # Se conserva qué pasó con ella: si el lead pregunta por esa propiedad, se le dice la verdad.
                 unavailable.append({"id": prop.get("id"), "title": prop.get("title"), "status": status})
-        return {**result, "properties": offered, "unavailable": unavailable}
+        return offered, unavailable
 
     async def _property(self, result: dict[str, Any]) -> dict[str, Any]:
         status, checked_at = await self._status(result.get("id"))

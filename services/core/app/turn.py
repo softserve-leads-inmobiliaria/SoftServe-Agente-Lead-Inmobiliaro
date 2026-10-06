@@ -18,6 +18,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app import alerts, reminders, scheduling_client, summary, visits
 from app.agent import Agent, AgentResult, FakeAgent, TurnInput
+from app.alternatives import Alternatives
 from app.availability import AvailabilityGuard
 from app.demand import SearchLog, UnmetSearch
 from app.fakes.fake_core import FakeCore
@@ -295,9 +296,10 @@ def _alert_step(context: GuardContext, result: AgentResult, searches: SearchLog 
     """La alerta de propiedades nuevas (A-18): la respuesta del turno y los filtros a guardar, si el lead la pidió.
 
     Si la pide, se usan los filtros de la búsqueda de este turno o, si no buscó, los de la oferta del turno
-    anterior. Si no la pide y la búsqueda trajo pocas propiedades, se le ofrece.
+    anterior. Si no la pide y la búsqueda trajo pocas propiedades, se guardan sus filtros y se le ofrece,
+    solo si no se le ofreció antes en la conversación (#213).
     """
-    current = searches.last_search if searches else None
+    current = searches.asked_search if searches else None
     if alerts.is_request(text):
         filters = (current[0] if current and alerts.has_filters(current[0])
                    else context.last_tool_results.get(alerts.ALERT_KEY))
@@ -305,8 +307,10 @@ def _alert_step(context: GuardContext, result: AgentResult, searches: SearchLog 
             return replace(result, text=alerts.CREATED_TEXT), dict(filters)
         return replace(result, text=alerts.NO_SEARCH_TEXT), None
     if current and current[1] <= alerts.FEW_RESULTS and alerts.has_filters(current[0]):
-        return replace(result, text=f"{result.text}\n\n{alerts.OFFER_TEXT}",
-                       tool_results={**result.tool_results, alerts.ALERT_KEY: current[0]}), None
+        offered = context.last_tool_results.get(alerts.OFFERED_KEY)
+        return replace(result, text=result.text if offered else f"{result.text}\n\n{alerts.OFFER_TEXT}",
+                       tool_results={**result.tool_results, alerts.ALERT_KEY: current[0],
+                                     alerts.OFFERED_KEY: True}), None
     return result, None
 
 
@@ -360,7 +364,9 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     else:
         # El agente solo ve el texto filtrado y el historial que guardó este mismo servicio.
         text = verdict.signal_text if verdict.signal_text.strip() or not event["text"].strip() else OMITTED_MESSAGE
-        searches = SearchLog(catalog)  # por debajo del guardrail: cuenta lo que contestó el catálogo (N-5)
+        # Por debajo del guardrail: cuenta lo que contestó el catálogo a lo que se buscó (N-5), sin las
+        # búsquedas con un filtro menos que traen las alternativas (#213).
+        searches = SearchLog(Alternatives(catalog))
         guarded = AvailabilityGuard(searches)
         listing = await _listing(event, guarded, context.lead_qualified)
         result = await agent.run(TurnInput(event=event, text=text, history=context.history,
@@ -389,8 +395,9 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     outbound = FakeCore().handle_event(event, intent=result.intent, text=result.text)
     if verdict.pii:
         outbound["text"] += " " + PII_REMINDER
+    remembered = remember_property(result.tool_results, context.last_tool_results)
     evidence = TurnEvidence(raw_signal=_raw_signal(verdict, result.raw_signal), listing=listing,
-                            tool_results=remember_property(result.tool_results, context.last_tool_results))
+                            tool_results=alerts.carry_offered(remembered, context.last_tool_results))
     streak = next_streak(context.unresolved_streak, result.intent, raw_signal=evidence.raw_signal,
                          resolved=visit is not None and visit.settled)
     frustrated = (counts and context.fsm_state not in TERMINAL_STATES and result.intent not in HUMAN_INTENTS
