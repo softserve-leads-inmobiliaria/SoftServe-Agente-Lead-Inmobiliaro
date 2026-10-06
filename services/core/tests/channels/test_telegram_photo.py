@@ -21,8 +21,8 @@ from app.channels.telegram import CAPTION_MAX_CHARS, ChannelReply, reply_to, rep
 from db.repo_root import repo_root
 
 PHOTO = "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1024&q=80"
-LISTING = {"id": "prop_00231", "title": "Depto 2 rec. en Providencia", "zone": "Providencia",
-           "status": "disponible", "address_approx": "Providencia", "photo_url": PHOTO}
+LISTING = {"id": "prop_00231", "title": "Depto 2 rec. en El Poblado", "zone": "El Poblado",
+           "status": "disponible", "address_approx": "El Poblado", "photo_url": PHOTO}
 EVENT_SCHEMA = json.loads((repo_root() / "contracts" / "event.schema.json").read_text(encoding="utf-8"))
 
 
@@ -86,7 +86,7 @@ def test_the_caption_is_the_same_text_the_lead_would_get_without_photo(engine, m
                                  text="", deep_link="prop_00231"))
 
     assert reply.text == plain
-    assert reply.text.startswith(PRIVACY_NOTICE) and "Depto 2 rec. en Providencia" in reply.text
+    assert reply.text.startswith(PRIVACY_NOTICE) and "Depto 2 rec. en El Poblado" in reply.text
 
 
 def test_a_property_without_photo_sends_only_text(engine, monkeypatch):
@@ -198,4 +198,4 @@ def test_start_with_a_deep_link_answers_with_the_photo(engine):
     asyncio.run(telegram._on_message(update, SimpleNamespace(application=application)))
 
     ((photo, caption),) = message.photos
-    assert photo == PHOTO and "Depto 2 rec. en Providencia" in caption and message.replies == []
+    assert photo == PHOTO and "Depto 2 rec. en El Poblado" in caption and message.replies == []

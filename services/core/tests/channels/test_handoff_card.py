@@ -26,8 +26,8 @@ class StubCatalog:
     async def call(self, tool, arguments=None):
         if tool == "get_availability":
             return {"property_id": "prop_00231", "status": "disponible", "checked_at": "2026-01-01T00:00:00Z"}
-        return {"properties": [{"id": "prop_00231", "title": "Depa en Providencia",
-                                "zone": "Providencia", "status": "disponible"}]}
+        return {"properties": [{"id": "prop_00231", "title": "Depa en El Poblado",
+                                "zone": "El Poblado", "status": "disponible"}]}
 
     async def tool_specs(self):
         return []
@@ -67,8 +67,8 @@ def _nuevo_lead() -> str:
 # --- render y troceado (sin base de datos) -----------------------------------------------------
 
 def test_la_ficha_lleva_motivo_score_propiedad_visita_y_la_transcripcion_en_orden():
-    card = LeadCard(lead_id=uuid.uuid4(), zone="Providencia", score_total=80, score_band="HOT",
-                    property_title="Depa en Providencia", property_id="prop_00231",
+    card = LeadCard(lead_id=uuid.uuid4(), zone="El Poblado", score_total=80, score_band="HOT",
+                    property_title="Depa en El Poblado", property_id="prop_00231",
                     visit_at="25/09/2026 10:00", reasons=("presupuesto declarado",))
     ficha = HandoffFile(card=card, fsm_state="HUMAN_HANDOFF", reason="solicitud_humano",
                         transcript=(("user", "Hola"), ("assistant", "¡Hola!"), ("user", "Quiero un asesor")))
@@ -76,7 +76,7 @@ def test_la_ficha_lleva_motivo_score_propiedad_visita_y_la_transcripcion_en_orde
     resumen, transcripcion = render_handoff(ficha)
 
     assert "Traspaso de lead (HUMAN_HANDOFF): el lead pidió hablar con una persona" in resumen
-    assert "HOT · 80/100" in resumen and "Depa en Providencia (prop_00231)" in resumen
+    assert "HOT · 80/100" in resumen and "Depa en El Poblado (prop_00231)" in resumen
     assert "Visita agendada: 25/09/2026 10:00" in resumen
     assert transcripcion == "Transcripción:\nLead: Hola\nAgente: ¡Hola!\nLead: Quiero un asesor"
 
@@ -115,7 +115,7 @@ def test_una_sola_linea_mas_larga_que_el_tope_se_corta_sin_perder_texto():
 
 def test_al_pedir_un_humano_el_asesor_recibe_la_ficha_una_sola_vez_con_toda_la_conversacion(engine):
     _limpiar_asesores(engine)
-    advisor = _advisor(engine, zone="Providencia", chat_id="chat-valeria")
+    advisor = _advisor(engine, zone="El Poblado", chat_id="chat-valeria")
     bot = AsyncMock()
     lead = _nuevo_lead()
 
@@ -126,7 +126,7 @@ def test_al_pedir_un_humano_el_asesor_recibe_la_ficha_una_sola_vez_con_toda_la_c
     assert _chats(bot) == {"chat-valeria"}
     resumen, *transcripcion = _mensajes(bot)
     assert "Traspaso de lead (HUMAN_HANDOFF)" in resumen and "pidió hablar con una persona" in resumen
-    assert "Zona: Providencia" in resumen
+    assert "Zona: El Poblado" in resumen
     completa = "\n".join(transcripcion)
     # Incluye el turno del traspaso: mensaje del lead y respuesta del agente, en orden.
     assert completa.index("Lead: Busco un departamento") < completa.index(f"Lead: {PIDE_HUMANO}")
@@ -142,7 +142,7 @@ def test_al_pedir_un_humano_el_asesor_recibe_la_ficha_una_sola_vez_con_toda_la_c
 
 def test_la_frustracion_manda_la_ficha_en_el_turno_que_completa_la_racha(engine):
     _limpiar_asesores(engine)
-    _advisor(engine, zone="Providencia", chat_id="chat-valeria")
+    _advisor(engine, zone="El Poblado", chat_id="chat-valeria")
     bot = AsyncMock()
     lead = _nuevo_lead()
 
@@ -158,7 +158,7 @@ def test_una_visita_sin_agenda_manda_la_ficha_con_el_horario_preferido(engine):
     """B-8: en estos tests la agenda no responde, así que el lead deja su horario preferido y el asesor
     lo coordina. La reserva real está en `test_visits_turn.py`."""
     _limpiar_asesores(engine)
-    _advisor(engine, zone="Providencia", chat_id="chat-valeria")
+    _advisor(engine, zone="El Poblado", chat_id="chat-valeria")
     bot = AsyncMock()
     lead = _nuevo_lead()
 
@@ -174,8 +174,8 @@ def test_una_visita_sin_agenda_manda_la_ficha_con_el_horario_preferido(engine):
 
 def test_el_traspaso_va_al_asesor_que_ya_tenia_el_lead_no_a_otro(engine):
     _limpiar_asesores(engine)
-    _advisor(engine, zone="Providencia", chat_id="chat-valeria")
-    otro = _advisor(engine, zone="Zapopan", chat_id="chat-otro")
+    _advisor(engine, zone="El Poblado", chat_id="chat-valeria")
+    otro = _advisor(engine, zone="Usaquen", chat_id="chat-otro")
     bot = AsyncMock()
     lead = _nuevo_lead()
     _decir(engine, lead, "Busco un departamento", bot)
@@ -192,7 +192,7 @@ def test_el_traspaso_va_al_asesor_que_ya_tenia_el_lead_no_a_otro(engine):
 
 def test_calificar_y_pasar_a_humano_en_el_mismo_turno_manda_una_sola_notificacion(engine):
     _limpiar_asesores(engine)
-    advisor = _advisor(engine, zone="Providencia", chat_id="chat-valeria")
+    advisor = _advisor(engine, zone="El Poblado", chat_id="chat-valeria")
     bot = AsyncMock()
     lead = _nuevo_lead()
 
@@ -208,7 +208,7 @@ def test_calificar_y_pasar_a_humano_en_el_mismo_turno_manda_una_sola_notificacio
 
 def test_sin_asesor_registrado_el_turno_del_traspaso_sigue_y_no_manda_nada(engine):
     _limpiar_asesores(engine)
-    _advisor(engine, zone="Providencia")  # existe, pero nunca abrió el bot
+    _advisor(engine, zone="El Poblado")  # existe, pero nunca abrió el bot
     bot = AsyncMock()
 
     reply = _decir(engine, _nuevo_lead(), PIDE_HUMANO, bot)
@@ -219,7 +219,7 @@ def test_sin_asesor_registrado_el_turno_del_traspaso_sigue_y_no_manda_nada(engin
 
 def test_si_telegram_falla_al_enviar_la_ficha_el_lead_igual_recibe_su_respuesta(engine):
     _limpiar_asesores(engine)
-    _advisor(engine, zone="Providencia", chat_id="chat-valeria")
+    _advisor(engine, zone="El Poblado", chat_id="chat-valeria")
     bot = AsyncMock()
     bot.send_message.side_effect = RuntimeError("Telegram caído")
 

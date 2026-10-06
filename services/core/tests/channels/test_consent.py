@@ -83,7 +83,7 @@ def test_el_aviso_no_se_repite_en_una_conversacion_nueva_del_mismo_lead(engine):
     assert not is_first_turn(engine, nueva.lead_id)
 
     segunda = asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="tg-consent-4",
-                                   text="busco algo en Providencia"))
+                                   text="busco algo en El Poblado"))
     assert primera.startswith(PRIVACY_NOTICE)
     assert PRIVACY_NOTICE not in segunda
 

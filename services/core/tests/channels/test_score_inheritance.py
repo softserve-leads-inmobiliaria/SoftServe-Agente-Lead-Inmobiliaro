@@ -20,8 +20,8 @@ class StubCatalog:
     async def call(self, tool, arguments=None):
         if tool == "get_availability":
             return {"property_id": "prop_00231", "status": "disponible", "checked_at": "2026-01-01T00:00:00Z"}
-        return {"properties": [{"id": "prop_00231", "title": "Depa en Providencia",
-                                "zone": "Providencia", "status": "disponible"}]}
+        return {"properties": [{"id": "prop_00231", "title": "Depa en El Poblado",
+                                "zone": "El Poblado", "status": "disponible"}]}
 
     async def tool_specs(self):
         return []

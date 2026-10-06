@@ -67,7 +67,7 @@ def _advisor(engine, *, zone: str, chat_id: str | None = None) -> str:
         return advisor.id
 
 
-def _lead(engine, zone: str = "Providencia") -> dict[str, str]:
+def _lead(engine, zone: str = "El Poblado") -> dict[str, str]:
     with session_scope(engine) as session:
         lead = Lead(telegram_user_id=f"tg-{uuid.uuid4().hex[:8]}", zone=zone)
         session.add(lead)
@@ -91,8 +91,8 @@ def _notices(engine, lead_id: str) -> list[tuple[str, str, str]]:
 # --- notificaciones -----------------------------------------------------------------------------
 
 def test_the_card_goes_to_the_advisor_the_agenda_chose(engine, clean):
-    _advisor(engine, zone="Providencia", chat_id="chat-local")  # el que elegiría la regla local
-    chosen = _advisor(engine, zone="Zapopan", chat_id="chat-agenda")
+    _advisor(engine, zone="El Poblado", chat_id="chat-local")  # el que elegiría la regla local
+    chosen = _advisor(engine, zone="Usaquen", chat_id="chat-agenda")
     agenda, bot, event = FakeAgenda(engine, chosen), AsyncMock(), _lead(engine)
 
     advisor = asyncio.run(notifications.notify_advisor(engine, event, SCORE, bot, agenda))
@@ -117,7 +117,7 @@ def test_without_any_advisor_nobody_is_notified_or_assigned(engine, clean):
 
 
 def test_an_advisor_without_telegram_gets_the_card_in_the_panel(engine, clean):
-    offline = _advisor(engine, zone="Providencia")
+    offline = _advisor(engine, zone="El Poblado")
     bot, event = AsyncMock(), _lead(engine)
 
     advisor = asyncio.run(notifications.notify_advisor(engine, event, SCORE, bot, FakeAgenda(engine, offline)))
@@ -128,7 +128,7 @@ def test_an_advisor_without_telegram_gets_the_card_in_the_panel(engine, clean):
 
 
 def test_if_telegram_fails_the_notice_stays_in_the_panel(engine, clean):
-    chosen = _advisor(engine, zone="Providencia", chat_id="chat-agenda")
+    chosen = _advisor(engine, zone="El Poblado", chat_id="chat-agenda")
     bot, event = AsyncMock(), _lead(engine)
     bot.send_message.side_effect = RuntimeError("Telegram caído")
 
@@ -140,8 +140,8 @@ def test_if_telegram_fails_the_notice_stays_in_the_panel(engine, clean):
 
 @pytest.mark.parametrize("error", ["UPSTREAM_UNAVAILABLE", "INVALID_INPUT"])
 def test_if_the_agenda_fails_the_local_rule_still_notifies(engine, clean, error):
-    local = _advisor(engine, zone="Providencia", chat_id="chat-local")
-    bot, event = AsyncMock(), _lead(engine, zone="Providencia")
+    local = _advisor(engine, zone="El Poblado", chat_id="chat-local")
+    bot, event = AsyncMock(), _lead(engine, zone="El Poblado")
 
     advisor = asyncio.run(notifications.notify_advisor(engine, event, SCORE, bot, FakeAgenda(engine, error=error)))
 
@@ -151,7 +151,7 @@ def test_if_the_agenda_fails_the_local_rule_still_notifies(engine, clean, error)
 
 
 def test_the_handoff_file_goes_to_the_advisor_the_agenda_chose(engine, clean):
-    chosen = _advisor(engine, zone="Zapopan", chat_id="chat-agenda")
+    chosen = _advisor(engine, zone="Usaquen", chat_id="chat-agenda")
     bot = AsyncMock()
 
     advisor = asyncio.run(notifications.notify_handoff(engine, _lead(engine), SCORE, "HUMAN_HANDOFF",
@@ -162,7 +162,7 @@ def test_the_handoff_file_goes_to_the_advisor_the_agenda_chose(engine, clean):
 
 
 def test_the_handoff_notice_has_the_reason_but_not_the_transcript(engine, clean):
-    offline = _advisor(engine, zone="Zapopan")
+    offline = _advisor(engine, zone="Usaquen")
     bot, event = AsyncMock(), _lead(engine)
 
     advisor = asyncio.run(notifications.notify_handoff(engine, event, SCORE, "HUMAN_HANDOFF", "solicitud_humano",
@@ -177,7 +177,7 @@ def test_the_handoff_notice_has_the_reason_but_not_the_transcript(engine, clean)
 
 def test_telegram_turns_use_the_process_agenda(engine, clean, monkeypatch):
     """De punta a punta por el canal: calificar y pedir un humano consultan la agenda del proceso."""
-    chosen = _advisor(engine, zone="Zapopan", chat_id="chat-agenda")
+    chosen = _advisor(engine, zone="Usaquen", chat_id="chat-agenda")
     agenda = FakeAgenda(engine, chosen)
     monkeypatch.setattr(scheduling_client, "get_scheduling", lambda: agenda)
     bot, lead = AsyncMock(), f"tg-{uuid.uuid4().hex[:8]}"

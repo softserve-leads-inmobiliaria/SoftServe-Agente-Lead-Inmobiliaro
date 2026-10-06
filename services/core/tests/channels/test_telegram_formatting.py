@@ -14,8 +14,8 @@ from app.channels.telegram import CAPTION_MAX_CHARS, ChannelReply, send_reply
 
 PHOTO = "https://images.unsplash.com/photo-1?w=1024"
 LISTING = ("Encontré estas opciones:\n"
-           "- **Casa 3 rec.** - $4,800,000 | 180 m² | Zapopan\n"
-           "- **Depa 2 rec.** - $2,100,000 | 85 m² | Providencia")
+           "- **Casa 3 rec.** - $4,800,000 | 180 m² | Usaquen\n"
+           "- **Depa 2 rec.** - $2,100,000 | 85 m² | El Poblado")
 
 
 class _TelegramHtml(HTMLParser):
@@ -50,10 +50,10 @@ def visible(html: str) -> str:
 def test_bold_and_bullets_become_telegram_html():
     rendered = render(LISTING)
     assert "**" not in rendered.html
-    assert "• <b>Casa 3 rec.</b> - $4,800,000 | 180 m² | Zapopan" in rendered.html
+    assert "• <b>Casa 3 rec.</b> - $4,800,000 | 180 m² | Usaquen" in rendered.html
     assert rendered.plain == ("Encontré estas opciones:\n"
-                              "• Casa 3 rec. - $4,800,000 | 180 m² | Zapopan\n"
-                              "• Depa 2 rec. - $2,100,000 | 85 m² | Providencia")
+                              "• Casa 3 rec. - $4,800,000 | 180 m² | Usaquen\n"
+                              "• Depa 2 rec. - $2,100,000 | 85 m² | El Poblado")
 
 
 @pytest.mark.parametrize("text", [
@@ -113,8 +113,8 @@ def test_the_text_goes_as_html():
 
 def test_the_caption_goes_as_html():
     message = FakeMessage()
-    asyncio.run(send_reply(message, ChannelReply("**Depa 2 rec.** en Providencia", PHOTO)))
-    assert message.sent == [("photo", "<b>Depa 2 rec.</b> en Providencia", ParseMode.HTML)]
+    asyncio.run(send_reply(message, ChannelReply("**Depa 2 rec.** en El Poblado", PHOTO)))
+    assert message.sent == [("photo", "<b>Depa 2 rec.</b> en El Poblado", ParseMode.HTML)]
 
 
 def test_special_characters_are_escaped_before_sending():
