@@ -112,7 +112,7 @@ def test_search_reply_carries_data_that_only_the_catalog_has(stack, tmp_path):
     script = tmp_path / "busqueda.jsonl"
     script.write_text(json.dumps({"text": "Busco un departamento"}) + "\n", encoding="utf-8")
     (reply,) = replay(script, http_responder(stack))
-    assert "Por ejemplo: Depto 2 rec. en Providencia." in reply["text"]
+    assert "Por ejemplo: Depto 2 rec. en El Poblado." in reply["text"]
 
 
 # Estado final en Postgres tras reproducir cada guion (A-1): `harness/scripts/expectations.py`.
