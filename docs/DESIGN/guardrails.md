@@ -22,7 +22,18 @@ El origen se detecta también como lo dice un lead (#116): gentilicios ("soy col
 argentinos") y frases de procedencia ("soy de Colombia", "vengo de Venezuela", "nací en Perú"). La
 lista de países es cerrada, para no marcar "soy de El Poblado". Los gentilicios que también nombran otra
 cosa ("pesos mexicanos", "colonia Americana", "cocina americana", "hablo español") solo cuentan detrás
-de "soy" o "somos". El costo de esa regla: "mi esposa es española" no se marca.
+de "soy" o "somos". El costo de esa regla: "mi esposa es española" no se marca. Un gentilicio con errata
+detrás de "soy/somos" ("soy colombian", "soy venezolan") también cuenta (#200).
+
+**Idioma (#202, DT-55).** La experiencia es en inglés: los cinco detectores reconocen inglés y conservan
+sus patrones en español. En inglés valen las mismas reglas: lista cerrada de países ("I'm from
+Venezuela" sí, "I'm from El Poblado" no), y los gentilicios ambiguos ("Colombian pesos", "Mexican food",
+"I speak Spanish") y las religiones en singular ("Christian" también es un nombre) solo cuentan detrás
+de "I'm/we're". "my wife" o "my husband" se generalizan a "my partner", y "my kids" a "my family". La
+baja reconoce "stop messaging me", "unsubscribe", "opt out" y similares, pero no "don't call me", que
+pide otro canal. La PII es la de Colombia: cédula de ciudadanía o de extranjería (CC, CE), NIT,
+pasaporte y licencia, con su número con puntos o guion; sin el nombre del documento delante, un número
+de 10 dígitos no se distingue de un teléfono y no se toca.
 
 **Regla general:** el guardrail de entrada nunca detiene la conversación en seco salvo `/stop` —
 degrada a una respuesta segura o a `HUMAN_HANDOFF`.
@@ -75,11 +86,11 @@ existir) — se actualiza en el mismo PR que cierra la historia correspondiente.
 | :--- | :--- | :--- |
 | Disponibilidad (revalidación tras cada búsqueda/ficha) | `A-4` | Implementado: `services/core/app/availability.py`, aplicado por `process_turn` a todo agente |
 | Factualidad | `A-5` | Implementado: `services/core/app/factuality.py`, aplicado por `BedrockAgent` (DT-23). Solo cubre a `BedrockAgent`: `FakeAgent` construye su respuesta directo de los resultados reales, no necesita el guardrail |
-| Dirección reservada | `A-6` | Implementado: `services/core/app/address_guard.py`, aplicado por `BedrockAgent` en el mismo *pipeline* de regenerar/degradar que A-5 (DT-23). No es literal como A-5: detecta la forma de una dirección exacta (tipo de vía + nombre + número) en prosa, porque el catálogo nunca devuelve `address_exact` sin `lead_qualified=true` y no hay valor real contra el que comparar. Solo cubre a `BedrockAgent`: `FakeAgent` nunca ve `address_exact` (el catálogo la redacta antes de que llegue) |
+| Dirección reservada | `A-6` | Implementado: `services/core/app/address_guard.py`, aplicado por `BedrockAgent` en el mismo *pipeline* de regenerar/degradar que A-5 (DT-23). No es literal como A-5: detecta la forma de una dirección exacta (tipo de vía + nombre + número, o vía numerada + placa: "Carrera 37 # 8A-24") en prosa, en español y en inglés. Una vía numerada sin placa ("near Calle 10") es una referencia aproximada y no dispara (DT-55), porque el catálogo nunca devuelve `address_exact` sin `lead_qualified=true` y no hay valor real contra el que comparar. Solo cubre a `BedrockAgent`: `FakeAgent` nunca ve `address_exact` (el catálogo la redacta antes de que llegue) |
 | Promesas no autorizadas (8 *claims*) | `A-7` | Implementado 6/8 con código: `services/core/app/promise_guard.py`, aplicado por `BedrockAgent` en el mismo *pipeline* que A-5/A-6 (DT-26). El 8 ya lo cubría A-5 sin cambios; el 6 queda parcial (ver §2.2). Detalle de cuál cubre cada uno en §2.2 |
 | Resumen para el asesor | `A-16` | Implementado: `services/core/app/summary.py` pasa el resumen del traspaso por A-5, A-6 y A-7, con la transcripción guardada y los datos del lead como fuente, y rechaza toda mención de categoría protegida (las reglas de A-8, más "su esposa" o "sus hijos" en tercera persona). Si algo no pasa, se descarta sin regenerar y la ficha sale sin resumen (DT-46) |
 | Entrada (PII/*jailbreak*/OOD/`/stop`/categoría protegida) | `A-8` | Implementado: los 5 detectores (`services/core/app/input_guard.py`). `/stop` cancela los *jobs* pendientes del lead y desactiva su alerta de propiedades nuevas por cualquiera de los dos caminos, el canal y `core` (`A-17`, `A-18`, DT-44, DT-45); el reingreso tras la baja es de `B-2` |
-| Fair housing | `A-11`, #119 | Implementado (DT-38, DT-40): `decision_maker` es `declarado`/`no_declarado`, así que el contrato no guarda con quién decide el lead. El guardrail de entrada generaliza "mis hijos" a "mi familia" y "mi esposa", "mi marido" o "mi novia" a "mi pareja" en vez de borrarlos, así que el lead no pierde los puntos de Authority. El gold set de `C-6` (DT-35) queda en 27 de 27 pares con diferencia 0, sin `xfail` |
+| Fair housing | `A-11`, #119 | Implementado (DT-38, DT-40): `decision_maker` es `declarado`/`no_declarado`, así que el contrato no guarda con quién decide el lead. El guardrail de entrada generaliza "mis hijos" a "mi familia" y "mi esposa", "mi marido" o "mi novia" a "mi pareja" en vez de borrarlos, así que el lead no pierde los puntos de Authority. El gold set de `C-6` (DT-35) queda con todos sus pares en diferencia 0, en español y en inglés (#202), sin `xfail` |
 | PII en logs (no en el mensaje al LLM — eso ya es `A-8`) | `OBS-7` | **Sin caso real que enmascarar**: ningún logger de `core`/`panel`/`catalog` imprime hoy texto del lead (mensaje, historial, `clean_text`/`signal_text`) — los `logger.*` existentes solo llevan mensajes fijos o metadata (ids, nombres de excepción). `db/logging_config.py::JsonFormatter` no enmascara nada por diseño (DT-27); si algún día un log necesita llevar texto del lead, la regla es la misma que `InputVerdict.audit_kinds()`: pasar por `input_guard._redact_pii`/tipos-no-valores antes de loguear, nunca el texto crudo |
 
 ## 4. Mapa guardrail → prueba

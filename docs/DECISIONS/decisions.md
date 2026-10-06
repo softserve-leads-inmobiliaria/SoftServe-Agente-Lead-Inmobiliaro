@@ -2344,7 +2344,11 @@ un *gold set*. Un campo de moneda por propiedad — descartado: todo el inventar
 moneda y agregarlo cambia el contrato sin necesidad.
 
 **Consecuencias.** Los guardrails son la parte delicada: se traducen primero y con sus *gold sets*,
-antes que los prompts. La PII se adapta a Colombia (cédula de ciudadanía, NIT, teléfonos +57) y
+antes que los prompts. Todos conservan sus patrones en español, no solo la baja, la PII y fair housing: no
+cuesta nada, los *gold sets* en español quedan como regresión, y cada uno suma su versión en inglés. En
+Colombia la calle se nombra con un número, así que para `address_guard` una vía numerada sin placa
+("Calle 10") es una referencia aproximada, y la dirección exacta es la que lleva la placa ("Calle 10 #
+43-12"). La PII se adapta a Colombia (cédula de ciudadanía, NIT, teléfonos +57) y
 `address_guard` a sus direcciones ("Calle 10 # 43-12", "Carrera 43A"). El inventario de demo se
 reescribe, con precios en USD, y cambian los escenarios de `scripts/demo/conversar.py`, el arnés y las
 ciudades de ejemplo de #194. Los tests que buscan texto en español se ajustan en el mismo PR que cambia
