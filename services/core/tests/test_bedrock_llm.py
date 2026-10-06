@@ -155,7 +155,7 @@ def test_the_prompts_are_in_english_with_the_market_and_the_currency():
     assert "in English" in CHAT_SYSTEM and "Medellin and Bogota" in CHAT_SYSTEM and "USD" in CHAT_SYSTEM
     assert not is_spanish(CHAT_SYSTEM) and not is_spanish(CLASSIFIER_SYSTEM)
     # Los valores de los contratos siguen en español (DT-55): el prompt dice cómo nombrarlos al lead.
-    assert all(f"`{value}`" in CHAT_SYSTEM for value in ("venta", "renta", "preventa", "disponible", "apartado"))
+    assert all(f"`{value}`" in CHAT_SYSTEM for value in ("venta", "renta", "preventa", "disponible", "apartado", "cerrado", "sin_verificar"))
 
 
 def test_the_prompt_lists_the_requirements_before_checking_them():
