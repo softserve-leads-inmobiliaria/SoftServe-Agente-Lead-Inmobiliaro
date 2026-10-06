@@ -69,6 +69,15 @@ ESCENARIOS: dict[str, dict] = {
             "I have $40,000 for the down payment",
         ],
     },
+    "05_lead_en_espanol": {
+        "descripcion": "Escribe en español: recibe el aviso de idioma sin mover la FSM, y sigue en inglés (#202)",
+        "property_id": None,
+        "turnos": [
+            "Hola, busco un apartamento en Laureles",
+            "¿No me puedes atender en español?",
+            "Ok, I'm looking for an apartment in Laureles",
+        ],
+    },
 }
 
 
