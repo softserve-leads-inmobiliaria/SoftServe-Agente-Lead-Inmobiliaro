@@ -296,7 +296,7 @@ def test_if_the_summary_fails_the_file_goes_out_without_it_as_before(engine):
     user = f"tg-{uuid.uuid4().hex[:8]}"
     reply = _say(engine, user, PIDE_HUMANO, bot, agent=BrokenSummary())
 
-    assert "asesor" in reply
+    assert "agents" in reply
     assert _lead(engine, user).handoff_summary is None
     first = bot.send_message.await_args_list[0].kwargs["text"]
     assert "Traspaso de lead" in first and "Resumen:" not in first

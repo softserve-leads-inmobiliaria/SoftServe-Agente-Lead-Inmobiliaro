@@ -136,7 +136,7 @@ def test_ordinary_property_questions_do_not_reach_a_person(text):
 
 
 def test_out_of_scope_has_a_reply_that_announces_the_handoff():
-    assert "asesor" in FakeLLM().generate_reply("fuera_de_alcance")
+    assert "agent" in FakeLLM().generate_reply("fuera_de_alcance")
 
 
 # --- A-12: el motivo del traspaso ---------------------------------------------------------------

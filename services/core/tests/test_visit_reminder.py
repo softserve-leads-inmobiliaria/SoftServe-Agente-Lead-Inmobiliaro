@@ -9,7 +9,7 @@ from test_visits_turn import Chat, ContractAgenda
 
 from app import reminders, scheduling_client
 from app.scheduler import Scheduler
-from app.visits import LOCAL_TZ
+from app.visits import LOCAL_TZ, slot_label
 from db.session import session_scope
 
 APPROX, EXACT = "El Poblado, Medellin", "Carrera 37 # 8A-24"
@@ -80,7 +80,7 @@ def _reminders(engine, chat):
 def _saved(engine, chat):
     with engine.connect() as connection:
         return connection.execute(text(
-            "SELECT content FROM messages WHERE conversation_id = :c AND content LIKE 'Te recuerdo%'"),
+            "SELECT content FROM messages WHERE conversation_id = :c AND content LIKE 'Just a reminder%'"),
             {"c": chat.conversation_id}).scalars().all()
 
 
@@ -140,9 +140,9 @@ def test_the_reminder_has_date_time_and_approximate_address(engine, agenda):
     run_at = _reminders(engine, chat)[0].run_at
     assert _run(engine, run_at - timedelta(seconds=1), channel) == 0 and channel.sent == []
     _run(engine, run_at, channel)
-    visit = datetime.fromisoformat(agenda.slots[1])
     [sent] = channel.sent
-    assert f"{visit:%d/%m}" in sent and f"{visit:%H:%M}" in sent and PROPERTY["title"] in sent
+    # En inglés y con el formato de la oferta de horarios (#202): "Fri Oct 9, 11:00".
+    assert slot_label(agenda.slots[1]) in sent and "tomorrow" in sent and PROPERTY["title"] in sent
     assert APPROX in sent and EXACT not in sent
     assert _saved(engine, chat) == [sent] and _reminders(engine, chat)[0].status == "done"
 

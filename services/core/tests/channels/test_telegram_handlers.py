@@ -139,7 +139,7 @@ def test_start_with_a_deep_link_sends_the_property_and_an_empty_text(engine, mon
 
 def test_a_bare_start_is_a_greeting_not_an_unresolved_turn(engine):
     (reply,) = dispatch(engine, "/start", user_id=915)
-    assert "asistente" in reply  # el saludo del agente, no "Gracias por tu mensaje..."
+    assert "assistant" in reply  # el saludo del agente, no "Thanks for your message..."
 
 
 # --- el agente configurado llega al canal ---------------------------------------------------------------------
@@ -154,7 +154,7 @@ def test_reply_to_uses_the_given_agent_and_defaults_to_the_fake_one(engine):
     agent = RecordingAgent()
     assert "respuesta del agente" in asyncio.run(
         reply_to(engine, StubCatalog(), telegram_user_id="917", text="hi", agent=agent))
-    assert "asistente" in asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="918", text="hi"))
+    assert "assistant" in asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="918", text="hi"))
 
 
 def test_the_application_carries_the_agent(engine):
