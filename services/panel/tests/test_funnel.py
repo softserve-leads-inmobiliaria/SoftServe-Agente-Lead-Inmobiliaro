@@ -126,12 +126,12 @@ def test_el_corte_por_zona_y_por_asesor(session_factory, mundo):
     zonas = {row.label: row for row in report.by_zone}
     assert zonas["El Poblado"].leads == 2 and zonas["El Poblado"].hot == 1
     assert zonas["Usaquen"].warm == 1
-    assert zonas["sin zona"].leads == 1
+    assert zonas["no area"].leads == 1
 
     asesores = {row.label: row for row in report.by_advisor}
     assert asesores["Valeria"].leads == 1 and asesores["Valeria"].managed == 1
-    assert asesores["sin asignar"].leads == 3
-    assert report.by_advisor[-1].label == "sin asignar"  # los no asignados van al final
+    assert asesores["unassigned"].leads == 3
+    assert report.by_advisor[-1].label == "unassigned"  # los no asignados van al final
 
 
 def test_la_historia_sintetica_no_cuenta_en_el_funnel(session_factory, mundo):
@@ -156,8 +156,8 @@ def test_con_la_base_vacia_renderiza_sin_romper(client, session_factory):
     page = client.get("/panel/tok-solo/funnel")
 
     assert page.status_code == 200
-    assert "0 leads empezaron" in page.text
-    assert "Todavía no hay leads" in page.text
+    assert "0 leads started" in page.text
+    assert "No leads yet" in page.text
 
 
 def test_el_dashboard_es_global_y_exige_token_valido(client, session_factory, mundo):

@@ -22,7 +22,7 @@ from db.session import session_scope
 
 CALIFICA = "My budget is 3 million, I decide and it's urgent"
 PIDE_HUMANO = "I want to talk to an agent"
-SCORE = {"total": 60, "band": "WARM", "reasons": ["presupuesto declarado"]}
+SCORE = {"total": 60, "band": "WARM", "reasons": ["Budget: budget stated"]}
 
 
 class StubCatalog:
@@ -102,7 +102,7 @@ def test_the_card_goes_to_the_advisor_the_agenda_chose(engine, clean):
     assert agenda.calls == [{"lead_id": event["lead_id"], "registered_only": False}]
     assert _advisor_of(engine, event["lead_id"]) == chosen
     [(advisor_id, kind, body)] = _notices(engine, event["lead_id"])
-    assert (advisor_id, kind) == (chosen, "calificado") and "WARM · 60/100" in body and "Ficha:" not in body
+    assert (advisor_id, kind) == (chosen, "calificado") and "WARM · 60/100" in body and "Lead page:" not in body
 
 
 def test_without_any_advisor_nobody_is_notified_or_assigned(engine, clean):
@@ -171,8 +171,8 @@ def test_the_handoff_notice_has_the_reason_but_not_the_transcript(engine, clean)
     assert advisor.id == offline
     bot.send_message.assert_not_awaited()
     [(_, kind, body)] = _notices(engine, event["lead_id"])
-    assert kind == "traspaso" and "el lead pidió hablar con una persona" in body
-    assert "Transcripción" not in body
+    assert kind == "traspaso" and "the lead asked to talk to a person" in body
+    assert "Transcript" not in body
 
 
 def test_telegram_turns_use_the_process_agenda(engine, clean, monkeypatch):

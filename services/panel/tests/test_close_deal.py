@@ -138,9 +138,10 @@ def test_the_card_shows_the_deal_after_closing(client, mundo):
 
     page = client.get(f"/panel/{valeria.access_token}/leads/{lead.id}").text
 
-    assert "Sin operación cerrada" not in page
+    assert "No closed deal" not in page
     assert "Depa consultado" in page and "$2,350,000.00" in page
-    assert "operación cerrada" in page  # la etiqueta del estado del lead
+    assert "deal closed" in page  # la etiqueta del estado del lead
+    assert "<td>sale</td>" in page and "<td>venta</td>" not in page  # #202: el tipo, en inglés
 
 
 def test_a_lead_without_advisor_stays_with_whoever_closed_it(client, session_factory, mundo):
@@ -229,7 +230,7 @@ def test_a_closed_property_cannot_be_closed_again(client, session_factory, mundo
     response = _close(client, valeria, lead, prop.id)
 
     assert response.status_code == 422
-    assert "Esa propiedad ya está cerrada: no se registró nada." in response.text
+    assert "That property is already off the market: nothing was recorded." in response.text
     assert _written(session_factory, lead, prop.id) == {"deals": 0, "lead": "sql", "property": "cerrado",
                                                         "events": 1}
 
@@ -245,18 +246,18 @@ def test_the_form_marks_a_closed_property_and_does_not_let_it_be_picked(client, 
     page = client.get(f"/panel/{valeria.access_token}/leads/{lead.id}").text
 
     option = page[page.index(f'value="{cerrada.id}"'):]
-    assert option.index("disabled") < option.index(">") and "ya cerrada" in option[:option.index("</option>")]
+    assert option.index("disabled") < option.index(">") and "off the market" in option[:option.index("</option>")]
 
 
 @pytest.mark.parametrize("field,value,message", [
-    ("price", "-1", "no puede ser negativo"),
-    ("price", "mucho", "tiene que ser un número"),
-    ("price", "NaN", "tiene que ser un número"),
-    ("price", "1e15", "demasiado alto"),
-    ("price", "1e30", "demasiado alto"),  # más dígitos de los que `quantize` puede redondear
-    ("kind", "permuta", "renta o venta"),
-    ("closed_on", "ayer", "no es válida"),
-    ("closed_on", (date.today() + timedelta(days=2)).isoformat(), "no puede ser futura"),
+    ("price", "-1", "cannot be negative"),
+    ("price", "mucho", "has to be a number"),
+    ("price", "NaN", "has to be a number"),
+    ("price", "1e15", "too high"),
+    ("price", "1e30", "too high"),  # más dígitos de los que `quantize` puede redondear
+    ("kind", "permuta", "a rental or a sale"),
+    ("closed_on", "ayer", "date is invalid"),
+    ("closed_on", (date.today() + timedelta(days=2)).isoformat(), "cannot be in the future"),
 ])
 def test_an_invalid_form_shows_the_error_and_writes_nothing(client, session_factory, mundo, field, value, message):
     valeria, lead, prop = mundo["valeria"], mundo["lead"], mundo["consultada"]
@@ -274,7 +275,7 @@ def test_a_property_that_is_not_offered_to_this_lead_is_rejected(client, session
 
     response = _close(client, mundo["valeria"], mundo["lead"], ajena.id)
 
-    assert response.status_code == 422 and "no está entre las de este lead" in response.text
+    assert response.status_code == 422 and "not linked to this lead" in response.text
     assert _written(session_factory, mundo["lead"], ajena.id)["events"] == 0
 
 
@@ -328,6 +329,6 @@ def test_a_preventa_suggests_a_sale():
 def test_the_card_offers_the_close_button_with_today_as_default(client, mundo):
     page = client.get(f"/panel/{mundo['valeria'].access_token}/leads/{mundo['lead'].id}").text
     today = datetime.now(timezone.utc).astimezone(LOCAL_TZ).date().isoformat()
-    assert "<summary>Cerrar operación</summary>" in page
+    assert "<summary>Close a deal</summary>" in page
     assert f'name="closed_on" max="{today}" required value="{today}"' in page
-    assert page.index("Las que le interesaron al lead") < page.index("Disponibles en su zona")
+    assert page.index("The ones the lead was interested in") < page.index("Available in their area")

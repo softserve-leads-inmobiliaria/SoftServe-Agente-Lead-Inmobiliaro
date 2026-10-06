@@ -26,6 +26,12 @@ URGENCY_POINTS: Mapping[str, int] = {
     "no_declarada": 0,
 }
 
+# Cómo se leen en las razones del score, que ve el asesor (#202): el valor del contrato no es texto.
+_DECISION_MAKER_TEXT: Mapping[str, str] = {"declarado": "how the decision is made was stated",
+                                           "no_declarado": "how the decision is made wasn't stated"}
+URGENCY_TEXT: Mapping[str, str] = {"inmediata": "immediate", "3_meses": "within 3 months",
+                                    "explorando": "just exploring", "no_declarada": "not stated"}
+
 COLD_MAX = 40
 WARM_MAX = 70
 
@@ -97,13 +103,13 @@ def _lookup(table: Mapping[str, int], value: str, field: str) -> int:
 
 def score_budget(budget_hint: Optional[str]) -> tuple[int, str]:
     if budget_hint is None or not budget_hint.strip():
-        return 0, "Budget: sin presupuesto declarado"
-    return 20, "Budget: presupuesto declarado"
+        return 0, "Budget: no budget stated"
+    return 20, "Budget: budget stated"
 
 
 def score_authority(decision_maker: str) -> tuple[int, str]:
     points = _lookup(DECISION_MAKER_POINTS, decision_maker, "decision_maker")
-    return points, f"Authority: decision_maker={decision_maker}"
+    return points, f"Authority: {_DECISION_MAKER_TEXT[decision_maker]}"
 
 
 def score_need_fit(matching_properties: int) -> tuple[int, str]:
@@ -117,20 +123,21 @@ def score_need_fit(matching_properties: int) -> tuple[int, str]:
         points = 10
     else:
         points = 20
-    return points, f"Need fit: {matching_properties} propiedades coinciden"
+    noun = "property matches" if matching_properties == 1 else "properties match"
+    return points, f"Need fit: {matching_properties} {noun}"
 
 
 def score_timing(urgency: str) -> tuple[int, str]:
     points = _lookup(URGENCY_POINTS, urgency, "urgency")
-    return points, f"Timing: urgency={urgency}"
+    return points, f"Timing: {URGENCY_TEXT[urgency]}"
 
 
 def score_eligibility(meets_requirements: Optional[bool]) -> tuple[int, str]:
     if meets_requirements is True:
-        return 20, "Eligibility: cumple requisitos"
+        return 20, "Eligibility: meets the requirements"
     if meets_requirements is False:
-        return 0, "Eligibility: no cumple requisitos"
-    return 0, "Eligibility: requisitos aún sin verificar"
+        return 0, "Eligibility: doesn't meet the requirements"
+    return 0, "Eligibility: requirements not checked yet"
 
 
 def compute_score(signal: ScoreSignal) -> Score:

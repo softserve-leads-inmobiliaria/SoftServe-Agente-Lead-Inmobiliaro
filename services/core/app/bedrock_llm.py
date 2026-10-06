@@ -85,19 +85,19 @@ CHAT_SYSTEM = (
 
 
 SUMMARY_SYSTEM = (
-    "Resumes para un asesor inmobiliario la conversación entre un lead y el asistente virtual de la "
-    "inmobiliaria. Respondes SOLO con un objeto JSON, sin texto adicional, con estas claves, cada una con "
-    "una o dos frases cortas en español:\n"
-    '- "busca": qué busca el lead (tipo de propiedad, zona, presupuesto, plazo), solo con lo que dice la '
-    "conversación.\n"
-    '- "objeciones": las dudas o reparos del lead (precio, ubicación, tiempos, requisitos). Si no hay, '
-    '"Ninguna".\n'
-    '- "siguiente_paso": qué conviene que haga el asesor ahora, a partir del motivo del traspaso.\n'
-    "Reglas:\n"
-    "- Todo número o dato debe aparecer en la conversación o en los DATOS DEL LEAD. No inventes nada.\n"
-    "- No incluyas direcciones exactas.\n"
-    "- No prometas descuentos, apartados, aprobación de crédito ni cierre de una operación.\n"
-    "- No menciones origen, religión, género, nacionalidad, situación familiar ni estado civil."
+    "You summarize, for a real estate agent, the conversation between a lead and the agency's virtual "
+    "assistant. Reply ONLY with a JSON object, with no extra text, with these keys, each with one or two "
+    "short sentences in English:\n"
+    '- "busca": what the lead is looking for (property type, area, budget, timeline), only with what the '
+    "conversation says.\n"
+    '- "objeciones": the lead\'s doubts or concerns (price, location, timing, requirements). If there are '
+    'none, "None".\n'
+    '- "siguiente_paso": what the agent should do now, based on the handoff reason.\n'
+    "Rules:\n"
+    "- Every number or fact must appear in the conversation or in the LEAD DATA. Don't make anything up.\n"
+    "- Prices are in USD. Don't include exact addresses.\n"
+    "- Don't promise discounts, reservations, loan approval or closing a deal.\n"
+    "- Don't mention origin, religion, gender, nationality, family situation or marital status."
 )
 SUMMARY_KEYS = ("busca", "objeciones", "siguiente_paso")
 
@@ -235,7 +235,7 @@ class BedrockLLM:
 
     async def summarize(self, transcript: str, facts: str) -> dict[str, str]:
         """El resumen del traspaso para el asesor (A-16), con el modelo de conversación y sin tools."""
-        prompt = f"DATOS DEL LEAD:\n{facts or 'sin datos'}\n\nCONVERSACIÓN:\n{transcript or 'sin mensajes'}"
+        prompt = f"LEAD DATA:\n{facts or 'no data'}\n\nCONVERSATION:\n{transcript or 'no messages'}"
         response = await self._converse(
             self.chat_model_id, system=[{"text": SUMMARY_SYSTEM}],
             messages=[{"role": "user", "content": [{"text": prompt}]}],

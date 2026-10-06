@@ -2343,6 +2343,10 @@ propiedad, los estados de la FSM, las intenciones y los valores de las señales 
 `inmediata`...). Son vocabulario interno congelado por los *contract tests* y viven en la base. El
 prompt le indica al LLM que nunca los muestre tal cual al lead, sino en inglés, y `factuality` reconoce
 las formas en inglés ("available", "reserved", "sold"...) como el mismo estado canónico.
+A una persona tampoco se le muestran: el panel y el reporte semanal los pasan por `db/labels.py`
+("for rent", "reserved", "in progress"), y las razones del score dicen en inglés lo que significan
+("Timing: within 3 months", no "urgency=3_meses"). Las rutas y los parámetros del panel (`/avisos`,
+`/negocio`, `periodo=semana`) tampoco cambian: son direcciones, no texto.
 
 **Alternativas.** Traducir también código y documentación — descartado: el costo se dispara y no cambia
 nada visible. Un producto bilingüe que responda en el idioma del lead — descartado: duplica prompts,

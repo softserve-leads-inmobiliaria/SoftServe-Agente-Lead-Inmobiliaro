@@ -138,6 +138,6 @@ def test_the_queue_marks_the_hot_leads_waiting_too_long(client, session_factory,
 
     page = client.get(f"/panel/{valeria.access_token}").text
 
-    assert page.count("HOT sin tomar hace") == 2
-    assert "HOT sin tomar hace 45 min" in page
-    assert "HOT sin tomar hace 3 h" in page
+    assert page.count("HOT unclaimed for") == 2
+    assert "HOT unclaimed for 45 min" in page
+    assert "HOT unclaimed for 3 h" in page

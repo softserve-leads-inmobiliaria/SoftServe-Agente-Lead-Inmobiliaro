@@ -77,14 +77,14 @@ pasar por una búsqueda, asignar la zona a mano (`update leads set zone='El Pobl
 inventado y un lead de otra zona dan el mismo 404.
 
 La vista de inventario y negocio (N-8) está en `http://localhost:8080/panel/<token>/negocio`, enlazada desde
-el funnel. Sin cierres ni historial de estados cada sección dice "sin datos": para verla con datos hay que
-sembrar la historia sintética de N-9 (ver "Historia sintética para la demo") y marcar "Incluir historia de
-demo".
+el funnel. Sin cierres ni historial de estados cada sección dice "No data for this period.": para verla con datos
+hay que sembrar la historia sintética de N-9 (ver "Historia sintética para la demo") y marcar "Include demo
+history".
 
 Tiempo de atención (B-12): un lead HOT que calificó hace más de `SLA_HOT_MINUTES` (30 por defecto) y que
-nadie marcó "en gestión" sale resaltado en la cola, con cuánto lleva esperando. Para verlo sin esperar,
+nadie marcó "Mark as in progress" sale resaltado en la cola, con cuánto lleva esperando. Para verlo sin esperar,
 poner `SLA_HOT_MINUTES=1` en `.env` y reiniciar el panel. La mediana por asesor aparece en la vista de
-negocio una vez que alguien toma un lead calificado, o con la historia de N-9 y "Incluir historia de demo".
+negocio una vez que alguien toma un lead calificado, o con la historia de N-9 y "Include demo history".
 
 ### Avisos al asesor: en el panel, y por Telegram si lo registró (B-7, A-12, B-15)
 
@@ -96,7 +96,7 @@ prueba todo.
 
 Telegram es un canal adicional. Con `TELEGRAM_BOT_TOKEN` puesto, un asesor se registra una vez abriendo su
 enlace `https://t.me/<bot>?start=adv_<token>` (el `<token>` es el de su URL del panel:
-`docker compose logs seed`). El bot responde "te voy a avisar…" y guarda su chat en
+`docker compose logs seed`). El bot responde "I'll let you know here…" y guarda su chat en
 `advisors.telegram_chat_id`; un enlace inválido no registra a nadie y no dice por qué. Registrado, recibe
 además cada aviso en el chat.
 
@@ -110,7 +110,8 @@ además cada aviso en el chat.
 
 Para verlo: escribirle al bot como lead y pedir "I want to talk to an agent", y abrir los avisos del
 asesor de la zona en el panel. En el panel van el resumen y el motivo, sin la transcripción, que está en la
-ficha. Si el envío por Telegram falla, el aviso queda igual en el panel.
+ficha. Si el envío por Telegram falla, el aviso queda igual en el panel. Todo lo que lee el asesor (la
+tarjeta, la ficha con su resumen, el panel y el reporte semanal) está en inglés (#202).
 
 ### Usar el LLM real (Bedrock)
 
@@ -502,7 +503,7 @@ docker compose run --rm seed python scripts/seed_history.py          # siembra, 
 docker compose run --rm seed python scripts/seed_history.py --borrar # la borra sin tocar datos reales
 ```
 
-- Todo lleva `synthetic = true`. Solo lo ven la vista de negocio con "Incluir historia de demo"
+- Todo lleva `synthetic = true`. Solo lo ven la vista de negocio con "Include demo history"
   (`/panel/<token>/negocio?demo=1`) y el reporte semanal con `WEEKLY_REPORT_INCLUDE_SYNTHETIC=1`. La
   cola, la ficha, el funnel, el reparto de leads y las alertas no lo ven (DT-49).
 - No cambia el inventario: el historial de cada propiedad termina en el estado que ya tiene. Una propiedad

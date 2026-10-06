@@ -102,8 +102,8 @@ DEALS: dict[str, tuple[str, bool]] = {
     "prop_00238": ("adv_003", True),
     "prop_00239": ("adv_002", True),
 }
-NO_INTEREST = {"prop_00232", "prop_00233"}  # las estancadas "sin consultas"
-NO_VISITS = {"prop_00231"}  # la estancada "consultas sin visitas"
+NO_INTEREST = {"prop_00232", "prop_00233"}  # las estancadas "no inquiries"
+NO_VISITS = {"prop_00231"}  # la estancada "inquiries but no visits"
 
 ZONES = {"El Poblado": 30, "Usaquen": 25, "Laureles": 15, "Envigado": 15, "Chapinero": 10, None: 5}
 CAMPAIGNS = {"El Poblado": "camp_fb_poblado", "Envigado": "camp_ig_envigado", "Usaquen": "camp_google_usaquen"}

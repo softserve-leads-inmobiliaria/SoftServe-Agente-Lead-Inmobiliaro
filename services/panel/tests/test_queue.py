@@ -146,13 +146,13 @@ def test_la_lista_y_la_ficha_muestran_el_boton_solo_si_corresponde(client, sessi
         session.commit()
 
     lista = client.get(f"/panel/{valeria.access_token}").text
-    assert lista.count("Marcar en gestión") == 1
-    assert "en gestión" in lista
+    assert lista.count("Mark as in progress") == 1
+    assert "in progress" in lista
 
     ficha_tomado = client.get(f"/panel/{valeria.access_token}/leads/{tomado.id}").text
-    assert "Marcar en gestión" not in ficha_tomado
+    assert "Mark as in progress" not in ficha_tomado
     ficha_abierto = client.get(f"/panel/{valeria.access_token}/leads/{abierto.id}").text
-    assert "Marcar en gestión" in ficha_abierto
+    assert "Mark as in progress" in ficha_abierto
 
 
 def test_la_historia_sintetica_no_aparece_en_la_cola_ni_se_abre(client, session_factory, zona):

@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}Inventario y negocio{% endblock %}
-{% block heading %}Inventario y negocio{% endblock %}
-{% block subheading %}Vista global · solo agregados, nunca leads{% endblock %}
+{% block title %}Inventory and business{% endblock %}
+{% block heading %}Inventory and business{% endblock %}
+{% block subheading %}Global view · aggregates only, never leads{% endblock %}
 
 {% set period = view.period %}
 {% set inv = view.inventory %}
@@ -17,15 +17,15 @@
   {%- endif -%}
 {%- endmacro %}
 {% macro days(value) -%}
-  {%- if value is none -%}—{%- else -%}{{ "%.1f"|format(value.total_seconds() / 86400) }} días{%- endif -%}
+  {%- if value is none -%}—{%- else -%}{{ "%.1f"|format(value.total_seconds() / 86400) }} days{%- endif -%}
 {%- endmacro %}
-{% macro empty() %}<p class="empty">Sin datos en este periodo.</p>{% endmacro %}
+{% macro empty() %}<p class="empty">No data for this period.</p>{% endmacro %}
 {% macro placed_table(title, rows) %}
   <div class="table-wrap">
     <table>
-      <thead><tr><th scope="col">{{ title }}</th><th scope="col">Cierres</th><th scope="col">Monto</th></tr></thead>
+      <thead><tr><th scope="col">{{ title }}</th><th scope="col">Deals</th><th scope="col">Amount</th></tr></thead>
       <tbody>
-        {% for row in rows %}<tr><td>{{ row.name }}</td><td>{{ row.deals }}</td><td>{{ money(row.amount) }}</td></tr>{% endfor %}
+        {% for row in rows %}<tr><td>{{ label("property_type", row.name) if title == "Type" else row.name }}</td><td>{{ row.deals }}</td><td>{{ money(row.amount) }}</td></tr>{% endfor %}
       </tbody>
     </table>
   </div>
@@ -34,11 +34,12 @@
   {% set top = rows|map(attribute="median_days")|max if rows else 1 %}
   <div class="table-wrap">
     <table>
-      <thead><tr><th scope="col">{{ title }}</th><th scope="col">Mediana</th><th scope="col">Cierres medidos</th><th scope="col">Proporción</th></tr></thead>
+      <thead><tr><th scope="col">{{ title }}</th><th scope="col">Median</th><th scope="col">Deals measured</th><th scope="col">Share</th></tr></thead>
       <tbody>
         {% for row in rows %}
-        <tr><td>{{ row.name }}</td><td>{{ row.median_days }} días</td><td>{{ row.deals }}</td>
-          <td>{{ ui.bar(row.median_days, top, row.name ~ ": " ~ row.median_days ~ " días") }}</td></tr>
+        {% set name = label("property_type", row.name) if title == "Type" else row.name %}
+        <tr><td>{{ name }}</td><td>{{ row.median_days }} days</td><td>{{ row.deals }}</td>
+          <td>{{ ui.bar(row.median_days, top, name ~ ": " ~ row.median_days ~ " days") }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -47,64 +48,64 @@
 
 {% block content %}
 <div class="stat-row">
-  {{ ui.stat(inv.placements.deals, "Operaciones colocadas") }}
-  {{ ui.stat(money(inv.placements.amount), "Monto colocado") }}
-  {{ ui.stat(pct(att.attribution.rate), "Cierres del bot") }}
-  {{ ui.stat(inv.stagnant|length, "Estancadas") }}
+  {{ ui.stat(inv.placements.deals, "Deals placed") }}
+  {{ ui.stat(money(inv.placements.amount), "Amount placed") }}
+  {{ ui.stat(pct(att.attribution.rate), "Deals from the bot") }}
+  {{ ui.stat(inv.stagnant|length, "Stagnant") }}
 </div>
 
 <div class="card">
   <form method="get" class="period">
-    <label><input type="radio" name="periodo" value="semana"{% if period.kind == "semana" %} checked{% endif %}> Última semana</label>
-    <label><input type="radio" name="periodo" value="mes"{% if period.kind == "mes" %} checked{% endif %}> Último mes</label>
-    <label><input type="radio" name="periodo" value="rango"{% if period.kind == "rango" %} checked{% endif %}> Rango</label>
-    <label class="field">Desde<input type="date" name="desde" value="{{ period.first_day.isoformat() }}"></label>
-    <label class="field">Hasta<input type="date" name="hasta" value="{{ period.last_day.isoformat() }}"></label>
-    <label><input type="checkbox" name="demo" value="1"{% if view.include_synthetic %} checked{% endif %}> Incluir historia de demo</label>
-    <button type="submit" class="btn">Ver</button>
+    <label><input type="radio" name="periodo" value="semana"{% if period.kind == "semana" %} checked{% endif %}> Last week</label>
+    <label><input type="radio" name="periodo" value="mes"{% if period.kind == "mes" %} checked{% endif %}> Last month</label>
+    <label><input type="radio" name="periodo" value="rango"{% if period.kind == "rango" %} checked{% endif %}> Date range</label>
+    <label class="field">From<input type="date" name="desde" value="{{ period.first_day.isoformat() }}"></label>
+    <label class="field">To<input type="date" name="hasta" value="{{ period.last_day.isoformat() }}"></label>
+    <label><input type="checkbox" name="demo" value="1"{% if view.include_synthetic %} checked{% endif %}> Include demo history</label>
+    <button type="submit" class="btn">Show</button>
   </form>
   <p class="muted" style="margin:8px 0 0">
-    Del {{ period.first_day.strftime("%d/%m/%Y") }} al {{ period.last_day.strftime("%d/%m/%Y") }}, hora local.
-    {% if view.include_synthetic %}Incluye la historia sintética de la demo.{% endif %}
+    From {{ period.first_day.strftime("%b %d, %Y") }} to {{ period.last_day.strftime("%b %d, %Y") }}, local time.
+    {% if view.include_synthetic %}Includes the demo's synthetic history.{% endif %}
   </p>
   {% if period.error %}<p class="error">{{ period.error }}</p>{% endif %}
 </div>
 
-<p class="group-title">¿Qué se colocó?</p>
+<p class="group-title">What was placed?</p>
 <div class="card">
-  <h2 class="section-title">Colocadas</h2>
+  <h2 class="section-title">Placed</h2>
   {% if inv.placements.deals %}
-  <p>{{ inv.placements.deals }} operaciones cerradas por {{ money(inv.placements.amount) }}.</p>
-  {{ placed_table("Zona", inv.placements.by_zone) }}
-  {{ placed_table("Tipo", inv.placements.by_type) }}
-  {{ placed_table("Asesor", inv.placements.by_advisor) }}
+  <p>{{ inv.placements.deals }} {{ "deal" if inv.placements.deals == 1 else "deals" }} closed for {{ money(inv.placements.amount) }}.</p>
+  {{ placed_table("Area", inv.placements.by_zone) }}
+  {{ placed_table("Type", inv.placements.by_type) }}
+  {{ placed_table("Agent", inv.placements.by_advisor) }}
   {% else %}{{ empty() }}{% endif %}
 </div>
 
-<p class="group-title">¿Qué rota rápido y qué está estancado?</p>
+<p class="group-title">What moves fast and what is stagnant?</p>
 <div class="card">
-  <h2 class="section-title">Días en el mercado</h2>
-  <p class="muted">Del primer paso a disponible hasta el cierre. Un cierre sin historial de estados no se mide.</p>
+  <h2 class="section-title">Days on the market</h2>
+  <p class="muted">From first becoming available to closing. A deal with no status history isn't measured.</p>
   {% if inv.days_on_market_by_zone %}
-  {{ market_table("Zona", inv.days_on_market_by_zone) }}
-  {{ market_table("Tipo", inv.days_on_market_by_type) }}
+  {{ market_table("Area", inv.days_on_market_by_zone) }}
+  {{ market_table("Type", inv.days_on_market_by_type) }}
   {% else %}{{ empty() }}{% endif %}
 </div>
 
 <div class="card">
-  <h2 class="section-title">Estancadas</h2>
-  <p class="muted">Disponibles hace más de 30 días al {{ inv.as_of.astimezone(view.period.start.tzinfo).strftime("%d/%m/%Y") }}, con las consultas y visitas del periodo.</p>
+  <h2 class="section-title">Stagnant</h2>
+  <p class="muted">Available for more than 30 days as of {{ inv.as_of.astimezone(view.period.start.tzinfo).strftime("%b %d, %Y") }}, with the period's inquiries and visits.</p>
   {% if inv.stagnant %}
   <div class="table-wrap">
     <table>
-      <thead><tr><th scope="col">Propiedad</th><th scope="col">Zona</th><th scope="col">Tipo</th><th scope="col">Precio</th><th scope="col">Días</th><th scope="col">Demanda</th></tr></thead>
+      <thead><tr><th scope="col">Property</th><th scope="col">Area</th><th scope="col">Type</th><th scope="col">Price</th><th scope="col">Days</th><th scope="col">Demand</th></tr></thead>
       <tbody>
         {% for prop in inv.stagnant %}
         <tr>
           <td>{{ prop.title }} <span class="muted">{{ prop.property_id }}</span></td>
-          <td>{{ prop.zone }}</td><td>{{ prop.type }}</td><td>{{ money(prop.price) }}</td>
+          <td>{{ prop.zone }}</td><td>{{ label("property_type", prop.type) }}</td><td>{{ money(prop.price) }}</td>
           <td>{{ prop.days }} <span class="badge">+{{ prop.threshold }}</span></td>
-          <td>{{ prop.demand or "%d visitas"|format(prop.visits) }}</td>
+          <td>{{ prop.demand or ("1 visit" if prop.visits == 1 else "%d visits"|format(prop.visits)) }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -114,11 +115,11 @@
 </div>
 
 <div class="card">
-  <h2 class="section-title">Propiedades con más movimiento</h2>
+  <h2 class="section-title">Most active properties</h2>
   {% if inv.ranking %}
   <div class="table-wrap">
     <table>
-      <thead><tr><th scope="col">Propiedad</th><th scope="col">Zona</th><th scope="col">Cierres</th><th scope="col">Visitas</th><th scope="col">Consultas</th></tr></thead>
+      <thead><tr><th scope="col">Property</th><th scope="col">Area</th><th scope="col">Deals</th><th scope="col">Visits</th><th scope="col">Inquiries</th></tr></thead>
       <tbody>
         {% for prop in inv.ranking %}
         <tr>
@@ -132,31 +133,31 @@
   {% else %}{{ empty() }}{% endif %}
 </div>
 
-<p class="group-title">¿De dónde vienen los cierres?</p>
+<p class="group-title">Where do the deals come from?</p>
 <div class="card">
-  <h2 class="section-title">Atribución al bot</h2>
+  <h2 class="section-title">Attribution to the bot</h2>
   {% if att.attribution.deals %}
   <dl>
-    <dt>Cierres del bot</dt>
+    <dt>Deals from the bot</dt>
     <dd>{{ pct(att.attribution.rate) }}
-        <span class="muted">({{ att.attribution.attributed }} de {{ att.attribution.deals }}: el lead tocó esa
-        propiedad con el bot en los 60 días previos, DT-41)</span></dd>
-    <dt>Del primer contacto al cierre (mediana)</dt>
+        <span class="muted">({{ att.attribution.attributed }} of {{ att.attribution.deals }}: the lead engaged with that
+        property through the bot in the previous 60 days, DT-41)</span></dd>
+    <dt>From first contact to closing (median)</dt>
     <dd>{{ days(att.time_to_close.p50) }}</dd>
-    <dt>Del primer contacto al cierre (p90)</dt>
+    <dt>From first contact to closing (p90)</dt>
     <dd>{{ days(att.time_to_close.p90) }}</dd>
   </dl>
   {% else %}{{ empty() }}{% endif %}
 </div>
 
 <div class="card">
-  <h2 class="section-title">Tiempo de atención del asesor</h2>
-  <p class="muted">De que el lead califica a que el asesor lo marca en gestión, de los tomados en el periodo.
-  Los más lentos arriba.</p>
+  <h2 class="section-title">Agent response time</h2>
+  <p class="muted">From the lead qualifying to the agent marking it as in progress, for the leads claimed in the
+  period. Slowest first.</p>
   {% if view.claim_times %}
   <div class="table-wrap">
     <table>
-      <thead><tr><th scope="col">Asesor</th><th scope="col">Mediana</th><th scope="col">Mediana HOT</th><th scope="col">Leads tomados</th><th scope="col">HOT</th></tr></thead>
+      <thead><tr><th scope="col">Agent</th><th scope="col">Median</th><th scope="col">HOT median</th><th scope="col">Leads claimed</th><th scope="col">HOT</th></tr></thead>
       <tbody>
         {% for row in view.claim_times %}
         <tr><td>{{ row.advisor }}</td><td>{{ wait(row.median) }}</td><td>{{ wait(row.median_hot) }}</td><td>{{ row.leads }}</td><td>{{ row.hot }}</td></tr>
@@ -168,12 +169,12 @@
 </div>
 
 <div class="card">
-  <h2 class="section-title">Conversión por banda</h2>
-  <p class="muted">Leads creados en el periodo, con su banda actual, y cuántos llegaron a cerrar.</p>
+  <h2 class="section-title">Conversion by band</h2>
+  <p class="muted">Leads created in the period, with their current band, and how many closed.</p>
   {% if att.by_band | sum(attribute="leads") %}
   <div class="table-wrap">
     <table>
-      <thead><tr><th scope="col">Banda</th><th scope="col">Leads</th><th scope="col">Cerrados</th><th scope="col">Conversión</th><th scope="col">Proporción</th></tr></thead>
+      <thead><tr><th scope="col">Band</th><th scope="col">Leads</th><th scope="col">Closed</th><th scope="col">Conversion</th><th scope="col">Share</th></tr></thead>
       <tbody>
         {% for row in att.by_band %}
         <tr><td>{{ ui.band_badge(row.band) }}</td><td>{{ row.leads }}</td><td>{{ row.won }}</td><td>{{ pct(row.rate) }}</td>
@@ -186,15 +187,15 @@
 </div>
 
 <div class="card">
-  <h2 class="section-title">Por campaña</h2>
+  <h2 class="section-title">By campaign</h2>
   {% if att.by_campaign %}
   <div class="table-wrap">
     <table>
-      <thead><tr><th scope="col">Campaña</th><th scope="col">Leads</th><th scope="col">Calificados</th><th scope="col">Cerrados</th><th scope="col">Cierre</th></tr></thead>
+      <thead><tr><th scope="col">Campaign</th><th scope="col">Leads</th><th scope="col">Qualified</th><th scope="col">Closed</th><th scope="col">Close rate</th></tr></thead>
       <tbody>
         {% for row in att.by_campaign %}
         <tr{% if row.campaign is none %} class="muted"{% endif %}>
-          <td>{{ row.campaign or "sin campaña" }}</td><td>{{ row.leads }}</td><td>{{ row.qualified }}</td>
+          <td>{{ row.campaign or "no campaign" }}</td><td>{{ row.leads }}</td><td>{{ row.qualified }}</td>
           <td>{{ row.closed }}</td><td>{{ pct(row.close_rate) }}</td>
         </tr>
         {% endfor %}
@@ -204,18 +205,18 @@
   {% else %}{{ empty() }}{% endif %}
 </div>
 
-<p class="group-title">¿Qué buscan y no encuentran?</p>
+<p class="group-title">What do they look for and not find?</p>
 <div class="card">
-  <h2 class="section-title">Búsquedas sin resultado</h2>
+  <h2 class="section-title">Searches without results</h2>
   {% if inv.unmet_demand %}
   <div class="table-wrap">
     <table>
-      <thead><tr><th scope="col">Zona</th><th scope="col">Tipo</th><th scope="col">Recámaras</th><th scope="col">Búsquedas</th></tr></thead>
+      <thead><tr><th scope="col">Area</th><th scope="col">Type</th><th scope="col">Bedrooms</th><th scope="col">Searches</th></tr></thead>
       <tbody>
         {% for row in inv.unmet_demand %}
         <tr>
-          <td>{{ row.zone or "cualquiera" }}</td><td>{{ row.type or "cualquiera" }}</td>
-          <td>{{ row.bedrooms if row.bedrooms is not none else "cualquiera" }}</td><td>{{ row.searches }}</td>
+          <td>{{ row.zone or "any" }}</td><td>{{ label("property_type", row.type) if row.type else "any" }}</td>
+          <td>{{ row.bedrooms if row.bedrooms is not none else "any" }}</td><td>{{ row.searches }}</td>
         </tr>
         {% endfor %}
       </tbody>
