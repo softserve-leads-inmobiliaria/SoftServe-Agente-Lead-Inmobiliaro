@@ -103,6 +103,17 @@ ESCENARIOS: dict[str, dict] = {
             "you have any property in bogota?",
         ],
     },
+    "08_cobertura_de_zonas": {
+        "descripcion": ("Pregunta en qué zonas hay propiedades y por ciudades sin cobertura: el agente contesta con "
+                        "las zonas del inventario, sin fallback (#194)"),
+        "property_id": "prop_00231",
+        "turnos": [
+            "",  # /start prop_00231
+            "In which areas do you have properties?",
+            "What about Cali or Cartagena, do you have anything there?",
+            "And what do you have for rent?",
+        ],
+    },
 }
 
 
