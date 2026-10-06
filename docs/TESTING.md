@@ -415,6 +415,21 @@ detecta gentilicios y frases de procedencia, y el gold set suma los pares `venez
 Para agregar un par se edita `MENCIONES` o `SITUACIONES` en el test; nunca se borra uno viejo salvo que
 deje de aplicar.
 
+### Filtro de idioma (#202)
+
+`services/core/tests/test_language_guard_gold_set.py` fija qué mensaje recibe el aviso de "solo en
+inglés" (DT-55). Tiene tres listas: español típico de un lead ("hola", "¿cuánto cuesta?", "la segunda"),
+inglés ("the second one", "Hola! I'm looking for a 2 bedroom in Laureles") y nombres propios que no son
+de ningún idioma ("El Poblado", "Carrera 37 # 8A-24, El Poblado", "La Candelaria"). El umbral: todo el
+español detectado y 0 falsos positivos, porque rechazar a quien ya escribe en inglés es el error caro.
+El filtro no llama a ningún LLM, así que corre en milisegundos. `test_input_guard_turn.py` prueba el
+turno completo: el aviso no mueve la FSM, no suma al score ni a la frustración, y la baja, la PII y fair
+housing se aplican antes.
+
+Como el filtro frena el español antes del agente, las pruebas de turno y los guiones del arnés le hablan
+al agente en inglés. El agente fake entiende las dos lenguas; sus respuestas fijas siguen en español
+hasta que pasen a inglés con los prompts.
+
 ### El registro de gold sets (OBS-4)
 
 `services/core/tests/test_gold_sets_gate.py` es el lugar donde se ve, de una vez, **qué gold set hay y qué

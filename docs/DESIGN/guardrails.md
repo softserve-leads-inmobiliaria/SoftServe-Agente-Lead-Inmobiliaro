@@ -17,6 +17,7 @@ silencio salvo lo que cada fila indica.
 | Opt-out (`/stop`) | Comando explícito o frase equivalente | Determinista (regla, no LLM). Cancela todo *job* pendiente del lead; marca `consent_status=withdrawn`; confirma la baja |
 | Fuera de dominio | Preguntas fuera de bienes raíces, o que piden dictamen legal/fiscal/crediticio formal | Respuesta acotada + oferta de `HUMAN_HANDOFF` si insiste |
 | Categoría protegida en la entrada | El lead menciona origen, religión, situación familiar, género, nacionalidad | Se responde con normalidad al resto del mensaje; el dato no entra a `ScoreSignal` |
+| Idioma (#202) | Mensaje escrito en español | Aviso fijo en inglés para que lo repita en inglés; no llega al LLM, no suma al score ni a la frustración, y se registra en `AuditLog` (`input.not_english`). Corre después de la baja, la PII y fair housing |
 
 El origen se detecta también como lo dice un lead (#116): gentilicios ("soy colombiano", "somos
 argentinos") y frases de procedencia ("soy de Colombia", "vengo de Venezuela", "nací en Perú"). La
@@ -26,7 +27,12 @@ de "soy" o "somos". El costo de esa regla: "mi esposa es española" no se marca.
 detrás de "soy/somos" ("soy colombian", "soy venezolan") también cuenta (#200).
 
 **Idioma (#202, DT-55).** La experiencia es en inglés: los cinco detectores reconocen inglés y conservan
-sus patrones en español. En inglés valen las mismas reglas: lista cerrada de países ("I'm from
+sus patrones en español, y un sexto, `app/language_guard.py`, contesta un mensaje en español con el aviso
+de "solo en inglés". Cuenta las palabras que solo son de un idioma: es español si tiene más de español
+que de inglés, y ante el empate pasa. No cuentan las ciudades y zonas del inventario, las vías con número
+("Calle 10", "Carrera 37 # 8A-24") ni un artículo seguido de mayúscula ("La Candelaria"), así que "Do you
+have anything in El Poblado?" o "Hola! I'm looking for..." pasan. La baja, la PII y fair housing se
+aplican antes, en los dos idiomas: retirar el consentimiento o proteger un dato no depende del idioma. En inglés valen las mismas reglas: lista cerrada de países ("I'm from
 Venezuela" sí, "I'm from El Poblado" no), y los gentilicios ambiguos ("Colombian pesos", "Mexican food",
 "I speak Spanish") y las religiones en singular ("Christian" también es un nombre) solo cuentan detrás
 de "I'm/we're". "my wife" o "my husband" se generalizan a "my partner", y "my kids" a "my family". La
@@ -89,7 +95,7 @@ existir) — se actualiza en el mismo PR que cierra la historia correspondiente.
 | Dirección reservada | `A-6` | Implementado: `services/core/app/address_guard.py`, aplicado por `BedrockAgent` en el mismo *pipeline* de regenerar/degradar que A-5 (DT-23). No es literal como A-5: detecta la forma de una dirección exacta (tipo de vía + nombre + número, o vía numerada + placa: "Carrera 37 # 8A-24") en prosa, en español y en inglés. Una vía numerada sin placa ("near Calle 10") es una referencia aproximada y no dispara (DT-55), porque el catálogo nunca devuelve `address_exact` sin `lead_qualified=true` y no hay valor real contra el que comparar. Solo cubre a `BedrockAgent`: `FakeAgent` nunca ve `address_exact` (el catálogo la redacta antes de que llegue) |
 | Promesas no autorizadas (8 *claims*) | `A-7` | Implementado 6/8 con código: `services/core/app/promise_guard.py`, aplicado por `BedrockAgent` en el mismo *pipeline* que A-5/A-6 (DT-26). El 8 ya lo cubría A-5 sin cambios; el 6 queda parcial (ver §2.2). Detalle de cuál cubre cada uno en §2.2 |
 | Resumen para el asesor | `A-16` | Implementado: `services/core/app/summary.py` pasa el resumen del traspaso por A-5, A-6 y A-7, con la transcripción guardada y los datos del lead como fuente, y rechaza toda mención de categoría protegida (las reglas de A-8, más "su esposa" o "sus hijos" en tercera persona). Si algo no pasa, se descarta sin regenerar y la ficha sale sin resumen (DT-46) |
-| Entrada (PII/*jailbreak*/OOD/`/stop`/categoría protegida) | `A-8` | Implementado: los 5 detectores (`services/core/app/input_guard.py`). `/stop` cancela los *jobs* pendientes del lead y desactiva su alerta de propiedades nuevas por cualquiera de los dos caminos, el canal y `core` (`A-17`, `A-18`, DT-44, DT-45); el reingreso tras la baja es de `B-2` |
+| Entrada (PII/*jailbreak*/OOD/`/stop`/categoría protegida/idioma) | `A-8`, #202 | Implementado: los 5 detectores (`services/core/app/input_guard.py`) y el filtro de idioma (`services/core/app/language_guard.py`, DT-55). `/stop` cancela los *jobs* pendientes del lead y desactiva su alerta de propiedades nuevas por cualquiera de los dos caminos, el canal y `core` (`A-17`, `A-18`, DT-44, DT-45); el reingreso tras la baja es de `B-2` |
 | Fair housing | `A-11`, #119 | Implementado (DT-38, DT-40): `decision_maker` es `declarado`/`no_declarado`, así que el contrato no guarda con quién decide el lead. El guardrail de entrada generaliza "mis hijos" a "mi familia" y "mi esposa", "mi marido" o "mi novia" a "mi pareja" en vez de borrarlos, así que el lead no pierde los puntos de Authority. El gold set de `C-6` (DT-35) queda con todos sus pares en diferencia 0, en español y en inglés (#202), sin `xfail` |
 | PII en logs (no en el mensaje al LLM — eso ya es `A-8`) | `OBS-7` | **Sin caso real que enmascarar**: ningún logger de `core`/`panel`/`catalog` imprime hoy texto del lead (mensaje, historial, `clean_text`/`signal_text`) — los `logger.*` existentes solo llevan mensajes fijos o metadata (ids, nombres de excepción). `db/logging_config.py::JsonFormatter` no enmascara nada por diseño (DT-27); si algún día un log necesita llevar texto del lead, la regla es la misma que `InputVerdict.audit_kinds()`: pasar por `input_guard._redact_pii`/tipos-no-valores antes de loguear, nunca el texto crudo |
 
@@ -103,6 +109,7 @@ existir) — se actualiza en el mismo PR que cierra la historia correspondiente.
 | Dirección reservada | Gold set de dirección reservada, fusionado en `A-6` (`services/core/tests/test_address_guard_gold_set.py`) — antes iba a ser `C-8`, ver notas de `A-06.md` | Sí — 0 fugas |
 | *Claims* prohibidos | Suite adversarial de A-7 (`services/core/tests/test_promise_guard.py`) — los 6 cubiertos con código, en positivo y negativo | Sí — corre con la suite de `core` |
 | Fair housing | Gold set de perfiles pareados, 27 pares (`C-6`, `services/core/tests/test_fair_housing_gold_set.py`) | Sí — 27/27 con diferencia 0, sin `xfail`. Los 6 pares de "con quién compras" daban −8/−12/−20 (DT-35) hasta que A-11 los arregló (DT-38) |
+| Idioma | Gold set de 71 mensajes: español típico de un lead, inglés y nombres propios (#202, `services/core/tests/test_language_guard_gold_set.py`) | Sí — todo el español detectado y 0 falsos positivos en inglés o en nombres |
 | PII/consentimiento | Test de privacidad + `/stop` | Manual (E2E) |
 | Contrato MCP del Catalog Service | *Contract test* dedicado | Sí |
 
