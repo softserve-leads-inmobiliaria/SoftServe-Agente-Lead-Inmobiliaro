@@ -1,4 +1,4 @@
-"""Contract tests de CT-2: las 5 tools catalog.* (input, output y errores)."""
+"""Contract tests de CT-2: las 6 tools catalog.* (input, output y errores)."""
 import json
 from pathlib import Path
 
@@ -12,6 +12,7 @@ TOOLS = [
     "get_availability",
     "get_promotions",
     "check_requirements",
+    "list_zones",
 ]
 ERROR_CODES = {"NOT_FOUND", "INVALID_INPUT", "UPSTREAM_UNAVAILABLE"}
 

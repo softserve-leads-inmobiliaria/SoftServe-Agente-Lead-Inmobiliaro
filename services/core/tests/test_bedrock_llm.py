@@ -183,6 +183,17 @@ def test_the_prompt_offers_the_alternatives_of_an_empty_search():
     assert "Don't ask the lead for their area again" in CHAT_SYSTEM
 
 
+def test_the_prompt_answers_coverage_with_list_zones():
+    # #194, en vivo con Sonnet: contestaba de memoria y nombraba un barrio sin inventario ("Chicó").
+    assert "call list_zones and name only the areas it returns" in CHAT_SYSTEM
+    assert "one we don't cover" in CHAT_SYSTEM
+
+
+def test_the_prompt_searches_before_asking_for_more_filters():
+    # #194: "what do you have for rent?" recibía tres preguntas (zona, presupuesto, recámaras).
+    assert "search right away with what they gave you" in CHAT_SYSTEM
+
+
 def test_the_prompt_never_promises_to_look_something_up_later():
     # #213: "Let me search to see what we have" y el turno terminaba sin buscar.
     assert "Never tell the lead you will look something up" in CHAT_SYSTEM and "in this same reply" in CHAT_SYSTEM

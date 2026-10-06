@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://softserve.local/contracts/mcp/list_zones.schema.json",
+  "name": "list_zones",
+  "description": "Zonas (barrios) con propiedades disponibles, con su ciudad, cuántas hay y qué operaciones (type) y tipos de inmueble (kind) tienen (#194, DT-58). Solo cuentan las propiedades en estado disponible: cada zona lo dice en status. Una zona sin propiedades disponibles no aparece. Sin inventario devuelve zones: [].",
+  "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "zones": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "zone": {
+              "type": "string",
+              "minLength": 1
+            },
+            "city": {
+              "type": "string",
+              "minLength": 1
+            },
+            "status": {
+              "const": "disponible"
+            },
+            "available": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "types": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "venta",
+                  "renta",
+                  "preventa"
+                ]
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "kinds": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "departamento",
+                  "casa",
+                  "terreno",
+                  "local",
+                  "estudio"
+                ]
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "zone",
+            "city",
+            "status",
+            "available",
+            "types",
+            "kinds"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "zones"
+    ],
+    "additionalProperties": false
+  },
+  "errorSchema": "catalog_error.schema.json",
+  "errors": {
+    "INVALID_INPUT": "El input no cumple el inputSchema (la tool no recibe argumentos)",
+    "UPSTREAM_UNAVAILABLE": "La fuente de datos (Postgres/servicio) no está disponible"
+  },
+  "errors_not_applicable": {
+    "NOT_FOUND": "No recibe ningún identificador: sin zonas se responde zones: [], no un error."
+  }
+}

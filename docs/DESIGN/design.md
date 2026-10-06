@@ -100,8 +100,8 @@ por red, y `stdio` asume que el cliente lanza al servidor como proceso hijo habl
 conecta apuntando a `${CATALOG_SERVICE_URL}/mcp`. Ver `decisions.md` para el detalle y el
 *gotcha* de *lifespan* al montar el sub-app.
 
-Las 5 tools (`search_properties`, `get_property`, `get_availability`, `get_promotions`,
-`check_requirements`) y sus schemas de input/output son responsabilidad de `CT-2` — este
+Las 6 tools (`search_properties`, `get_property`, `get_availability`, `get_promotions`,
+`check_requirements` y `list_zones`, #194) y sus schemas de input/output son responsabilidad de `CT-2` — este
 documento solo fija el transporte, no el contenido de cada tool. El servidor publica en `list_tools` el
 `inputSchema` del contrato, el mismo contra el que valida, y no el que el SDK deriva de la firma de Python,
 que es más laxo: con ese, el LLM no sabía qué campos lleva `lead_profile` (#182).

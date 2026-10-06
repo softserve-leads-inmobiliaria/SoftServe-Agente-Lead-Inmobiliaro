@@ -60,7 +60,7 @@ def _validator(schema):
 def test_every_contract_is_found():
     """Guarda contra un `rglob` que deje de ver carpetas: los contratos que ya existían."""
     assert {"event", "fsm_state", "catalog_error", "scheduling_error", "search_properties",
-            "get_property", "get_availability", "get_promotions", "check_requirements",
+            "get_property", "get_availability", "get_promotions", "check_requirements", "list_zones",
             "assign_advisor", "get_slots", "book"} <= set(SCHEMAS)
 
 

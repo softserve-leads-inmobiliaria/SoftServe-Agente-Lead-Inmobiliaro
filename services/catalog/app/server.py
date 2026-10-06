@@ -1,4 +1,4 @@
-"""Servidor MCP del catálogo (C-1b): las 5 tools catalog.* por streamable HTTP en /mcp (DT-2).
+"""Servidor MCP del catálogo (C-1b): las 6 tools catalog.* por streamable HTTP en /mcp (DT-2).
 
 Mismo transporte y mismo código cliente que el catálogo falso de CT-8: lo único que cambió al
 migrar el catálogo a Postgres (C-1) fue la fuente de datos detrás de `CatalogService`, nunca el
@@ -107,6 +107,13 @@ def create_mcp(service: CatalogService | None = None) -> FastMCP:
         No matches returns properties: [] (not an error)."""
         return run(service.search_properties, zone=zone, budget_range=budget_range, type=type,
                    bedrooms=bedrooms, kind=kind)
+
+    @mcp.tool()
+    def list_zones() -> Any:
+        """Areas (neighborhoods) with available properties: their city, how many are available and
+        which deals (`types`) and kinds of property (`kinds`) they have. Use it when the lead asks where
+        you have properties or about a city or area you may not cover, and name only these areas."""
+        return run(service.list_zones)
 
     @mcp.tool()
     def get_property(property_id: str, lead_qualified: bool) -> Any:

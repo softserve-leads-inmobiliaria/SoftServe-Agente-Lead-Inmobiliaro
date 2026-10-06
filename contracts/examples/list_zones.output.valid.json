@@ -1,0 +1,30 @@
+{
+  "zones": [
+    {
+      "zone": "El Poblado",
+      "city": "Medellin",
+      "status": "disponible",
+      "available": 3,
+      "types": [
+        "renta",
+        "venta"
+      ],
+      "kinds": [
+        "departamento",
+        "estudio"
+      ]
+    },
+    {
+      "zone": "Chapinero",
+      "city": "Bogota",
+      "status": "disponible",
+      "available": 1,
+      "types": [
+        "renta"
+      ],
+      "kinds": [
+        "local"
+      ]
+    }
+  ]
+}

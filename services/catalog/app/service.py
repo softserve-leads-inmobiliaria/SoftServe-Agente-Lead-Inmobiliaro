@@ -1,4 +1,4 @@
-"""Lógica del catálogo (C-1): las 5 tools `catalog.*` sobre Postgres (`properties` y `promotions`).
+"""Lógica del catálogo (C-1): las 6 tools `catalog.*` sobre Postgres (`properties` y `promotions`).
 
 Sin MCP ni red: `server.py` lo expone por MCP. Las reglas de `check_requirements` siguen en `app/data.py`. Cada método devuelve un dict que cumple
 el `outputSchema` de contracts/mcp/<tool>.schema.json o lanza `CatalogError` con uno de los códigos
@@ -139,7 +139,29 @@ class CatalogService:
                 found.append(prop_dict)
                 
             return {"properties": found}
-        
+
+    def list_zones(self) -> dict[str, Any]:
+        """Las zonas con propiedades disponibles (#194, DT-58): ciudad, cuántas hay, operaciones y tipos.
+
+        Es la cobertura que el agente puede citar: sin esta tool contestaba de memoria e inventaba barrios.
+        La ciudad sale de `address_approx` ("El Poblado, Medellin, near Parque Lleras", DT-55).
+        """
+        self._check_upstream()
+
+        with self._db_session_factory() as db:
+            available = db.query(Property).filter(Property.status == "disponible").order_by(Property.id).all()
+
+        zones: dict[str, dict[str, Any]] = {}
+        for prop in available:
+            parts = [part.strip() for part in (prop.address_approx or "").split(",")]
+            entry = zones.setdefault(prop.zone, {
+                "zone": prop.zone, "city": parts[1] if len(parts) > 1 and parts[1] else prop.zone,
+                "status": "disponible", "available": 0, "types": [], "kinds": []})
+            entry["available"] += 1
+            for key, value in (("types", prop.type), ("kinds", prop.kind)):
+                if value and value not in entry[key]:
+                    entry[key].append(value)
+        return {"zones": sorted(zones.values(), key=lambda z: (z["city"], z["zone"]))}
 
     def get_property(self, property_id: str, lead_qualified: bool) -> dict[str, Any]:
         """Recupera la ficha de la propiedad protegiendo la dirección exacta."""
