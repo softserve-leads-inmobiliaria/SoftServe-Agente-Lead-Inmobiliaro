@@ -211,7 +211,7 @@ Las cajas con borde punteado no están construidas.
   `property_interest` y `unmet_searches`, más `leads.utm_campaign`, `properties.photo_url` y `synthetic`.
   `db/property_history.py` es la única vía para cambiar el estado de una propiedad. Hoy se escriben
   `property_interest` (`N-4`), `unmet_searches` y `leads.utm_campaign` (`N-5`). `deals` y el historial de
-  estados reales los escribe "Cerrar operación" (`N-3`); la historia sintética de `N-9` siembra los suyos
+  estados reales los escribe "Close a deal" (`N-3`); la historia sintética de `N-9` siembra los suyos
   aparte.
 - **Interés del lead por propiedad** (`N-4`): cada turno guarda, en su misma transacción, las propiedades
   que el lead tocó: `anuncio` (el *deep-link*), `consulta` (`get_property`), `busqueda` (cada resultado de
@@ -245,7 +245,7 @@ Las cajas con borde punteado no están construidas.
   - Colocadas: operaciones de `deals`, por zona, tipo de propiedad y asesor.
   - Días en el mercado, del primer `disponible` al cierre: mediana por zona y por tipo.
   - Estancadas: `disponible` a la fecha de corte desde hace más de 30, 60 o 90 días, con sus consultas y
-    visitas del periodo ("sin consultas", "consultas sin visitas"). El estado es el del último evento hasta
+    visitas del periodo ("no inquiries", "inquiries but no visits"). El estado es el del último evento hasta
     el corte, no el de hoy: el reporte semanal corta en el pasado (#177).
   - Ranking por cierres, visitas y consultas, y las combinaciones de zona, tipo y recámaras más
     buscadas sin resultado.
@@ -277,10 +277,10 @@ Las cajas con borde punteado no están construidas.
 - **Vista de inventario y negocio** (`N-8`, DT-41): `/panel/<token>/negocio`, con las consultas de `N-6` y
   `N-7`. Como el funnel de `B-9`, la ve cualquier token de asesor y un token que no existe da 404. Periodo:
   la última semana (por defecto), el último mes o un rango de fechas, en hora local; un rango inválido
-  muestra la última semana con un aviso. "Incluir historia de demo" suma lo sintético de `N-9`. Solo
+  muestra la última semana con un aviso. "Include demo history" suma lo sintético de `N-9`. Solo
   agregados: las estancadas y el ranking listan propiedades, nunca leads ni enlaces a una ficha. Con la
-  base vacía, cada sección dice "sin datos". Enlazada desde el funnel y de vuelta.
-- **Tiempo de atención del asesor** (`B-12`): "Marcar en gestión" guarda la primera toma en
+  base vacía, cada sección dice "No data for this period.". Enlazada desde el funnel y de vuelta.
+- **Tiempo de atención del asesor** (`B-12`): "Mark as in progress" guarda la primera toma en
   `leads.claimed_at` (migración `0014`). La vista de `N-8` muestra, por asesor, la mediana de `qualified_at`
   a la toma (de todos los calificados y solo de los HOT), con `db/metrics/sla.py`.
   - Cuenta los leads tomados en el periodo. El asesor es el del lead (`advisor_id`), aunque lo haya tomado
@@ -303,7 +303,7 @@ Las cajas con borde punteado no están construidas.
     cambia el inventario. Una propiedad con historial real, o en otro estado, no se toca.
   - Determinista e idempotente: semilla fija, y cada corrida borra la historia anterior y la vuelve a
     sembrar. `--borrar` la quita sin tocar datos reales.
-  - Solo la ven las vistas agregadas con "Incluir historia de demo" (`N-8`) o con
+  - Solo la ven las vistas agregadas con "Include demo history" (`N-8`) o con
     `WEEKLY_REPORT_INCLUDE_SYNTHETIC=1` (`N-10`). La cola, la ficha, el funnel, el reparto de leads y las
     alertas de propiedades nuevas la excluyen.
 - **Resumen del traspaso para el asesor** (`A-16`, DT-46): al llegar a `HANDOFF` o `HUMAN_HANDOFF`, el
