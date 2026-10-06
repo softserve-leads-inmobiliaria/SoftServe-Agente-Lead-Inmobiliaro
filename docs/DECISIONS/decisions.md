@@ -2452,3 +2452,40 @@ pero en tres corridas el modelo nunca repitió la búsqueda.
   cupo de Bedrock.
 - Una búsqueda con solo la zona ("¿qué tienen en Cali?") trae, sin la zona, todo el inventario como
   alternativas. Eso cubre en parte la pregunta de cobertura de #194.
+
+## DT-58 — La cobertura sale de una tool del catálogo, `list_zones`
+
+**Estado:** aceptada (#194).
+
+**Contexto.** Ante "¿en qué zonas tienen propiedades?" o una ciudad sin cobertura, el agente no llamaba
+ninguna tool. Con Haiku en la conversación terminaba en la respuesta de respaldo: la factualidad (A-5) no
+encontraba las cantidades en ningún resultado. Con Sonnet contestaba bien las ciudades, que dice el
+prompt, pero inventaba un barrio sin inventario ("Chicó"). La factualidad no lo detecta porque revisa
+números y estados, no nombres. #194 pedía elegir entre una tool y una regla en el prompt para que el
+agente busque sin filtros y resuma las zonas.
+
+**Decisión.**
+- El catálogo publica una sexta tool, `list_zones`, sin argumentos (contrato en
+  `contracts/mcp/list_zones.schema.json`).
+- Devuelve las zonas con propiedades `disponible`. Cada zona trae su ciudad, cuántas hay, sus
+  operaciones (`types`) y sus tipos de inmueble (`kinds`). La ciudad sale de `address_approx` (DT-55).
+- Cada zona lleva `status: "disponible"`, que dice qué se contó. Así "3 available properties in El
+  Poblado" queda respaldado para la factualidad.
+- El prompt le pide llamar a `list_zones` ante una pregunta de cobertura y nombrar solo las zonas que
+  devuelve. Una ciudad que no aparece es una ciudad sin cobertura.
+
+**Alternativas.**
+- **`search_properties` sin filtros y una regla en el prompt:** descartado. Trae todas las fichas para
+  contestar una lista de barrios, crece con el inventario y deja las cuentas a cargo del modelo.
+- **Solo el prompt, con las zonas escritas:** descartado. Queda desactualizado en cuanto cambia el
+  inventario.
+- **Un guardrail de nombres de zona:** queda para después. Tiene que distinguir un barrio de cualquier
+  nombre propio, y con la tool el modelo ya tiene la fuente.
+
+**Consecuencias.**
+- `list_zones` no pasa por el `AvailabilityGuard` (A-4). Cuenta el estado de la tabla, que es la misma
+  fuente que `get_availability`.
+- Core descubre las tools en tiempo de ejecución, así que no hubo que tocar el cliente.
+- Los *contract tests*, el servidor MCP y el gold set de factualidad sobre el catálogo suman la tool y
+  un turno `zonas`.
+
