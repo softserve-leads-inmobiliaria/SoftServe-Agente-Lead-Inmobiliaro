@@ -21,23 +21,32 @@ INTENTS = (
     "otro",
 )
 
-# El orden importa: gana la primera categoría cuya palabra clave aparece en el mensaje.
+# El orden importa: gana la primera categoría cuya palabra clave aparece en el mensaje. En español y en
+# inglés (#202): el filtro de idioma no deja llegar el español al agente, pero el fake lo sigue
+# entendiendo. Las palabras clave son expresiones regulares que empiezan en un límite de palabra ("depa"
+# también es "departamento", pero "hi" no es "this").
 _KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("solicitud_humano", (
         "asesor", "humano", "persona real", "hablar con alguien", "hablar con una persona",
         "supervisor", "gerente",
+        r"agent\b", "agents", "human", "real person", r"(?:talk|speak) (?:to|with) (?:someone|somebody|a person)",
+        "manager",
     )),
     # Lo que un agente de ventas no atiende (cuentas, contratos vigentes, quejas): lo ve una persona.
     ("fuera_de_alcance", (
         "queja", "reclamo", "reclamacion", "ya soy cliente", "mi contrato", "mi deposito",
+        "complaint", "i(?:'m| am) already (?:a )?(?:client|customer)", "my contract", "my deposit",
     )),
-    ("agendar_visita", ("visita", "agendar", "cita")),
-    ("consulta_precio", ("precio", "cuesta", "costo", "cuanto")),
+    ("agendar_visita", ("visita", "agendar", "cita", "visit", "viewing", "schedule", "appointment", "book a")),
+    ("consulta_precio", ("precio", "cuesta", "costo", "cuanto", "price", "cost", "how much")),
     ("busqueda_propiedad", (
         "busco", "departamento", "depa", "casa", "propiedad", "rentar", "comprar", "recamara",
+        "looking for", "apartment", "flat", "condo", r"house\b", "property", "rent", "buy", "bedroom",
     )),
-    ("saludo", ("hola", "buenas", "buenos dias", "buenas tardes")),
+    ("saludo", ("hola", "buenas", "buenos dias", "buenas tardes",
+                r"hi\b", "hello", r"hey\b", "good (?:morning|afternoon|evening)")),
 )
+_PATTERNS = tuple((intent, re.compile("|".join(rf"\b(?:{k})" for k in words))) for intent, words in _KEYWORDS)
 
 REPLIES: dict[str, str] = {
     "solicitud_humano": "Claro, te comunico con un asesor de nuestro equipo.",
@@ -76,11 +85,11 @@ _BUDGET = re.compile(
 # Tipo de inmueble que nombra el lead (#188). "depa" es un prefijo de "departamento", así que caen en
 # el mismo valor. El fake solo mapea `kind`; la zona y el presupuesto los extrae el LLM real.
 _KINDS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("departamento", ("depa", "departamento", "penthouse")),
-    ("casa", ("casa",)),
-    ("terreno", ("terreno", "lote")),
-    ("local", ("local",)),
-    ("estudio", ("estudio",)),
+    ("departamento", ("depa", "departamento", "penthouse", "apartment", "flat", "condo")),
+    ("casa", ("casa", "house", "townhouse")),
+    ("terreno", ("terreno", "lote", "land", "plot")),
+    ("local", ("local", "commercial", "storefront", "retail space")),
+    ("estudio", ("estudio", "studio")),
 )
 
 
@@ -94,10 +103,7 @@ class FakeLLM:
         normalized = _normalize(text)
         if not normalized.strip():
             return "saludo"  # p. ej. un deep-link sin texto: el lead acaba de llegar
-        for intent, keywords in _KEYWORDS:
-            if any(keyword in normalized for keyword in keywords):
-                return intent
-        return "otro"
+        return next((intent for intent, pattern in _PATTERNS if pattern.search(normalized)), "otro")
 
     def generate_reply(self, intent: str) -> str:
         try:

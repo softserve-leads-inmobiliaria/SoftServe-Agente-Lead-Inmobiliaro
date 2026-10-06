@@ -9,15 +9,17 @@ respuesta segura. Nunca se copia el contenido sensible a los resultados: `clean_
 datos omitidos y la auditoría solo guarda tipos, no valores.
 
 Idioma (#202, DT-55): la experiencia es en inglés, así que cada detector reconoce inglés, y también
-conserva sus patrones en español. Un mensaje en español no debería llegar al LLM, pero la baja, la PII y
-fair housing no pueden depender de eso, y el resto no cuesta nada mantenerlo. Las respuestas fijas son en
-inglés.
+conserva sus patrones en español. Un mensaje en español no llega al LLM (`not_english`, ver
+`app/language_guard.py`), pero la baja, la PII y fair housing se aplican antes y no pueden depender de eso,
+y el resto no cuesta nada mantenerlo. Las respuestas fijas son en inglés.
 """
 from __future__ import annotations
 
 import re
 import unicodedata
 from dataclasses import dataclass
+
+from app.language_guard import is_spanish
 
 REDACTED = "[redacted]"
 # Lo que se guarda y se le da al LLM cuando de un mensaje no queda nada utilizable (solo PII o categoría protegida).
@@ -237,10 +239,12 @@ class InputVerdict:
     pii: tuple[str, ...] = ()
     out_of_domain: bool = False
     protected_category: bool = False
+    not_english: bool = False  # escrito en español: se pide repetirlo en inglés (#202, DT-55)
 
     @property
     def flagged(self) -> bool:
-        return self.opt_out or self.jailbreak or bool(self.pii) or self.out_of_domain or self.protected_category
+        return (self.opt_out or self.jailbreak or bool(self.pii) or self.out_of_domain or self.protected_category
+                or self.not_english)
 
     def audit_kinds(self) -> list[tuple[str, dict[str, object]]]:
         """(acción, detalle) de cada detección para `AuditLog`; el detalle nunca lleva el contenido."""
@@ -255,6 +259,8 @@ class InputVerdict:
             kinds.append(("input.out_of_domain", {}))
         if self.protected_category:
             kinds.append(("input.protected_category", {}))
+        if self.not_english:
+            kinds.append(("input.not_english", {}))
         return kinds
 
 
@@ -335,4 +341,5 @@ def inspect_input(text: str) -> InputVerdict:
         pii=pii,
         out_of_domain=bool(_FORMAL_ADVICE.search(normalized)) or (not domain and bool(_OFF_TOPIC.search(normalized))),
         protected_category=bool(_PROTECTED.search(normalized)),
+        not_english=is_spanish(clean),
     )
