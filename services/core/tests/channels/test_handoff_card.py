@@ -69,16 +69,16 @@ def _nuevo_lead() -> str:
 def test_la_ficha_lleva_motivo_score_propiedad_visita_y_la_transcripcion_en_orden():
     card = LeadCard(lead_id=uuid.uuid4(), zone="El Poblado", score_total=80, score_band="HOT",
                     property_title="Depa en El Poblado", property_id="prop_00231",
-                    visit_at="25/09/2026 10:00", reasons=("presupuesto declarado",))
+                    visit_at="Fri Sep 25, 10:00", reasons=("Budget: budget stated",))
     ficha = HandoffFile(card=card, fsm_state="HUMAN_HANDOFF", reason="solicitud_humano",
                         transcript=(("user", "Hi"), ("assistant", "Hello!"), ("user", "I want an agent")))
 
     resumen, transcripcion = render_handoff(ficha)
 
-    assert "Traspaso de lead (HUMAN_HANDOFF): el lead pidió hablar con una persona" in resumen
+    assert "Lead handoff (HUMAN_HANDOFF): the lead asked to talk to a person" in resumen
     assert "HOT · 80/100" in resumen and "Depa en El Poblado (prop_00231)" in resumen
-    assert "Visita agendada: 25/09/2026 10:00" in resumen
-    assert transcripcion == "Transcripción:\nLead: Hi\nAgente: Hello!\nLead: I want an agent"
+    assert "Scheduled visit: Fri Sep 25, 10:00" in resumen
+    assert transcripcion == "Transcript:\nLead: Hi\nAssistant: Hello!\nLead: I want an agent"
 
 
 def test_una_conversacion_sin_mensajes_lo_dice_en_vez_de_omitir_la_transcripcion():
@@ -88,7 +88,7 @@ def test_una_conversacion_sin_mensajes_lo_dice_en_vez_de_omitir_la_transcripcion
     partes = render_handoff(HandoffFile(card=card, fsm_state="HANDOFF", reason="visit_scheduled",
                                         transcript=()))
 
-    assert partes[-1] == "Transcripción: sin mensajes."
+    assert partes[-1] == "Transcript: no messages."
     assert "Propiedad" not in partes[0] and "Visita" not in partes[0]
 
 
@@ -105,10 +105,10 @@ def test_una_transcripcion_larga_se_parte_sin_perder_ni_una_linea():
 def test_una_sola_linea_mas_larga_que_el_tope_se_corta_sin_perder_texto():
     linea = "Lead: " + "y" * (TELEGRAM_MAX_CHARS * 2 + 10)
 
-    partes = split_lines(["Transcripción:", linea], TELEGRAM_MAX_CHARS)
+    partes = split_lines(["Transcript:", linea], TELEGRAM_MAX_CHARS)
 
     assert all(len(parte) <= TELEGRAM_MAX_CHARS for parte in partes)
-    assert "".join(partes).replace("Transcripción:", "", 1) == linea
+    assert "".join(partes).replace("Transcript:", "", 1) == linea
 
 
 # --- de punta a punta por el canal -------------------------------------------------------------
@@ -125,12 +125,12 @@ def test_al_pedir_un_humano_el_asesor_recibe_la_ficha_una_sola_vez_con_toda_la_c
 
     assert _chats(bot) == {"chat-valeria"}
     resumen, *transcripcion = _mensajes(bot)
-    assert "Traspaso de lead (HUMAN_HANDOFF)" in resumen and "pidió hablar con una persona" in resumen
-    assert "Zona: El Poblado" in resumen
+    assert "Lead handoff (HUMAN_HANDOFF)" in resumen and "asked to talk to a person" in resumen
+    assert "Area: El Poblado" in resumen
     completa = "\n".join(transcripcion)
     # Incluye el turno del traspaso: mensaje del lead y respuesta del agente, en orden.
     assert completa.index("Lead: I'm looking for an apartment") < completa.index(f"Lead: {PIDE_HUMANO}")
-    assert "Agente: Sure, I'll put you in touch with one of our agents" in completa
+    assert "Assistant: Sure, I'll put you in touch with one of our agents" in completa
     with session_scope(engine) as session:
         assigned = session.execute(select(Lead.advisor_id).where(Lead.telegram_user_id == lead)).scalar()
     assert assigned == advisor.id
@@ -151,7 +151,7 @@ def test_la_frustracion_manda_la_ficha_en_el_turno_que_completa_la_racha(engine)
     bot.send_message.assert_not_awaited()
     _decir(engine, lead, "ok", bot)
 
-    assert "frustración" in _mensajes(bot)[0]
+    assert "frustration" in _mensajes(bot)[0]
 
 
 def test_una_visita_sin_agenda_manda_la_ficha_con_el_horario_preferido(engine):
@@ -167,9 +167,9 @@ def test_una_visita_sin_agenda_manda_la_ficha_con_el_horario_preferido(engine):
     bot.send_message.assert_not_awaited()
     _decir(engine, lead, "Tomorrow afternoon", bot)
 
-    assert "Traspaso de lead (HANDOFF)" in _mensajes(bot)[0]
-    assert "la agenda no la pudo reservar" in _mensajes(bot)[0]
-    assert "Horario preferido para la visita: Tomorrow afternoon" in _mensajes(bot)[0]
+    assert "Lead handoff (HANDOFF)" in _mensajes(bot)[0]
+    assert "the calendar couldn't book it" in _mensajes(bot)[0]
+    assert "Preferred visit time: Tomorrow afternoon" in _mensajes(bot)[0]
 
 
 def test_el_traspaso_va_al_asesor_que_ya_tenia_el_lead_no_a_otro(engine):
@@ -199,8 +199,8 @@ def test_calificar_y_pasar_a_humano_en_el_mismo_turno_manda_una_sola_notificacio
     _decir(engine, lead, f"{CALIFICA}. {PIDE_HUMANO}", bot)
 
     textos = _mensajes(bot)
-    assert "Traspaso de lead" in textos[0]
-    assert not any("Lead calificado" in texto for texto in textos)
+    assert "Lead handoff" in textos[0]
+    assert not any("Qualified lead" in texto for texto in textos)
     with session_scope(engine) as session:
         row = session.execute(select(Lead).where(Lead.telegram_user_id == lead)).scalar_one()
     assert row.status == "mql" and row.qualified_at is not None and row.advisor_id == advisor.id

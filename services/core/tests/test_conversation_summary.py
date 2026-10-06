@@ -18,6 +18,7 @@ from app.bedrock_llm import SUMMARY_SYSTEM, BedrockLLM, LLMError, LLMFormatError
 from app.channels import canonical
 from app.channels.telegram import reply_to
 from app.input_guard import mentions_protected
+from app.language_guard import is_spanish
 from app.rate_limit import RateLimits
 from app.summary import SummaryFacts, render, template, violations
 from app.turn import process_turn
@@ -27,11 +28,11 @@ from db.session import session_scope
 CHAT, FAST = "modelo-chat", "modelo-rapido"
 PIDE_HUMANO = "I want to talk to an agent"
 TRANSCRIPT = (
-    ("user", "Busco una casa en El Poblado de 3 recámaras, tengo 4 millones"),
-    ("assistant", "Tengo una casa en El Poblado por 3,950,000."),
-    ("user", "Me parece cara y la quiero para marzo"),
+    ("user", "I'm looking for a 3-bedroom house in El Poblado, I have $400,000"),
+    ("assistant", "I have a house in El Poblado for $395,000."),
+    ("user", "It seems expensive and I want it by March"),
 )
-FACTS = SummaryFacts(reason="solicitud_humano", zone="El Poblado", budget="4 millones", timing="3_meses")
+FACTS = SummaryFacts(reason="solicitud_humano", zone="El Poblado", budget="$400,000", timing="3_meses")
 
 
 def run(coro):
@@ -39,9 +40,9 @@ def run(coro):
 
 
 def sections(**overrides):
-    return {"busca": "Casa de 3 recámaras en El Poblado, presupuesto de 4 millones.",
-            "objeciones": "Le parece cara.",
-            "siguiente_paso": "Llamarle para revisar opciones."} | overrides
+    return {"busca": "3-bedroom house in El Poblado, budget of $400,000.",
+            "objeciones": "They think it's expensive.",
+            "siguiente_paso": "Call them to go over options."} | overrides
 
 
 class Writes:
@@ -66,22 +67,23 @@ class Writes:
 
 def test_the_template_says_what_the_lead_wants_with_the_lead_data():
     result = template(FACTS)
-    assert result["busca"] == "Zona El Poblado; presupuesto 4 millones; plazo 3 meses."
+    assert result["busca"] == "Area El Poblado; budget $400,000; timeline within 3 months."
     assert result["objeciones"] == summary.NO_OBJECTIONS_TEMPLATE
 
 
 def test_the_template_without_data_does_not_invent_anything():
-    assert template(SummaryFacts(reason="frustration"))["busca"] == "Todavía no lo dijo."
+    assert template(SummaryFacts(reason="frustration"))["busca"] == "They haven't said yet."
 
 
 @pytest.mark.parametrize("facts,expected", [
-    (SummaryFacts(reason="solicitud_humano"), "Contactar al lead: pidió hablar con una persona."),
-    (SummaryFacts(reason="fuera_de_alcance"), "Revisar su consulta: está fuera del alcance del agente."),
-    (SummaryFacts(reason="frustration"), "Retomar la conversación: el agente no resolvió varios turnos seguidos."),
-    (SummaryFacts(reason="visit_scheduled", visit_at="05/10/2026 11:00"), "Confirmar la visita del 05/10/2026 11:00."),
-    (SummaryFacts(reason="visit_requested", preferred_time="el sábado en la mañana"),
-     "Coordinar el horario de la visita: el lead prefiere el sábado en la mañana."),
-    (SummaryFacts(reason="otro_motivo"), "Contactar al lead."),
+    (SummaryFacts(reason="solicitud_humano"), "Contact the lead: they asked to talk to a person."),
+    (SummaryFacts(reason="fuera_de_alcance"), "Review their request: it's outside what the assistant handles."),
+    (SummaryFacts(reason="frustration"),
+     "Pick up the conversation: the assistant didn't resolve several turns in a row."),
+    (SummaryFacts(reason="visit_scheduled", visit_at="Mon Oct 5, 11:00"), "Confirm the visit on Mon Oct 5, 11:00."),
+    (SummaryFacts(reason="visit_requested", preferred_time="Saturday morning"),
+     "Coordinate the visit time: the lead prefers Saturday morning."),
+    (SummaryFacts(reason="otro_motivo"), "Contact the lead."),
 ])
 def test_the_next_step_follows_the_handoff_reason(facts, expected):
     assert template(facts)["siguiente_paso"] == expected
@@ -93,9 +95,9 @@ def test_the_template_is_deterministic_and_the_fake_agent_uses_it():
 
 def test_the_summary_keeps_the_three_sections_in_order():
     assert render(sections()).split("\n") == [
-        "Qué busca: Casa de 3 recámaras en El Poblado, presupuesto de 4 millones.",
-        "Objeciones: Le parece cara.",
-        "Siguiente paso: Llamarle para revisar opciones.",
+        "Looking for: 3-bedroom house in El Poblado, budget of $400,000.",
+        "Objections: They think it's expensive.",
+        "Next step: Call them to go over options.",
     ]
 
 
@@ -103,35 +105,38 @@ def test_the_summary_keeps_the_three_sections_in_order():
 
 def test_numbers_from_the_conversation_and_from_the_lead_data_are_allowed():
     assert violations(render(sections()), TRANSCRIPT, FACTS) == []
-    assert violations("Qué busca: algo por 3,950,000.", TRANSCRIPT, FACTS) == []
-    assert violations("Visita el 05/10/2026 11:00.", (), SummaryFacts(reason="visit_scheduled",
-                                                                       visit_at="05/10/2026 11:00")) == []
+    assert violations("Looking for: something for $395,000.", TRANSCRIPT, FACTS) == []
+    assert violations("Visit on Mon Oct 5, 11:00.", (), SummaryFacts(reason="visit_scheduled",
+                                                                      visit_at="Mon Oct 5, 11:00")) == []
 
 
 def test_an_invented_number_is_a_violation():
-    assert violations("Qué busca: algo de 2 millones.", TRANSCRIPT, FACTS) == ["number"]
+    assert violations("Looking for: something for $200,000.", TRANSCRIPT, FACTS) == ["number"]
 
 
 def test_an_exact_address_is_a_violation_unless_the_lead_is_qualified():
-    text_ = "Siguiente paso: llevarlo a Calle Morelos 123."
+    text_ = "Next step: take them to Carrera 43A # 1204."
     assert violations(text_, TRANSCRIPT, FACTS) == ["number", "address"]
     qualified = SummaryFacts(reason="solicitud_humano", lead_qualified=True)
     assert "address" not in violations(text_, TRANSCRIPT, qualified)
 
 
 def test_an_unauthorised_promise_is_a_violation():
-    assert "promise" in violations("Siguiente paso: decirle que su crédito está aprobado.", TRANSCRIPT, FACTS)
+    assert "promise" in violations("Next step: tell them their loan is approved.", TRANSCRIPT, FACTS)
 
 
 @pytest.mark.parametrize("value", [
-    "El lead es colombiano.", "Es casado.", "Decide con su esposa.", "Lo consulta con sus hijos.",
-    "Busca algo cerca de su religión.",
+    "The lead is Colombian.", "They're Catholic.", "He's married.", "He decides with his wife.",
+    "She checks with her kids.", "Wants something that fits their religion.",
+    # Una conversación guardada en español también se resume.
+    "El lead es colombiano.", "Decide con su esposa.", "Lo consulta con sus hijos.",
 ])
 def test_a_protected_category_is_a_violation(value):
     assert "protected_category" in violations(value, TRANSCRIPT, FACTS)
 
 
-@pytest.mark.parametrize("value", ["Decide con su pareja.", "Lo consulta con su familia."])
+@pytest.mark.parametrize("value", ["They decide with their partner.", "They'll check with their family.",
+                                   "They want an American-style kitchen.", "Decide con su pareja."])
 def test_the_neutral_forms_left_by_the_input_guard_are_allowed(value):
     assert violations(value, TRANSCRIPT, FACTS) == []
 
@@ -153,14 +158,14 @@ def test_the_agent_gets_the_transcript_as_text_and_the_facts():
     agent = Writes(sections())
     assert run(summary.summarize(agent, TRANSCRIPT, FACTS)) == render(sections())
     transcript, facts = agent.seen[0]
-    assert transcript.split("\n")[0] == "Lead: Busco una casa en El Poblado de 3 recámaras, tengo 4 millones"
-    assert "Agente: Tengo una casa" in transcript and facts == FACTS
+    assert transcript.split("\n")[0] == "Lead: I'm looking for a 3-bedroom house in El Poblado, I have $400,000"
+    assert "Assistant: I have a house" in transcript and facts == FACTS
 
 
 def test_only_the_most_recent_messages_go_to_the_llm():
-    long = tuple(("user", f"mensaje {i}") for i in range(summary.SUMMARY_MAX_MESSAGES + 5))
+    long = tuple(("user", f"message {i}") for i in range(summary.SUMMARY_MAX_MESSAGES + 5))
     lines = summary.transcript_text(long).split("\n")
-    assert len(lines) == summary.SUMMARY_MAX_MESSAGES and lines[-1] == f"Lead: mensaje {len(long) - 1}"
+    assert len(lines) == summary.SUMMARY_MAX_MESSAGES and lines[-1] == f"Lead: message {len(long) - 1}"
 
 
 def test_a_failing_llm_leaves_the_file_without_summary():
@@ -178,7 +183,7 @@ def test_an_incomplete_summary_is_dropped(result):
 
 
 def test_a_summary_that_fails_the_guardrails_is_dropped_not_regenerated():
-    agent = Writes(sections(objeciones="Ninguna; es colombiano."))
+    agent = Writes(sections(objeciones="None; the lead is Colombian."))
     assert run(summary.summarize(agent, TRANSCRIPT, FACTS)) is None
     assert len(agent.seen) == 1
 
@@ -192,17 +197,23 @@ def bedrock(*responses):
 
 def test_bedrock_summarizes_with_the_chat_model_without_tools_and_without_randomness():
     client, llm = bedrock(text(json.dumps(sections())))
-    assert run(llm.summarize("Lead: hola", "Zona: El Poblado")) == sections()
+    assert run(llm.summarize("Lead: hi", "Area: El Poblado")) == sections()
     (request,) = client.requests
     assert request["modelId"] == CHAT and "toolConfig" not in request
     assert request["inferenceConfig"]["temperature"] == 0.0
     assert request["system"] == [{"text": SUMMARY_SYSTEM}]
     prompt = request["messages"][0]["content"][0]["text"]
-    assert "DATOS DEL LEAD:\nZona: El Poblado" in prompt and "CONVERSACIÓN:\nLead: hola" in prompt
+    assert "LEAD DATA:\nArea: El Poblado" in prompt and "CONVERSATION:\nLead: hi" in prompt
+
+
+def test_the_summary_is_written_in_english():
+    # #202: lo lee el asesor. Las claves del JSON siguen siendo las del contrato.
+    assert not is_spanish(SUMMARY_SYSTEM) and "in English" in SUMMARY_SYSTEM and "USD" in SUMMARY_SYSTEM
+    assert all(f'"{key}"' in SUMMARY_SYSTEM for key, _ in summary.SECTIONS)
 
 
 def test_the_summary_prompt_forbids_inventing_promising_and_protected_categories():
-    for rule in ("No inventes", "direcciones exactas", "No prometas", "estado civil"):
+    for rule in ("Don't make anything up", "exact addresses", "Don't promise", "marital status"):
         assert rule in SUMMARY_SYSTEM
 
 
@@ -280,10 +291,10 @@ def test_the_handoff_saves_the_summary_and_the_file_shows_it_before_the_transcri
     sent = [call.kwargs["text"] for call in bot.send_message.await_args_list
             if call.kwargs["chat_id"] == advisor.telegram_chat_id]
     first, *rest = sent
-    assert "Resumen:\nQué busca:" in first and "Siguiente paso: Contactar al lead" in first
-    assert rest and rest[0].startswith("Transcripción:")
+    assert "Summary:\nLooking for:" in first and "Next step: Contact the lead" in first
+    assert rest and rest[0].startswith("Transcript:")
     (notice,) = _notices(engine, user)
-    assert "Resumen:\nQué busca:" in notice
+    assert "Summary:\nLooking for:" in notice
 
 
 def test_if_the_summary_fails_the_file_goes_out_without_it_as_before(engine):
@@ -299,7 +310,7 @@ def test_if_the_summary_fails_the_file_goes_out_without_it_as_before(engine):
     assert "agents" in reply
     assert _lead(engine, user).handoff_summary is None
     first = bot.send_message.await_args_list[0].kwargs["text"]
-    assert "Traspaso de lead" in first and "Resumen:" not in first
+    assert "Lead handoff" in first and "Summary:" not in first
 
 
 def test_the_summary_is_written_even_without_a_channel_to_notify(engine):
@@ -315,4 +326,4 @@ def test_the_summary_is_written_even_without_a_channel_to_notify(engine):
     event = canonical.to_canonical(lead_id=lead_id, conversation_id=conversation_id, text=PIDE_HUMANO)
     run(process_turn(engine, event, StubCatalog()))
     with session_scope(engine) as session:
-        assert session.get(Lead, lead_id).handoff_summary.startswith("Qué busca:")
+        assert session.get(Lead, lead_id).handoff_summary.startswith("Looking for:")

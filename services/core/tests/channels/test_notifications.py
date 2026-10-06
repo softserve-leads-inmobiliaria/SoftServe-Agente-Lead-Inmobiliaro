@@ -58,7 +58,7 @@ def test_un_token_valido_liga_el_chat_al_asesor(engine):
     reply = asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="chat-777", text="",
                                  deep_link=f"adv_{advisor.access_token}"))
 
-    assert "te voy a avisar" in reply
+    assert "I'll let you know here" in reply
     with session_scope(engine) as session:
         assert session.get(Advisor, advisor.id).telegram_chat_id == "chat-777"
         # Registrarse no crea un lead: un asesor no es un prospecto.
@@ -104,19 +104,19 @@ def test_la_tarjeta_degrada_sin_propiedad_ni_visita():
     texto = render(card)
 
     assert "WARM · 60/100" in texto
-    assert "sin definir" in texto
+    assert "not set" in texto
     assert "Propiedad" not in texto and "Visita" not in texto
 
 
 def test_la_tarjeta_completa_lleva_propiedad_visita_y_razones():
     card = LeadCard(lead_id=uuid.uuid4(), zone="El Poblado", score_total=80, score_band="HOT",
                     property_title="Depa en El Poblado", property_id="prop_00231",
-                    visit_at="25/09/2026 10:00", reasons=("presupuesto declarado",))
+                    visit_at="Fri Sep 25, 10:00", reasons=("Budget: budget stated",))
     texto = render(card)
 
     assert "Depa en El Poblado (prop_00231)" in texto
-    assert "Visita agendada: 25/09/2026 10:00" in texto
-    assert "presupuesto declarado" in texto
+    assert "Scheduled visit: Fri Sep 25, 10:00" in texto
+    assert "Why: Budget: budget stated" in texto
 
 
 # --- de punta a punta por el canal -------------------------------------------------------------
@@ -138,7 +138,7 @@ def test_al_calificar_el_asesor_de_la_zona_recibe_la_tarjeta_una_vez(engine):
     bot.send_message.assert_awaited_once()
     kwargs: dict[str, Any] = bot.send_message.await_args.kwargs
     assert kwargs["chat_id"] == "chat-valeria"
-    assert "Lead calificado (WARM" in kwargs["text"]
+    assert "Qualified lead (WARM" in kwargs["text"]
     assert "Depa en El Poblado" in kwargs["text"]
     with session_scope(engine) as session:
         row = session.execute(select(Lead).where(Lead.telegram_user_id == lead)).scalar_one()
@@ -158,8 +158,8 @@ def test_la_propiedad_que_el_lead_miro_antes_sigue_en_la_tarjeta(engine):
     asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id=lead, text=CALIFICA, bot=bot))
 
     texto = bot.send_message.await_args.kwargs["text"]
-    assert "Zona: El Poblado" in texto
-    assert "Propiedad de interés: Depa en El Poblado (prop_00231)" in texto
+    assert "Area: El Poblado" in texto
+    assert "Property of interest: Depa en El Poblado (prop_00231)" in texto
 
 
 def test_sin_telegram_el_turno_sigue_y_el_aviso_queda_en_el_panel(engine):
