@@ -16,9 +16,9 @@ from sqlalchemy.orm import Session
 
 from db.models import Advisor, Lead, Property, Visit
 
-# Horario de atención de los asesores, en hora de Guadalajara. México no tiene horario de verano
-# desde 2022, así que un desfase fijo basta y no depende de que la imagen traiga la base tzdata.
-LOCAL_TZ = timezone(timedelta(hours=-6), "America/Mexico_City")
+# Horario de atención de los asesores, en hora de Colombia (DT-55). Colombia no tiene horario de
+# verano, así que un desfase fijo basta y no depende de que la imagen traiga la base tzdata.
+LOCAL_TZ = timezone(timedelta(hours=-5), "America/Bogota")
 WORKDAYS = range(0, 6)  # lunes (0) a sábado (5)
 FIRST_SLOT, LAST_SLOT = 9, 17  # el último bloque empieza a las 17:00 y termina a las 18:00
 SLOT_LENGTH = timedelta(hours=1)

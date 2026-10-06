@@ -74,8 +74,8 @@ def test_search_without_filters_returns_everything_without_exact_address(service
 
 def test_search_filters_combine(service):
     # Los cuatro filtros a la vez: solo prop_00231 cumple zona + tipo + recámaras + precio.
-    result = service.search_properties(zone="providencia", type="venta", bedrooms=2,
-                                      budget_range={"min": 1500000, "max": 2500000})
+    result = service.search_properties(zone="poblado", type="venta", bedrooms=2,
+                                      budget_range={"min": 150000, "max": 200000})
     output_validator("search_properties").validate(result)
     assert {p["id"] for p in result["properties"]} == {"prop_00231"}
 
@@ -154,12 +154,12 @@ def test_promotion_is_valid_through_its_last_day(make_service):
     assert the_next_day == {"promotions": []}
 
 @pytest.mark.parametrize("prop,profile,expected", [
-    ("prop_00231", {"down_payment": 500000, "monthly_income": 60000, "has_references": False}, True),
-    ("prop_00231", {"down_payment": 1000, "monthly_income": 60000, "has_references": True}, False),
-    ("prop_00237", {"down_payment": 500000, "monthly_income": 60000, "has_references": True}, False),
-    ("prop_00235", {"down_payment": 0, "monthly_income": 60000, "has_references": True}, True),
-    ("prop_00235", {"down_payment": 0, "monthly_income": 20000, "has_references": True}, False),
-    ("prop_00235", {"down_payment": 0, "monthly_income": 60000, "has_references": False}, False),
+    ("prop_00231", {"down_payment": 30000, "monthly_income": 5000, "has_references": False}, True),
+    ("prop_00231", {"down_payment": 1000, "monthly_income": 5000, "has_references": True}, False),
+    ("prop_00237", {"down_payment": 30000, "monthly_income": 5000, "has_references": True}, False),
+    ("prop_00235", {"down_payment": 0, "monthly_income": 5000, "has_references": True}, True),
+    ("prop_00235", {"down_payment": 0, "monthly_income": 2000, "has_references": True}, False),
+    ("prop_00235", {"down_payment": 0, "monthly_income": 5000, "has_references": False}, False),
 ])
 def test_check_requirements(service, prop, profile, expected):
     result = service.check_requirements(prop, profile)

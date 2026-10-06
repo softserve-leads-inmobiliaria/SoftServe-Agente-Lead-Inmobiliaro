@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Callable
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app import data
@@ -81,8 +82,11 @@ class CatalogService:
             query = db.query(Property)
 
             # Aplicamos filtros condicionales sobre la consulta de SQLAlchemy
+            # La zona es el barrio y la ciudad va en `address_approx` (DT-55): "Medellin" trae todos sus
+            # barrios. `address_exact` nunca entra al filtro, para no delatarla por el resultado.
             if zone is not None:
-                query = query.filter(Property.zone.ilike(f"%{zone}%"))
+                pattern = f"%{zone}%"
+                query = query.filter(or_(Property.zone.ilike(pattern), Property.address_approx.ilike(pattern)))
             if type is not None:
                 query = query.filter(Property.type == type)
             if bedrooms is not None:

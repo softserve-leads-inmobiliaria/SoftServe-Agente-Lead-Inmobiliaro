@@ -125,7 +125,7 @@ def create_mcp(service: CatalogService | None = None) -> FastMCP:
         """Verifica si el lead cumple los requisitos de compra o renta de una propiedad: enganche mínimo
         (venta y preventa), ingreso mensual mínimo (renta) y referencias (renta). Úsala cuando el lead ya
         dijo cuánto tiene de enganche o cuánto gana al mes. Los tres campos de lead_profile van siempre,
-        en pesos; si uno no aplica a esa operación o el lead no lo dijo, 0 o false."""
+        en dólares (USD); si uno no aplica a esa operación o el lead no lo dijo, 0 o false."""
         return run(service.check_requirements, property_id=property_id, lead_profile=lead_profile)
 
     return mcp
