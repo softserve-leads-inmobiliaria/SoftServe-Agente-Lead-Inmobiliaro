@@ -2335,6 +2335,9 @@ para un cambio de país: el puntaje de presupuesto solo mira si el lead lo decla
 los requisitos del catálogo son proporciones del precio (`down_payment_ratio`, `income_multiple`), que
 no dependen de la moneda.
 
+Los botones de Telegram (DT-51) también pasan a inglés, etiqueta y texto fijo: el texto es un mensaje
+del lead y pasa por el filtro de idioma. El `callback_data` no cambia.
+
 **Los valores de los contratos no cambian:** `type` (`venta/renta/preventa`), `kind`, `status` de
 propiedad, los estados de la FSM, las intenciones y los valores de las señales (`declarado`,
 `inmediata`...). Son vocabulario interno congelado por los *contract tests* y viven en la base. El

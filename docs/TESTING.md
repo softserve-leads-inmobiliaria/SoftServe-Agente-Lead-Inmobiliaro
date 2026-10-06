@@ -58,9 +58,11 @@ servicios que usen la base dependerán de él.
 Con un bot creado en @BotFather: poner `TELEGRAM_BOT_TOKEN` en el `.env` y `docker compose up -d --build core`
 (*long polling*, no hace falta URL pública). Sin token, `core` arranca igual y no levanta el bot. Comprobar:
 
-1. Un saludo → aviso de privacidad más la respuesta del agente.
+Al lead se le escribe en inglés (#202, DT-55): un mensaje en español recibe el aviso de "solo en inglés".
+
+1. Un saludo ("Hi") → aviso de privacidad más la respuesta del agente.
 2. `https://t.me/<bot>?start=prop_00231` → el saludo nombra la propiedad del anuncio (`ref. prop_00231`), el
-   lead queda con la zona de esa propiedad y, con Bedrock, "¿sigue disponible?" se responde sobre ella sin
+   lead queda con la zona de esa propiedad y, con Bedrock, "is it still available?" se responde sobre ella sin
    pedir la referencia (#122).
 3. `STOP` y `/stop` → `consent_status=withdrawn` y `status=closed_lost` en `leads`, sin pasar por el LLM.
 4. Un segundo `getUpdates` externo devuelve `409 Conflict`: confirma que el *polling* corre de verdad.
@@ -106,7 +108,7 @@ además cada aviso en el chat.
   la **transcripción completa** (en varios mensajes si excede el tope de Telegram). Va al mismo asesor que
   ya tenía el lead; si el mismo turno califica y traspasa, llega solo la ficha.
 
-Para verlo: escribirle al bot como lead y pedir "quiero hablar con un asesor", y abrir los avisos del
+Para verlo: escribirle al bot como lead y pedir "I want to talk to an agent", y abrir los avisos del
 asesor de la zona en el panel. En el panel van el resumen y el motivo, sin la transcripción, que está en la
 ficha. Si el envío por Telegram falla, el aviso queda igual en el panel.
 
@@ -248,10 +250,12 @@ desde su Telegram con `core` levantado con `TELEGRAM_BOT_TOKEN`, y después se v
 panel:
 
 1. `https://t.me/<bot>?start=prop_00231` → saludo con aviso de privacidad y la propiedad del anuncio.
-2. "¿Cuánto cuesta?" → responde sobre esa propiedad.
-3. "Quiero hablar con un asesor" → `HUMAN_HANDOFF` en `conversations`; el lead aparece en el panel de
+2. "How much is it?" → responde sobre esa propiedad.
+3. "I want to talk to an agent" → `HUMAN_HANDOFF` en `conversations`; el lead aparece en el panel de
    El Poblado con la transcripción.
 4. `STOP` → `consent_status=withdrawn` en `leads` y una fila `input.opt_out` en `audit_log`.
+5. "Hola, busco casa" → el aviso de "solo en inglés", sin mover la FSM, y una fila `input.not_english` en
+   `audit_log`.
 
 ## Pruebas automáticas
 
