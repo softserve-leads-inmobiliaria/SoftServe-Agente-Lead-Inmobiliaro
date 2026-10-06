@@ -132,8 +132,8 @@ def test_the_history_shows_the_cases_of_the_proposal(engine, summary):
         claims = sla.claim_times(session, START, END, include_synthetic=True)
 
     rotation = {row.name: row.median_days for row in report.days_on_market_by_zone}
-    assert max(rotation["Chapalita"], rotation["Providencia"]) < 20  # rotan rápido
-    assert min(rotation["Andares"], rotation["Tlaquepaque"]) > 100  # rotan lento
+    assert max(rotation["Laureles"], rotation["El Poblado"]) < 20  # rotan rápido
+    assert min(rotation["Envigado"], rotation["Chapinero"]) > 100  # rotan lento
 
     demand = {row.property_id: row.demand for row in report.stagnant}
     assert demand["prop_00231"] == inventory.INQUIRIES_WITHOUT_VISITS
@@ -144,7 +144,7 @@ def test_the_history_shows_the_cases_of_the_proposal(engine, summary):
     assert rates["HOT"] > rates["COLD"]
 
     assert [row.advisor for row in claims] == ["Andrés Núñez", "Camila Reyes", "Valeria Ortiz"]  # B-12
-    assert report.unmet_demand[0].zone == "Providencia" and report.unmet_demand[0].type == "renta"
+    assert report.unmet_demand[0].zone == "El Poblado" and report.unmet_demand[0].type == "renta"
 
 
 def test_the_last_week_has_something_to_show(engine, summary):
@@ -166,12 +166,12 @@ def test_without_demo_the_views_do_not_see_it(engine, summary):
 
 def test_remove_takes_only_the_synthetic_history(engine, summary):
     with Session(engine) as session:
-        real = Lead(telegram_user_id=f"{uuid.uuid4().int % 10**9}", zone="Providencia")
+        real = Lead(telegram_user_id=f"{uuid.uuid4().int % 10**9}", zone="El Poblado")
         session.add(real)
         session.flush()
         real_id = real.id
         session.add_all([PropertyInterest(lead_id=real_id, property_id="prop_00231", kind="consulta"),
-                         UnmetSearch(zone="Providencia", type="renta")])
+                         UnmetSearch(zone="El Poblado", type="renta")])
         session.commit()
     try:
         removed = seed_history.remove(engine)
