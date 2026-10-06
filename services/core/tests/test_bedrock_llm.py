@@ -169,6 +169,13 @@ def test_the_prompt_answers_whether_a_protected_characteristic_matters():
     assert "asks whether any of that matters" in CHAT_SYSTEM and "doesn't affect" in CHAT_SYSTEM
 
 
+def test_the_prompt_does_not_repeat_figures_from_earlier_turns():
+    # #202, en vivo: el modelo repetía en cada turno el precio y el enganche de turnos anteriores, la
+    # factualidad (A-5) solo acepta lo de las tools de este turno, y la respuesta terminaba degradada.
+    assert "only if you got it from a tool in this same reply" in CHAT_SYSTEM
+    assert "don't repeat it" in CHAT_SYSTEM
+
+
 # --- conversación y tool calling -----------------------------------------------------------------------
 
 def test_a_plain_reply_uses_the_chat_model_and_returns_the_text():

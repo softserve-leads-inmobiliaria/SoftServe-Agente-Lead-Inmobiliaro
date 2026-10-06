@@ -337,11 +337,11 @@ def test_the_model_is_told_which_listing_the_lead_came_from():
 # --- #200: el guardrail quitó una mención de categoría protegida --------------------------------------------
 
 def test_the_model_is_told_a_protected_mention_was_removed_but_not_what_it_was():
-    client = ScriptedBedrock(classification("otro"), text("No, that doesn't affect anything."))
-    message = TurnInput(event=EVENT, text="does that matter?", protected_removed=True)
+    client = ScriptedBedrock(classification("consulta_precio"), text("No, that doesn't affect anything."))
+    message = TurnInput(event=EVENT, text="does that matter? how much is it?", protected_removed=True)
     run(agent_for(client).run(message, FakeCatalog()))
     sent = client.calls_to(CHAT)[0]["messages"][-1]["content"][0]["text"]
-    assert sent.startswith("does that matter?") and PROTECTED_NOTE in sent
+    assert sent.startswith("does that matter? how much is it?") and PROTECTED_NOTE in sent
     classified = client.calls_to(FAST)[0]["messages"][0]["content"][0]["text"]
     assert PROTECTED_NOTE not in classified  # el clasificador solo ve lo que dijo el lead
 
@@ -350,6 +350,15 @@ def test_without_a_removed_mention_there_is_no_note():
     client = ScriptedBedrock(classification("otro"), text("Sure."))
     run(agent_for(client).run(turn("does that matter?"), FakeCatalog()))
     assert PROTECTED_NOTE not in client.calls_to(CHAT)[0]["messages"][-1]["content"][0]["text"]
+
+
+def test_the_bedrock_agent_answers_that_a_protected_characteristic_does_not_matter():
+    # En vivo, el modelo ignoraba la nota y volvía al enganche: la respuesta es fija, sin llamar al chat.
+    client = ScriptedBedrock(classification("otro"))
+    message = TurnInput(event=EVENT, text="does that matter?", protected_removed=True)
+    result = run(agent_for(client).run(message, FakeCatalog()))
+    assert (result.text, result.intent) == (PROTECTED_ANSWER, "otro")
+    assert client.calls_to(CHAT) == []
 
 
 def test_the_fake_agent_answers_that_a_protected_characteristic_does_not_matter():
