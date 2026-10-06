@@ -2108,6 +2108,12 @@ de algún lado:
 - El turno trata de una sola propiedad cuando trae la del anuncio (*deep-link*) o cuando el agente llamó
   `get_property` sin buscar en el mismo turno. No cuenta si el código reemplazó la respuesta: agenda, alerta,
   traspaso a humano, frustración, o un turno que dejó la conversación en un estado terminal.
+- **La foto sale una sola vez por propiedad (#210).** El agente vuelve a llamar a `get_property` cada vez
+  que cita una cifra (A-5), así que la foto se repetía en cada respuesta sobre la misma propiedad. El
+  turno guarda en `last_tool_results` (`photo_shown`) el id de la última propiedad cuya foto vio el lead,
+  y no la vuelve a mandar mientras la respuesta siga en esa. Vuelve a salir al pasar a otra propiedad. No
+  se usa la propiedad de interés recordada (`property_of_interest`): también la fija una búsqueda, y
+  `search_properties` no trae foto.
 - El canal manda la foto con `reply_photo` y, como *caption*, el mismo texto que habría mandado solo.
   Cae al texto sin foto si no hay foto, si el texto pasa el tope de 1024 unidades UTF-16 de un *caption*,
   o si Telegram rechaza la foto. Un `TimedOut` no cae al texto, por la misma razón que en #161: la foto
