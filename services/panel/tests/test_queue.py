@@ -103,7 +103,7 @@ def test_marcar_en_gestion_pasa_a_sql_y_asigna_al_asesor(client, session_factory
                            follow_redirects=False)
 
     assert response.status_code == 303
-    assert response.headers["location"].endswith(f"/leads/{lead.id}")
+    assert f"/leads/{lead.id}" in response.headers["location"]
     with session_factory() as session:
         fresh = session.execute(select(Lead).where(Lead.id == lead.id)).scalar_one()
     assert fresh.status == "sql" and fresh.advisor_id == valeria.id

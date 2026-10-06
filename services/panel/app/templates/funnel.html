@@ -1,9 +1,8 @@
 {% extends "base.html" %}
+{% import "_macros.html" as ui %}
 {% block title %}Funnel{% endblock %}
 {% block heading %}Funnel del negocio{% endblock %}
-{% block subheading %}
-  Vista global · <a href="/panel/{{ token }}/negocio">Inventario y negocio</a> · <a href="/panel/{{ token }}">&larr; Mis leads</a>
-{% endblock %}
+{% block subheading %}Vista global · todos los leads que empezaron una conversación{% endblock %}
 
 {% macro duration(value) -%}
   {%- if value is none -%}—
@@ -13,36 +12,49 @@
 {%- endmacro %}
 
 {% block content %}
+{% set shares = (report.happy_path + report.side_states)|map(attribute="share")|list %}
+{% set max_share = shares|max if shares else 1 %}
+
+<div class="stat-row">
+  {{ ui.stat(report.total_leads, "Leads") }}
+  {{ ui.stat("—" if report.containment_rate is none else "%.0f%%"|format(report.containment_rate * 100), "Contención", "sin pedir humano") }}
+  {{ ui.stat(duration(report.first_response.p50), "1ª respuesta (p50)", report.first_response.conversations ~ " conversaciones") }}
+</div>
+
 <div class="card">
-  <h2 style="font-size:15px;margin:0 0 12px">Leads por etapa</h2>
+  <h2 class="section-title">Leads por etapa</h2>
   <p class="muted">
     {{ report.total_leads }} leads empezaron una conversación.
     La entrada a GREETING no se registra como transición (DT-17): cada fila cuenta leads distintos
     que <em>llegaron</em> a esa etapa.
   </p>
-  <table>
-    <thead><tr><th>Etapa</th><th>Leads</th><th>% del total</th></tr></thead>
-    <tbody>
-      {% for stage in report.happy_path %}
-      <tr>
-        <td>{{ stage.name }}</td>
-        <td>{{ stage.leads }}</td>
-        <td class="muted">{{ "%.0f"|format(stage.share * 100) }}%</td>
-      </tr>
-      {% endfor %}
-      {% for stage in report.side_states %}
-      <tr class="muted">
-        <td>{{ stage.name }}</td>
-        <td>{{ stage.leads }}</td>
-        <td>{{ "%.0f"|format(stage.share * 100) }}%</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Etapa</th><th scope="col">Leads</th><th scope="col">% del total</th><th scope="col">Proporción</th></tr></thead>
+      <tbody>
+        {% for stage in report.happy_path %}
+        <tr>
+          <td>{{ stage.name }}</td>
+          <td>{{ stage.leads }}</td>
+          <td class="muted">{{ "%.0f"|format(stage.share * 100) }}%</td>
+          <td>{{ ui.bar(stage.share, max_share, stage.name ~ ": " ~ stage.leads ~ " leads") }}</td>
+        </tr>
+        {% endfor %}
+        {% for stage in report.side_states %}
+        <tr class="muted">
+          <td>{{ stage.name }}</td>
+          <td>{{ stage.leads }}</td>
+          <td>{{ "%.0f"|format(stage.share * 100) }}%</td>
+          <td>{{ ui.bar(stage.share, max_share, stage.name ~ ": " ~ stage.leads ~ " leads") }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 
 <div class="card">
-  <h2 style="font-size:15px;margin:0 0 12px">Respuesta y contención</h2>
+  <h2 class="section-title">Respuesta y contención</h2>
   <dl>
     <dt>Primera respuesta (mediana)</dt>
     <dd>{{ duration(report.first_response.p50) }}
@@ -63,41 +75,45 @@
 </div>
 
 <div class="card">
-  <h2 style="font-size:15px;margin:0 0 12px">Por zona</h2>
+  <h2 class="section-title">Por zona</h2>
   {% if report.by_zone %}
-  <table>
-    <thead><tr><th>Zona</th><th>Leads</th><th>HOT</th><th>WARM</th><th>En gestión</th></tr></thead>
-    <tbody>
-      {% for row in report.by_zone %}
-      <tr>
-        <td>{{ row.label }}</td><td>{{ row.leads }}</td>
-        <td class="band band-HOT">{{ row.hot or "" }}</td>
-        <td class="band band-WARM">{{ row.warm or "" }}</td>
-        <td>{{ row.managed or "" }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Zona</th><th scope="col">Leads</th><th scope="col">HOT</th><th scope="col">WARM</th><th scope="col">En gestión</th></tr></thead>
+      <tbody>
+        {% for row in report.by_zone %}
+        <tr>
+          <td>{{ row.label }}</td><td>{{ row.leads }}</td>
+          <td>{{ ui.band_badge("HOT") if row.hot else "" }} {{ row.hot or "" }}</td>
+          <td>{{ ui.band_badge("WARM") if row.warm else "" }} {{ row.warm or "" }}</td>
+          <td>{{ row.managed or "" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% else %}<p class="empty">Todavía no hay leads.</p>{% endif %}
 </div>
 
 <div class="card">
-  <h2 style="font-size:15px;margin:0 0 12px">Por asesor</h2>
+  <h2 class="section-title">Por asesor</h2>
   <p class="muted">Solo cuenta leads ya asignados al calificar (B-7) o al tomarlos (B-6); el resto va como "sin asignar".</p>
   {% if report.by_advisor %}
-  <table>
-    <thead><tr><th>Asesor</th><th>Zona</th><th>Leads</th><th>HOT</th><th>WARM</th><th>En gestión</th></tr></thead>
-    <tbody>
-      {% for row in report.by_advisor %}
-      <tr{% if row.zone is none %} class="muted"{% endif %}>
-        <td>{{ row.label }}</td><td>{{ row.zone or "—" }}</td><td>{{ row.leads }}</td>
-        <td class="band band-HOT">{{ row.hot or "" }}</td>
-        <td class="band band-WARM">{{ row.warm or "" }}</td>
-        <td>{{ row.managed or "" }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Asesor</th><th scope="col">Zona</th><th scope="col">Leads</th><th scope="col">HOT</th><th scope="col">WARM</th><th scope="col">En gestión</th></tr></thead>
+      <tbody>
+        {% for row in report.by_advisor %}
+        <tr{% if row.zone is none %} class="muted"{% endif %}>
+          <td>{{ row.label }}</td><td>{{ row.zone or "—" }}</td><td>{{ row.leads }}</td>
+          <td>{{ ui.band_badge("HOT") if row.hot else "" }} {{ row.hot or "" }}</td>
+          <td>{{ ui.band_badge("WARM") if row.warm else "" }} {{ row.warm or "" }}</td>
+          <td>{{ row.managed or "" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% else %}<p class="empty">Todavía no hay leads.</p>{% endif %}
 </div>
 {% endblock %}
