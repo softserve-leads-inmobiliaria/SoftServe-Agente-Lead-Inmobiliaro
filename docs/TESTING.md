@@ -199,8 +199,11 @@ bash scripts/demo/down.sh     # exporta las conversaciones a txt y apaga borrand
 - `python scripts/demo/conversar.py [escenario ...]`: ensayo automático por `POST /events` contra el LLM
   del `.env` (deep-link hasta el asesor, búsqueda y recomendación, guardrails, deep-link hasta HOT
   verificando los requisitos, lead que escribe en español, y requisitos y fair housing: se enumeran los
-  requisitos antes de verificarlos y "does that matter?" se contesta), con 20 segundos entre turnos para no pasar el cupo de 10 llamadas por minuto:
+  requisitos antes de verificarlos y "does that matter?" se contesta, búsqueda vacía con alternativas y
+  cobertura de zonas), con 20 segundos entre turnos para no pasar el cupo de 10 llamadas por minuto:
   un turno con herramientas hace 3 o 4. Los avisos al asesor no salen por esta vía: solo por Telegram.
+  Los escenarios están en `harness/scripts/scenarios.py`, los mismos que mide la evaluación en vivo (ver
+  "Evaluación en vivo repetible").
 - `python scripts/demo/exportar.py [minutos]`: guarda en txt las conversaciones activas en ese lapso
   (por defecto 60), con el estado final de cada una. `down.sh` lo corre solo antes de borrar la base.
 
@@ -264,6 +267,63 @@ panel:
 4. `STOP` → `consent_status=withdrawn` en `leads` y una fila `input.opt_out` en `audit_log`.
 5. "Hola, busco casa" → el aviso de "solo en inglés", sin mover la FSM, y una fila `input.not_english` en
    `audit_log`.
+
+### Evaluación en vivo repetible (#216)
+
+Una corrida suelta de `conversar.py` no dice si el agente es confiable: con el LLM real, el mismo
+escenario sale distinto de una vez a otra. La evaluación corre los escenarios de
+`harness/scripts/scenarios.py` varias veces contra el stack, con el LLM del `.env`, y mide cada turno con
+lo que quedó en Postgres:
+- qué tools llamó el modelo (`messages.tool_calls`);
+- qué dejó en `audit_log`: regeneraciones y degradaciones de la factualidad, guardrails de entrada;
+- al final, el estado de la FSM y la banda del score.
+
+```
+bash scripts/demo/up.sh                                   # con LLM_PROVIDER=bedrock
+python harness/scripts/evaluate.py --reps 5               # la corrida de referencia, ~80 min
+python harness/scripts/evaluate.py --reps 3 07_busqueda_vacia_y_alternativas 08_cobertura_de_zonas
+```
+
+- **Lo que espera cada turno** (`Turn` en `scenarios.py`):
+  - al menos una de las tools esperadas (`tools`);
+  - alguno de los textos esperados (`expect_any`);
+  - ninguno de los prohibidos (`forbid`, más `ALWAYS_FORBIDDEN`: prometer buscar después y el texto interno
+    de la corrección);
+  - las auditorías esperadas (`audits`), por ejemplo `input.pii`.
+
+  Las expectativas no fijan frases: valen con cualquier modelo que haga lo correcto. Cada escenario
+  declara además el estado final o la banda que espera.
+- **Métricas**, por escenario y en total:
+  - turnos OK;
+  - turnos con la tool esperada;
+  - tasa de regeneraciones, de respuestas degradadas y de respuestas de respaldo del LLM;
+  - estado final;
+  - latencia p50 y p95.
+
+  El turno del deep-link sin texto no cuenta, porque no llama al LLM.
+- **Umbrales** (`THRESHOLDS` en `harness/scripts/evaluation.py`), sobre los totales:
+
+  | Métrica | Umbral |
+  | :--- | :--- |
+  | Degradadas | ≤ 5% |
+  | Respaldo | ≤ 2% |
+  | Regeneradas | ≤ 30% |
+  | Tool esperada | ≥ 90% |
+  | Turnos OK | ≥ 90% |
+  | Estado final | ≥ 80% |
+
+  El script sale con 1 si alguno no se cumple.
+- **Informe:** queda en `tmp/eval/<fecha>_evaluacion.md`, con cada turno que falló y su respuesta, y un
+  `.json` con todas las observaciones para comparar corridas.
+- **CI:** no corre la evaluación, porque necesita Bedrock. Sí corre `tests/harness/test_evaluation.py`, que
+  prueba las expectativas y las métricas, y que los escenarios sigan alineados con los contratos de las
+  tools, el inventario y los textos fijos del core.
+- **Cuándo correrla:** antes y después de cambiar el prompt, el modelo o un guardrail de salida. Un cambio
+  no puede empeorar los totales.
+
+**Línea base** (Sonnet 4.5 para la conversación, Haiku 4.5 para la intención, 5 corridas):
+
+<!-- línea base: se completa con la primera corrida de referencia -->
 
 ## Pruebas automáticas
 
