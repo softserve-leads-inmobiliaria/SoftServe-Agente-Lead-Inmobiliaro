@@ -322,6 +322,20 @@ def mentions_protected(text: str) -> bool:
     return bool(_PROTECTED.search(normalize(text)))
 
 
+# El resumen del traspaso (A-16) habla del lead en tercera persona: "the lead is Colombian" no pasa por
+# "I'm/we're", que es lo único que hace contar a los gentilicios ambiguos y a la religión en singular.
+_EN_THIRD = rf"(?:he{_APOS}?s|he is|she{_APOS}?s|she is|they{_APOS}?re|they are|(?:the )?lead is)\s+(?:an?\s+)?"
+_PROTECTED_THIRD_PERSON = _any((
+    rf"\b{_EN_THIRD}{_EN_AMBIGUOUS_DEMONYMS}\b",
+    rf"\b{_EN_THIRD}(?:catholic|christian|muslim|jew|jewish|atheist|evangelical|buddhist|hindu|mormon)\b",
+))
+
+
+def describes_protected(text: str) -> bool:
+    """True si el texto dice de un tercero algo de una categoría protegida, como lo diría un resumen."""
+    return mentions_protected(text) or bool(_PROTECTED_THIRD_PERSON.search(normalize(text)))
+
+
 def is_opt_out(text: str) -> bool:
     normalized = normalize(text)
     return bool(_STOP_COMMAND.search(normalized) or _STOP_PHRASES.search(normalized))

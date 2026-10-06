@@ -22,6 +22,7 @@ from functools import lru_cache
 from sqlalchemy.orm import Session
 
 from app import jobs
+from db.labels import label
 from db.metrics.inventory import (
     LOCAL_TZ,
     Placements,
@@ -41,7 +42,7 @@ STAGNANT_MIN_DAYS = 60
 STAGNANT_SHOWN = 5  # las más antiguas; el resto se cuenta
 UNMET_SHOWN = 3
 # La vista de inventario y negocio de N-8. El enlace no lleva el token: cada asesor usa el suyo.
-BUSINESS_PATH = "/panel/<tu token>/negocio"
+BUSINESS_PATH = "/panel/<your token>/negocio"
 
 
 @dataclass(frozen=True)
@@ -108,37 +109,48 @@ def plan(session: Session, run_at: datetime, now: datetime, config: ReportConfig
 
 # --- el mensaje --------------------------------------------------------------------------------------
 
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _day(moment: datetime) -> str:
+    """`Oct 5`: el mes en inglés sin depender del *locale* del sistema."""
+    return f"{_MONTHS[moment.month - 1]} {moment.day}"
+
+
 def _money(amount: Decimal) -> str:
     return f"${amount:,.0f}"
 
 
+def _count(count: int, one: str, many: str) -> str:
+    return f"{count} {one if count == 1 else many}"
+
+
 def _unmet_line(item: UnmetDemand) -> str:
-    what = item.type or "cualquier tipo"
-    where = f"en {item.zone}" if item.zone else "en cualquier zona"
-    rooms = f", {item.bedrooms} recámaras" if item.bedrooms is not None else ""
-    plural = "búsqueda" if item.searches == 1 else "búsquedas"
-    return f"- {what} {where}{rooms}: {item.searches} {plural}"
+    what = label("property_type", item.type) if item.type else "any type"
+    where = f"in {item.zone}" if item.zone else "in any area"
+    rooms = f", {_count(item.bedrooms, 'bedroom', 'bedrooms')}" if item.bedrooms is not None else ""
+    return f"- {what} {where}{rooms}: {_count(item.searches, 'search', 'searches')}"
 
 
 def report_text(start: datetime, end: datetime, placed: Placements, stuck: list[StagnantProperty],
                 unmet: list[UnmetDemand], panel_url: str) -> str:
     last_day = (end - timedelta(days=1)).astimezone(LOCAL_TZ)
-    lines = [f"Reporte semanal: del {start.astimezone(LOCAL_TZ):%d/%m} al {last_day:%d/%m/%Y}", ""]
+    lines = [f"Weekly report: {_day(start.astimezone(LOCAL_TZ))} to {_day(last_day)}, {last_day.year}", ""]
 
-    lines.append(f"Colocadas: {placed.deals}" + (f" ({_money(placed.amount)})" if placed.deals else ""))
+    lines.append(f"Placed: {placed.deals}" + (f" ({_money(placed.amount)})" if placed.deals else ""))
     lines += [f"- {group.name}: {group.deals}" for group in placed.by_zone]
 
-    lines += ["", f"Estancadas de más de {STAGNANT_MIN_DAYS} días: {len(stuck)}"]
+    lines += ["", f"On the market for more than {STAGNANT_MIN_DAYS} days: {len(stuck)}"]
     for item in stuck[:STAGNANT_SHOWN]:
         demand = f", {item.demand}" if item.demand else ""
-        lines.append(f"- {item.title} ({item.zone}): {item.days} días{demand}")
+        lines.append(f"- {item.title} ({item.zone}): {item.days} days{demand}")
     if len(stuck) > STAGNANT_SHOWN:
-        lines.append(f"- y {len(stuck) - STAGNANT_SHOWN} más")
+        lines.append(f"- and {len(stuck) - STAGNANT_SHOWN} more")
 
-    lines += ["", "Demanda sin cubrir:"]
-    lines += [_unmet_line(item) for item in unmet] or ["- sin búsquedas sin resultado"]
+    lines += ["", "Unmet demand:"]
+    lines += [_unmet_line(item) for item in unmet] or ["- no searches without results"]
 
-    lines += ["", f"Detalle en el panel: {panel_url}{BUSINESS_PATH}"]
+    lines += ["", f"Details in the panel: {panel_url}{BUSINESS_PATH}"]
     return "\n".join(lines)
 
 

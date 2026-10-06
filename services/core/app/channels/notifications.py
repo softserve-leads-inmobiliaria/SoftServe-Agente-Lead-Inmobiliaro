@@ -21,7 +21,7 @@ from sqlalchemy import Engine, func, select, update
 from app import scheduling_client
 from app.interest import property_of_interest
 from app.scheduling_client import SchedulingClient, SchedulingError
-from app.visits import LOCAL_TZ, VISIT_KEY
+from app.visits import VISIT_KEY, slot_label
 from db.models import Advisor, AdvisorNotification, FsmContext, Lead, Message, Visit
 from db.session import session_scope
 
@@ -29,14 +29,15 @@ logger = logging.getLogger("core.channels.notifications")
 
 TELEGRAM_MAX_CHARS = 4096  # tope de un mensaje de Telegram; la transcripción se parte en varios
 
+# Lo que lee el asesor va en inglés (#202). "Agent" es el asesor: el que conversa con el lead es el asistente.
 HANDOFF_REASONS = {
-    "solicitud_humano": "el lead pidió hablar con una persona",
-    "fuera_de_alcance": "consulta fuera del alcance del agente",
-    "frustration": "varios turnos seguidos sin resolver (frustración)",
-    "visit_scheduled": "visita agendada, el lead pasa al asesor",
-    "visit_requested": "el lead pidió una visita y la agenda no la pudo reservar: coordinar su horario",
+    "solicitud_humano": "the lead asked to talk to a person",
+    "fuera_de_alcance": "request outside what the assistant handles",
+    "frustration": "several turns in a row unresolved (frustration)",
+    "visit_scheduled": "visit scheduled, the lead moves to the agent",
+    "visit_requested": "the lead asked for a visit and the calendar couldn't book it: coordinate the time",
 }
-_ROLE_LABELS = {"user": "Lead", "assistant": "Agente"}
+_ROLE_LABELS = {"user": "Lead", "assistant": "Assistant"}
 
 
 class Sender(Protocol):
@@ -105,7 +106,7 @@ def build_card(session, lead_id: uuid.UUID, conversation_id: uuid.UUID,
         score_band=str(score["band"]),
         property_title=prop.get("title") if prop else None,
         property_id=prop.get("id") if prop else None,
-        visit_at=visit.scheduled_at.astimezone(LOCAL_TZ).strftime("%d/%m/%Y %H:%M") if visit else None,
+        visit_at=slot_label(visit.scheduled_at.isoformat()) if visit else None,
         reasons=tuple(score.get("reasons") or ()),
         preferred_time=requested.get("preferred_time") or None,
     )
@@ -115,27 +116,27 @@ def _card_lines(card: LeadCard) -> list[str]:
     """Propiedad, visita y horario preferido: lo que comparten la tarjeta y la ficha de traspaso."""
     lines = []
     if card.property_title:
-        lines.append(f"Propiedad de interés: {card.property_title} ({card.property_id})")
+        lines.append(f"Property of interest: {card.property_title} ({card.property_id})")
     if card.visit_at:
-        lines.append(f"Visita agendada: {card.visit_at}")
+        lines.append(f"Scheduled visit: {card.visit_at}")
     if card.preferred_time:
-        lines.append(f"Horario preferido para la visita: {card.preferred_time}")
+        lines.append(f"Preferred visit time: {card.preferred_time}")
     return lines
 
 
 def _link(card: LeadCard) -> str:
-    return f"Ficha: /panel/<tu token>/leads/{card.lead_id}"
+    return f"Lead page: /panel/<your token>/leads/{card.lead_id}"
 
 
 def card_summary(card: LeadCard) -> str:
     """La tarjeta sin el enlace a la ficha: lo que se guarda como aviso en el panel."""
     lines = [
-        f"Lead calificado ({card.score_band} · {card.score_total}/100)",
-        f"Zona: {card.zone or 'sin definir'}",
+        f"Qualified lead ({card.score_band} · {card.score_total}/100)",
+        f"Area: {card.zone or 'not set'}",
         *_card_lines(card),
     ]
     if card.reasons:
-        lines.append("Por qué: " + "; ".join(card.reasons))
+        lines.append("Why: " + "; ".join(card.reasons))
     return "\n".join(lines)
 
 
@@ -177,15 +178,15 @@ def handoff_summary(handoff: HandoffFile) -> str:
     que ya muestra la conversación en la ficha del lead."""
     card = handoff.card
     lines = [
-        f"Traspaso de lead ({handoff.fsm_state}): {HANDOFF_REASONS.get(handoff.reason, handoff.reason)}",
+        f"Lead handoff ({handoff.fsm_state}): {HANDOFF_REASONS.get(handoff.reason, handoff.reason)}",
         f"Score: {card.score_band} · {card.score_total}/100",
-        f"Zona: {card.zone or 'sin definir'}",
+        f"Area: {card.zone or 'not set'}",
         *_card_lines(card),
     ]
     if card.reasons:
-        lines.append("Por qué el score: " + "; ".join(card.reasons))
+        lines.append("Why this score: " + "; ".join(card.reasons))
     if handoff.summary:
-        lines += ["", "Resumen:", handoff.summary]
+        lines += ["", "Summary:", handoff.summary]
     return "\n".join(lines)
 
 
@@ -198,8 +199,8 @@ def render_handoff(handoff: HandoffFile) -> list[str]:
     messages = [f"{handoff_summary(handoff)}\n{_link(handoff.card)}"]
 
     if not handoff.transcript:
-        return messages + ["Transcripción: sin mensajes."]
-    transcript = ["Transcripción:", *(f"{_ROLE_LABELS.get(role, role)}: {content}"
+        return messages + ["Transcript: no messages."]
+    transcript = ["Transcript:", *(f"{_ROLE_LABELS.get(role, role)}: {content}"
                                        for role, content in handoff.transcript)]
     return messages + split_lines(transcript, TELEGRAM_MAX_CHARS)
 

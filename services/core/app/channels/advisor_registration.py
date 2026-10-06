@@ -17,9 +17,9 @@ from db.session import session_scope
 logger = logging.getLogger("core.channels.advisor_registration")
 
 REGISTERED_REPLY: Final = (
-    "Listo, {name}: te voy a avisar por acá cada vez que un lead de {zone} quede calificado o pase a atención humana."
+    "Done, {name}: I'll let you know here every time a lead from {zone} gets qualified or is handed off to you."
 )
-UNKNOWN_TOKEN_REPLY: Final = "Ese enlace de registro no es válido. Pedile al equipo uno nuevo."
+UNKNOWN_TOKEN_REPLY: Final = "That registration link isn't valid. Ask the team for a new one."
 
 
 def register(engine: Engine, *, access_token: str, chat_id: str) -> Advisor | None:
