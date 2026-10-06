@@ -22,7 +22,7 @@ from typing import Any, Mapping
 
 from app.scheduling_client import SchedulingClient, SchedulingError
 
-LOCAL_TZ = timezone(timedelta(hours=-6))  # hora de Guadalajara, la misma de la agenda (DT-32)
+LOCAL_TZ = timezone(timedelta(hours=-5))  # hora de Colombia, la misma de la agenda (DT-32, DT-55)
 OFFERED_SLOTS = 3
 SEARCH_DAYS = 7
 
@@ -60,7 +60,7 @@ def today_local(now: datetime | None = None) -> date:
 
 
 def slot_label(slot: str) -> str:
-    """`2026-10-06T10:00:00-06:00` -> `lun 06/10 10:00`, en hora local."""
+    """`2026-10-06T10:00:00-05:00` -> `lun 06/10 10:00`, en hora local."""
     local = datetime.fromisoformat(slot).astimezone(LOCAL_TZ)
     return f"{_WEEKDAYS[local.weekday()]} {local:%d/%m %H:%M}"
 

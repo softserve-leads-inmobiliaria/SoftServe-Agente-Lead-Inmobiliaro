@@ -76,15 +76,16 @@ def deactivate_for_lead(session: Session, lead_id: uuid.UUID) -> None:
                     .values(active=False))
 
 
-# Mismos criterios que `search_properties` del catálogo: zona por coincidencia parcial, recámaras exactas y
-# precio dentro del rango. "Nueva" = entró a `disponible` después de crearse la alerta, en el historial real:
-# un evento de la historia sintética (N-9) no es una propiedad nueva para nadie.
+# Mismos criterios que `search_properties` del catálogo: zona por coincidencia parcial (en el barrio o en la
+# ciudad de `address_approx`, DT-55), recámaras exactas y precio dentro del rango. "Nueva" = entró a
+# `disponible` después de crearse la alerta, en el historial real: un evento de la historia sintética (N-9)
+# no es una propiedad nueva para nadie.
 _NEW_MATCHES = text("""
     SELECT a.id AS alert_id, a.lead_id, a.conversation_id, p.id AS property_id
     FROM property_alerts a
     JOIN leads l ON l.id = a.lead_id AND l.consent_status <> 'withdrawn'
     JOIN properties p ON p.status = 'disponible'
-        AND (a.zone IS NULL OR p.zone ILIKE '%' || a.zone || '%')
+        AND (a.zone IS NULL OR p.zone ILIKE '%' || a.zone || '%' OR p.address_approx ILIKE '%' || a.zone || '%')
         AND (a.type IS NULL OR p.type = a.type)
         AND (a.bedrooms IS NULL OR p.bedrooms = a.bedrooms)
         AND (a.budget_min IS NULL OR p.price >= a.budget_min)

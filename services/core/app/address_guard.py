@@ -8,7 +8,7 @@ no si coincide con un dato real. Eso también cubre el caso que A-5 no puede: un
 propio turno ya "permite" por casualidad (coincide con el precio, los m² u otro dato real) igual
 delata una dirección si aparece pegado a un tipo de vía.
 
-Una referencia aproximada sin número ("cerca de Av. Vallarta") no dispara nada: así es como el
+Una referencia aproximada sin número ("cerca de Avenida Nutibara") no dispara nada: así es como el
 catálogo distingue `address_approx` (público) de `address_exact` (reservado) — el número es lo que
 hace la diferencia, no el nombre de la calle.
 """
@@ -21,6 +21,9 @@ from app.factuality import Violation
 _STREET_TYPES = (
     "calle", "avenida", "av", "boulevard", "blvd", "circuito", "privada", "andador",
     "camino", "paseo", "prolongación", "prolongacion", "callejón", "callejon", "calzada",
+    # Colombia (DT-55): "Carrera 37 # 8A-24", "Diagonal 75B # 2-30". Sin "tv" ni "cr" sueltos: chocan
+    # con texto común ("TV de 55 pulgadas").
+    "carrera", "cra", "kra", "kr", "diagonal", "transversal", "circular", "autopista",
 )
 _STREET_PREFIX = "|".join(sorted(_STREET_TYPES, key=len, reverse=True))
 # Palabras que, justo después del número, revelan que en realidad es una distancia ("a 5 minutos",

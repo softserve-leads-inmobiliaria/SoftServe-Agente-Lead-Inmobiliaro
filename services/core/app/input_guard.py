@@ -78,7 +78,7 @@ _OFF_TOPIC = _any((
 
 # --- categoría protegida (fair housing) ---------------------------------------------------------
 # Origen dicho como lo dice un lead: gentilicios y frases de procedencia (#116). Lista cerrada de
-# países para no marcar "soy de Providencia". Los gentilicios que también nombran otra cosa (pesos
+# países para no marcar "soy de El Poblado". Los gentilicios que también nombran otra cosa (pesos
 # mexicanos, colonia Americana, cocina americana, hablar español) solo cuentan detrás de "soy/somos":
 # con "es/son" hablan de la propiedad tanto como de una persona.
 _COPULA = r"(?:soy|somos|eres|es|son)\s+(?:de nacionalidad\s+)?"

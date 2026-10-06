@@ -1,6 +1,6 @@
 """Recordatorio de la visita el día anterior (B-13), como *job* del *scheduler* (A-17, DT-44).
 
-El turno que reserva la visita (B-8) lo programa para las 18:00 del día anterior, en hora de Guadalajara.
+El turno que reserva la visita (B-8) lo programa para las 18:00 del día anterior, en hora de Colombia.
 Si esa hora ya pasó al reservar (p. ej. una visita para mañana reservada esta noche), no hay recordatorio:
 el lead acaba de recibir la confirmación. Uno por visita: su clave es el `visit_id`.
 """
