@@ -34,6 +34,12 @@ agente sin LLM contesta un texto fijo (`PROTECTED_ANSWER`) si lo que queda es un
 intención; "I'm Colombian, how much is it?" sigue siendo una consulta de precio. El clasificador no ve la
 nota: solo lee lo que escribió el lead.
 
+El resumen del traspaso para el asesor (A-16) habla del lead en tercera persona, y en inglés "the lead is
+Colombian" o "they're Catholic" no pasan por "I'm/we're", que es lo único que hace contar a los gentilicios
+ambiguos y a la religión en singular en la entrada. Por eso el resumen se revisa con `describes_protected`,
+que suma esas formas, y con las de familia en tercera persona ("his wife", "her kids"); "their partner" y
+"their family" siguen permitidas, como en la entrada (DT-40).
+
 **Idioma (#202, DT-55).** La experiencia es en inglés: los cinco detectores reconocen inglés y conservan
 sus patrones en español, y un sexto, `app/language_guard.py`, contesta un mensaje en español con el aviso
 de "solo en inglés". Cuenta las palabras que solo son de un idioma: es español si tiene más de español

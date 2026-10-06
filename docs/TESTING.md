@@ -96,7 +96,7 @@ prueba todo.
 
 Telegram es un canal adicional. Con `TELEGRAM_BOT_TOKEN` puesto, un asesor se registra una vez abriendo su
 enlace `https://t.me/<bot>?start=adv_<token>` (el `<token>` es el de su URL del panel:
-`docker compose logs seed`). El bot responde "te voy a avisar…" y guarda su chat en
+`docker compose logs seed`). El bot responde "I'll let you know here…" y guarda su chat en
 `advisors.telegram_chat_id`; un enlace inválido no registra a nadie y no dice por qué. Registrado, recibe
 además cada aviso en el chat.
 
@@ -110,7 +110,8 @@ además cada aviso en el chat.
 
 Para verlo: escribirle al bot como lead y pedir "I want to talk to an agent", y abrir los avisos del
 asesor de la zona en el panel. En el panel van el resumen y el motivo, sin la transcripción, que está en la
-ficha. Si el envío por Telegram falla, el aviso queda igual en el panel.
+ficha. Si el envío por Telegram falla, el aviso queda igual en el panel. Todo lo que lee el asesor (la
+tarjeta, la ficha con su resumen, el panel y el reporte semanal) está en inglés (#202).
 
 ### Usar el LLM real (Bedrock)
 
