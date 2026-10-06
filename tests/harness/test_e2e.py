@@ -280,7 +280,7 @@ def test_core_client_discovers_the_contract_tools_from_the_catalog():
         contract = json.loads(path.read_text(encoding="utf-8"))
         if "inputSchema" in contract:
             contracts[contract["name"]] = contract
-    assert len(contracts) == 5 and sorted(tools) == sorted(contracts)
+    assert len(contracts) == 6 and sorted(tools) == sorted(contracts)  # con list_zones (#194)
     for name, contract in contracts.items():
         # Lo que publica el catálogo exige lo mismo que el contrato.
         assert set(tools[name].input_schema.get("required", [])) == set(contract["inputSchema"].get("required", []))
