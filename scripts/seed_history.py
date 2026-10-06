@@ -7,8 +7,8 @@ WEEKLY_REPORT_INCLUDE_SYNTHETIC=1). La cola, la ficha, el funnel, el reparto de 
 nunca: no son personas a las que atender.
 
 Qué muestra (propuestas.md §2.2):
-- Zonas que rotan rápido (las rentas de Chapalita y Providencia, en días) y lento (las ventas y la preventa
-  de Tlaquepaque y Andares, en meses).
+- Zonas que rotan rápido (las rentas de Laureles y El Poblado, en días) y lento (las ventas y la preventa
+  de Chapinero y Envigado, en meses).
 - Estancadas con consultas y sin visitas (prop_00231: ¿el precio?) y sin ninguna consulta (prop_00232 y
   prop_00233: ¿la visibilidad?).
 - Cierres atribuibles al bot (el lead consultó o visitó esa propiedad con el bot) y no atribuibles.
@@ -73,21 +73,21 @@ UNMET_SEARCHES = 90
 
 # El guion de cada propiedad: (días atrás, hora local, estado). Termina en el estado del catálogo.
 TIMELINES: dict[str, list[tuple[int, int, str]]] = {
-    # Providencia, venta: se cayó el apartado y lleva más de 90 días disponible, con consultas y sin visitas.
+    # El Poblado, venta: se cayó el apartado y lleva más de 90 días disponible, con consultas y sin visitas.
     "prop_00231": [(170, 10, "disponible"), (120, 16, "apartado"), (112, 11, "disponible")],
-    # Providencia y Zapopan, venta: disponibles hace más de 30 y de 90 días, sin una sola consulta.
+    # El Poblado y Usaquen, venta: disponibles hace más de 30 y de 90 días, sin una sola consulta.
     "prop_00232": [(45, 10, "disponible")],
     "prop_00233": [(100, 10, "disponible")],
     "prop_00234": [(130, 10, "disponible"), (9, 13, "apartado")],
-    # Chapalita y Providencia, renta: se rentan en menos de dos semanas y vuelven al mercado.
+    # Laureles y El Poblado, renta: se rentan en menos de dos semanas y vuelven al mercado.
     "prop_00235": [(175, 10, "disponible"), (166, 17, "apartado"), (163, 12, "cerrado"), (3, 9, "disponible")],
     "prop_00236": [(80, 10, "disponible"), (70, 18, "apartado"), (67, 12, "cerrado"), (10, 9, "disponible"),
                    (2, 16, "apartado")],
     "prop_00240": [(60, 10, "disponible"), (54, 17, "apartado"), (52, 12, "cerrado"), (6, 9, "disponible")],
-    # Andares, preventa: se vende una unidad y la propiedad sigue disponible con las demás.
+    # Envigado, preventa: se vende una unidad y la propiedad sigue disponible con las demás.
     "prop_00237": [(180, 10, "disponible"), (100, 12, "cerrado"), (100, 13, "disponible")],
     "prop_00238": [(150, 10, "disponible"), (40, 16, "apartado"), (5, 12, "cerrado"), (5, 13, "disponible")],
-    # Tlaquepaque, venta: casi cinco meses en el mercado.
+    # Chapinero, venta: casi cinco meses en el mercado.
     "prop_00239": [(160, 10, "disponible"), (30, 15, "apartado"), (20, 12, "cerrado")],
     # Recién publicadas.
     "prop_00241": [(25, 10, "disponible")],
@@ -105,23 +105,23 @@ DEALS: dict[str, tuple[str, bool]] = {
 NO_INTEREST = {"prop_00232", "prop_00233"}  # las estancadas "sin consultas"
 NO_VISITS = {"prop_00231"}  # la estancada "consultas sin visitas"
 
-ZONES = {"Providencia": 30, "Zapopan": 25, "Chapalita": 15, "Andares": 15, "Tlaquepaque": 10, None: 5}
-CAMPAIGNS = {"Providencia": "camp_fb_providencia", "Andares": "camp_ig_andares", "Zapopan": "camp_google_zapopan"}
+ZONES = {"El Poblado": 30, "Usaquen": 25, "Laureles": 15, "Envigado": 15, "Chapinero": 10, None: 5}
+CAMPAIGNS = {"El Poblado": "camp_fb_poblado", "Envigado": "camp_ig_envigado", "Usaquen": "camp_google_usaquen"}
 BANDS = {"COLD": 45, "WARM": 35, "HOT": 20}
 BAND_TOTALS = {"COLD": (12, 40), "WARM": (41, 70), "HOT": (71, 94)}
 # Mediana de lo que tarda cada asesor en tomar un lead calificado (B-12): uno rápido, uno lento. Son los
 # asesores de scripts/seed_advisors.py, y todos los cierres son de ellos.
 CLAIM_MINUTES = {"adv_001": 12, "adv_002": 150, "adv_003": 35}
-# Búsquedas sin resultado: (zona, tipo, recámaras, presupuesto máximo, peso). La zona la escribe el lead.
+# Búsquedas sin resultado: (zona, tipo, recámaras, presupuesto máximo en USD, peso). La zona la escribe el lead.
 UNMET = [
-    ("Providencia", "renta", 3, 25000, 20),
-    ("providencia", "renta", 3, 25000, 5),  # la misma zona escrita distinto: la vista las junta
-    ("Chapalita", "venta", 2, 3000000, 12),
-    ("Zapopan", "renta", 2, 15000, 10),
-    ("Tlajomulco", "venta", 3, 2500000, 8),
-    (None, "renta", 1, 8000, 6),
-    ("Andares", "renta", 2, 30000, 6),
-    ("Tlaquepaque", "preventa", None, None, 3),
+    ("El Poblado", "renta", 3, 1500, 20),
+    ("el poblado", "renta", 3, 1500, 5),  # la misma zona escrita distinto: la vista las junta
+    ("Laureles", "venta", 2, 230000, 12),
+    ("Usaquen", "renta", 2, 900, 10),
+    ("Cedritos", "venta", 3, 190000, 8),
+    (None, "renta", 1, 500, 6),
+    ("Envigado", "renta", 2, 1800, 6),
+    ("Chapinero", "preventa", None, None, 3),
 ]
 
 _CATALOG = {prop["id"]: prop for prop in PROPERTIES}
