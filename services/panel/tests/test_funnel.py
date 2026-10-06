@@ -160,6 +160,19 @@ def test_con_la_base_vacia_renderiza_sin_romper(client, session_factory):
     assert "No leads yet" in page.text
 
 
+def test_con_un_solo_lead_el_texto_va_en_singular(client, session_factory):
+    with session_factory() as session:
+        session.add(Advisor(id="adv_solo", name="Sola", zone="Envigado", access_token="tok-solo"))
+        _lead(session, zone="Envigado", reached=("DISCOVERY",), reply_after=timedelta(seconds=3))
+        session.commit()
+
+    page = client.get("/panel/tok-solo/funnel").text
+
+    assert "1 lead started a conversation" in page
+    assert "over 1 conversation<" in page
+    assert "1 conversations" not in page
+
+
 def test_el_dashboard_es_global_y_exige_token_valido(client, session_factory, mundo):
     page = client.get("/panel/tok-v/funnel")
     assert page.status_code == 200

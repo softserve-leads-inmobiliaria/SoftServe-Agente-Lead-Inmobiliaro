@@ -18,13 +18,13 @@
 <div class="stat-row">
   {{ ui.stat(report.total_leads, "Leads") }}
   {{ ui.stat("—" if report.containment_rate is none else "%.0f%%"|format(report.containment_rate * 100), "Containment", "no human requested") }}
-  {{ ui.stat(duration(report.first_response.p50), "First response (p50)", report.first_response.conversations ~ " conversations") }}
+  {{ ui.stat(duration(report.first_response.p50), "First response (p50)", report.first_response.conversations ~ (" conversation" if report.first_response.conversations == 1 else " conversations")) }}
 </div>
 
 <div class="card">
   <h2 class="section-title">Leads by stage</h2>
   <p class="muted">
-    {{ report.total_leads }} leads started a conversation.
+    {{ report.total_leads }} {{ "lead" if report.total_leads == 1 else "leads" }} started a conversation.
     Entering GREETING isn't recorded as a transition (DT-17): each row counts distinct leads
     that <em>reached</em> that stage.
   </p>
@@ -58,7 +58,7 @@
   <dl>
     <dt>First response (median)</dt>
     <dd>{{ duration(report.first_response.p50) }}
-        <span class="muted">over {{ report.first_response.conversations }} conversations</span></dd>
+        <span class="muted">over {{ report.first_response.conversations }} {{ "conversation" if report.first_response.conversations == 1 else "conversations" }}</span></dd>
     <dt>First response (p90)</dt>
     <dd>{{ duration(report.first_response.p90) }}
         <span class="muted">— measured in the database, between the start of the conversation and the
