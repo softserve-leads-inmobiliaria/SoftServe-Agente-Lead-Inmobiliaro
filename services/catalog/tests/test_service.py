@@ -67,6 +67,30 @@ def test_get_property_returns_the_photo_but_search_does_not(service):
     assert service.get_property(prop["id"], lead_qualified=False)["photo_url"] == prop["photo_url"]
     assert all("photo_url" not in p for p in service.search_properties()["properties"])
 
+@pytest.mark.parametrize("prop, expected", [
+    ("prop_00231", {"down_payment_percent": 10, "down_payment_min": 18500, "income_multiple": None,
+                    "monthly_income_min": None, "references_required": False}),  # venta, USD 185,000
+    ("prop_00237", {"down_payment_percent": 20, "down_payment_min": 59000, "income_multiple": None,
+                    "monthly_income_min": None, "references_required": False}),  # preventa, USD 295,000
+    ("prop_00235", {"down_payment_percent": None, "down_payment_min": None, "income_multiple": 3,
+                    "monthly_income_min": 3450, "references_required": True}),  # renta, USD 1,150
+])
+def test_get_property_lists_the_requirements_of_its_deal(service, prop, expected):
+    # #201: el agente puede decir qué requisitos se piden antes de verificar nada.
+    assert service.get_property(prop, lead_qualified=False)["requirements"] == expected
+
+
+@pytest.mark.parametrize("prop, profile", [
+    ("prop_00231", {"down_payment": 18500, "monthly_income": 0, "has_references": False}),
+    ("prop_00235", {"down_payment": 0, "monthly_income": 3450, "has_references": True}),
+])
+def test_the_listed_requirements_are_exactly_what_check_requirements_asks(service, prop, profile):
+    # Las dos tools leen las mismas reglas: el mínimo que lista `get_property` alcanza, un dólar menos no.
+    assert service.check_requirements(prop, profile)["meets_requirements"] is True
+    short = {key: value - 1 if type(value) is int and value else value for key, value in profile.items()}
+    assert service.check_requirements(prop, short)["meets_requirements"] is False
+
+
 def test_search_without_filters_returns_everything_without_exact_address(service):
     result = service.search_properties()
     output_validator("search_properties").validate(result)
