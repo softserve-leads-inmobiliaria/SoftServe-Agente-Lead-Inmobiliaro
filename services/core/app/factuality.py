@@ -34,6 +34,9 @@ _STATUS_WORDS = {
 }
 # Negado no es afirmar el estado: "that one is not available, it is reserved" solo dice `apartado`.
 _NOT_BEFORE = r"(?<!not )(?<!n't )(?<!n’t )(?<!no longer )"
+# "Available" también es el dinero o el tiempo del lead: "how much do you have available for the down
+# payment?" o "are you available on Friday?" no hablan de la propiedad (#202, visto en vivo).
+_NOT_THE_PROPERTY = re.compile(r"(?:\bhave|\bhas|\byou|\byou're|\bwe're|\bthey're)\s+$", re.IGNORECASE)
 _STATUS = re.compile(_NOT_BEFORE + r"\b(" + "|".join(sorted(_STATUS_WORDS, key=len, reverse=True)) + r")\b",
                      re.IGNORECASE)
 
@@ -59,7 +62,9 @@ def extract_numbers(text: str) -> set[str]:
 
 def extract_statuses(text: str) -> set[str]:
     """Palabras de estado de propiedad que aparecen en `text`, en su forma canónica."""
-    return {_STATUS_WORDS[m.group(1).lower()] for m in _STATUS.finditer(text or "")}
+    text = text or ""
+    return {_STATUS_WORDS[m.group(1).lower()] for m in _STATUS.finditer(text)
+            if not (m.group(1).lower() == "available" and _NOT_THE_PROPERTY.search(text[:m.start()]))}
 
 
 # Listas cuyo TAMAÑO es un número que se puede citar ("tengo 3 opciones"). Deliberadamente acotada:
