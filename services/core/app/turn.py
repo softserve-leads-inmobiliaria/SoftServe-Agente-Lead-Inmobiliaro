@@ -92,6 +92,8 @@ class TurnReply:
     fsm_state: str | None = None
 
 
+PHOTO_KEY = "photo_shown"  # en `last_tool_results`: id de la última propiedad cuya foto vio el lead (#210)
+
 OnQualified = Callable[[Mapping[str, Any], "Transition"], Awaitable[None]]
 OnHandoff = Callable[[Mapping[str, Any], "Transition"], Awaitable[None]]
 
@@ -251,6 +253,23 @@ def _featured_property(result: AgentResult, listing: Mapping[str, Any] | None, v
     return prop if isinstance(prop, Mapping) and prop.get("id") else None
 
 
+def _first_sight(featured: Mapping[str, Any] | None, tool_results: Mapping[str, Any],
+                 previous: Mapping[str, Any]) -> tuple[Mapping[str, Any] | None, dict[str, Any]]:
+    """La propiedad del turno solo si el lead todavía no vio su foto (#210), y `tool_results` con la
+    última que vio (`PHOTO_KEY`), para el turno siguiente.
+
+    El agente vuelve a llamar a `get_property` cada vez que cita una cifra (A-5), así que la foto se
+    repetía en cada respuesta sobre la misma propiedad. Vuelve a salir cuando la respuesta pasa a otra.
+    No sirve la propiedad recordada (`REMEMBERED_KEY`): también la fija una búsqueda, que no lleva foto.
+    """
+    shown = previous.get(PHOTO_KEY)
+    if featured is not None and featured.get("id") == shown:
+        featured = None
+    elif featured is not None:
+        shown = featured["id"]
+    return featured, ({**tool_results, PHOTO_KEY: shown} if shown else dict(tool_results))
+
+
 async def _visit_step(event: Mapping[str, Any], context: GuardContext, result: AgentResult,
                       text: str) -> VisitStep | None:
     """El paso de agenda de este turno (B-8), o None si el turno no tiene que ver con la visita.
@@ -378,6 +397,10 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
                   and is_frustrated(streak))
     if frustrated:
         outbound["text"] = FRUSTRATION_REPLY  # esta racha dispara el traspaso: se le avisa al lead
+    replaced = frustrated or alerts.is_request(verdict.signal_text)  # la alerta (A-18) cambia la respuesta
+    featured, shown = _first_sight(_featured_property(result, listing, visit, replaced),
+                                   evidence.tool_results, context.last_tool_results)
+    evidence = replace(evidence, tool_results=shown)
 
     span.set_attributes({"turn.intent": result.intent, "turn.tools": sorted(result.tool_results),
                          "turn.agent": agent.name, "turn.llm_error": result.llm_error or "",
@@ -408,8 +431,7 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
             await on_handoff(event, transition)
         except Exception:
             logger.exception("fallo al enviar la ficha del traspaso")
-    replaced = frustrated or alerts.is_request(verdict.signal_text)  # la alerta (A-18) cambia la respuesta
-    featured = None if transition.after in TERMINAL_STATES else _featured_property(result, listing, visit, replaced)
+    featured = None if transition.after in TERMINAL_STATES else featured
     return TurnReply(outbound, featured, transition.after)
 
 

@@ -34,7 +34,7 @@ class PhotoCatalog:
 
     async def call(self, tool: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
         if tool == "get_property":
-            return LISTING | {"photo_url": self.photo}
+            return LISTING | {"id": (arguments or {}).get("property_id", LISTING["id"]), "photo_url": self.photo}
         return stub_call(tool, arguments)
 
 
@@ -42,13 +42,13 @@ class ToolAgent:
     """Un agente que consulta las tools que se le pidan y contesta con un texto fijo."""
     name = "tools"
 
-    def __init__(self, *tools: str, intent: str = "consulta_precio"):
-        self.tools, self.intent = tools, intent
+    def __init__(self, *tools: str, intent: str = "consulta_precio", property_id: str = "prop_00231"):
+        self.tools, self.intent, self.property_id = tools, intent, property_id
 
     async def run(self, turn, catalog):
         results = {}
         for tool in self.tools:
-            arguments = {"property_id": "prop_00231", "lead_qualified": False} if tool == "get_property" else {}
+            arguments = {"property_id": self.property_id, "lead_qualified": False} if tool == "get_property" else {}
             results[tool] = await catalog.call(tool, arguments)
         return AgentResult(text="Cuesta 2.35 millones.", intent=self.intent, tool_results=results)
 
@@ -120,6 +120,29 @@ def test_asking_for_an_alert_replaces_the_reply_so_there_is_no_photo(engine, mon
     reply, turn = turn_of(engine, monkeypatch, "tg-photo-9", text="Notify me if something like that comes up",
                           agent=ToolAgent("get_property"))
     assert reply.photo_url is None and turn.property is None
+
+
+def test_a_follow_up_about_the_same_property_does_not_repeat_the_photo(engine, monkeypatch):
+    # #210: el agente vuelve a llamar a `get_property` para citar el precio, pero el lead ya vio la foto.
+    asyncio.run(reply_turn(engine, PhotoCatalog(), telegram_user_id="tg-photo-10", text="", deep_link="prop_00231"))
+    reply, turn = turn_of(engine, monkeypatch, "tg-photo-10", text="How much is it?", agent=ToolAgent("get_property"))
+    assert reply.photo_url is None and turn.property is None
+
+
+def test_moving_on_to_another_property_brings_its_photo(engine, monkeypatch):
+    asyncio.run(reply_turn(engine, PhotoCatalog(), telegram_user_id="tg-photo-11", text="", deep_link="prop_00231"))
+    reply, turn = turn_of(engine, monkeypatch, "tg-photo-11", text="And the other one?",
+                          agent=ToolAgent("get_property", property_id="prop_00412"))
+    assert reply.photo_url == PHOTO and turn.property["id"] == "prop_00412"
+
+
+def test_a_search_does_not_count_as_having_seen_the_photo(engine, monkeypatch):
+    # La búsqueda fija la propiedad de interés, pero no lleva foto: al pedir esa propiedad, la foto sale.
+    asyncio.run(reply_turn(engine, PhotoCatalog(), telegram_user_id="tg-photo-12", text="Apartments in El Poblado?",
+                           agent=ToolAgent("search_properties")))
+    reply, _ = turn_of(engine, monkeypatch, "tg-photo-12", text="Tell me about the first one",
+                       agent=ToolAgent("get_property"))
+    assert reply.photo_url == PHOTO
 
 
 def test_the_opt_out_has_no_photo(engine):
