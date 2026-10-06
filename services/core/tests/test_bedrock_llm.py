@@ -176,6 +176,25 @@ def test_the_prompt_does_not_repeat_figures_from_earlier_turns():
     assert "don't repeat it" in CHAT_SYSTEM
 
 
+def test_the_prompt_offers_the_alternatives_of_an_empty_search():
+    # #213, en vivo: "houses for rent" no traía nada y el agente volvía a pedir la ciudad, sin alternativas.
+    # Las busca el código (`app/alternatives.py`); el prompt dice cómo presentarlas.
+    assert "`alternatives`" in CHAT_SYSTEM and "`alternatives_without`" in CHAT_SYSTEM
+    assert "Don't ask the lead for their area again" in CHAT_SYSTEM
+
+
+def test_the_prompt_never_promises_to_look_something_up_later():
+    # #213: "Let me search to see what we have" y el turno terminaba sin buscar.
+    assert "Never tell the lead you will look something up" in CHAT_SYSTEM and "in this same reply" in CHAT_SYSTEM
+
+
+def test_the_prompt_asks_whether_an_unclear_price_is_about_the_listing():
+    # #213: "how much is it?" sin propiedad clara recibía "¿en qué ciudad y con qué presupuesto?". Se busca
+    # la propiedad antes de preguntar: el título trae números ("2-bedroom") que la factualidad no deja pasar
+    # si no salieron de una tool en ese turno, y la respuesta se degradaba.
+    assert "look up the listing's property with get_property and ask whether they mean that one" in CHAT_SYSTEM
+
+
 # --- conversación y tool calling -----------------------------------------------------------------------
 
 def test_a_plain_reply_uses_the_chat_model_and_returns_the_text():

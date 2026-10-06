@@ -262,9 +262,26 @@ def test_the_correction_prompt_shows_the_model_its_own_reply_and_what_was_wrong(
     catalog = FakeCatalog(properties=[{"id": "p1", "title": "Casa", "price": 2350000, "status": "disponible"}])
     run(agent_for(client).run(turn(), catalog))
     correction_request = client.calls_to(CHAT)[-1]
-    assert correction_request["messages"][-2] == {"role": "assistant", "content": [{"text": "I have one at $9,999,999."}]}
-    correction_text = correction_request["messages"][-1]["content"][0]["text"]
-    assert "9999999" in correction_text
+    correction_text = correction_request["system"][0]["text"]
+    assert "<draft>I have one at $9,999,999.</draft>" in correction_text and "9999999" in correction_text
+
+
+def test_the_correction_goes_in_the_system_so_the_model_answers_the_lead_and_not_a_correction():
+    # #213, en vivo: como mensaje `user`, el modelo creía que el lead lo había corregido y contestaba
+    # "You're right, I apologize… Let me search", sin buscar.
+    client = ScriptedBedrock(classification("busqueda_propiedad"), tool_use("search_properties", {"zone": "Prov."}),
+                             text("I have one at $9,999,999."), text("I have one at $2,350,000."))
+    catalog = FakeCatalog(properties=[{"id": "p1", "title": "Casa", "price": 2350000, "status": "disponible"}])
+    run(agent_for(client).run(turn(), catalog))
+    first, correction = client.calls_to(CHAT)[0], client.calls_to(CHAT)[-1]
+    assert correction["messages"] == first["messages"][:len(correction["messages"])]
+    assert correction["messages"][-1]["role"] == "user"
+    assert correction["messages"][-1]["content"] == [{"text": "I'm looking for a house in El Poblado"}]
+    instruction = correction["system"][0]["text"]
+    assert instruction.startswith(first["system"][0]["text"]) and "the lead never sees this" in instruction
+    assert "Do not apologize" in instruction and "Never tell the lead you will look something up later" in instruction
+    # Y no repite lo de un turno anterior: el número va normalizado, pero vale en cualquier formato.
+    assert "earlier messages does not count as verified" in instruction and "in any format" in instruction
 
 
 # --- A-6: dirección reservada en prosa ----------------------------------------------------------------------------

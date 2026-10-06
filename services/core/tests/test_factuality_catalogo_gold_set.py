@@ -295,6 +295,11 @@ CASOS = [
      "disponibilidad_apartada", "", True),
     ("en_lead_disponible_no_es_estado", "Are you available on Friday?",
      "disponibilidad_apartada", "", True),
+    # "What's available" es el inventario en general, no el estado de una propiedad (visto en vivo, #213).
+    ("en_lo_disponible_no_es_estado", "Would you like me to show you what's available in Laureles?",
+     "disponibilidad_apartada", "", True),
+    ("en_lo_que_hay_disponible_no_es_estado", "Tell me your budget and I'll tell you what is available.",
+     "disponibilidad_apartada", "", True),
     ("en_tenemos_disponible_si_es_estado", "We have it available right now.", "disponibilidad_apartada", "",
      False),
     ("en_vendida_falso", "That one was already sold.", "busqueda_venta_poblado", "", False),

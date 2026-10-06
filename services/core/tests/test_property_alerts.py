@@ -170,6 +170,49 @@ def test_a_search_with_few_results_offers_the_alert(engine, zone):
                                                           "budget_min": 0, "budget_max": 20000}
 
 
+def test_the_alert_is_offered_once_per_conversation(engine, zone):
+    # #213, en vivo: la oferta salió en 3 de 4 turnos.
+    lead = Lead(engine)
+    assert lead.search(zone).endswith(alerts.OFFER_TEXT)
+    lead.say("hi")  # un turno sin búsqueda no borra la marca
+    assert lead.search(zone + " norte") == "Esto es lo que encontré."
+    assert lead.last_tool_results()[alerts.ALERT_KEY]["zone"] == zone + " norte"
+
+
+def test_after_the_offer_notify_me_still_saves_the_latest_search(engine, zone):
+    lead = Lead(engine)
+    lead.search(zone)
+    lead.search(zone + " norte")  # ya sin oferta
+    assert lead.say("notify me") == alerts.CREATED_TEXT
+    assert [row[0] for row in lead.alerts()] == [zone + " norte"]
+
+
+def test_the_alert_is_for_what_the_lead_asked_and_not_for_the_agents_alternative(engine, zone):
+    # #213: si la búsqueda no trae nada, el agente la repite con un filtro menos; la alerta es de la primera.
+    class Relaxes(Searches):
+        async def run(self, turn, catalog):
+            await catalog.call("search_properties", dict(self.filters))
+            found = await catalog.call("search_properties", {key: value for key, value in self.filters.items()
+                                                             if key != "zone"})
+            return AgentResult(text="No houses there, but there are these.", intent="busqueda_propiedad",
+                               tool_results={"search_properties": found})
+
+    class FirstEmpty(Catalog):
+        async def call(self, tool, arguments=None):
+            if tool == "search_properties" and "zone" in (arguments or {}):
+                return {"properties": []}
+            return await super().call(tool, arguments)
+
+    lead = Lead(engine)
+    event = INBOUND | {"conversation_id": lead.conversation_id, "lead_id": lead.lead_id,
+                       "event_id": str(uuid.uuid4()), "text": "I'm looking for a house"}
+    many = [{"id": f"prop_{n}", "title": "Casa", "status": "disponible"} for n in range(3)]
+    agent = Relaxes({"zone": zone, "type": "renta"})
+    reply = asyncio.run(process_turn(engine, event, FirstEmpty(many), agent=agent))["text"]
+    assert reply.endswith(alerts.OFFER_TEXT)
+    assert lead.last_tool_results()[alerts.ALERT_KEY]["zone"] == zone
+
+
 def test_a_search_with_many_results_does_not(engine, zone):
     found = [{"id": f"prop_{n}", "title": "Casa", "status": "disponible"} for n in range(3)]
     reply = Lead(engine).search(zone, found=found)
