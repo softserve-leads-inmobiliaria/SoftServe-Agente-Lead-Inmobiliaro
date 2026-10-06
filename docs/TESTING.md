@@ -125,6 +125,12 @@ BEDROCK_MODEL_ID_CLASSIFIER=<modelo liviano>
 AWS_ACCESS_KEY_ID=...   AWS_SECRET_ACCESS_KEY=...   (o AWS_PROFILE fuera de Docker)
 ```
 
+La configuración probada (#213) usa Sonnet para la conversación y Haiku para la intención:
+`BEDROCK_MODEL_ID_CHAT=us.anthropic.claude-sonnet-4-5-20250929-v1:0` y
+`BEDROCK_MODEL_ID_CLASSIFIER=us.anthropic.claude-haiku-4-5-20251001-v1:0`. Con Haiku en la conversación,
+el agente no seguía varias reglas del prompt: repetía precios de turnos anteriores, que la factualidad
+bloquea, y no repetía una búsqueda vacía.
+
 Con inferencia entre regiones el ID lleva prefijo (p. ej. `us.anthropic.claude-haiku-4-5-20251001-v1:0`) y
 `BEDROCK_REGION` debe ser una región de EE. UU. Antes de darlos por buenos, probar **una llamada real de un token** con cada ID: algunos modelos de
 Bedrock exigen un *inference profile* y el error solo aparece en la primera llamada. Sin los dos IDs,
