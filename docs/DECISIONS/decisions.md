@@ -2295,7 +2295,11 @@ multiplicaría el trabajo sin cambiar nada de lo que se ve.
 - El panel, los avisos y la ficha de traspaso al asesor, y el reporte semanal al gerente.
 
 Se quedan en español el código, los identificadores, los comentarios y *docstrings*, los mensajes de
-log y de excepción (los lee el equipo, no un usuario del producto) y `docs/`.
+log y de excepción (los lee el equipo, no un usuario del producto), `docs/` y las `description` de
+`contracts/`. Hay dos excepciones, porque las lee el LLM: el *docstring* de cada tool de
+`services/catalog/app/server.py` (es la descripción que publica MCP) y las `description` del
+`inputSchema` de `contracts/mcp/` (`list_tools` publica ese esquema tal cual). Los mensajes de error y las
+notas del catálogo también van en inglés: viajan como resultado de la tool.
 
 *Solo se conversa en inglés.* Si el mensaje del lead está en español, el guardrail de entrada lo
 detiene antes del LLM, la FSM y el score, y responde un texto fijo en inglés: solo se puede conversar
