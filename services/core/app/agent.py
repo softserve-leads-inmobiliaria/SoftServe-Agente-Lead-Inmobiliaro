@@ -24,7 +24,8 @@ LLM_FALLBACK_REPLY = "Sorry, I had a problem processing your message. Could you 
 # A-5: ni el primer intento ni la regeneración pasaron la factualidad. Nunca se manda el dato dudoso.
 FACTUALITY_DEGRADE_REPLY = "I don't have verified information to answer that reliably." + HANDOFF_OFFER
 # #200: el guardrail quitó una mención de categoría protegida y lo que queda es una pregunta ("does that
-# matter?"). El agente sin LLM contesta esto; el LLM recibe la nota de `_turn_notes` y lo dice a su modo.
+# matter?"). Los dos agentes contestan esto con el mismo texto; si el mensaje pregunta otra cosa, el LLM
+# recibe la nota de `_with_notes` y contesta a su modo.
 PROTECTED_ANSWER = ("That doesn't affect how we help you or the requirements to buy or rent: we treat "
                     "every client the same way. What kind of property are you looking for?")
 
@@ -109,6 +110,10 @@ class BedrockAgent:
                 # Un traspaso a una persona lo dice siempre el mismo texto: no se le deja al modelo.
                 return AgentResult(text=FakeLLM().generate_reply(classification.intent),
                                    intent=classification.intent, raw_signal=classification.signal)
+            if turn.protected_removed and "?" in turn.text and classification.intent == "otro":
+                # #200: "does that matter?" se contesta siempre igual. En vivo el modelo ignoraba la nota y
+                # seguía con el enganche, o lo degradaba la factualidad.
+                return AgentResult(text=PROTECTED_ANSWER, intent="otro", raw_signal=classification.signal)
             specs = await catalog.tool_specs()
             hidden = {s["name"]: [a for a in CODE_CONTROLLED_ARGUMENTS if a in s["input_schema"].get("properties", {})]
                       for s in specs}
