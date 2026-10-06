@@ -196,3 +196,45 @@ def test_upstream_unavailable_on_every_tool(real_db_session_factory):
     with pytest.raises(CatalogError) as exc:
         service.search_properties()
     assert exc.value.error_code == "UPSTREAM_UNAVAILABLE"
+
+# --- list_zones (#194, DT-58) ------------------------------------------------------------------------
+
+def _seeded_zones(service):
+    """Las zonas del inventario de demo: otras suites pueden haber dado de alta propiedades propias."""
+    seeded = {prop["zone"] for prop in data.PROPERTIES}
+    return {z["zone"]: z for z in service.list_zones()["zones"] if z["zone"] in seeded}
+
+
+def test_list_zones_follows_its_contract(service):
+    output_validator("list_zones").validate(service.list_zones())
+
+
+def test_list_zones_counts_only_available_properties(service):
+    zones = _seeded_zones(service)
+    expected = {}
+    for prop in data.PROPERTIES:
+        if prop["status"] == "disponible":
+            expected[prop["zone"]] = expected.get(prop["zone"], 0) + 1
+    assert {zone: z["available"] for zone, z in zones.items()} == expected
+    # Chapinero tiene una casa cerrada y un local disponible: aparece, pero solo con el local.
+    assert zones["Chapinero"]["kinds"] == ["local"] and zones["Chapinero"]["types"] == ["renta"]
+
+
+def test_list_zones_says_the_city_of_each_area(service):
+    zones = _seeded_zones(service)
+    assert {zone: z["city"] for zone, z in zones.items()} == {
+        "El Poblado": "Medellin", "Laureles": "Medellin", "Envigado": "Medellin",
+        "Usaquen": "Bogota", "Chapinero": "Bogota"}
+    assert set(zones["El Poblado"]["types"]) == {"venta", "renta"}
+    assert set(zones["El Poblado"]["kinds"]) == {"departamento", "estudio"}
+
+
+def test_list_zones_never_carries_addresses_or_ids(service):
+    assert all(set(z) == {"zone", "city", "status", "available", "types", "kinds"} for z in service.list_zones()["zones"])
+
+
+def test_list_zones_when_the_catalog_is_down(real_db_session_factory):
+    service = CatalogService(db_session_factory=real_db_session_factory, available=lambda: False)
+    with pytest.raises(CatalogError) as exc:
+        service.list_zones()
+    assert exc.value.error_code == "UPSTREAM_UNAVAILABLE"

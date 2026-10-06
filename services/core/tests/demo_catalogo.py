@@ -76,6 +76,8 @@ TURNOS: dict[str, tuple[str, dict[str, Any]]] = {
     "busqueda_presupuesto_renta": ("search_properties", {"budget_range": {"min": 550, "max": 1200}}),
     "busqueda_una_recamara": ("search_properties", {"bedrooms": 1}),
     "busqueda_zona_sin_coincidencia": ("search_properties", {"zone": "Cali"}),
+    # --- cobertura (#194) ------------------------------------------------------------------------
+    "zonas": ("list_zones", {}),
     # --- ficha ------------------------------------------------------------------------------------
     "ficha_venta": ("get_property", {"property_id": "prop_00231", "lead_qualified": False}),
     "ficha_venta_calificado": ("get_property", {"property_id": "prop_00231", "lead_qualified": True}),

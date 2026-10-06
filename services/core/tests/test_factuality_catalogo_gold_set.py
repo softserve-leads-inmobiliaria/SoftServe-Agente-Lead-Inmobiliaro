@@ -300,6 +300,10 @@ CASOS = [
      "disponibilidad_apartada", "", True),
     ("en_lo_que_hay_disponible_no_es_estado", "Tell me your budget and I'll tell you what is available.",
      "disponibilidad_apartada", "", True),
+    # Cobertura (#194): las zonas y las cantidades salen de `list_zones`.
+    ("en_zonas_con_cantidad", "In El Poblado I have 3 available properties, and 2 in Usaquen.", "zonas", "", True),
+    ("en_zona_cantidad_inventada", "In Laureles I have 4 properties for rent.", "zonas", "", False),
+    ("en_ciudad_sin_cobertura", "We only have properties in Medellin and Bogota, not in Cali.", "zonas", "", True),
     ("en_tenemos_disponible_si_es_estado", "We have it available right now.", "disponibilidad_apartada", "",
      False),
     ("en_vendida_falso", "That one was already sold.", "busqueda_venta_poblado", "", False),
