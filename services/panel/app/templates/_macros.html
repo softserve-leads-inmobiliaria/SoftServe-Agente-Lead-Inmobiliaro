@@ -22,17 +22,12 @@
     <span class="badge badge-{{ score_band|lower }}">{{ score_band }}</span>
     {%- if score_total is not none %} <span class="muted">{{ score_total }}</span>{% endif %}
   {%- else -%}
-    <span class="muted">sin calificar</span>
+    <span class="muted">not scored</span>
   {%- endif -%}
 {%- endmacro %}
 
 {% macro status_badge(status) -%}
-  <span class="badge badge-status">
-    {%- if status == "sql" %}en gestión
-    {%- elif status == "mql" %}calificado
-    {%- elif status == "closed_won" %}operación cerrada
-    {%- else %}{{ status }}{% endif -%}
-  </span>
+  <span class="badge badge-status">{{ label("lead_status", status) }}</span>
 {%- endmacro %}
 
 {# Identificador legible del lead (#178): el `telegram_user_id` queda en el `title` y en la ficha. #}
@@ -41,5 +36,5 @@
 {%- endmacro %}
 
 {% macro sla_badge(wait, sla_minutes) -%}
-{% set minutes = (wait.total_seconds() // 60)|int %}<span class="sla" title="Umbral: {{ sla_minutes }} min">HOT sin tomar hace {% if minutes < 120 %}{{ minutes }} min{% else %}{{ minutes // 60 }} h{% endif %}</span>
+{% set minutes = (wait.total_seconds() // 60)|int %}<span class="sla" title="Threshold: {{ sla_minutes }} min">HOT unclaimed for {% if minutes < 120 %}{{ minutes }} min{% else %}{{ minutes // 60 }} h{% endif %}</span>
 {%- endmacro %}

@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
-{% block title %}Mis leads — {{ advisor.name }}{% endblock %}
-{% block heading %}Mis leads{% endblock %}
-{% block subheading %}{{ advisor.name }} · zona {{ advisor.zone }} · ordenados por calidad{% endblock %}
+{% block title %}My leads — {{ advisor.name }}{% endblock %}
+{% block heading %}My leads{% endblock %}
+{% block subheading %}{{ advisor.name }} · area {{ advisor.zone }} · best leads first{% endblock %}
 
 {% block content %}
 <div class="stat-row">
-  {{ ui.stat(leads|length, "Leads en la cola") }}
-  {{ ui.stat(overdue|length, "HOT sin tomar", "más de " ~ sla_minutes ~ " min") }}
-  {{ ui.stat(unread or 0, "Avisos sin leer") }}
+  {{ ui.stat(leads|length, "Leads in the queue") }}
+  {{ ui.stat(overdue|length, "HOT unclaimed", "over " ~ sla_minutes ~ " min") }}
+  {{ ui.stat(unread or 0, "Unread notifications") }}
 </div>
 
 <div class="card">
@@ -17,8 +17,8 @@
     <table>
       <thead>
         <tr>
-          <th scope="col">Lead</th><th scope="col">Score</th><th scope="col">Etapa</th>
-          <th scope="col">Estado</th><th scope="col">Último mensaje</th><th scope="col"></th>
+          <th scope="col">Lead</th><th scope="col">Score</th><th scope="col">Stage</th>
+          <th scope="col">Status</th><th scope="col">Last message</th><th scope="col"></th>
         </tr>
       </thead>
       <tbody>
@@ -33,12 +33,12 @@
           <td>{{ lead.fsm_state or "—" }}</td>
           <td>{{ ui.status_badge(lead.status) }}</td>
           <td class="muted">
-            {{ lead.last_message_at.strftime("%d/%m %H:%M") if lead.last_message_at else "—" }}
+            {{ lead.last_message_at.strftime("%b %d, %H:%M") if lead.last_message_at else "—" }}
           </td>
           <td>
             {% if lead.status in ("nuevo", "mql") %}
             <form class="inline" method="post" action="/panel/{{ token }}/leads/{{ lead.id }}/gestionar">
-              <button type="submit" class="btn">Marcar en gestión</button>
+              <button type="submit" class="btn">Mark as in progress</button>
             </form>
             {% endif %}
           </td>
@@ -48,7 +48,7 @@
     </table>
   </div>
   {% else %}
-  <p class="empty">Todavía no hay leads en tu zona.</p>
+  <p class="empty">No leads in your area yet.</p>
   {% endif %}
 </div>
 {% endblock %}
