@@ -42,14 +42,14 @@ def _advisor(session, zone: str) -> Advisor:
 
 @pytest.fixture
 def mundo(session_factory):
-    """Valeria (Providencia) tiene un aviso viejo leído y uno nuevo; Andrés (Zapopan), uno propio.
+    """Valeria (El Poblado) tiene un aviso viejo leído y uno nuevo; Andrés (Usaquen), uno propio.
     El lead del traspaso no tiene zona: la cola general se lo asignó a Valeria."""
     with session_factory() as session:
-        valeria, andres = _advisor(session, "Providencia"), _advisor(session, "Zapopan")
+        valeria, andres = _advisor(session, "El Poblado"), _advisor(session, "Usaquen")
         session.flush()
         sin_zona = Lead(id=uuid.uuid4(), telegram_user_id=f"tg-{uuid.uuid4().hex[:8]}", zone=None,
                         advisor_id=valeria.id)
-        de_andres = Lead(id=uuid.uuid4(), telegram_user_id=f"tg-{uuid.uuid4().hex[:8]}", zone="Zapopan",
+        de_andres = Lead(id=uuid.uuid4(), telegram_user_id=f"tg-{uuid.uuid4().hex[:8]}", zone="Usaquen",
                          advisor_id=andres.id)
         session.add_all([sin_zona, de_andres])
         session.flush()
@@ -115,7 +115,7 @@ def test_el_aviso_de_otro_asesor_es_404_igual_que_uno_inexistente(client, mundo)
 
 def test_sin_avisos_la_pagina_lo_dice(client, session_factory):
     with session_factory() as session:
-        sola = _advisor(session, "Andares")
+        sola = _advisor(session, "Envigado")
         session.commit()
 
     page = client.get(f"/panel/{sola.access_token}/avisos")
