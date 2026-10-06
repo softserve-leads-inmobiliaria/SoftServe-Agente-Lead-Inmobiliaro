@@ -27,7 +27,7 @@
           "max"
         ],
         "additionalProperties": false,
-        "description": "min > max es INVALID_INPUT."
+        "description": "In US dollars (USD). min > max is INVALID_INPUT."
       },
       "type": {
         "type": "string",
@@ -36,7 +36,7 @@
           "renta",
           "preventa"
         ],
-        "description": "Operación: venta, renta o preventa."
+        "description": "The deal: venta (sale), renta (rent) or preventa (pre-sale)."
       },
       "bedrooms": {
         "type": "integer",
@@ -51,7 +51,7 @@
           "local",
           "estudio"
         ],
-        "description": "Tipo de inmueble. \"depa\"/\"departamento\" -> departamento. Un valor fuera del enum es INVALID_INPUT."
+        "description": "The kind of property: departamento (apartment, flat, condo), casa (house), terreno (lot, land), local (commercial space, store), estudio (studio). A value outside the enum is INVALID_INPUT."
       }
     },
     "required": [],

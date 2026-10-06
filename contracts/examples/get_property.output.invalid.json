@@ -9,8 +9,8 @@
   "bedrooms": 2,
   "bathrooms": 2,
   "amenities": [
-    "alberca",
-    "gimnasio"
+    "pool",
+    "gym"
   ],
   "status": "disponible",
   "address_exact": null

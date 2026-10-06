@@ -1,4 +1,4 @@
 {
   "error_code": "NOT_FOUND",
-  "message": "La propiedad prop_99999 no existe."
+  "message": "Property prop_99999 does not exist."
 }
