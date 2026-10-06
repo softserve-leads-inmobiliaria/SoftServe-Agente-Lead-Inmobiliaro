@@ -7,6 +7,7 @@ import pytest
 from catalog_stub import stub_call
 from sqlalchemy import text
 
+from app.handoff import FRUSTRATION_REPLY
 from app.input_guard import (
     HANDOFF_OFFER,
     OPT_OUT_REPLY,
@@ -14,6 +15,7 @@ from app.input_guard import (
     PII_REMINDER,
     WITHDRAWN_REPLY,
 )
+from app.language_guard import NOT_ENGLISH_REPLY
 from app.turn import process_turn
 from db.repo_root import repo_root
 
@@ -66,6 +68,16 @@ class Chat:
                 "SELECT action, actor, payload FROM audit_log WHERE payload->>'conversation_id' = :c ORDER BY id"),
                 {"c": self.conversation_id}).all()
         return [r for r in rows if action is None or r.action == action]
+
+    @property
+    def streak(self):
+        return self._scalar("SELECT unresolved_streak FROM fsm_context WHERE conversation_id = :c")
+
+    def messages(self):
+        with self.engine.connect() as connection:
+            return [tuple(r) for r in connection.execute(text(
+                "SELECT role, content FROM messages WHERE conversation_id = :c ORDER BY id"),
+                {"c": self.conversation_id})]
 
 
 # --- /stop --------------------------------------------------------------------------------------
@@ -236,6 +248,70 @@ def test_paired_profiles_get_the_same_score(engine, plain, with_mention):
     signals = [a._scalar("SELECT score_signal::text FROM fsm_context WHERE conversation_id = :c"),
                b._scalar("SELECT score_signal::text FROM fsm_context WHERE conversation_id = :c")]
     assert signals[0] == signals[1]
+
+
+# --- idioma (#202, DT-55) ------------------------------------------------------------------------
+
+def test_spanish_gets_the_notice_without_moving_the_flow(engine):
+    chat = Chat(engine)
+    chat.say("Hi")
+    state = chat.state
+    assert chat.say("Busco un departamento en El Poblado") == NOT_ENGLISH_REPLY
+    assert chat.state == state and chat.catalog.calls == []
+    assert len(chat.audits("input.not_english")) == 1
+
+
+def test_spanish_adds_nothing_to_the_score(engine):
+    chat = Chat(engine)
+    chat.say("Busco casa, decido yo, mi presupuesto es 3 millones y es urgente")
+    assert chat.total == 0
+
+
+def test_insisting_in_spanish_is_not_frustration(engine):
+    chat = Chat(engine)
+    chat.say("Hi")
+    replies = [chat.say(message) for message in ("Hola", "¿Hablas español?", "No entiendo nada", "Por favor")]
+    assert FRUSTRATION_REPLY not in replies and set(replies) == {NOT_ENGLISH_REPLY}
+    assert chat.streak == 0 and chat.state == "DISCOVERY"
+
+
+def test_the_lead_writing_again_in_english_goes_on_normally(engine):
+    # Como fuera de dominio, el aviso es un turno `otro`: solo mueve el saludo inicial (GREETING -> DISCOVERY).
+    chat, english_only = Chat(engine), Chat(engine)
+    chat.say("Hola, busco casa")
+    english_only.say("Hi")
+    reply = chat.say("I'm looking for a house")
+    assert reply == english_only.say("I'm looking for a house") != NOT_ENGLISH_REPLY
+    assert (chat.state, chat.total) == (english_only.state, english_only.total)
+    assert chat.catalog.calls == english_only.catalog.calls
+
+
+def test_the_spanish_message_and_the_notice_stay_in_the_history(engine):
+    chat = Chat(engine)
+    chat.say("Busco un departamento")
+    # Los dos mensajes se guardan en la misma transacción: el orden entre ellos no está garantizado.
+    assert sorted(chat.messages()) == [("assistant", NOT_ENGLISH_REPLY), ("user", "Busco un departamento")]
+
+
+def test_opt_out_in_spanish_still_comes_first(engine):
+    chat = Chat(engine)
+    assert chat.say("ya no me escriban") == OPT_OUT_REPLY and chat.consent == "withdrawn"
+    assert chat.audits("input.not_english") == []
+
+
+def test_pii_in_spanish_is_still_redacted(engine):
+    chat = Chat(engine)
+    reply = chat.say(f"Busco casa, mi tarjeta es {CARD}")
+    assert reply.startswith(NOT_ENGLISH_REPLY) and PII_REMINDER in reply
+    assert CARD not in json.dumps(chat.messages(), ensure_ascii=False)
+    assert {r.action for r in chat.audits()} == {"input.pii", "input.not_english"}
+
+
+def test_a_protected_mention_in_spanish_is_still_stripped(engine):
+    chat = Chat(engine)
+    chat.say("Soy católico y busco casa")
+    assert "católico" not in json.dumps(chat.messages(), ensure_ascii=False)
+    assert len(chat.audits("input.protected_category")) == 1
 
 
 # --- general ------------------------------------------------------------------------------------
