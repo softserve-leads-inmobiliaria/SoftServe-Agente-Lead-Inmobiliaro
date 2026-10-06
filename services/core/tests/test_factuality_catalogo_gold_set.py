@@ -290,6 +290,13 @@ CASOS = [
      "busqueda_zona_sin_coincidencia", "my budget is $250,000", True),
     ("en_precio_inventado", "That apartment costs $150,000.", "busqueda_venta_poblado", "", False),
     ("en_disponible_falso", "Yes, it's still available.", "disponibilidad_apartada", "", False),
+    # "Available" del dinero o del tiempo del lead no es el estado de la propiedad (visto en vivo, #202).
+    ("en_dinero_disponible_no_es_estado", "How much do you have available for the down payment?",
+     "disponibilidad_apartada", "", True),
+    ("en_lead_disponible_no_es_estado", "Are you available on Friday?",
+     "disponibilidad_apartada", "", True),
+    ("en_tenemos_disponible_si_es_estado", "We have it available right now.", "disponibilidad_apartada", "",
+     False),
     ("en_vendida_falso", "That one was already sold.", "busqueda_venta_poblado", "", False),
     ("en_apartada_falso", "That one is on hold.", "disponibilidad_disponible", "", False),
     ("en_promocion_inventada", "It has a 15% discount promotion.", "promociones_sin_promociones", "", False),

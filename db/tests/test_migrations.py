@@ -137,6 +137,24 @@ def test_0006_rewrites_the_old_decision_maker_values(old):
         engine.dispose()
 
 
+def test_0016_moves_the_advisors_to_english():
+    """#202 (DT-55): el ruteo pide asesores en inglés, y los ya sembrados estaban en `es` por omisión."""
+    with temporary_database(migrate=False) as url:
+        config = alembic_config(url)
+        command.upgrade(config, "0015")
+        engine = create_engine(url)
+        with engine.begin() as connection:
+            connection.execute(text("INSERT INTO advisors (id, name, zone, access_token)"
+                                    " VALUES ('adv_0016', 'Valeria', 'El Poblado', 'tok_0016')"))
+        command.upgrade(config, "0016")
+        with engine.begin() as connection:
+            connection.execute(text("INSERT INTO advisors (id, name, zone, access_token)"
+                                    " VALUES ('adv_new', 'Andres', 'Usaquen', 'tok_new')"))
+            languages = connection.execute(text("SELECT id, language FROM advisors ORDER BY id")).all()
+        assert languages == [("adv_0016", "en"), ("adv_new", "en")]
+        engine.dispose()
+
+
 # --- estado de la FSM (lo que A-1 necesita) ----------------------------------------------------
 
 def test_new_conversation_starts_in_greeting(session):

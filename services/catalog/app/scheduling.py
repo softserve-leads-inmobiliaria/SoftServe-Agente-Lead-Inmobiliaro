@@ -23,7 +23,7 @@ WORKDAYS = range(0, 6)  # lunes (0) a sábado (5)
 FIRST_SLOT, LAST_SLOT = 9, 17  # el último bloque empieza a las 17:00 y termina a las 18:00
 SLOT_LENGTH = timedelta(hours=1)
 DEFAULT_DAYS = 7
-DEFAULT_LANGUAGE = "es"
+DEFAULT_LANGUAGE = "en"  # la conversación es solo en inglés (DT-55)
 MATCH_ORDER = ("zone_and_language", "zone", "language", "any")
 
 

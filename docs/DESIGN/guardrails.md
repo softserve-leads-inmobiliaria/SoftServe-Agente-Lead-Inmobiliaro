@@ -29,9 +29,10 @@ detrás de "soy/somos" ("soy colombian", "soy venezolan") también cuenta (#200)
 Quitar la mención no puede dejar sin respuesta la pregunta del lead: ante "I'm Colombian, does that
 matter?", al agente le llega solo "does that matter?". Por eso el turno marca que se quitó una mención
 (`TurnInput.protected_removed`) y el LLM recibe una nota, sin el dato quitado, que le pide contestar que
-no influye en la atención ni en los requisitos (`agent._with_notes`, como la nota del anuncio de #122). El
-agente sin LLM contesta un texto fijo (`PROTECTED_ANSWER`) si lo que queda es una pregunta sin otra
-intención; "I'm Colombian, how much is it?" sigue siendo una consulta de precio. El clasificador no ve la
+no influye en la atención ni en los requisitos (`agent._with_notes`, como la nota del anuncio de #122). Si
+lo que queda es una pregunta sin otra intención, los dos agentes contestan un texto fijo (`PROTECTED_ANSWER`)
+sin pasar por el chat: en vivo (#202) el modelo ignoraba la nota y volvía al enganche. "I'm Colombian, how
+much is it?" sigue siendo una consulta de precio, y ahí el LLM contesta con la nota. El clasificador no ve la
 nota: solo lee lo que escribió el lead.
 
 El resumen del traspaso para el asesor (A-16) habla del lead en tercera persona, y en inglés "the lead is
@@ -68,7 +69,11 @@ se regenera con una instrucción explícita de qué no se pudo verificar, con la
 disponibles. 2do fallo: se degrada a un texto fijo que ofrece un asesor (`intent="otro"`, sin forzar
 `HUMAN_HANDOFF` — si se repite, la racha de turnos sin resolver ya existente lo dispara sola).
 
-La regla se prueba contra el catálogo de demo real en el gold set de `C-7` (75 casos, y además la
+En inglés (#202), "available" detrás de "have", "has", "you" o "we're" no cuenta como estado: es el dinero
+o el tiempo del lead ("how much do you have available for the down payment?", "are you available on
+Friday?"). En vivo, esa pregunta degradaba la respuesta en los turnos sin tools.
+
+La regla se prueba contra el catálogo de demo real en el gold set de `C-7` (93 casos, y además la
 validación de cada turno contra `contracts/mcp/`, DT-36), que corre el `AvailabilityGuard` real de A-4
 como capa intermedia. El límite conocido —el guardrail compara
 literales y no sabe de qué propiedad habla el texto, así que un número real de *otra* propiedad del
@@ -119,7 +124,7 @@ existir) — se actualiza en el mismo PR que cierra la historia correspondiente.
 | :--- | :--- | :--- |
 | Disponibilidad | `services/core/tests/test_availability.py` | Sí — corre con la suite de `core` |
 | Factualidad | Gold set de 32 casos, fusionado en `A-5` (`services/core/tests/test_factuality_gold_set.py`) | Sí — 100%. Sus `tool_results` están escritos a mano y ya no coinciden con el contrato desde C-1: **no se modifican** (prueban DT-23, y no se borran casos antiguos) |
-| Factualidad sobre el catálogo de demo | Gold set de 75 casos sobre la salida real de `CatalogService`, ya pasada por el `AvailabilityGuard` real (`C-7`, `services/core/tests/test_factuality_catalogo_gold_set.py`) + validación de cada turno contra `contracts/mcp/` | Sí — 100%, sin `xfail`. 27/27 turnos y 12/12 propiedades del inventario. Cierra el hueco que dejó el de A-5: sus fixtures ya no son la salida de ninguna tool y nada lo señalaba (DT-36) |
+| Factualidad sobre el catálogo de demo | Gold set de 93 casos sobre la salida real de `CatalogService`, ya pasada por el `AvailabilityGuard` real (`C-7`, `services/core/tests/test_factuality_catalogo_gold_set.py`) + validación de cada turno contra `contracts/mcp/` | Sí — 100%, sin `xfail`. 27/27 turnos y 12/12 propiedades del inventario. Cierra el hueco que dejó el de A-5: sus fixtures ya no son la salida de ninguna tool y nada lo señalaba (DT-36) |
 | Dirección reservada | Gold set de dirección reservada, fusionado en `A-6` (`services/core/tests/test_address_guard_gold_set.py`) — antes iba a ser `C-8`, ver notas de `A-06.md` | Sí — 0 fugas |
 | *Claims* prohibidos | Suite adversarial de A-7 (`services/core/tests/test_promise_guard.py`) — los 6 cubiertos con código, en positivo y negativo | Sí — corre con la suite de `core` |
 | Fair housing | Gold set de perfiles pareados, 27 pares (`C-6`, `services/core/tests/test_fair_housing_gold_set.py`) | Sí — 27/27 con diferencia 0, sin `xfail`. Los 6 pares de "con quién compras" daban −8/−12/−20 (DT-35) hasta que A-11 los arregló (DT-38) |

@@ -33,7 +33,7 @@ class FakeAgenda:
         if operation in self.fail:
             raise SchedulingError(self.fail[operation], "falla de prueba")
 
-    async def assign_advisor(self, lead_id, zone=None, language="es", registered_only=False):
+    async def assign_advisor(self, lead_id, zone=None, language="en", registered_only=False):
         self.calls.append(("assign_advisor", lead_id, registered_only))
         self._maybe_fail("assign_advisor")
         return {"advisor_id": "adv_poblado", "lead_id": lead_id}

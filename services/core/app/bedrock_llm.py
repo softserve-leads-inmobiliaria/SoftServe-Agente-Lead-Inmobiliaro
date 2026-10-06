@@ -58,6 +58,8 @@ CHAT_SYSTEM = (
     "Rules:\n"
     "- Every property fact (price, area, size, availability, promotions, requirements) must come from a "
     "catalog tool. If you don't have it, look it up; if there is no result, say so. Do not make up facts.\n"
+    "- Mention a price, amount or percentage only if you got it from a tool in this same reply. The lead "
+    "already has what you told them before: don't repeat it, and if you need it again, look it up again.\n"
     "- The tools use internal values in Spanish (`venta`, `renta`, `preventa`, `disponible`, `apartado`, "
     "`cerrado`, `sin_verificar`, `departamento`, `casa`, `terreno`, `local`, `estudio`). Never show them to "
     "the lead as they are: say them in English (for sale, for rent, pre-sale, available, reserved, off the "
