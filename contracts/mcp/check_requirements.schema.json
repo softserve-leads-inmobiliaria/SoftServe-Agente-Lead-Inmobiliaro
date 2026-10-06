@@ -16,12 +16,12 @@
           "down_payment": {
             "type": "number",
             "minimum": 0,
-            "description": "Enganche disponible, en pesos."
+            "description": "Enganche disponible, en dólares (USD)."
           },
           "monthly_income": {
             "type": "number",
             "minimum": 0,
-            "description": "Ingreso mensual declarado, en pesos."
+            "description": "Ingreso mensual declarado, en dólares (USD)."
           },
           "has_references": {
             "type": "boolean",

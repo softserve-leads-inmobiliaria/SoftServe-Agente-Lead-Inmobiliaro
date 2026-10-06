@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://softserve.local/contracts/scheduling/get_slots.schema.json",
   "name": "get_slots",
-  "description": "Horarios libres de un asesor: bloques de 1 hora en su horario de atención (lunes a sábado, 9:00 a 18:00, hora de Guadalajara, UTC-6), desde date_from durante `days` días, sin los ya pasados ni los que ya tienen una visita.",
+  "description": "Horarios libres de un asesor: bloques de 1 hora en su horario de atención (lunes a sábado, 9:00 a 18:00, hora de Colombia, UTC-5), desde date_from durante `days` días, sin los ya pasados ni los que ya tienen una visita.",
   "http": "POST /scheduling/get_slots",
   "inputSchema": {
     "type": "object",
