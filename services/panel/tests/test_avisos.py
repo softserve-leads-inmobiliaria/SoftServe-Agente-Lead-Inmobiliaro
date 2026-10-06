@@ -55,10 +55,10 @@ def mundo(session_factory):
         session.flush()
         moment = datetime.now(timezone.utc)
         leido = AdvisorNotification(id=uuid.uuid4(), advisor_id=valeria.id, lead_id=sin_zona.id,
-                                    kind="calificado", body="Lead calificado (WARM · 60/100)",
+                                    kind="calificado", body="Qualified lead (WARM · 60/100)",
                                     created_at=moment - timedelta(hours=1), read_at=moment)
         nuevo = AdvisorNotification(id=uuid.uuid4(), advisor_id=valeria.id, lead_id=sin_zona.id,
-                                    kind="traspaso", body="Traspaso de lead (HANDOFF): visita agendada",
+                                    kind="traspaso", body="Lead handoff (HANDOFF): visit scheduled",
                                     created_at=moment)
         ajeno = AdvisorNotification(id=uuid.uuid4(), advisor_id=andres.id, lead_id=de_andres.id,
                                     kind="calificado", body="Aviso de Andrés", created_at=moment)
@@ -71,16 +71,16 @@ def test_el_asesor_ve_sus_avisos_los_nuevos_primero_y_no_los_de_otros(client, mu
     page = client.get(f"/panel/{mundo['valeria'].access_token}/avisos")
 
     assert page.status_code == 200
-    assert page.text.index("visita agendada") < page.text.index("WARM · 60/100")
+    assert page.text.index("visit scheduled") < page.text.index("WARM · 60/100")
     assert "Aviso de Andrés" not in page.text
-    assert "1 sin leer" in page.text
+    assert "1 unread" in page.text
     assert f'http-equiv="refresh" content="{REFRESH_SECONDS}"' in page.text
 
 
 def test_la_lista_de_leads_cuenta_los_avisos_sin_leer(client, mundo):
     page = client.get(f"/panel/{mundo['valeria'].access_token}")
 
-    assert "1 sin leer" in page.text  # el contador de Avisos de la navegación (#178)
+    assert "1 unread" in page.text  # el contador de Avisos de la navegación (#178)
 
 
 def test_abrir_un_aviso_lo_marca_leido_y_lleva_a_la_ficha(client, mundo):
@@ -90,7 +90,7 @@ def test_abrir_un_aviso_lo_marca_leido_y_lleva_a_la_ficha(client, mundo):
 
     assert response.status_code == 303
     assert response.headers["location"] == f"/panel/{token}/leads/{lead_id}"
-    assert "0 sin leer" in client.get(f"/panel/{token}/avisos").text
+    assert "0 unread" in client.get(f"/panel/{token}/avisos").text
 
 
 def test_la_ficha_de_un_lead_asignado_abre_aunque_no_sea_de_su_zona(client, mundo):
@@ -121,7 +121,7 @@ def test_sin_avisos_la_pagina_lo_dice(client, session_factory):
     page = client.get(f"/panel/{sola.access_token}/avisos")
 
     assert page.status_code == 200
-    assert "Todavía no tienes avisos" in page.text
+    assert "No notifications yet" in page.text
 
 
 def test_un_token_invalido_es_404(client):

@@ -20,7 +20,7 @@ TODAY = date(2026, 10, 3)  # sábado
 # La semana del 14 al 20 de septiembre, pedida como rango para que el test no dependa de la fecha de hoy.
 WEEK = "/panel/tok-v/negocio?periodo=rango&desde=2026-09-14&hasta=2026-09-20"
 IN_WEEK = datetime(2026, 9, 16, 18, tzinfo=UTC)
-EMPTY = "Sin datos en este periodo."
+EMPTY = "No data for this period."
 SECTIONS = 9
 TOTALS = {"HOT": 90, "WARM": 50, "COLD": 10}  # el total tiene que caer en la banda
 
@@ -166,10 +166,10 @@ def test_the_page_shows_the_inventory_and_attribution_of_the_period(client, mund
     page = client.get(WEEK)
 
     assert page.status_code == 200
-    assert "Del 14/09/2026 al 20/09/2026" in page.text
-    assert "1 operaciones cerradas por $2,400,000" in page.text
+    assert "From Sep 14, 2026 to Sep 20, 2026" in page.text
+    assert "1 deal closed for $2,400,000" in page.text
     assert "Casa Jardín" in page.text  # en el ranking
-    assert "Depto Olvidado" in page.text and "sin consultas" in page.text  # estancada, +60
+    assert "Depto Olvidado" in page.text and "no inquiries" in page.text  # estancada, +60
     assert "+60" in page.text
     assert "Laureles" in page.text  # búsqueda sin resultado
     assert "100%" in page.text  # el único cierre es del bot
@@ -188,8 +188,8 @@ def test_the_synthetic_history_only_shows_up_when_asked(client, mundo):
 
     with_demo = client.get(WEEK + "&demo=1").text
     assert "Envigado" in with_demo
-    assert "2 operaciones cerradas" in with_demo
-    assert "Incluye la historia sintética" in with_demo
+    assert "2 deals closed" in with_demo
+    assert "Includes the demo's synthetic history" in with_demo
 
 
 def test_an_invalid_range_shows_the_week_with_a_notice(client):
@@ -212,5 +212,5 @@ def test_the_view_shows_how_long_each_advisor_takes_to_claim(client, session_fac
 
     page = client.get(WEEK).text
 
-    section = page.split("Tiempo de atención del asesor")[1].split("</table>")[0]
+    section = page.split("Agent response time")[1].split("</table>")[0]
     assert "Valeria" in section and "20 min" in section

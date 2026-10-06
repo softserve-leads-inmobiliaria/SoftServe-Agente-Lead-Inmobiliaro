@@ -100,7 +100,7 @@ def test_un_asesor_sin_leads_ve_la_lista_vacia_sin_romper(client, session_factor
     page = client.get(f"/panel/{token}")
 
     assert page.status_code == 200
-    assert "Todavía no hay leads" in page.text
+    assert "No leads in your area yet" in page.text
 
 
 def test_la_ficha_trae_score_visita_y_transcripcion_en_orden(client, mundo):
@@ -135,7 +135,7 @@ def test_un_lead_sin_score_no_rompe_la_ficha(client, mundo, session_factory):
     page = client.get(f"/panel/{mundo['valeria'].access_token}/leads/{lead_id}")
 
     assert page.status_code == 200
-    assert "Todavía sin calificar" in page.text
+    assert "Not scored yet" in page.text
 
 
 # --- resumen del traspaso (A-16) ------------------------------------------------------------------------
@@ -154,11 +154,11 @@ def test_la_ficha_muestra_el_resumen_antes_de_la_transcripcion(client, mundo, se
 
     page = client.get(f"/panel/{mundo['valeria'].access_token}/leads/{mundo['lead'].id}")
 
-    assert "Resumen del traspaso" in page.text and "Siguiente paso: llamarle." in page.text
-    assert page.text.index("Resumen del traspaso") < page.text.index("Hola, busco depa")
+    assert "Handoff summary" in page.text and "Siguiente paso: llamarle." in page.text
+    assert page.text.index("Handoff summary") < page.text.index("Hola, busco depa")
 
 
 def test_sin_traspaso_la_ficha_sale_sin_resumen_como_antes(client, mundo):
     page = client.get(f"/panel/{mundo['valeria'].access_token}/leads/{mundo['lead'].id}")
 
-    assert page.status_code == 200 and "Resumen del traspaso" not in page.text
+    assert page.status_code == 200 and "Handoff summary" not in page.text
