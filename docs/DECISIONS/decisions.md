@@ -2367,8 +2367,9 @@ Colombia la calle se nombra con un número, así que para `address_guard` una v�
 reescribe, con precios en USD, y cambian los escenarios de `scripts/demo/conversar.py`, el arnés y las
 ciudades de ejemplo de #194. Los tests que buscan texto en español se ajustan en el mismo PR que cambia
 ese texto. #200 (gentilicios con errata) y #201 (enumerar requisitos) se resuelven ya en inglés. El
-idioma por omisión del ruteo de asesores (`DEFAULT_LANGUAGE = "es"`, DT-42) se revisa junto con los
-asesores del seed. Esto no es un *bugfix*: la semana de *hardening* (Z-1, #51) empieza cuando termine.
+idioma por omisión del ruteo de asesores (`DEFAULT_LANGUAGE`, DT-42) pasa de `es` a `en`, y también el
+`server_default` de `advisors.language` (migración `0016`, que pasa a `en` a los asesores que tenían el
+valor por omisión): si no, el ruteo nunca encontraría un asesor de "zona e idioma". Esto no es un *bugfix*: la semana de *hardening* (Z-1, #51) empieza cuando termine.
 
 ## DT-56 — `get_property` devuelve los requisitos de la operación
 
