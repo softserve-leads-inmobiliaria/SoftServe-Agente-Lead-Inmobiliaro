@@ -58,18 +58,29 @@ CHAT_SYSTEM = (
     "Rules:\n"
     "- Every property fact (price, area, size, availability, promotions, requirements) must come from a "
     "catalog tool. If you don't have it, look it up; if there is no result, say so. Do not make up facts.\n"
+    "- Never tell the lead you will look something up or check later: if you need a fact, call the tool now, "
+    "in this same reply.\n"
+    "- If a search has no `properties` but has `alternatives`, there is nothing exactly like what the lead "
+    "asked for: say so, and offer the alternatives, making clear they don't match the filter named in "
+    "`alternatives_without` (`zone`: in another area; `kind`: another kind of property). Don't ask the lead "
+    "for their area again.\n"
     "- Mention a price, amount or percentage only if you got it from a tool in this same reply. The lead "
-    "already has what you told them before: don't repeat it, and if you need it again, look it up again.\n"
+    "already has what you told them before: don't repeat it, and if you need it again, look it up again (with get_property if you have its "
+    "reference, or by repeating the search).\n"
     "- The tools use internal values in Spanish (`venta`, `renta`, `preventa`, `disponible`, `apartado`, "
     "`cerrado`, `sin_verificar`, `departamento`, `casa`, `terreno`, `local`, `estudio`). Never show them to "
     "the lead as they are: say them in English (for sale, for rent, pre-sale, available, reserved, off the "
     "market, unverified, apartment, house, land, commercial space, studio).\n"
-    "- In a search, `properties` are the only ones you can offer. The ones in `unavailable` are not "
+    "- In a search, `properties` (or `alternatives`, when there are no `properties`) are the only ones you "
+    "can offer. The ones in `unavailable` are not "
     "available: if the lead asks about one, tell them its status (reserved, off the market or unverified) "
     "and do not offer it.\n"
     "- If the lead came from a property's listing (you will see its reference, `ref. prop_…`, in the "
     "conversation), when they say \"this one\", \"this apartment\" or something similar they mean that "
-    "one: look it up with get_property and do not ask them for the reference.\n"
+    "one: look it up with get_property and do not ask them for the reference. If they ask about a price or "
+    "a detail without saying which property and the conversation doesn't make it clear, look up the "
+    "listing's property with get_property and ask whether they mean that one, instead of asking for their "
+    "area or budget.\n"
     "- If the lead asks what the requirements are, first list that property's requirements as get_property "
     "returns them in `requirements` (minimum down payment with its percentage and amount, minimum monthly "
     "income, references), and then ask for the figure you need to check them.\n"
@@ -256,22 +267,21 @@ class BedrockLLM:
     async def regenerate(self, history: Sequence[tuple[str, str]], current: str, previous_reply: str,
                          violations: Sequence[Any], specs: Sequence[Mapping[str, Any]],
                          run_tool: ToolRunner) -> ChatResult:
-        """Repite la conversación con la respuesta candidata y una instrucción de corregirla (A-5).
+        """Rehace la respuesta al lead sabiendo qué de la candidata no se pudo verificar (A-5).
 
         Se le muestra al modelo su propia respuesta y qué de ella no se pudo verificar, para que la
-        rehaga con lo que ya sabe de las herramientas — no para regañarlo, para darle la oportunidad
-        de arreglarlo con datos reales antes de degradar la conversación.
+        rehaga con datos reales antes de degradar la conversación. Va en el *system*, no como mensaje
+        `user`: el modelo creía que el lead lo había corregido, se disculpaba y prometía buscar (#213).
+        El último mensaje sigue siendo el del lead.
         """
-        messages = to_messages(history, current)
-        messages.append({"role": "assistant", "content": [{"text": previous_reply}]})
-        messages.append({"role": "user", "content": [{"text": _correction_prompt(violations)}]})
-        return await self._converse_loop(messages, specs, run_tool)
+        system = f"{CHAT_SYSTEM}\n\n{_correction_prompt(previous_reply, violations)}"
+        return await self._converse_loop(to_messages(history, current), specs, run_tool, system=system)
 
     async def _converse_loop(self, messages: list[dict[str, Any]], specs: Sequence[Mapping[str, Any]],
-                             run_tool: ToolRunner) -> ChatResult:
+                             run_tool: ToolRunner, system: str = CHAT_SYSTEM) -> ChatResult:
         result = ChatResult(text="")
         for _ in range(MAX_TOOL_ROUNDS + 1):
-            request: dict[str, Any] = {"system": [{"text": CHAT_SYSTEM}], "messages": messages,
+            request: dict[str, Any] = {"system": [{"text": system}], "messages": messages,
                                        "inferenceConfig": {"maxTokens": MAX_REPLY_TOKENS, "temperature": 0.3}}
             if specs:
                 request["toolConfig"] = tool_config(specs)
@@ -317,12 +327,23 @@ def _report_failure(code: str, attempt: int, reason: str) -> None:
     span.add_event("llm.failed", {"llm.error_code": code, "llm.attempt": attempt, "llm.give_up_reason": reason})
 
 
-def _correction_prompt(violations: Sequence[Any]) -> str:
+def _correction_prompt(previous_reply: str, violations: Sequence[Any]) -> str:
+    """La instrucción interna de la regeneración (A-5). El lead nunca la ve, y el modelo tiene que saberlo.
+
+    Los números van normalizados ("1150"): en vivo, el modelo no los reconocía en su "$1,150" y repetía
+    los precios de un turno anterior (#213). Por eso se le dice que valen en cualquier formato y que lo
+    dicho antes no cuenta como verificado.
+    """
     detected = "; ".join(f"{v.kind} '{v.value}'" for v in violations)
     return (
-        f"Your previous reply mentioned this without it coming from any tool you called: "
-        f"{detected}. Do not repeat it: reply again using only the data you already have from the "
-        "tools. If you are missing a fact, say so or call the right tool again instead of making it up."
+        "INTERNAL CHECK (the lead never sees this): your draft reply to the lead's last message was:\n"
+        f"<draft>{previous_reply}</draft>\n"
+        f"It mentioned this without it coming from any tool you called in this reply: {detected}. Write your "
+        "reply to the lead again without those figures or statuses, in any format (\"1150\" is also \"$1,150\"): "
+        "what you said in earlier messages does not count as verified. If the lead needs them, call the right "
+        "tool now, in this reply (get_property, or the same search again for a property you mentioned before). "
+        "Do not apologize and do not mention the draft or this check: the lead did not correct you. Never tell "
+        "the lead you will look something up later."
     )
 
 

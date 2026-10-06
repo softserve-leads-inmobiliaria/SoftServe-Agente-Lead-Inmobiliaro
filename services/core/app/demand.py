@@ -48,7 +48,7 @@ class SearchLog:
     def __init__(self, catalog: Any) -> None:
         self._catalog = catalog
         self._unmet: dict[tuple[Any, ...], UnmetSearch] = {}
-        self._last: tuple[UnmetSearch, int] | None = None
+        self._first: tuple[UnmetSearch, int] | None = None
 
     async def tool_specs(self) -> list[dict[str, Any]]:
         return await self._catalog.tool_specs()
@@ -58,7 +58,8 @@ class SearchLog:
         if tool == "search_properties" and isinstance(result, Mapping):
             found = result.get("properties")
             filters = unmet_filters(arguments)
-            self._last = (filters, len(found) if isinstance(found, list) else 0)
+            if self._first is None:
+                self._first = (filters, len(found) if isinstance(found, list) else 0)
             if not found:
                 self._unmet.setdefault(tuple(filters.values()), filters)
         return result
@@ -68,6 +69,10 @@ class SearchLog:
         return list(self._unmet.values())
 
     @property
-    def last_search(self) -> tuple[UnmetSearch, int] | None:
-        """Los filtros de la última búsqueda del turno y cuántas propiedades trajo (A-18), o None."""
-        return self._last
+    def asked_search(self) -> tuple[UnmetSearch, int] | None:
+        """Los filtros de la primera búsqueda del turno y cuántas propiedades trajo (A-18), o None.
+
+        Es la que pidió el lead: si no trae nada, el agente repite la búsqueda con un filtro menos para
+        ofrecer alternativas (#213), y la alerta tiene que ser de lo que el lead buscaba.
+        """
+        return self._first

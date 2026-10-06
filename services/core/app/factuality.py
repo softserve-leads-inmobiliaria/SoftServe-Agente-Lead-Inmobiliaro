@@ -35,8 +35,10 @@ _STATUS_WORDS = {
 # Negado no es afirmar el estado: "that one is not available, it is reserved" solo dice `apartado`.
 _NOT_BEFORE = r"(?<!not )(?<!n't )(?<!n’t )(?<!no longer )"
 # "Available" también es el dinero o el tiempo del lead: "how much do you have available for the down
-# payment?" o "are you available on Friday?" no hablan de la propiedad (#202, visto en vivo).
-_NOT_THE_PROPERTY = re.compile(r"(?:\bhave|\bhas|\byou|\byou're|\bwe're|\bthey're)\s+$", re.IGNORECASE)
+# payment?" o "are you available on Friday?" no hablan de la propiedad (#202, visto en vivo). Tampoco "what's
+# available": es el inventario en general, no el estado de una propiedad (#213, visto en vivo).
+_NOT_THE_PROPERTY = re.compile(r"(?:\bhave|\bhas|\byou|\byou're|\bwe're|\bthey're|\bwhat's|\bwhat’s|\bwhat is)\s+$",
+                               re.IGNORECASE)
 _STATUS = re.compile(_NOT_BEFORE + r"\b(" + "|".join(sorted(_STATUS_WORDS, key=len, reverse=True)) + r")\b",
                      re.IGNORECASE)
 
@@ -70,7 +72,7 @@ def extract_statuses(text: str) -> set[str]:
 # Listas cuyo TAMAÑO es un número que se puede citar ("tengo 3 opciones"). Deliberadamente acotada:
 # `unavailable` (A-4) o `amenities` son metadata, no algo que el agente deba citar como una cantidad,
 # y contarlas igual haría que casi cualquier "1" o "2" quedara siempre permitido en cualquier turno.
-_COUNTABLE_LISTS = {"properties", "promotions"}
+_COUNTABLE_LISTS = {"properties", "alternatives", "promotions"}
 
 
 def _walk(value: Any, numbers: set[str], statuses: set[str], key: str | None = None) -> None:
