@@ -44,11 +44,11 @@ _WHEN = re.compile(r"\d|\b(hoy|manana|pasado|lunes|martes|miercoles|jueves|viern
                    r"|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|week|weekend"
                    r"|morning|afternoon|evening|night|noon|early|late)\b")
 
-PREFERRED_ASK = ("I can't book the viewing from here right now. What day and time work for you? "
+PREFERRED_ASK = ("I can't book the visit from here right now. What day and time work for you? "
                  "I'll pass it on to your agent so they can confirm it.")
-PREFERRED_AGAIN = "What day and time would you like for the viewing? I'll pass it on to your agent."
+PREFERRED_AGAIN = "What day and time would you like for the visit? I'll pass it on to your agent."
 PREFERRED_THANKS = ("Thanks. I'll pass your preferred time on to your agent, who will contact you to "
-                    "confirm the viewing.")
+                    "confirm the visit.")
 
 
 def _hour(hour: str, meridiem: str | None) -> int:

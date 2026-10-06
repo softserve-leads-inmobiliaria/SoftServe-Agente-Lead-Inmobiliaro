@@ -166,8 +166,8 @@ def test_stop_withdraws_consent_in_postgres(stack, database_url, tmp_path):
 
     script = tmp_path / "baja_del_lead.jsonl"
     turns = ({"text": "Hola, buenas tardes", "expect_reply_contains": "asistente"},
-             {"text": "/stop", "expect_reply_contains": "baja"},
-             {"text": "Busco un departamento", "expect_reply_contains": "baja"})
+             {"text": "/stop", "expect_reply_contains": "unsubscribed"},
+             {"text": "Busco un departamento", "expect_reply_contains": "unsubscribed"})
     script.write_text("".join(json.dumps(turn) + chr(10) for turn in turns), encoding="utf-8")
     replay(script, http_responder(stack))
     lead_id = build_events("baja_del_lead", [{"text": "x"}])[0]["lead_id"]
