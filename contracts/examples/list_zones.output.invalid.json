@@ -1,0 +1,16 @@
+{
+  "zones": [
+    {
+      "zone": "Chapinero",
+      "city": "Bogota",
+      "status": "apartado",
+      "available": 0,
+      "types": [
+        "renta"
+      ],
+      "kinds": [
+        "local"
+      ]
+    }
+  ]
+}
