@@ -258,7 +258,7 @@ Las cajas con borde punteado no están construidas.
   cuenta, y `/stop` cancela todo lo pendiente. Un *job* que falla se reintenta 2 veces y luego queda en
   `failed`; ninguno se ejecuta dos veces. Los tiempos se cambian con `SCHEDULER_*` (`.env.example`).
 - **Recordatorio de la visita** (`B-13`): el turno que reserva la visita programa un `visit_reminder` para
-  las 18:00 del día anterior, en hora de Guadalajara. Si esa hora ya pasó al reservar, no hay recordatorio.
+  las 18:00 del día anterior, en hora de Colombia (UTC-5, DT-55). Si esa hora ya pasó al reservar, no hay recordatorio.
   Dice la propiedad, la fecha, la hora y la dirección aproximada; la exacta, solo si el lead ya calificó
   (A-6). Uno por visita, y no se envía si el lead se dio de baja o si la visita ya pasó.
 - **Alertas de propiedades nuevas** (`A-18`, DT-45). El lead pide "avísame si sale algo así"; lo detecta

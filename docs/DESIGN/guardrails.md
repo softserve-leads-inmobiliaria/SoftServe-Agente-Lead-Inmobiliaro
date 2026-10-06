@@ -20,7 +20,7 @@ silencio salvo lo que cada fila indica.
 
 El origen se detecta también como lo dice un lead (#116): gentilicios ("soy colombiano", "somos
 argentinos") y frases de procedencia ("soy de Colombia", "vengo de Venezuela", "nací en Perú"). La
-lista de países es cerrada, para no marcar "soy de Providencia". Los gentilicios que también nombran otra
+lista de países es cerrada, para no marcar "soy de El Poblado". Los gentilicios que también nombran otra
 cosa ("pesos mexicanos", "colonia Americana", "cocina americana", "hablo español") solo cuentan detrás
 de "soy" o "somos". El costo de esa regla: "mi esposa es española" no se marca.
 

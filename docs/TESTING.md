@@ -68,10 +68,10 @@ Con un bot creado en @BotFather: poner `TELEGRAM_BOT_TOKEN` en el `.env` y `dock
 ### Ver el panel de asesores (B-5)
 
 `docker compose up -d --build` ejecuta `seed`, que imprime una línea por asesor con su URL:
-`docker compose logs seed` → `adv_001  Valeria Ortiz  Providencia  /panel/<token>`. Abrir
+`docker compose logs seed` → `adv_001  Valeria Ortiz  El Poblado  /panel/<token>`. Abrir
 `http://localhost:8080/panel/<token>`. El panel filtra por `Lead.zone`, que el core rellena con la zona de la
 primera propiedad que el lead consulta (#81; el ruteo por zona al asesor es A-10). Para verlo con datos sin
-pasar por una búsqueda, asignar la zona a mano (`update leads set zone='Providencia' where ...`). Un token
+pasar por una búsqueda, asignar la zona a mano (`update leads set zone='El Poblado' where ...`). Un token
 inventado y un lead de otra zona dan el mismo 404.
 
 La vista de inventario y negocio (N-8) está en `http://localhost:8080/panel/<token>/negocio`, enlazada desde
@@ -250,7 +250,7 @@ panel:
 1. `https://t.me/<bot>?start=prop_00231` → saludo con aviso de privacidad y la propiedad del anuncio.
 2. "¿Cuánto cuesta?" → responde sobre esa propiedad.
 3. "Quiero hablar con un asesor" → `HUMAN_HANDOFF` en `conversations`; el lead aparece en el panel de
-   Providencia con la transcripción.
+   El Poblado con la transcripción.
 4. `STOP` → `consent_status=withdrawn` en `leads` y una fila `input.opt_out` en `audit_log`.
 
 ## Pruebas automáticas
@@ -496,15 +496,15 @@ Qué se ve en la vista de negocio, con el periodo de los últimos seis meses:
 
 | Caso (propuestas.md §2.2) | Dónde |
 | :--- | :--- |
-| Zonas que rotan rápido | Rentas de Chapalita y Providencia: se rentan en menos de dos semanas |
-| Zonas que rotan lento | Tlaquepaque (venta) y Andares (preventa): meses en el mercado |
+| Zonas que rotan rápido | Rentas de Laureles y El Poblado: se rentan en menos de dos semanas |
+| Zonas que rotan lento | Chapinero (venta) y Envigado (preventa): meses en el mercado |
 | Estancada con consultas y sin visitas | `prop_00231`: se cayó el apartado y lleva más de 90 días disponible |
 | Estancada sin consultas | `prop_00232` (más de 30 días) y `prop_00233` (más de 90) |
 | Cierres atribuibles y no atribuibles al bot | 4 de los 6 cierres: el lead consultó o visitó esa propiedad con el bot |
 | Tiempo de atención por asesor (B-12) | Valeria toma en minutos, Camila en media hora y Andrés en horas |
-| Búsquedas sin resultado | Renta de 3 recámaras en Providencia, la más pedida ("providencia" se junta con "Providencia") |
+| Búsquedas sin resultado | Renta de 3 recámaras en El Poblado, la más pedida ("el poblado" se junta con "El Poblado") |
 
-La última semana tiene al menos un cierre (una unidad de la preventa de Andares).
+La última semana tiene al menos un cierre (una unidad de la preventa de Envigado).
 
 ### Suite de transiciones de la FSM
 
