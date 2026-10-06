@@ -25,9 +25,9 @@ class Reply:
     tool_results: dict[str, Any]  # payloads de las tools llamadas en este turno, por nombre
 
 
-# Plural para el aviso de "no hay de ese tipo" (#188).
-_KIND_PLURAL = {"departamento": "departamentos", "casa": "casas", "terreno": "terrenos",
-                "local": "locales", "estudio": "estudios"}
+# Plural para el aviso de "no hay de ese tipo" (#188), en inglés como todo lo que lee el lead (#202).
+_KIND_PLURAL = {"departamento": "apartments", "casa": "houses", "terreno": "plots of land",
+                "local": "commercial spaces", "estudio": "studios"}
 
 
 async def respond(event: Mapping[str, Any], catalog: Catalog, *, intent: str | None = None,
@@ -44,9 +44,9 @@ async def respond(event: Mapping[str, Any], catalog: Catalog, *, intent: str | N
         tool_results["search_properties"] = await catalog.call("search_properties", arguments)
         found = tool_results["search_properties"]["properties"]
         if found:
-            outbound["text"] += f" Por ejemplo: {found[0]['title']}."
+            outbound["text"] += f" For example: {found[0]['title']}."
         elif kind:
-            outbound["text"] = (f"No tengo {_KIND_PLURAL[kind]} disponibles con esos filtros. "
+            outbound["text"] = (f"I don't have any {_KIND_PLURAL[kind]} with those filters. "
                                 + outbound["text"])
     return Reply(outbound, intent, tool_results)
 
