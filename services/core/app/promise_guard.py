@@ -74,12 +74,17 @@ _ALWAYS_PROHIBITED: dict[str, tuple[str, ...]] = {
 _PROHIBITED = {kind: re.compile("|".join(patterns)) for kind, patterns in _ALWAYS_PROHIBITED.items()}
 
 # --- claim 5: amenidad no respaldada por `amenities` de este turno ---------------------------------
-# Vocabulario cerrado: los valores que usa el catálogo de demo (services/catalog/app/data.py). Cuando C-9
-# cargue el inventario real en Postgres, este vocabulario debe cubrir sus `amenities`.
+# Vocabulario cerrado: la clave es el valor que usa el catálogo de demo (services/catalog/app/data.py), en
+# inglés desde #202 (DT-55). Los sinónimos en español siguen: un texto que los use se reconoce igual.
 _AMENITY_SYNONYMS: dict[str, tuple[str, ...]] = {
-    "alberca": ("alberca", "piscina"), "gimnasio": ("gimnasio",), "jardin": ("jardin",),
-    "cochera": ("cochera",), "estacionamiento": ("estacionamiento",), "terraza": ("terraza",),
-    "patio": ("patio",), "salon de eventos": ("salon de eventos", "salon social"),
+    "pool": ("pool", "swimming pool", "alberca", "piscina"),
+    "gym": ("gym", "gymnasium", "fitness center", "gimnasio"),
+    "garden": ("garden", "jardin"),
+    "garage": ("garage", "cochera"),
+    "parking": ("parking", "parking lot", "parking space", "estacionamiento"),
+    "terrace": ("terrace", "terraza"),
+    "patio": ("patio",),
+    "event room": ("event room", "party room", "event hall", "salon de eventos", "salon social"),
 }
 _AMENITY = {canonical: re.compile(r"\b(?:" + "|".join(words) + r")\b")
            for canonical, words in _AMENITY_SYNONYMS.items()}
@@ -95,7 +100,11 @@ def _walk_amenities(value: Any, found: set[str]) -> None:
     if isinstance(value, dict):
         for key, inner in value.items():
             if key == "amenities" and isinstance(inner, list):
-                found.update(normalize(str(item)) for item in inner)
+                for item in inner:
+                    # El valor tal cual y su forma canónica: un catálogo que diga "alberca" respalda "pool".
+                    item_text = normalize(str(item))
+                    found.add(item_text)
+                    found.update(canonical for canonical, pattern in _AMENITY.items() if pattern.search(item_text))
             else:
                 _walk_amenities(inner, found)
     elif isinstance(value, list):

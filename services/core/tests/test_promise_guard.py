@@ -14,6 +14,9 @@ CASES = [
     # --- respuestas seguras: no prometen nada que el sistema no respalde -----------------------------
     ("respuesta_neutra", "Con gusto te agendo una visita para el sábado.", {}, "", True),
     ("amenidad_respaldada", "Esa opción tiene alberca y gimnasio.", PROPERTY_WITH_AMENITIES, "", True),
+    # Inventario en inglés (DT-55): la amenidad canónica es la del catálogo, y "swimming pool" es la misma.
+    ("amenidad_en_ingles_respaldada", "It has a swimming pool and a gym.",
+     {"get_property": {"id": "p1", "amenities": ["pool", "gym"]}}, "", True),
     ("amenidad_negada_no_es_promesa", "Esta no tiene alberca, pero sí jardín.",
      {"get_property": {"id": "p1", "amenities": ["jardin"]}}, "", True),
     ("duda_sobre_mascotas_no_es_promesa", "Voy a confirmar con el asesor si aceptan mascotas.", {}, "", True),
@@ -42,6 +45,7 @@ CASES = [
 
     # --- 5: amenidad no listada en el catálogo ----------------------------------------------------------
     ("amenidad_inventada", "Esa unidad tiene alberca y gimnasio.", NO_AMENITIES, "", False),
+    ("amenidad_en_ingles_inventada", "The unit has a terrace and an event room.", NO_AMENITIES, "", False),
     ("amenidad_inventada_sin_tools", "Cuenta con terraza y salón de eventos.", {}, "", False),
 
     # --- 7: garantía de cierre de operación -------------------------------------------------------------
