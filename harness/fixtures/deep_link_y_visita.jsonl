@@ -1,3 +1,3 @@
-{"text": "Hola, me interesa esta propiedad", "property_id": "prop_00231", "utm_campaign": "septiembre_redes", "expect_reply_contains": "zona"}
-{"text": "Quiero agendar una visita", "expect_reply_contains": "visita"}
-{"text": "Mejor pásame con un asesor", "expect_reply_contains": "asesor"}
+{"text": "Hi, I'm interested in this property", "property_id": "prop_00231", "utm_campaign": "septiembre_redes", "expect_reply_contains": "area"}
+{"text": "I'd like to schedule a visit", "expect_reply_contains": "visit"}
+{"text": "Actually, put me through to an agent", "expect_reply_contains": "agent"}

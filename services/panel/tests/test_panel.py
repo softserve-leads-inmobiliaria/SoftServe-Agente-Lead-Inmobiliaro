@@ -11,8 +11,8 @@ from sqlalchemy.orm import sessionmaker
 from app.main import app, get_session
 from db.models import Advisor, Conversation, Lead, LeadScore, Message, Property, Visit
 
-PROVIDENCIA = "Providencia"
-ZAPOPAN = "Zapopan"
+POBLADO = "El Poblado"
+USAQUEN = "Usaquen"
 
 
 @pytest.fixture
@@ -41,18 +41,18 @@ def client(engine, session_factory):
 def mundo(session_factory):
     """Dos asesores en zonas distintas y un lead con score, visita y transcripción."""
     with session_factory() as session:
-        valeria = Advisor(id=f"adv_{uuid.uuid4().hex[:6]}", name="Valeria Ortiz", zone=PROVIDENCIA,
+        valeria = Advisor(id=f"adv_{uuid.uuid4().hex[:6]}", name="Valeria Ortiz", zone=POBLADO,
                           access_token=uuid.uuid4().hex)
-        andres = Advisor(id=f"adv_{uuid.uuid4().hex[:6]}", name="Andrés Núñez", zone=ZAPOPAN,
+        andres = Advisor(id=f"adv_{uuid.uuid4().hex[:6]}", name="Andrés Núñez", zone=USAQUEN,
                          access_token=uuid.uuid4().hex)
         lead = Lead(id=uuid.uuid4(), telegram_user_id=f"tg-{uuid.uuid4().hex[:8]}",
-                    zone=PROVIDENCIA, status="nuevo", budget="3 millones")
+                    zone=POBLADO, status="nuevo", budget="3 millones")
         ajeno = Lead(id=uuid.uuid4(), telegram_user_id=f"tg-{uuid.uuid4().hex[:8]}",
-                     zone=ZAPOPAN, status="nuevo")
-        propiedad = Property(id=f"prop_{uuid.uuid4().hex[:6]}", title="Depa en Providencia",
-                             price=3_000_000, type="venta", kind="departamento", zone=PROVIDENCIA, m2=90,
-                             bedrooms=2, bathrooms=2, address_approx="Av. Providencia",
-                             address_exact="Av. Providencia 1234")
+                     zone=USAQUEN, status="nuevo")
+        propiedad = Property(id=f"prop_{uuid.uuid4().hex[:6]}", title="Depa en El Poblado",
+                             price=3_000_000, type="venta", kind="departamento", zone=POBLADO, m2=90,
+                             bedrooms=2, bathrooms=2, address_approx="Av. El Poblado",
+                             address_exact="Carrera 37 # 8A-24")
         # Los modelos usan FK sin relationship(), así que el orden de inserción es cosa nuestra:
         # primero las filas referenciadas, después las que apuntan a ellas.
         session.add_all([valeria, andres, lead, ajeno, propiedad])
@@ -91,7 +91,7 @@ def test_un_token_invalido_es_404(client, mundo):
 
 def test_un_asesor_sin_leads_ve_la_lista_vacia_sin_romper(client, session_factory):
     with session_factory() as session:
-        sola = Advisor(id=f"adv_{uuid.uuid4().hex[:6]}", name="Camila Reyes", zone="Andares",
+        sola = Advisor(id=f"adv_{uuid.uuid4().hex[:6]}", name="Camila Reyes", zone="Envigado",
                        access_token=uuid.uuid4().hex)
         session.add(sola)
         session.commit()
@@ -100,7 +100,7 @@ def test_un_asesor_sin_leads_ve_la_lista_vacia_sin_romper(client, session_factor
     page = client.get(f"/panel/{token}")
 
     assert page.status_code == 200
-    assert "Todavía no hay leads" in page.text
+    assert "No leads in your area yet" in page.text
 
 
 def test_la_ficha_trae_score_visita_y_transcripcion_en_orden(client, mundo):
@@ -127,7 +127,7 @@ def test_un_lead_sin_score_no_rompe_la_ficha(client, mundo, session_factory):
     """Es el estado normal hasta que A-9 puntúa: la ficha tiene que abrir igual."""
     with session_factory() as session:
         lead = Lead(id=uuid.uuid4(), telegram_user_id=f"tg-{uuid.uuid4().hex[:8]}",
-                    zone=PROVIDENCIA, status="nuevo")
+                    zone=POBLADO, status="nuevo")
         session.add(lead)
         session.commit()
         lead_id = lead.id
@@ -135,7 +135,7 @@ def test_un_lead_sin_score_no_rompe_la_ficha(client, mundo, session_factory):
     page = client.get(f"/panel/{mundo['valeria'].access_token}/leads/{lead_id}")
 
     assert page.status_code == 200
-    assert "Todavía sin calificar" in page.text
+    assert "Not scored yet" in page.text
 
 
 # --- resumen del traspaso (A-16) ------------------------------------------------------------------------
@@ -150,15 +150,15 @@ def _resumir(session_factory, lead_id, summary):
 
 def test_la_ficha_muestra_el_resumen_antes_de_la_transcripcion(client, mundo, session_factory):
     _resumir(session_factory, mundo["lead"].id,
-             "Qué busca: depa en Providencia.\nObjeciones: Ninguna.\nSiguiente paso: llamarle.")
+             "Qué busca: depa en El Poblado.\nObjeciones: Ninguna.\nSiguiente paso: llamarle.")
 
     page = client.get(f"/panel/{mundo['valeria'].access_token}/leads/{mundo['lead'].id}")
 
-    assert "Resumen del traspaso" in page.text and "Siguiente paso: llamarle." in page.text
-    assert page.text.index("Resumen del traspaso") < page.text.index("Hola, busco depa")
+    assert "Handoff summary" in page.text and "Siguiente paso: llamarle." in page.text
+    assert page.text.index("Handoff summary") < page.text.index("Hola, busco depa")
 
 
 def test_sin_traspaso_la_ficha_sale_sin_resumen_como_antes(client, mundo):
     page = client.get(f"/panel/{mundo['valeria'].access_token}/leads/{mundo['lead'].id}")
 
-    assert page.status_code == 200 and "Resumen del traspaso" not in page.text
+    assert page.status_code == 200 and "Handoff summary" not in page.text

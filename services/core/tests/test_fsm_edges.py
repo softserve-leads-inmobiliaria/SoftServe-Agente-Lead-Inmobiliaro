@@ -79,17 +79,17 @@ def test_every_state_of_the_diagram_is_a_known_state():
 
 # --- 2. una arista, un test --------------------------------------------------------------------------
 
-HUMAN = "Quiero hablar con un asesor"
+HUMAN = "I want to talk to an agent"
 # (estado, trigger) -> mensaje real del lead que provoca la arista; None si la provoca el scheduler
 # (fuera de A-1: se aplica el trigger directamente sobre el estado persistido).
 EDGE_MESSAGES = {
-    ("GREETING", GREETED): "Hola",
-    ("DISCOVERY", DISCOVERY_COMPLETE): "Busco un departamento",
-    ("QUALIFY", QUALIFIED): "¿Cuánto cuesta?",
-    ("RECOMMEND", VISIT_REQUESTED): "Quiero agendar una visita",
+    ("GREETING", GREETED): "Hi",
+    ("DISCOVERY", DISCOVERY_COMPLETE): "I'm looking for an apartment",
+    ("QUALIFY", QUALIFIED): "How much does it cost?",
+    ("RECOMMEND", VISIT_REQUESTED): "I'd like to schedule a visit",
     # B-8: en los tests la agenda no responde; el lead deja su horario preferido y la visita queda resuelta.
-    ("SCHEDULE", VISIT_SCHEDULED): ("Quiero agendar una visita", "Mañana a las 10"),
-    ("NURTURE", LEAD_RETURNED): "Hola, sigo interesado",
+    ("SCHEDULE", VISIT_SCHEDULED): ("I'd like to schedule a visit", "Tomorrow at 10"),
+    ("NURTURE", LEAD_RETURNED): "Hi, I'm still interested",
     ("DISCOVERY", NO_RESPONSE): None,
     ("NURTURE", NO_RESPONSE): None,
     **{(state, HUMAN_REQUESTED): HUMAN for state in NON_TERMINAL},
@@ -195,8 +195,8 @@ def test_the_grid_covers_every_intent_the_classifier_can_emit():
 def test_the_happy_path_visits_every_state_of_the_funnel_in_order(engine):
     chat = Conversation(engine)
     visited = [chat.state]
-    for message in ("Hola", "Busco un departamento", "¿Cuánto cuesta?", "Quiero agendar una visita",
-                    "Mañana a las 10"):
+    for message in ("Hi", "I'm looking for an apartment", "How much does it cost?", "I'd like to schedule a visit",
+                    "Tomorrow at 10"):
         chat.say(message)
         visited.append(chat.state)
     assert visited == ["GREETING", "DISCOVERY", "QUALIFY", "RECOMMEND", "SCHEDULE", "HANDOFF"]
@@ -204,20 +204,20 @@ def test_the_happy_path_visits_every_state_of_the_funnel_in_order(engine):
 
 def test_a_lead_that_goes_quiet_and_comes_back_resumes_discovery(engine):
     chat = Conversation(engine)
-    chat.say("Hola")
+    chat.say("Hi")
     chat.fire(NO_RESPONSE)
     assert chat.state == "NURTURE"
-    chat.say("Hola de nuevo")
+    chat.say("Hi again")
     assert chat.state == "DISCOVERY"
 
 
 def test_a_lead_that_goes_quiet_twice_is_lost_and_stays_lost(engine):
     chat = Conversation(engine)
-    chat.say("Hola")
+    chat.say("Hi")
     chat.fire(NO_RESPONSE)
     chat.fire(NO_RESPONSE)
     assert chat.state == "LOST"
-    for message in ("Hola", "Busco casa", HUMAN):
+    for message in ("Hi", "I'm looking for a house", HUMAN):
         chat.say(message)
     assert chat.state == "LOST"
 
@@ -226,12 +226,12 @@ def test_every_state_can_be_reached_in_a_real_conversation(engine):
     reached = set()
     chat = Conversation(engine)
     reached.add(chat.state)
-    for message in ("Hola", "Busco un departamento", "¿Cuánto cuesta?", "Quiero agendar una visita",
-                    "Mañana a las 10"):
+    for message in ("Hi", "I'm looking for an apartment", "How much does it cost?", "I'd like to schedule a visit",
+                    "Tomorrow at 10"):
         chat.say(message)
         reached.add(chat.state)
     quiet = Conversation(engine)
-    quiet.say("Hola")
+    quiet.say("Hi")
     quiet.fire(NO_RESPONSE)
     reached.add(quiet.state)
     quiet.fire(NO_RESPONSE)

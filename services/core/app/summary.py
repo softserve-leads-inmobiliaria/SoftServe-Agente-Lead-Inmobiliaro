@@ -25,9 +25,10 @@ from starlette.concurrency import run_in_threadpool
 
 from app import address_guard, factuality, promise_guard
 from app.channels.notifications import HANDOFF_REASONS, transcript_of
-from app.input_guard import mentions_protected, normalize
+from app.input_guard import describes_protected, normalize
 from app.interest import property_of_interest
-from app.visits import LOCAL_TZ, VISIT_KEY
+from app.scoring import URGENCY_TEXT
+from app.visits import VISIT_KEY, slot_label
 from db.models import FsmContext, Lead, Visit
 from db.session import session_scope
 
@@ -38,26 +39,31 @@ SUMMARY_MAX_MESSAGES = 60
 # El turno del traspaso espera el resumen antes de contestarle al lead: no puede colgarlo.
 SUMMARY_TIMEOUT_SECONDS = 15.0
 
+# Las claves son las del JSON que devuelve el LLM; las etiquetas, lo que lee el asesor (#202).
 SECTIONS: tuple[tuple[str, str], ...] = (
-    ("busca", "Qué busca"),
-    ("objeciones", "Objeciones"),
-    ("siguiente_paso", "Siguiente paso"),
+    ("busca", "Looking for"),
+    ("objeciones", "Objections"),
+    ("siguiente_paso", "Next step"),
 )
-_ROLE_LABELS = {"user": "Lead", "assistant": "Agente"}
+# "Agent" es el asesor: el que conversa con el lead es el asistente.
+_ROLE_LABELS = {"user": "Lead", "assistant": "Assistant"}
 
-NO_OBJECTIONS_TEMPLATE = "Sin detectar: el agente sin LLM no las identifica. Revisa la transcripción."
+NO_OBJECTIONS_TEMPLATE = "Not detected: the assistant can't identify them without the LLM. Check the transcript."
 _NEXT_STEPS = {
-    "solicitud_humano": "Contactar al lead: pidió hablar con una persona.",
-    "fuera_de_alcance": "Revisar su consulta: está fuera del alcance del agente.",
-    "frustration": "Retomar la conversación: el agente no resolvió varios turnos seguidos.",
-    "visit_scheduled": "Confirmar la visita agendada.",
-    "visit_requested": "Coordinar el horario de la visita: la agenda no la pudo reservar.",
+    "solicitud_humano": "Contact the lead: they asked to talk to a person.",
+    "fuera_de_alcance": "Review their request: it's outside what the assistant handles.",
+    "frustration": "Pick up the conversation: the assistant didn't resolve several turns in a row.",
+    "visit_scheduled": "Confirm the scheduled visit.",
+    "visit_requested": "Coordinate the visit time: the calendar couldn't book it.",
 }
 
 # La transcripción ya viene sin categorías protegidas, pero el resumen habla del lead en tercera
-# persona: "su esposa" no lo cubre el guardrail de entrada, que mira "mi esposa". "su pareja" y "su
-# familia" son las formas neutras que deja el guardrail (DT-40), así que no cuentan.
-_THIRD_PERSON_FAMILY = re.compile(r"\bsus? (?:espos[oa]s?|marido|mujer|novi[oa]s?|hij[oa]s?)\b")
+# persona: "his wife" no lo cubre el guardrail de entrada, que mira "my wife". "their partner" y "their
+# family" son las formas neutras que deja el guardrail (DT-40), así que no cuentan. Sigue el español de
+# antes ("su esposa"), por las conversaciones guardadas en español.
+_THIRD_PERSON_FAMILY = re.compile(
+    r"\b(?:(?:his|her|their) (?:wives|wife|husbands?|kids|children|sons?|daughters?|girlfriends?|boyfriends?"
+    r"|fiancee?s?)|sus? (?:espos[oa]s?|marido|mujer|novi[oa]s?|hij[oa]s?))\b")
 
 
 @dataclass(frozen=True)
@@ -75,33 +81,34 @@ class SummaryFacts:
 
     def lines(self) -> list[str]:
         values = [
-            ("Motivo del traspaso", HANDOFF_REASONS.get(self.reason, self.reason)),
-            ("Zona", self.zone), ("Presupuesto", self.budget), ("Plazo", _timing(self.timing)),
-            ("Propiedad de interés", self.property_title), ("Visita agendada", self.visit_at),
-            ("Horario preferido para la visita", self.preferred_time),
+            ("Handoff reason", HANDOFF_REASONS.get(self.reason, self.reason)),
+            ("Area", self.zone), ("Budget", self.budget), ("Timeline", _timing(self.timing)),
+            ("Property of interest", self.property_title), ("Scheduled visit", self.visit_at),
+            ("Preferred visit time", self.preferred_time),
         ]
         return [f"{label}: {value}" for label, value in values if value]
 
 
 def _timing(value: str | None) -> str | None:
-    return value.replace("_", " ") if value else None
+    """El plazo en inglés si es uno de los de `urgency` ("3_meses" -> "within 3 months")."""
+    return URGENCY_TEXT.get(value, value.replace("_", " ")) if value else None
 
 
 def template(facts: SummaryFacts) -> dict[str, str]:
     """El resumen sin LLM: determinista, solo con los datos del lead."""
-    wants = [f"le interesa {facts.property_title}" if facts.property_title else None,
-             f"zona {facts.zone}" if facts.zone else None,
-             f"presupuesto {facts.budget}" if facts.budget else None,
-             f"plazo {_timing(facts.timing)}" if facts.timing else None]
+    wants = [f"interested in {facts.property_title}" if facts.property_title else None,
+             f"area {facts.zone}" if facts.zone else None,
+             f"budget {facts.budget}" if facts.budget else None,
+             f"timeline {_timing(facts.timing)}" if facts.timing else None]
     wants = [w for w in wants if w]
     busca = "; ".join(wants)
-    next_step = _NEXT_STEPS.get(facts.reason, "Contactar al lead.")
+    next_step = _NEXT_STEPS.get(facts.reason, "Contact the lead.")
     if facts.reason == "visit_scheduled" and facts.visit_at:
-        next_step = f"Confirmar la visita del {facts.visit_at}."
+        next_step = f"Confirm the visit on {facts.visit_at}."
     elif facts.reason == "visit_requested" and facts.preferred_time:
-        next_step = f"Coordinar el horario de la visita: el lead prefiere {facts.preferred_time}."
+        next_step = f"Coordinate the visit time: the lead prefers {facts.preferred_time}."
     return {
-        "busca": f"{busca[:1].upper()}{busca[1:]}." if busca else "Todavía no lo dijo.",
+        "busca": f"{busca[:1].upper()}{busca[1:]}." if busca else "They haven't said yet.",
         "objeciones": NO_OBJECTIONS_TEMPLATE,
         "siguiente_paso": next_step,
     }
@@ -123,7 +130,7 @@ def violations(text: str, transcript: Sequence[tuple[str, str]], facts: SummaryF
              + address_guard.check(text, facts.lead_qualified, sources)
              + promise_guard.check(text, {}, sources))
     kinds = [violation.kind for violation in found]
-    if mentions_protected(text) or _THIRD_PERSON_FAMILY.search(normalize(text)):
+    if describes_protected(text) or _THIRD_PERSON_FAMILY.search(normalize(text)):
         kinds.append("protected_category")
     return kinds
 
@@ -167,7 +174,7 @@ def read_facts(session, lead_id: uuid.UUID, conversation_id: uuid.UUID, reason: 
         budget=lead.budget if lead else None,
         timing=lead.timing if lead else None,
         property_title=prop.get("title") if prop else None,
-        visit_at=visit.scheduled_at.astimezone(LOCAL_TZ).strftime("%d/%m/%Y %H:%M") if visit else None,
+        visit_at=slot_label(visit.scheduled_at.isoformat()) if visit else None,
         preferred_time=requested.get("preferred_time") or None,
     )
 

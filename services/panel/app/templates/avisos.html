@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Avisos — {{ advisor.name }}{% endblock %}
-{% block heading %}Avisos{% endblock %}
+{% block title %}Notifications — {{ advisor.name }}{% endblock %}
+{% block heading %}Notifications{% endblock %}
 {% block subheading %}
-  {{ advisor.name }} · {{ unread }} sin leer · se actualiza cada {{ refresh_seconds }} s
+  {{ advisor.name }} · {{ unread }} unread · refreshes every {{ refresh_seconds }} s
 {% endblock %}
 
 {% block content %}
@@ -11,14 +11,14 @@
   {% for notice in notices %}
   <div class="notice{% if not notice.read_at %} notice-unread{% endif %}">
     {% if not notice.read_at %}<span class="dot" aria-hidden="true"></span>{% endif %}
-    <span class="badge badge-status">{% if notice.kind == "traspaso" %}traspaso{% else %}lead calificado{% endif %}</span>
-    <span class="muted">{{ notice.created_at.strftime("%d/%m %H:%M") }}{% if not notice.read_at %} · nuevo{% endif %}</span>
+    <span class="badge badge-status">{{ label("notice_kind", notice.kind) }}</span>
+    <span class="muted">{{ notice.created_at.strftime("%b %d, %H:%M") }}{% if not notice.read_at %} · new{% endif %}</span>
     <p class="notice-body">{{ notice.body }}</p>
-    <a href="/panel/{{ token }}/avisos/{{ notice.id }}">Abrir la ficha &rarr;</a>
+    <a href="/panel/{{ token }}/avisos/{{ notice.id }}">Open the lead &rarr;</a>
   </div>
   {% endfor %}
   {% else %}
-  <p class="empty">Todavía no tienes avisos. Aquí llegan los leads calificados y los traspasos.</p>
+  <p class="empty">No notifications yet. Qualified leads and handoffs show up here.</p>
   {% endif %}
 </div>
 {% endblock %}

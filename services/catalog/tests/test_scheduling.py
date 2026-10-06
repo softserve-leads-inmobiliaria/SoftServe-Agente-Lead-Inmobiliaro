@@ -18,9 +18,9 @@ from db.repo_root import repo_root
 from db.settings import database_url
 
 CONTRACTS = repo_root() / "contracts" / "scheduling"
-# Lunes 14 de septiembre de 2026, 9:00 en Guadalajara (UTC-6): el bloque de las 9:00 ya empezó.
-NOW = datetime(2026, 9, 14, 15, 0, tzinfo=timezone.utc)
-TUESDAY_10 = "2026-09-15T10:00:00-06:00"
+# Lunes 14 de septiembre de 2026, 9:00 en Colombia (UTC-5): el bloque de las 9:00 ya empezó.
+NOW = datetime(2026, 9, 14, 14, 0, tzinfo=timezone.utc)
+TUESDAY_10 = "2026-09-15T10:00:00-05:00"
 
 
 def output_validator(name):
@@ -43,7 +43,7 @@ def service(factory):
     return SchedulingService(db_session_factory=factory, now=lambda: NOW)
 
 
-def add_advisor(factory, advisor_id, zone, language="es", chat_id=None):
+def add_advisor(factory, advisor_id, zone, language="en", chat_id=None):
     with factory() as db:
         db.add(Advisor(id=advisor_id, name=f"Asesor {advisor_id}", zone=zone, language=language,
                        access_token=uuid.uuid4().hex, telegram_chat_id=chat_id))
@@ -72,9 +72,9 @@ def error_code(call):
 # --- assign_advisor -------------------------------------------------------------------------------
 
 def test_assigns_an_advisor_of_the_lead_zone_and_writes_it(factory, service):
-    add_advisor(factory, "adv_a", "Zapopan")
-    add_advisor(factory, "adv_b", "Providencia")
-    lead_id = add_lead(factory, zone="Providencia")
+    add_advisor(factory, "adv_a", "Usaquen")
+    add_advisor(factory, "adv_b", "El Poblado")
+    lead_id = add_lead(factory, zone="El Poblado")
 
     result = service.assign_advisor(lead_id)
 
@@ -85,9 +85,9 @@ def test_assigns_an_advisor_of_the_lead_zone_and_writes_it(factory, service):
 
 
 def test_assignment_is_idempotent(factory, service):
-    add_advisor(factory, "adv_a", "Providencia")
-    add_advisor(factory, "adv_b", "Providencia")
-    lead_id = add_lead(factory, zone="Providencia")
+    add_advisor(factory, "adv_a", "El Poblado")
+    add_advisor(factory, "adv_b", "El Poblado")
+    lead_id = add_lead(factory, zone="El Poblado")
 
     first = service.assign_advisor(lead_id)
     second = service.assign_advisor(lead_id)
@@ -98,52 +98,52 @@ def test_assignment_is_idempotent(factory, service):
 
 def test_an_advisor_already_assigned_elsewhere_is_kept(factory, service):
     # B-7 ya pudo asignar el lead al notificar: la agenda no lo reasigna.
-    add_advisor(factory, "adv_a", "Providencia")
-    add_advisor(factory, "adv_b", "Zapopan")
-    lead_id = add_lead(factory, zone="Providencia", advisor_id="adv_b")
+    add_advisor(factory, "adv_a", "El Poblado")
+    add_advisor(factory, "adv_b", "Usaquen")
+    lead_id = add_lead(factory, zone="El Poblado", advisor_id="adv_b")
 
     assert service.assign_advisor(lead_id)["advisor_id"] == "adv_b"
 
 
 def test_leads_of_one_zone_are_shared_in_turns(factory, service):
-    add_advisor(factory, "adv_a", "Providencia")
-    add_advisor(factory, "adv_b", "Providencia")
-    add_advisor(factory, "adv_c", "Zapopan")
+    add_advisor(factory, "adv_a", "El Poblado")
+    add_advisor(factory, "adv_b", "El Poblado")
+    add_advisor(factory, "adv_c", "Usaquen")
 
-    chosen = [service.assign_advisor(add_lead(factory, zone="Providencia"))["advisor_id"] for _ in range(4)]
+    chosen = [service.assign_advisor(add_lead(factory, zone="El Poblado"))["advisor_id"] for _ in range(4)]
 
     assert chosen == ["adv_a", "adv_b", "adv_a", "adv_b"]
 
 
 def test_the_synthetic_history_is_not_load(factory, service):
     # N-9 le asigna leads sintéticos a los asesores; no los atiende nadie, así que no cuentan en el reparto.
-    add_advisor(factory, "adv_a", "Providencia")
-    add_advisor(factory, "adv_b", "Providencia")
+    add_advisor(factory, "adv_a", "El Poblado")
+    add_advisor(factory, "adv_b", "El Poblado")
     for _ in range(3):
-        add_lead(factory, zone="Providencia", advisor_id="adv_a", synthetic=True)
+        add_lead(factory, zone="El Poblado", advisor_id="adv_a", synthetic=True)
 
-    assert service.assign_advisor(add_lead(factory, zone="Providencia"))["advisor_id"] == "adv_a"
+    assert service.assign_advisor(add_lead(factory, zone="El Poblado"))["advisor_id"] == "adv_a"
 
 
 def test_zone_given_by_the_caller_wins_and_ignores_case(factory, service):
-    add_advisor(factory, "adv_a", "Providencia")
-    add_advisor(factory, "adv_b", "Zapopan")
-    lead_id = add_lead(factory, zone="Providencia")
+    add_advisor(factory, "adv_a", "El Poblado")
+    add_advisor(factory, "adv_b", "Usaquen")
+    lead_id = add_lead(factory, zone="El Poblado")
 
-    assert service.assign_advisor(lead_id, zone="zapopan")["advisor_id"] == "adv_b"
+    assert service.assign_advisor(lead_id, zone="usaquen")["advisor_id"] == "adv_b"
 
 
 @pytest.mark.parametrize("zone,language,expected,match", [
-    ("Zapopan", "en", "adv_en", "zone_and_language"),
-    ("Zapopan", "fr", "adv_en", "zone"),         # empate de carga: gana el id menor
-    ("Tlaquepaque", "en", "adv_en", "language"),
-    ("Tlaquepaque", "fr", "adv_en", "any"),
+    ("Usaquen", "en", "adv_en", "zone_and_language"),
+    ("Usaquen", "fr", "adv_en", "zone"),         # empate de carga: gana el id menor
+    ("Chapinero", "en", "adv_en", "language"),
+    ("Chapinero", "fr", "adv_en", "any"),
     (None, "es", "adv_es", "language"),
 ])
 def test_fallback_order(factory, service, zone, language, expected, match):
-    add_advisor(factory, "adv_es", "Zapopan", language="es")
-    add_advisor(factory, "adv_en", "Zapopan", language="en")
-    add_advisor(factory, "adv_x", "Andares", language="en")
+    add_advisor(factory, "adv_es", "Usaquen", language="es")
+    add_advisor(factory, "adv_en", "Usaquen", language="en")
+    add_advisor(factory, "adv_x", "Envigado", language="en")
     # adv_x tiene carga: sin él, el grupo "language" en inglés empataría con adv_en.
     add_lead(factory, advisor_id="adv_x")
 
@@ -154,13 +154,13 @@ def test_fallback_order(factory, service, zone, language, expected, match):
 
 def test_assign_errors(factory, service):
     assert error_code(lambda: service.assign_advisor(str(uuid.uuid4()))) == "NOT_FOUND"
-    assert error_code(lambda: service.assign_advisor(add_lead(factory, zone="Zapopan"))) == "NOT_FOUND"
+    assert error_code(lambda: service.assign_advisor(add_lead(factory, zone="Usaquen"))) == "NOT_FOUND"
 
 
 def test_registered_only_skips_advisors_without_telegram(factory, service):
-    add_advisor(factory, "adv_a", "Providencia")                      # nunca abrió el bot
-    add_advisor(factory, "adv_b", "Zapopan", chat_id="chat-b")
-    lead_id = add_lead(factory, zone="Providencia")
+    add_advisor(factory, "adv_a", "El Poblado")                      # nunca abrió el bot
+    add_advisor(factory, "adv_b", "Usaquen", chat_id="chat-b")
+    lead_id = add_lead(factory, zone="El Poblado")
 
     result = service.assign_advisor(lead_id, registered_only=True)
 
@@ -168,8 +168,8 @@ def test_registered_only_skips_advisors_without_telegram(factory, service):
 
 
 def test_registered_only_without_any_registered_advisor_assigns_nobody(factory, service):
-    add_advisor(factory, "adv_a", "Providencia")
-    lead_id = add_lead(factory, zone="Providencia")
+    add_advisor(factory, "adv_a", "El Poblado")
+    lead_id = add_lead(factory, zone="El Poblado")
 
     assert error_code(lambda: service.assign_advisor(lead_id, registered_only=True)) == "NOT_FOUND"
     with factory() as db:
@@ -177,9 +177,9 @@ def test_registered_only_without_any_registered_advisor_assigns_nobody(factory, 
 
 
 def test_registered_only_keeps_an_advisor_already_assigned(factory, service):
-    add_advisor(factory, "adv_a", "Providencia")
-    add_advisor(factory, "adv_b", "Providencia", chat_id="chat-b")
-    lead_id = add_lead(factory, zone="Providencia", advisor_id="adv_a")
+    add_advisor(factory, "adv_a", "El Poblado")
+    add_advisor(factory, "adv_b", "El Poblado", chat_id="chat-b")
+    lead_id = add_lead(factory, zone="El Poblado", advisor_id="adv_a")
 
     assert service.assign_advisor(lead_id, registered_only=True)["advisor_id"] == "adv_a"
 
@@ -187,19 +187,19 @@ def test_registered_only_keeps_an_advisor_already_assigned(factory, service):
 # --- get_slots ------------------------------------------------------------------------------------
 
 def test_slots_are_office_hours_from_now_on(factory, service):
-    add_advisor(factory, "adv_a", "Providencia")
+    add_advisor(factory, "adv_a", "El Poblado")
 
     result = service.get_slots("adv_a", "2026-09-14", days=2)
 
     output_validator("get_slots").validate(result)
     # Lunes: de 10:00 a 17:00 (el de las 9:00 ya empezó). Martes: de 9:00 a 17:00.
     assert len(result["slots"]) == 8 + 9
-    assert result["slots"][0] == "2026-09-14T10:00:00-06:00"
-    assert result["slots"][-1] == "2026-09-15T17:00:00-06:00"
+    assert result["slots"][0] == "2026-09-14T10:00:00-05:00"
+    assert result["slots"][-1] == "2026-09-15T17:00:00-05:00"
 
 
 def test_sunday_has_no_slots(factory, service):
-    add_advisor(factory, "adv_a", "Providencia")
+    add_advisor(factory, "adv_a", "El Poblado")
 
     slots = service.get_slots("adv_a", "2026-09-19", days=2)["slots"]  # sábado y domingo
 
@@ -207,13 +207,13 @@ def test_sunday_has_no_slots(factory, service):
 
 
 def test_a_past_start_date_means_today(factory, service):
-    add_advisor(factory, "adv_a", "Providencia")
+    add_advisor(factory, "adv_a", "El Poblado")
 
     assert service.get_slots("adv_a", "2020-01-01", days=1) == service.get_slots("adv_a", "2026-09-14", days=1)
 
 
 def test_get_slots_errors(factory, service):
-    add_advisor(factory, "adv_a", "Providencia")
+    add_advisor(factory, "adv_a", "El Poblado")
     assert error_code(lambda: service.get_slots("adv_nadie", "2026-09-15")) == "NOT_FOUND"
     assert error_code(lambda: service.get_slots("adv_a", "15/09/2026")) == "INVALID_INPUT"
     assert error_code(lambda: service.get_slots("adv_a", "2026-09-15", days=15)) == "INVALID_INPUT"
@@ -223,8 +223,8 @@ def test_get_slots_errors(factory, service):
 
 @pytest.fixture
 def booking(factory):
-    add_advisor(factory, "adv_a", "Providencia")
-    lead_id = add_lead(factory, zone="Providencia")
+    add_advisor(factory, "adv_a", "El Poblado")
+    lead_id = add_lead(factory, zone="El Poblado")
     return {"idempotency_key": "req-1", "lead_id": lead_id, "property_id": "prop_00231",
             "advisor_id": "adv_a", "scheduled_at": TUESDAY_10}
 
@@ -257,7 +257,7 @@ def test_a_retry_after_the_visit_time_still_answers(factory, service, booking):
 def test_the_same_instant_in_another_offset_is_the_same_request(factory, service, booking):
     first = service.book(**booking)
 
-    retry = service.book(**booking | {"scheduled_at": "2026-09-15T16:00:00+00:00"})
+    retry = service.book(**booking | {"scheduled_at": "2026-09-15T15:00:00+00:00"})
 
     assert retry["visit_id"] == first["visit_id"]
 
@@ -265,13 +265,13 @@ def test_the_same_instant_in_another_offset_is_the_same_request(factory, service
 def test_reusing_a_key_for_another_visit_is_rejected(factory, service, booking):
     service.book(**booking)
 
-    assert error_code(lambda: service.book(**booking | {"scheduled_at": "2026-09-15T11:00:00-06:00"})) \
+    assert error_code(lambda: service.book(**booking | {"scheduled_at": "2026-09-15T11:00:00-05:00"})) \
         == "INVALID_INPUT"
 
 
 def test_a_taken_slot_cannot_be_booked_again(factory, service, booking):
     service.book(**booking)
-    other_lead = add_lead(factory, zone="Providencia")
+    other_lead = add_lead(factory, zone="El Poblado")
 
     assert error_code(lambda: service.book(**booking | {"idempotency_key": "req-2", "lead_id": other_lead})) \
         == "SLOT_TAKEN"
@@ -279,12 +279,12 @@ def test_a_taken_slot_cannot_be_booked_again(factory, service, booking):
 
 
 @pytest.mark.parametrize("scheduled_at", [
-    "2026-09-14T09:00:00-06:00",  # ya empezó
-    "2026-09-13T10:00:00-06:00",  # ayer
-    "2026-09-20T10:00:00-06:00",  # domingo
-    "2026-09-15T08:00:00-06:00",  # antes de abrir
-    "2026-09-15T18:00:00-06:00",  # terminaría después de cerrar
-    "2026-09-15T10:30:00-06:00",  # no es el inicio de un bloque
+    "2026-09-14T09:00:00-05:00",  # ya empezó
+    "2026-09-13T10:00:00-05:00",  # ayer
+    "2026-09-20T10:00:00-05:00",  # domingo
+    "2026-09-15T08:00:00-05:00",  # antes de abrir
+    "2026-09-15T18:00:00-05:00",  # terminaría después de cerrar
+    "2026-09-15T10:30:00-05:00",  # no es el inicio de un bloque
     "2026-09-15T10:00:00",        # sin desfase horario
 ])
 def test_only_future_office_hour_slots_can_be_booked(factory, service, booking, scheduled_at):
@@ -325,7 +325,7 @@ def _in_parallel(calls):
 
 
 def test_simultaneous_bookings_of_one_slot_leave_a_single_visit(factory, service, booking):
-    leads = [add_lead(factory, zone="Providencia") for _ in range(6)]
+    leads = [add_lead(factory, zone="El Poblado") for _ in range(6)]
 
     results = _in_parallel([lambda i=i, lead=lead: service.book(**booking | {"idempotency_key": f"req-{i}",
                                                                             "lead_id": lead})
@@ -346,8 +346,8 @@ def test_simultaneous_retries_all_get_the_same_visit(factory, service, booking):
 
 def test_simultaneous_assignments_of_one_lead_agree(factory, service):
     for advisor_id in ("adv_a", "adv_b", "adv_c"):
-        add_advisor(factory, advisor_id, "Providencia")
-    lead_id = add_lead(factory, zone="Providencia")
+        add_advisor(factory, advisor_id, "El Poblado")
+    lead_id = add_lead(factory, zone="El Poblado")
 
     results = _in_parallel([lambda: service.assign_advisor(lead_id) for _ in range(6)])
 

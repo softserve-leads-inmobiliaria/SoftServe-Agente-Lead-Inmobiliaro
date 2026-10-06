@@ -21,57 +21,76 @@ INTENTS = (
     "otro",
 )
 
-# El orden importa: gana la primera categoría cuya palabra clave aparece en el mensaje.
+# El orden importa: gana la primera categoría cuya palabra clave aparece en el mensaje. En español y en
+# inglés (#202): el filtro de idioma no deja llegar el español al agente, pero el fake lo sigue
+# entendiendo. Las palabras clave son expresiones regulares que empiezan en un límite de palabra ("depa"
+# también es "departamento", pero "hi" no es "this").
 _KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("solicitud_humano", (
         "asesor", "humano", "persona real", "hablar con alguien", "hablar con una persona",
         "supervisor", "gerente",
+        r"agent\b", "agents", "human", "real person", r"(?:talk|speak) (?:to|with) (?:someone|somebody|a person)",
+        "manager",
     )),
     # Lo que un agente de ventas no atiende (cuentas, contratos vigentes, quejas): lo ve una persona.
     ("fuera_de_alcance", (
         "queja", "reclamo", "reclamacion", "ya soy cliente", "mi contrato", "mi deposito",
+        "complaint", "i(?:'m| am) already (?:a )?(?:client|customer)", "my contract", "my deposit",
     )),
-    ("agendar_visita", ("visita", "agendar", "cita")),
-    ("consulta_precio", ("precio", "cuesta", "costo", "cuanto")),
+    ("agendar_visita", ("visita", "agendar", "cita", "visit", "viewing", "schedule", "appointment", "book a")),
+    ("consulta_precio", ("precio", "cuesta", "costo", "cuanto", "price", "cost", "how much")),
     ("busqueda_propiedad", (
         "busco", "departamento", "depa", "casa", "propiedad", "rentar", "comprar", "recamara",
+        "looking for", "apartment", "flat", "condo", r"house\b", "property", "rent", "buy", "bedroom",
     )),
-    ("saludo", ("hola", "buenas", "buenos dias", "buenas tardes")),
+    ("saludo", ("hola", "buenas", "buenos dias", "buenas tardes",
+                r"hi\b", "hello", r"hey\b", "good (?:morning|afternoon|evening)")),
 )
+_PATTERNS = tuple((intent, re.compile("|".join(rf"\b(?:{k})" for k in words))) for intent, words in _KEYWORDS)
 
+# Lo que lee el lead, en inglés (#202, DT-55).
 REPLIES: dict[str, str] = {
-    "solicitud_humano": "Claro, te comunico con un asesor de nuestro equipo.",
-    "fuera_de_alcance": "Eso lo atiende directamente nuestro equipo: te comunico con un asesor.",
-    "agendar_visita": "Con gusto coordinamos una visita. ¿Qué día te acomoda?",
-    "consulta_precio": "Con gusto reviso el precio de esa propiedad y te lo comparto.",
-    "busqueda_propiedad": "Cuéntame más: ¿en qué zona buscas y cuántas recámaras necesitas?",
-    "saludo": "¡Hola! Soy el asistente de la inmobiliaria. ¿En qué te puedo ayudar?",
-    "otro": "Gracias por tu mensaje. ¿Me cuentas qué tipo de propiedad estás buscando?",
+    "solicitud_humano": "Sure, I'll put you in touch with one of our agents.",
+    "fuera_de_alcance": "Our team handles that directly: I'll put you in touch with an agent.",
+    "agendar_visita": "Happy to set up a visit. What day works for you?",
+    "consulta_precio": "Happy to check the price of that property and share it with you.",
+    "busqueda_propiedad": "Tell me more: which area are you looking in and how many bedrooms do you need?",
+    "saludo": "Hi! I'm the agency's assistant. How can I help you?",
+    "otro": "Thanks for your message. What kind of property are you looking for?",
 }
 
 
 # Señal cruda por turno (A-9): solo los tres campos que el contrato deja emitir al LLM. Un `None`
 # significa "no lo dijo en este mensaje"; el número final del score nunca sale de aquí.
 # `decision_maker` solo dice si el lead declaró cómo se decide, no con quién (#119, DT-40).
+# En español y en inglés (#202): el gold set de fair housing corre las dos versiones por este extractor.
 _DECISION_MAKER: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("declarado", ("decido yo", "yo decido", "solo yo", "soy yo quien", "mi pareja", "mi familia",
-                   "mis padres", "mis papas")),
+                   "mis padres", "mis papas",
+                   "i decide", "i make the decision", "i'm the one who decides", "my decision", "decide myself",
+                   "my partner", "my family", "my parents")),
 )
 _URGENCY: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("inmediata", ("urgente", "lo antes posible", "cuanto antes", "de inmediato", "este mes", "ya mismo")),
-    ("3_meses", ("tres meses", "3 meses", "en unos meses", "pronto")),
-    ("explorando", ("explorando", "solo estoy viendo", "curiosidad", "mas adelante", "sin prisa")),
+    ("inmediata", ("urgente", "lo antes posible", "cuanto antes", "de inmediato", "este mes", "ya mismo",
+                   "urgent", "asap", "as soon as possible", "right away", "immediately", "this month")),
+    ("3_meses", ("tres meses", "3 meses", "en unos meses", "pronto",
+                 "three months", "3 months", "in a few months", "soon")),
+    ("explorando", ("explorando", "solo estoy viendo", "curiosidad", "mas adelante", "sin prisa",
+                    "exploring", "just looking", "browsing", "curious", "later on", "no rush")),
 )
-_BUDGET = re.compile(r"presupuesto[^.,;!?\n]*|\$\s?[\d.,]+(?:\s?(?:mil|millones|k))?|\b\d[\d.,]*\s?(?:mil|millones)\b")
+_BUDGET = re.compile(
+    r"presupuesto[^.,;!?\n]*|budget[^.,;!?\n]*"
+    r"|\$\s?[\d.,]+(?:\s?(?:mil|millones|k|m|thousand|million))?"
+    r"|\b\d[\d.,]*\s?(?:mil|millones|k|thousand|million)\b")
 
 # Tipo de inmueble que nombra el lead (#188). "depa" es un prefijo de "departamento", así que caen en
 # el mismo valor. El fake solo mapea `kind`; la zona y el presupuesto los extrae el LLM real.
 _KINDS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("departamento", ("depa", "departamento", "penthouse")),
-    ("casa", ("casa",)),
-    ("terreno", ("terreno", "lote")),
-    ("local", ("local",)),
-    ("estudio", ("estudio",)),
+    ("departamento", ("depa", "departamento", "penthouse", "apartment", "flat", "condo")),
+    ("casa", ("casa", "house", "townhouse")),
+    ("terreno", ("terreno", "lote", "land", "plot")),
+    ("local", ("local", "commercial", "storefront", "retail space")),
+    ("estudio", ("estudio", "studio")),
 )
 
 
@@ -85,10 +104,7 @@ class FakeLLM:
         normalized = _normalize(text)
         if not normalized.strip():
             return "saludo"  # p. ej. un deep-link sin texto: el lead acaba de llegar
-        for intent, keywords in _KEYWORDS:
-            if any(keyword in normalized for keyword in keywords):
-                return intent
-        return "otro"
+        return next((intent for intent, pattern in _PATTERNS if pattern.search(normalized)), "otro")
 
     def generate_reply(self, intent: str) -> str:
         try:

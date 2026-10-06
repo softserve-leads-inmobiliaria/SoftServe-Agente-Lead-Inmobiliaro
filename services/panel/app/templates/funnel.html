@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% import "_macros.html" as ui %}
 {% block title %}Funnel{% endblock %}
-{% block heading %}Funnel del negocio{% endblock %}
-{% block subheading %}Vista global · todos los leads que empezaron una conversación{% endblock %}
+{% block heading %}Business funnel{% endblock %}
+{% block subheading %}Global view · every lead that started a conversation{% endblock %}
 
 {% macro duration(value) -%}
   {%- if value is none -%}—
@@ -17,20 +17,20 @@
 
 <div class="stat-row">
   {{ ui.stat(report.total_leads, "Leads") }}
-  {{ ui.stat("—" if report.containment_rate is none else "%.0f%%"|format(report.containment_rate * 100), "Contención", "sin pedir humano") }}
-  {{ ui.stat(duration(report.first_response.p50), "1ª respuesta (p50)", report.first_response.conversations ~ " conversaciones") }}
+  {{ ui.stat("—" if report.containment_rate is none else "%.0f%%"|format(report.containment_rate * 100), "Containment", "no human requested") }}
+  {{ ui.stat(duration(report.first_response.p50), "First response (p50)", report.first_response.conversations ~ (" conversation" if report.first_response.conversations == 1 else " conversations")) }}
 </div>
 
 <div class="card">
-  <h2 class="section-title">Leads por etapa</h2>
+  <h2 class="section-title">Leads by stage</h2>
   <p class="muted">
-    {{ report.total_leads }} leads empezaron una conversación.
-    La entrada a GREETING no se registra como transición (DT-17): cada fila cuenta leads distintos
-    que <em>llegaron</em> a esa etapa.
+    {{ report.total_leads }} {{ "lead" if report.total_leads == 1 else "leads" }} started a conversation.
+    Entering GREETING isn't recorded as a transition (DT-17): each row counts distinct leads
+    that <em>reached</em> that stage.
   </p>
   <div class="table-wrap">
     <table>
-      <thead><tr><th scope="col">Etapa</th><th scope="col">Leads</th><th scope="col">% del total</th><th scope="col">Proporción</th></tr></thead>
+      <thead><tr><th scope="col">Stage</th><th scope="col">Leads</th><th scope="col">% of total</th><th scope="col">Share</th></tr></thead>
       <tbody>
         {% for stage in report.happy_path %}
         <tr>
@@ -54,32 +54,32 @@
 </div>
 
 <div class="card">
-  <h2 class="section-title">Respuesta y contención</h2>
+  <h2 class="section-title">Response and containment</h2>
   <dl>
-    <dt>Primera respuesta (mediana)</dt>
+    <dt>First response (median)</dt>
     <dd>{{ duration(report.first_response.p50) }}
-        <span class="muted">sobre {{ report.first_response.conversations }} conversaciones</span></dd>
-    <dt>Primera respuesta (p90)</dt>
+        <span class="muted">over {{ report.first_response.conversations }} {{ "conversation" if report.first_response.conversations == 1 else "conversations" }}</span></dd>
+    <dt>First response (p90)</dt>
     <dd>{{ duration(report.first_response.p90) }}
-        <span class="muted">— medido en la base, entre el alta de la conversación y el primer
-        mensaje del agente; la latencia real de cada turno está en la traza <code>turn.latency_ms</code>
+        <span class="muted">— measured in the database, between the start of the conversation and the
+        assistant's first message; the real latency of each turn is in the <code>turn.latency_ms</code> trace
         (OBS-1)</span></dd>
-    <dt>Tasa de contención</dt>
+    <dt>Containment rate</dt>
     <dd>
       {% if report.containment_rate is none %}—
       {% else %}{{ "%.0f"|format(report.containment_rate * 100) }}%
-        <span class="muted">({{ report.handed_off }} de {{ report.total_leads }} pidieron un humano)</span>
+        <span class="muted">({{ report.handed_off }} of {{ report.total_leads }} asked for a person)</span>
       {% endif %}
     </dd>
   </dl>
 </div>
 
 <div class="card">
-  <h2 class="section-title">Por zona</h2>
+  <h2 class="section-title">By area</h2>
   {% if report.by_zone %}
   <div class="table-wrap">
     <table>
-      <thead><tr><th scope="col">Zona</th><th scope="col">Leads</th><th scope="col">HOT</th><th scope="col">WARM</th><th scope="col">En gestión</th></tr></thead>
+      <thead><tr><th scope="col">Area</th><th scope="col">Leads</th><th scope="col">HOT</th><th scope="col">WARM</th><th scope="col">In progress</th></tr></thead>
       <tbody>
         {% for row in report.by_zone %}
         <tr>
@@ -92,16 +92,16 @@
       </tbody>
     </table>
   </div>
-  {% else %}<p class="empty">Todavía no hay leads.</p>{% endif %}
+  {% else %}<p class="empty">No leads yet.</p>{% endif %}
 </div>
 
 <div class="card">
-  <h2 class="section-title">Por asesor</h2>
-  <p class="muted">Solo cuenta leads ya asignados al calificar (B-7) o al tomarlos (B-6); el resto va como "sin asignar".</p>
+  <h2 class="section-title">By agent</h2>
+  <p class="muted">Only counts leads already assigned when they qualified (B-7) or were claimed (B-6); the rest go under "unassigned".</p>
   {% if report.by_advisor %}
   <div class="table-wrap">
     <table>
-      <thead><tr><th scope="col">Asesor</th><th scope="col">Zona</th><th scope="col">Leads</th><th scope="col">HOT</th><th scope="col">WARM</th><th scope="col">En gestión</th></tr></thead>
+      <thead><tr><th scope="col">Agent</th><th scope="col">Area</th><th scope="col">Leads</th><th scope="col">HOT</th><th scope="col">WARM</th><th scope="col">In progress</th></tr></thead>
       <tbody>
         {% for row in report.by_advisor %}
         <tr{% if row.zone is none %} class="muted"{% endif %}>
@@ -114,6 +114,6 @@
       </tbody>
     </table>
   </div>
-  {% else %}<p class="empty">Todavía no hay leads.</p>{% endif %}
+  {% else %}<p class="empty">No leads yet.</p>{% endif %}
 </div>
 {% endblock %}

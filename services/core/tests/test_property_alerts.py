@@ -74,7 +74,7 @@ class Channel:
         return self._reachable
 
     def send(self, chat_id, text):
-        if text.startswith("¡Salió algo"):
+        if text.startswith("Something like"):
             self.sent.append(text)
 
 
@@ -88,7 +88,7 @@ class Lead:
                            "event_id": str(uuid.uuid4()), "text": message}
         return asyncio.run(process_turn(self.engine, event, Catalog(found), agent=agent))["text"]
 
-    def search(self, zone, found=(), message="Busco casa"):
+    def search(self, zone, found=(), message="I'm looking for a house"):
         return self.say(message, Searches({"zone": zone, "type": "renta", "budget_range": {"min": 0, "max": 20000}}),
                         found)
 
@@ -108,7 +108,7 @@ class Lead:
 
     def saved(self):
         return [row[0] for row in self._rows(
-            "SELECT content FROM messages WHERE conversation_id = :c AND content LIKE '¡Salió algo%'")]
+            "SELECT content FROM messages WHERE conversation_id = :c AND content LIKE 'Something like%'")]
 
 
 def _list(engine, zone, *, price=15000, bedrooms=2, type_="renta", status="disponible", at=None):
@@ -135,7 +135,7 @@ def _run(engine, channel=None, after=timedelta(minutes=11)):
 def _alerted(engine, zone, channel=None, **listing):
     lead = Lead(engine)
     lead.search(zone)
-    lead.say("avísame")
+    lead.say("notify me")
     property_id = _list(engine, zone, **listing)
     channel = channel or Channel()
     _run(engine, channel)
@@ -144,13 +144,18 @@ def _alerted(engine, zone, channel=None, **listing):
 
 # --- detectar el pedido --------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("message", ["avísame", "Avísame si sale algo así", "¿me avisas?", "me avisan porfa",
-                                     "notifícame", "quiero una alerta", "Avisenme cuando haya"])
+@pytest.mark.parametrize("message", ["notify me", "Notify me if something like that comes up", "¿me avisas?", "me avisan porfa",
+                                     "notifícame", "quiero una alerta", "Avisenme cuando haya",
+                                     "notify me", "Notify me if something like that comes up", "keep me posted",
+                                     "let me know when there's one", "let me know if anything comes up",
+                                     "can you set up an alert?"])
 def test_the_lead_asking_for_an_alert_is_detected(message):
     assert alerts.is_request(message)
 
 
-@pytest.mark.parametrize("message", ["Busco casa en Zapopan", "¿Cuánto cuesta?", "Quiero agendar una visita", ""])
+@pytest.mark.parametrize("message", ["Busco casa en Usaquen", "How much does it cost?", "I'd like to schedule a visit", "",
+                                     "let me know the price", "I'm looking for a house in Usaquen",
+                                     "I'd like to schedule a viewing"])
 def test_other_messages_are_not_an_alert_request(message):
     assert not alerts.is_request(message)
 
@@ -173,14 +178,14 @@ def test_a_search_with_many_results_does_not(engine, zone):
 
 def test_a_search_without_filters_does_not(engine):
     lead = Lead(engine)
-    reply = lead.say("Busco casa")  # el agente fake busca sin filtros
+    reply = lead.say("I'm looking for a house")  # el agente fake busca sin filtros
     assert alerts.OFFER_TEXT not in reply and alerts.ALERT_KEY not in lead.last_tool_results()
 
 
 def test_asking_after_the_offer_saves_the_filters_of_that_search(engine, zone):
     lead = Lead(engine)
     lead.search(zone)
-    assert lead.say("avísame") == alerts.CREATED_TEXT
+    assert lead.say("notify me") == alerts.CREATED_TEXT
     [(saved_zone, kind, bedrooms, budget_min, budget_max, active, lasts)] = lead.alerts()
     assert (saved_zone, kind, bedrooms, budget_min, budget_max, active) == (zone, "renta", None, 0, 20000, True)
     assert lasts == timedelta(days=alerts.ALERT_DAYS)
@@ -188,22 +193,22 @@ def test_asking_after_the_offer_saves_the_filters_of_that_search(engine, zone):
 
 def test_asking_in_the_same_turn_as_the_search_uses_that_search(engine, zone):
     lead = Lead(engine)
-    assert lead.search(zone, message="Busco renta y avísame si sale algo así") == alerts.CREATED_TEXT
+    assert lead.search(zone, message="I'm looking for a rental, notify me if something like that comes up") == alerts.CREATED_TEXT
     assert lead.alerts()[0][0] == zone
 
 
 def test_asking_without_a_search_asks_what_the_lead_is_looking_for(engine):
     lead = Lead(engine)
-    assert lead.say("avísame si sale algo") == alerts.NO_SEARCH_TEXT
+    assert lead.say("notify me if something comes up") == alerts.NO_SEARCH_TEXT
     assert lead.alerts() == []
 
 
 def test_a_new_alert_replaces_the_previous_one(engine, zone):
     lead = Lead(engine)
     lead.search(zone)
-    lead.say("avísame")
+    lead.say("notify me")
     lead.search(zone + " norte")
-    lead.say("avísame")
+    lead.say("notify me")
     assert [(row[0], row[5]) for row in lead.alerts()] == [(zone, False), (zone + " norte", True)]
 
 
@@ -218,9 +223,9 @@ def test_a_new_matching_property_is_announced_once(engine, zone):
     lead, property_id, channel = _alerted(engine, zone)
     [sent] = channel.sent
     assert "Depto nuevo" in sent and property_id in sent and zone in sent and "$15,000" in sent
-    assert "2 recámaras" in sent and sent.endswith(STOP_HINT)
+    assert "2 bedrooms" in sent and sent.endswith(STOP_HINT)
     assert lead.saved() == [sent]
-    assert lead.last_tool_results()[REMEMBERED_KEY]["id"] == property_id  # "me interesa" sabe cuál es
+    assert lead.last_tool_results()[REMEMBERED_KEY]["id"] == property_id  # "I'm interested" sabe cuál es
     _run(engine, channel, after=timedelta(minutes=30))
     assert len(channel.sent) == 1 and lead.property_alert_jobs() == [("done",)]
 
@@ -229,7 +234,7 @@ def test_a_property_that_was_already_listed_is_not_new(engine, zone):
     _list(engine, zone, at=datetime.now(UTC) - timedelta(days=1))
     lead = Lead(engine)
     lead.search(zone)
-    lead.say("avísame")
+    lead.say("notify me")
     channel = Channel()
     _run(engine, channel)
     assert channel.sent == []
@@ -241,7 +246,7 @@ def test_a_property_back_to_available_is_announced(engine, zone):
         set_status(session, property_id, "apartado", "test", at=datetime.now(UTC) - timedelta(hours=1))
     lead = Lead(engine)
     lead.search(zone)
-    lead.say("avísame")
+    lead.say("notify me")
     with session_scope(engine) as session:
         set_status(session, property_id, "disponible", "test")
     channel = Channel()
@@ -256,7 +261,7 @@ def test_the_synthetic_history_never_makes_a_property_new(engine, zone):
         set_status(session, property_id, "apartado", "seed", at=datetime.now(UTC) - timedelta(hours=1))
     lead = Lead(engine)
     lead.search(zone)
-    lead.say("avísame")
+    lead.say("notify me")
     with session_scope(engine) as session:
         set_status(session, property_id, "disponible", "seed", synthetic=True)
     channel = Channel()
@@ -278,7 +283,7 @@ def test_a_lead_without_a_channel_gets_nothing_saved(engine, zone):
 def test_a_property_taken_before_the_message_goes_out_is_not_announced(engine, zone):
     lead = Lead(engine)
     lead.search(zone)
-    lead.say("avísame")
+    lead.say("notify me")
     property_id = _list(engine, zone)
     now, channel = datetime.now(UTC) + timedelta(minutes=11), Channel()
     one_at_a_time = Scheduler(engine, channel, batch_size=1)
@@ -304,7 +309,7 @@ def test_the_message_goes_through_the_output_guardrails(engine, zone, monkeypatc
 def test_stop_turns_the_alert_off(engine, zone):
     lead = Lead(engine)
     lead.search(zone)
-    lead.say("avísame")
+    lead.say("notify me")
     lead.say("/stop")
     assert lead.alerts()[0][5] is False
     _list(engine, zone)
@@ -316,7 +321,7 @@ def test_stop_turns_the_alert_off(engine, zone):
 def test_stop_in_the_channel_turns_the_alert_off(engine, zone):
     lead = Lead(engine)
     lead.search(zone)
-    lead.say("avísame")
+    lead.say("notify me")
     consent.withdraw_consent(engine, uuid.UUID(lead.lead_id))
     assert lead.alerts()[0][5] is False
 
@@ -324,7 +329,7 @@ def test_stop_in_the_channel_turns_the_alert_off(engine, zone):
 def test_a_withdrawn_lead_is_never_alerted_even_if_the_alert_was_left(engine, zone):
     lead = Lead(engine)
     lead.search(zone)
-    lead.say("avísame")
+    lead.say("notify me")
     with engine.begin() as connection:
         connection.execute(text("UPDATE leads SET consent_status = 'withdrawn' WHERE id = :l"), {"l": lead.lead_id})
     _list(engine, zone)
@@ -336,7 +341,7 @@ def test_a_withdrawn_lead_is_never_alerted_even_if_the_alert_was_left(engine, zo
 def test_an_expired_alert_is_turned_off_and_the_scan_stops(engine, zone):
     lead = Lead(engine)
     lead.search(zone)
-    lead.say("avísame")
+    lead.say("notify me")
     _list(engine, zone)
     channel = Channel()
     _run(engine, channel, after=timedelta(days=alerts.ALERT_DAYS + 1))
@@ -350,7 +355,7 @@ def test_an_expired_alert_is_turned_off_and_the_scan_stops(engine, zone):
 def test_the_scan_keeps_itself_scheduled_while_there_are_active_alerts(engine, zone):
     lead = Lead(engine)
     lead.search(zone)
-    lead.say("avísame")
+    lead.say("notify me")
     for minutes in (11, 22, 33):
         _run(engine, Channel(), after=timedelta(minutes=minutes))
     with engine.connect() as connection:
@@ -364,17 +369,17 @@ def test_the_lead_answering_from_nurture_goes_back_to_discovery(engine, zone):
     with engine.begin() as connection:
         connection.execute(text("UPDATE conversations SET fsm_state = 'NURTURE' WHERE id = :c"),
                            {"c": lead.conversation_id})
-    lead.say("me interesa")
+    lead.say("I'm interested")
     assert lead._rows("SELECT fsm_state FROM conversations WHERE id = :c")[0][0] == "DISCOVERY"
 
 
 # --- el texto ----------------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("prop,expected", [
-    ({"id": "prop_1", "title": "Casa", "zone": "Zapopan", "type": "venta", "bedrooms": 3, "price": 2350000.0},
-     "Casa (ref. prop_1), en Zapopan: en venta, 3 recámaras, $2,350,000."),
+    ({"id": "prop_1", "title": "Casa", "zone": "Usaquen", "type": "venta", "bedrooms": 3, "price": 2350000.0},
+     "Casa (ref. prop_1), in Usaquen: for sale, 3 bedrooms, $2,350,000."),
     ({"id": "prop_2", "title": "Estudio", "zone": "Centro", "type": "renta", "bedrooms": 1, "price": 8500.5},
-     "Estudio (ref. prop_2), en Centro: en renta, 1 recámara, $8,500.50."),
+     "Estudio (ref. prop_2), in Centro: for rent, 1 bedroom, $8,500.50."),
 ])
 def test_the_alert_text_uses_only_catalog_data(prop, expected):
     assert expected in alerts.alert_text(prop)

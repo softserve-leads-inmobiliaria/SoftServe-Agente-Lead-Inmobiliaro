@@ -53,7 +53,7 @@ def handlers_reached(application, update):
 # --- qué mensajes atiende el bot ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("message_text,command", [
-    ("hola", False), ("STOP", False), ("/stop", True), ("/stop@mi_bot", True), ("/start", True),
+    ("hi", False), ("STOP", False), ("/stop", True), ("/stop@mi_bot", True), ("/start", True),
     ("/start prop_00231", True), ("/ayuda", True),
 ])
 def test_every_text_reaches_a_handler_commands_included(engine, message_text, command):
@@ -139,22 +139,22 @@ def test_start_with_a_deep_link_sends_the_property_and_an_empty_text(engine, mon
 
 def test_a_bare_start_is_a_greeting_not_an_unresolved_turn(engine):
     (reply,) = dispatch(engine, "/start", user_id=915)
-    assert "asistente" in reply  # el saludo del agente, no "Gracias por tu mensaje..."
+    assert "assistant" in reply  # el saludo del agente, no "Thanks for your message..."
 
 
 # --- el agente configurado llega al canal ---------------------------------------------------------------------
 
 def test_the_agent_configured_in_main_is_the_one_that_answers_on_telegram(engine):
     agent = RecordingAgent()
-    (reply,) = dispatch(engine, "Busco casa", user_id=916, agent=agent)
-    assert "respuesta del agente" in reply and [i.text for i in agent.inputs] == ["Busco casa"]
+    (reply,) = dispatch(engine, "I'm looking for a house", user_id=916, agent=agent)
+    assert "respuesta del agente" in reply and [i.text for i in agent.inputs] == ["I'm looking for a house"]
 
 
 def test_reply_to_uses_the_given_agent_and_defaults_to_the_fake_one(engine):
     agent = RecordingAgent()
     assert "respuesta del agente" in asyncio.run(
-        reply_to(engine, StubCatalog(), telegram_user_id="917", text="hola", agent=agent))
-    assert "asistente" in asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="918", text="hola"))
+        reply_to(engine, StubCatalog(), telegram_user_id="917", text="hi", agent=agent))
+    assert "assistant" in asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="918", text="hi"))
 
 
 def test_the_application_carries_the_agent(engine):
@@ -179,7 +179,7 @@ def test_a_failing_turn_answers_the_lead_instead_of_staying_silent(engine, monke
         raise RuntimeError("catálogo caído")
 
     monkeypatch.setattr(telegram, "process_turn_reply", broken)
-    assert dispatch(engine, "Busco casa", user_id=919) == [ERROR_REPLY]
+    assert dispatch(engine, "I'm looking for a house", user_id=919) == [ERROR_REPLY]
 
 
 def test_a_failure_sending_the_reply_does_not_crash_the_bot(engine):
@@ -187,7 +187,7 @@ def test_a_failure_sending_the_reply_does_not_crash_the_bot(engine):
         async def reply_text(self, value, parse_mode=None):
             raise ConnectionError("Telegram no responde")
 
-    message = Broken("hola")
+    message = Broken("hi")
     update = SimpleNamespace(effective_message=message, effective_user=SimpleNamespace(id=920))
     application = SimpleNamespace(bot_data={"engine": engine, "catalog": StubCatalog(), "agent": None})
     asyncio.run(telegram._on_message(update, SimpleNamespace(application=application)))  # no lanza

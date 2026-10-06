@@ -44,16 +44,18 @@ NO_RESPONSE_KIND = "no_response"
 MAX_ATTEMPTS = 3  # ejecuciones fallidas antes de dejar el job en `failed`
 RETRY_DELAYS = (timedelta(minutes=1), timedelta(minutes=5))  # espera tras el 1.er y el 2.º fallo
 
-STOP_HINT = "Si prefieres que no te escriba más, responde STOP."
+STOP_HINT = "If you'd rather I didn't write to you again, reply STOP."
 # Seguimientos por estado, sin LLM: el intento N usa el texto N (el último se repite si N es mayor).
+# En inglés, como todo lo que lee el lead (#202, DT-55).
 FOLLOW_UPS: Mapping[str, tuple[str, ...]] = {
     "DISCOVERY": (
-        "¡Hola! ¿Sigues buscando propiedad? Si me cuentas la zona y tu presupuesto, te muestro opciones.",
-        "Por si te sirve: puedo buscarte casas o departamentos en venta o renta. Escríbeme cuando quieras retomar.",
+        "Hi! Are you still looking for a property? Tell me the area and your budget and I'll show you some options.",
+        "In case it helps: I can look for houses or apartments for sale or rent. Write to me whenever you want "
+        "to pick up where we left off.",
     ),
     "NURTURE": (
-        "Hola de nuevo. Si todavía buscas propiedad, escríbeme y retomamos tu búsqueda.",
-        "Este es mi último mensaje por ahora: cuando quieras retomar la búsqueda, escríbeme por aquí.",
+        "Hi again. If you're still looking for a property, write to me and we'll pick up your search.",
+        "This is my last message for now: whenever you want to pick up your search, write to me here.",
     ),
 }
 
@@ -297,7 +299,7 @@ class Scheduler:
             return "done"
         store = StateStore(session)
         store.add_messages(conversation_id, [("assistant", text, None)])
-        # Si el lead contesta "me interesa", el turno siguiente sabe de qué propiedad habla.
+        # Si el lead contesta "I'm interested", el turno siguiente sabe de qué propiedad habla.
         store.remember(conversation_id, {key: found[key] for key in ("id", "title", "zone")})
         session.flush()
         self._channel.send(lead.telegram_user_id, text)  # lo último antes del commit

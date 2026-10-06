@@ -33,8 +33,8 @@ def session(engine):
         transaction = connection.begin()
         with Session(bind=connection) as session:
             session.add_all([
-                Advisor(id="adv_v", name="Valeria", zone="Providencia", access_token=f"t-{uuid.uuid4().hex}"),
-                Advisor(id="adv_a", name="Andrés", zone="Zapopan", access_token=f"t-{uuid.uuid4().hex}"),
+                Advisor(id="adv_v", name="Valeria", zone="El Poblado", access_token=f"t-{uuid.uuid4().hex}"),
+                Advisor(id="adv_a", name="Andrés", zone="Usaquen", access_token=f"t-{uuid.uuid4().hex}"),
             ])
             session.flush()
             yield session

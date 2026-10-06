@@ -20,9 +20,9 @@ from app.scheduling_client import SchedulingClient, SchedulingError
 from db.models import Advisor, AdvisorNotification, Lead
 from db.session import session_scope
 
-CALIFICA = "Tengo presupuesto de 3 millones, decido yo y es urgente"
-PIDE_HUMANO = "Quiero hablar con un asesor"
-SCORE = {"total": 60, "band": "WARM", "reasons": ["presupuesto declarado"]}
+CALIFICA = "My budget is 3 million, I decide and it's urgent"
+PIDE_HUMANO = "I want to talk to an agent"
+SCORE = {"total": 60, "band": "WARM", "reasons": ["Budget: budget stated"]}
 
 
 class StubCatalog:
@@ -40,7 +40,7 @@ class FakeAgenda:
         self.engine, self.advisor_id, self.error = engine, advisor_id, error
         self.calls: list[dict[str, Any]] = []
 
-    async def assign_advisor(self, lead_id, zone=None, language="es", registered_only=False):
+    async def assign_advisor(self, lead_id, zone=None, language="en", registered_only=False):
         self.calls.append({"lead_id": lead_id, "registered_only": registered_only})
         if self.error:
             raise SchedulingError(self.error, "falla simulada")
@@ -48,7 +48,7 @@ class FakeAgenda:
             connection.execute(text("UPDATE leads SET advisor_id = :a WHERE id = :l AND advisor_id IS NULL"),
                                {"a": self.advisor_id, "l": lead_id})
         return {"lead_id": lead_id, "advisor_id": self.advisor_id, "name": "x", "zone": "x",
-                "language": "es", "match": "zone_and_language"}
+                "language": "en", "match": "zone_and_language"}
 
 
 @pytest.fixture
@@ -67,7 +67,7 @@ def _advisor(engine, *, zone: str, chat_id: str | None = None) -> str:
         return advisor.id
 
 
-def _lead(engine, zone: str = "Providencia") -> dict[str, str]:
+def _lead(engine, zone: str = "El Poblado") -> dict[str, str]:
     with session_scope(engine) as session:
         lead = Lead(telegram_user_id=f"tg-{uuid.uuid4().hex[:8]}", zone=zone)
         session.add(lead)
@@ -91,8 +91,8 @@ def _notices(engine, lead_id: str) -> list[tuple[str, str, str]]:
 # --- notificaciones -----------------------------------------------------------------------------
 
 def test_the_card_goes_to_the_advisor_the_agenda_chose(engine, clean):
-    _advisor(engine, zone="Providencia", chat_id="chat-local")  # el que elegiría la regla local
-    chosen = _advisor(engine, zone="Zapopan", chat_id="chat-agenda")
+    _advisor(engine, zone="El Poblado", chat_id="chat-local")  # el que elegiría la regla local
+    chosen = _advisor(engine, zone="Usaquen", chat_id="chat-agenda")
     agenda, bot, event = FakeAgenda(engine, chosen), AsyncMock(), _lead(engine)
 
     advisor = asyncio.run(notifications.notify_advisor(engine, event, SCORE, bot, agenda))
@@ -102,7 +102,7 @@ def test_the_card_goes_to_the_advisor_the_agenda_chose(engine, clean):
     assert agenda.calls == [{"lead_id": event["lead_id"], "registered_only": False}]
     assert _advisor_of(engine, event["lead_id"]) == chosen
     [(advisor_id, kind, body)] = _notices(engine, event["lead_id"])
-    assert (advisor_id, kind) == (chosen, "calificado") and "WARM · 60/100" in body and "Ficha:" not in body
+    assert (advisor_id, kind) == (chosen, "calificado") and "WARM · 60/100" in body and "Lead page:" not in body
 
 
 def test_without_any_advisor_nobody_is_notified_or_assigned(engine, clean):
@@ -117,7 +117,7 @@ def test_without_any_advisor_nobody_is_notified_or_assigned(engine, clean):
 
 
 def test_an_advisor_without_telegram_gets_the_card_in_the_panel(engine, clean):
-    offline = _advisor(engine, zone="Providencia")
+    offline = _advisor(engine, zone="El Poblado")
     bot, event = AsyncMock(), _lead(engine)
 
     advisor = asyncio.run(notifications.notify_advisor(engine, event, SCORE, bot, FakeAgenda(engine, offline)))
@@ -128,7 +128,7 @@ def test_an_advisor_without_telegram_gets_the_card_in_the_panel(engine, clean):
 
 
 def test_if_telegram_fails_the_notice_stays_in_the_panel(engine, clean):
-    chosen = _advisor(engine, zone="Providencia", chat_id="chat-agenda")
+    chosen = _advisor(engine, zone="El Poblado", chat_id="chat-agenda")
     bot, event = AsyncMock(), _lead(engine)
     bot.send_message.side_effect = RuntimeError("Telegram caído")
 
@@ -140,8 +140,8 @@ def test_if_telegram_fails_the_notice_stays_in_the_panel(engine, clean):
 
 @pytest.mark.parametrize("error", ["UPSTREAM_UNAVAILABLE", "INVALID_INPUT"])
 def test_if_the_agenda_fails_the_local_rule_still_notifies(engine, clean, error):
-    local = _advisor(engine, zone="Providencia", chat_id="chat-local")
-    bot, event = AsyncMock(), _lead(engine, zone="Providencia")
+    local = _advisor(engine, zone="El Poblado", chat_id="chat-local")
+    bot, event = AsyncMock(), _lead(engine, zone="El Poblado")
 
     advisor = asyncio.run(notifications.notify_advisor(engine, event, SCORE, bot, FakeAgenda(engine, error=error)))
 
@@ -151,7 +151,7 @@ def test_if_the_agenda_fails_the_local_rule_still_notifies(engine, clean, error)
 
 
 def test_the_handoff_file_goes_to_the_advisor_the_agenda_chose(engine, clean):
-    chosen = _advisor(engine, zone="Zapopan", chat_id="chat-agenda")
+    chosen = _advisor(engine, zone="Usaquen", chat_id="chat-agenda")
     bot = AsyncMock()
 
     advisor = asyncio.run(notifications.notify_handoff(engine, _lead(engine), SCORE, "HUMAN_HANDOFF",
@@ -162,7 +162,7 @@ def test_the_handoff_file_goes_to_the_advisor_the_agenda_chose(engine, clean):
 
 
 def test_the_handoff_notice_has_the_reason_but_not_the_transcript(engine, clean):
-    offline = _advisor(engine, zone="Zapopan")
+    offline = _advisor(engine, zone="Usaquen")
     bot, event = AsyncMock(), _lead(engine)
 
     advisor = asyncio.run(notifications.notify_handoff(engine, event, SCORE, "HUMAN_HANDOFF", "solicitud_humano",
@@ -171,13 +171,13 @@ def test_the_handoff_notice_has_the_reason_but_not_the_transcript(engine, clean)
     assert advisor.id == offline
     bot.send_message.assert_not_awaited()
     [(_, kind, body)] = _notices(engine, event["lead_id"])
-    assert kind == "traspaso" and "el lead pidió hablar con una persona" in body
-    assert "Transcripción" not in body
+    assert kind == "traspaso" and "the lead asked to talk to a person" in body
+    assert "Transcript" not in body
 
 
 def test_telegram_turns_use_the_process_agenda(engine, clean, monkeypatch):
     """De punta a punta por el canal: calificar y pedir un humano consultan la agenda del proceso."""
-    chosen = _advisor(engine, zone="Zapopan", chat_id="chat-agenda")
+    chosen = _advisor(engine, zone="Usaquen", chat_id="chat-agenda")
     agenda = FakeAgenda(engine, chosen)
     monkeypatch.setattr(scheduling_client, "get_scheduling", lambda: agenda)
     bot, lead = AsyncMock(), f"tg-{uuid.uuid4().hex[:8]}"
@@ -209,7 +209,7 @@ def test_client_posts_to_the_agenda_and_returns_the_assignment():
 
     assert result == {"advisor_id": "adv_001"}
     assert seen["url"] == "http://catalog:8000/scheduling/assign_advisor"
-    assert seen["body"] == {"lead_id": "lead-1", "language": "es", "registered_only": True}
+    assert seen["body"] == {"lead_id": "lead-1", "language": "en", "registered_only": True}
 
 
 @pytest.mark.parametrize("response,code", [

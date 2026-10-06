@@ -10,6 +10,12 @@ rediseño no se improvise archivo por archivo. El *por qué* de cada decisión d
 rutas, datos, autenticación ni la regla de privacidad de las vistas agregadas (DT-41). Si una decisión
 de este documento cambia, se cambia acá primero y se enlaza al PR que la implementa.
 
+**Idioma (#202, DT-55).** Desde #202 el panel está en inglés: "My leads", "Notifications", "Mark as in
+progress", "Close a deal", "No data for this period."... Las citas de este boceto son las de la versión
+en español, la que se diseñó; la estructura, los componentes y el comportamiento no cambiaron. Los valores
+de la base (`venta`, `disponible`, `sql`...) se muestran con `label()` (`db/labels.py`), y las rutas y los
+parámetros (`/avisos`, `/negocio`, `periodo=semana`) siguen como estaban: son direcciones, no texto.
+
 ## 1. Estado actual y problemas
 
 El panel funciona y cumple sus historias, pero visualmente está por debajo de una demo. Hoy:
@@ -201,7 +207,8 @@ El contador de Avisos sale del `unread` que ya calcula `main.py`; no se agrega n
 
 ## 11. Tests que miran el HTML
 
-El rediseño conserva o ajusta (en el mismo PR) los textos que los tests buscan hoy, entre otros:
+El rediseño conserva o ajusta (en el mismo PR) los textos que los tests buscan hoy, entre otros (en
+español, como estaban antes de #202; hoy buscan los mismos textos en inglés):
 
 - `test_avisos.py`: `"Avisos (1 sin leer)"`, `"1 sin leer"`, `"Todavía no tienes avisos"`,
   `http-equiv="refresh"`.

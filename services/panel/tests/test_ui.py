@@ -88,7 +88,7 @@ def test_marcar_en_gestion_muestra_una_confirmacion(client, mundo):
 
     page = client.post(f"/panel/{token}/leads/{lead.id}/gestionar", follow_redirects=True).text
 
-    assert "Lead en gestión." in page
+    assert "Lead marked as in progress." in page
 
 
 def test_las_graficas_son_svg_inline(client, mundo):

@@ -24,9 +24,9 @@ from db.session import get_engine, session_scope  # noqa: E402
 
 # Mismos ids, nombres y zonas que `services/catalog/app/data.py:ADVISORS`.
 ADVISORS = [
-    {"id": "adv_001", "name": "Valeria Ortiz", "zone": "Providencia"},
-    {"id": "adv_002", "name": "Andrés Núñez", "zone": "Zapopan"},
-    {"id": "adv_003", "name": "Camila Reyes", "zone": "Andares"},
+    {"id": "adv_001", "name": "Valeria Ortiz", "zone": "El Poblado"},
+    {"id": "adv_002", "name": "Andrés Núñez", "zone": "Usaquen"},
+    {"id": "adv_003", "name": "Camila Reyes", "zone": "Envigado"},
 ]
 
 

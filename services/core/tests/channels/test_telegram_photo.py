@@ -21,8 +21,8 @@ from app.channels.telegram import CAPTION_MAX_CHARS, ChannelReply, reply_to, rep
 from db.repo_root import repo_root
 
 PHOTO = "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1024&q=80"
-LISTING = {"id": "prop_00231", "title": "Depto 2 rec. en Providencia", "zone": "Providencia",
-           "status": "disponible", "address_approx": "Providencia", "photo_url": PHOTO}
+LISTING = {"id": "prop_00231", "title": "Depto 2 rec. en El Poblado", "zone": "El Poblado",
+           "status": "disponible", "address_approx": "El Poblado", "photo_url": PHOTO}
 EVENT_SCHEMA = json.loads((repo_root() / "contracts" / "event.schema.json").read_text(encoding="utf-8"))
 
 
@@ -86,7 +86,7 @@ def test_the_caption_is_the_same_text_the_lead_would_get_without_photo(engine, m
                                  text="", deep_link="prop_00231"))
 
     assert reply.text == plain
-    assert reply.text.startswith(PRIVACY_NOTICE) and "Depto 2 rec. en Providencia" in reply.text
+    assert reply.text.startswith(PRIVACY_NOTICE) and "Depto 2 rec. en El Poblado" in reply.text
 
 
 def test_a_property_without_photo_sends_only_text(engine, monkeypatch):
@@ -95,29 +95,29 @@ def test_a_property_without_photo_sends_only_text(engine, monkeypatch):
 
 
 def test_the_agent_asking_for_one_property_brings_its_photo(engine, monkeypatch):
-    reply, _ = turn_of(engine, monkeypatch, "tg-photo-4", text="¿Cuánto cuesta?", agent=ToolAgent("get_property"))
+    reply, _ = turn_of(engine, monkeypatch, "tg-photo-4", text="How much does it cost?", agent=ToolAgent("get_property"))
     assert reply.photo_url == PHOTO
 
 
 def test_a_turn_that_also_searched_talks_about_several_properties_and_has_no_photo(engine, monkeypatch):
-    reply, turn = turn_of(engine, monkeypatch, "tg-photo-5", text="¿Qué más hay?",
+    reply, turn = turn_of(engine, monkeypatch, "tg-photo-5", text="What else is there?",
                           agent=ToolAgent("get_property", "search_properties"))
     assert reply.photo_url is None and turn.property is None
 
 
 def test_a_turn_without_property_has_no_photo(engine, monkeypatch):
-    reply, turn = turn_of(engine, monkeypatch, "tg-photo-6", text="hola")
+    reply, turn = turn_of(engine, monkeypatch, "tg-photo-6", text="hi")
     assert reply.photo_url is None and turn.property is None
 
 
 def test_asking_for_a_human_replaces_the_reply_so_there_is_no_photo(engine, monkeypatch):
-    reply, turn = turn_of(engine, monkeypatch, "tg-photo-7", text="Quiero hablar con un asesor",
+    reply, turn = turn_of(engine, monkeypatch, "tg-photo-7", text="I want to talk to an agent",
                           agent=ToolAgent("get_property", intent="solicitud_humano"))
     assert reply.photo_url is None and turn.fsm_state == "HUMAN_HANDOFF"
 
 
 def test_asking_for_an_alert_replaces_the_reply_so_there_is_no_photo(engine, monkeypatch):
-    reply, turn = turn_of(engine, monkeypatch, "tg-photo-9", text="Avísame si sale algo así",
+    reply, turn = turn_of(engine, monkeypatch, "tg-photo-9", text="Notify me if something like that comes up",
                           agent=ToolAgent("get_property"))
     assert reply.photo_url is None and turn.property is None
 
@@ -150,28 +150,28 @@ class FakeMessage:
 
 def test_with_photo_the_text_goes_as_caption():
     message = FakeMessage()
-    asyncio.run(send_reply(message, ChannelReply("Hola", PHOTO)))
-    assert message.photos == [(PHOTO, "Hola")] and message.replies == []
+    asyncio.run(send_reply(message, ChannelReply("Hi", PHOTO)))
+    assert message.photos == [(PHOTO, "Hi")] and message.replies == []
 
 
 def test_without_photo_only_the_text_goes():
     message = FakeMessage()
-    asyncio.run(send_reply(message, ChannelReply("Hola")))
-    assert message.photos == [] and message.replies == ["Hola"]
+    asyncio.run(send_reply(message, ChannelReply("Hi")))
+    assert message.photos == [] and message.replies == ["Hi"]
 
 
 @pytest.mark.parametrize("error", [BadRequest("Wrong file identifier/http url specified"), ConnectionError("x")])
 def test_if_telegram_cannot_send_the_photo_the_text_still_goes(error, caplog):
     message = FakeMessage(photo_error=error)
-    asyncio.run(send_reply(message, ChannelReply("Hola", PHOTO)))
-    assert message.replies == ["Hola"]
+    asyncio.run(send_reply(message, ChannelReply("Hi", PHOTO)))
+    assert message.replies == ["Hi"]
     assert "foto de la propiedad" in caplog.text
 
 
 def test_a_timeout_does_not_fall_back_to_text_because_the_photo_may_have_arrived():
     message = FakeMessage(photo_error=TimedOut())
     with pytest.raises(TimedOut):
-        asyncio.run(send_reply(message, ChannelReply("Hola", PHOTO)))
+        asyncio.run(send_reply(message, ChannelReply("Hi", PHOTO)))
     assert message.replies == []
 
 
@@ -198,4 +198,4 @@ def test_start_with_a_deep_link_answers_with_the_photo(engine):
     asyncio.run(telegram._on_message(update, SimpleNamespace(application=application)))
 
     ((photo, caption),) = message.photos
-    assert photo == PHOTO and "Depto 2 rec. en Providencia" in caption and message.replies == []
+    assert photo == PHOTO and "Depto 2 rec. en El Poblado" in caption and message.replies == []

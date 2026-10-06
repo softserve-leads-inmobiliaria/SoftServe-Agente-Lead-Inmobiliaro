@@ -67,15 +67,15 @@ CHECKED_AT = "2026-01-01T00:00:00+00:00"
 TURNOS: dict[str, tuple[str, dict[str, Any]]] = {
     # --- búsquedas -------------------------------------------------------------------------------
     "busqueda_sin_filtros": ("search_properties", {}),
-    "busqueda_venta_providencia": ("search_properties", {"zone": "Providencia"}),
-    "busqueda_zapopan": ("search_properties", {"zone": "Zapopan"}),
+    "busqueda_venta_poblado": ("search_properties", {"zone": "El Poblado"}),
+    "busqueda_usaquen": ("search_properties", {"zone": "Usaquen"}),
     "busqueda_renta": ("search_properties", {"type": "renta"}),
     "busqueda_preventa": ("search_properties", {"type": "preventa"}),
     "busqueda_sin_recamaras": ("search_properties", {"bedrooms": 0}),
-    "busqueda_presupuesto_venta": ("search_properties", {"budget_range": {"min": 2000000, "max": 5000000}}),
-    "busqueda_presupuesto_renta": ("search_properties", {"budget_range": {"min": 9000, "max": 20000}}),
+    "busqueda_presupuesto_venta": ("search_properties", {"budget_range": {"min": 150000, "max": 400000}}),
+    "busqueda_presupuesto_renta": ("search_properties", {"budget_range": {"min": 550, "max": 1200}}),
     "busqueda_una_recamara": ("search_properties", {"bedrooms": 1}),
-    "busqueda_zona_sin_coincidencia": ("search_properties", {"zone": "Polanco"}),
+    "busqueda_zona_sin_coincidencia": ("search_properties", {"zone": "Cali"}),
     # --- ficha ------------------------------------------------------------------------------------
     "ficha_venta": ("get_property", {"property_id": "prop_00231", "lead_qualified": False}),
     "ficha_venta_calificado": ("get_property", {"property_id": "prop_00231", "lead_qualified": True}),
@@ -94,19 +94,19 @@ TURNOS: dict[str, tuple[str, dict[str, Any]]] = {
     # --- requisitos -------------------------------------------------------------------------------
     "requisitos_venta_no_cumple": ("check_requirements", {
         "property_id": "prop_00231",
-        "lead_profile": {"down_payment": 100000, "monthly_income": 50000, "has_references": True}}),
+        "lead_profile": {"down_payment": 10000, "monthly_income": 4000, "has_references": True}}),
     "requisitos_venta_cumple": ("check_requirements", {
         "property_id": "prop_00231",
-        "lead_profile": {"down_payment": 500000, "monthly_income": 50000, "has_references": True}}),
+        "lead_profile": {"down_payment": 30000, "monthly_income": 4000, "has_references": True}}),
     "requisitos_preventa_no_cumple": ("check_requirements", {
         "property_id": "prop_00237",
-        "lead_profile": {"down_payment": 500000, "monthly_income": 50000, "has_references": True}}),
+        "lead_profile": {"down_payment": 30000, "monthly_income": 4000, "has_references": True}}),
     "requisitos_renta_no_cumple": ("check_requirements", {
         "property_id": "prop_00235",
-        "lead_profile": {"down_payment": 0, "monthly_income": 20000, "has_references": False}}),
+        "lead_profile": {"down_payment": 0, "monthly_income": 2000, "has_references": False}}),
     "requisitos_renta_cumple": ("check_requirements", {
         "property_id": "prop_00235",
-        "lead_profile": {"down_payment": 0, "monthly_income": 90000, "has_references": True}}),
+        "lead_profile": {"down_payment": 0, "monthly_income": 5000, "has_references": True}}),
 }
 
 

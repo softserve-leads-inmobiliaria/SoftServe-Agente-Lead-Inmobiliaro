@@ -93,7 +93,7 @@ def build_other_catalog() -> CountingMCP:
     @mcp.tool()
     def list_neighborhoods() -> Any:
         """Barrios con oferta."""
-        return _ok({"neighborhoods": ["Providencia", "Las Condes"]})
+        return _ok({"neighborhoods": ["El Poblado", "Las Condes"]})
 
     return mcp
 
@@ -121,8 +121,8 @@ def test_discovers_the_tools_the_server_publishes(catalog_like):
 
 def test_calls_a_discovered_tool_and_returns_its_structured_output(catalog_like):
     _, url = catalog_like
-    assert run(CatalogClient(url).call("search_properties", {"zone": "Providencia"})) == {
-        "properties": [{"title": "Casa en Providencia"}]}
+    assert run(CatalogClient(url).call("search_properties", {"zone": "El Poblado"})) == {
+        "properties": [{"title": "Casa en El Poblado"}]}
 
 
 def test_the_same_client_serves_a_different_catalog_without_code_changes(catalog_like):
@@ -133,7 +133,7 @@ def test_the_same_client_serves_a_different_catalog_without_code_changes(catalog
         first, second = CatalogClient(url), CatalogClient(other_url)
         assert sorted(run(first.discover())) == ["get_property", "search_properties"]
         assert sorted(run(second.discover())) == ["get_property", "list_neighborhoods"]
-        assert run(second.call("list_neighborhoods")) == {"neighborhoods": ["Providencia", "Las Condes"]}
+        assert run(second.call("list_neighborhoods")) == {"neighborhoods": ["El Poblado", "Las Condes"]}
         assert run(second.call("get_property", {"property_id": "p1", "lead_qualified": False}))["source"] == "otro"
     finally:
         stop()

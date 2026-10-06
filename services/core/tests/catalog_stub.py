@@ -9,5 +9,5 @@ def stub_call(tool: str, arguments: dict[str, Any] | None = None) -> dict[str, A
     if tool == "get_availability":
         return {"property_id": (arguments or {})["property_id"], "status": "disponible", "checked_at": CHECKED_AT}
     if tool == "get_property":
-        return dict(PROPERTY) | {"address_approx": "Providencia"}
+        return dict(PROPERTY) | {"address_approx": "El Poblado"}
     return {"properties": [dict(PROPERTY)]}

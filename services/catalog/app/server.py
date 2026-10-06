@@ -69,13 +69,13 @@ class _CatalogMCP(FastMCP):
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
         validator = self._validators.get(name)
         if validator is not None and not validator.is_valid(arguments):
-            return _error_result(CatalogError("INVALID_INPUT", "Los argumentos no cumplen el esquema de la tool."))
+            return _error_result(CatalogError("INVALID_INPUT", "The arguments do not match the tool schema."))
         try:
             return await super().call_tool(name, arguments)
         except ToolError as exc:
             if isinstance(exc.__cause__, ValidationError):
-                return _error_result(CatalogError("INVALID_INPUT", "Los argumentos no cumplen el esquema de la tool."))
-            return _error_result(CatalogError("UPSTREAM_UNAVAILABLE", "El catálogo no pudo procesar la solicitud."))
+                return _error_result(CatalogError("INVALID_INPUT", "The arguments do not match the tool schema."))
+            return _error_result(CatalogError("UPSTREAM_UNAVAILABLE", "The catalog could not process the request."))
 
 
 def create_mcp(service: CatalogService | None = None) -> FastMCP:
@@ -99,33 +99,42 @@ def create_mcp(service: CatalogService | None = None) -> FastMCP:
     def search_properties(zone: str | None = None, budget_range: dict[str, float] | None = None,
                           type: PropertyType | None = None, bedrooms: int | None = None,
                           kind: PropertyKind | None = None) -> Any:
-        """Busca propiedades por filtros opcionales. `type` es la operación (venta/renta/preventa);
-        `kind` es el inmueble (departamento/casa/terreno/local/estudio). Si el lead dice "depa" o
-        "departamento", usa kind=departamento. Sin coincidencias devuelve properties: []."""
+        """Search properties with optional filters. `zone` matches the neighborhood or the city
+        (e.g. "El Poblado" or "Medellin"). `type` is the deal: venta (sale), renta (rent) or preventa
+        (pre-sale). `kind` is the property: departamento (apartment, flat, condo), casa (house), terreno
+        (lot, land), local (commercial space, store) or estudio (studio). If the lead asks for a kind of
+        property, pass `kind`, or the search returns other kinds too. Prices are in US dollars (USD).
+        No matches returns properties: [] (not an error)."""
         return run(service.search_properties, zone=zone, budget_range=budget_range, type=type,
                    bedrooms=bedrooms, kind=kind)
 
     @mcp.tool()
     def get_property(property_id: str, lead_qualified: bool) -> Any:
-        """Ficha completa. address_exact solo viene con lead_qualified=true."""
+        """Full property details. address_exact is only returned with lead_qualified=true.
+        `requirements` lists what the deal asks for, with the amounts in US dollars (USD): the minimum
+        down payment as a percentage and an amount (sale and pre-sale), the minimum monthly income
+        (rent) and whether references are required. Use it to tell the lead what the requirements are;
+        whether the lead meets them is only answered by check_requirements."""
         return run(service.get_property, property_id=property_id, lead_qualified=lead_qualified)
 
     @mcp.tool()
     def get_availability(property_id: str) -> Any:
-        """Estado de disponibilidad de una propiedad en este momento."""
+        """Current availability of a property: disponible (available), apartado (reserved) or
+        cerrado (sold or rented)."""
         return run(service.get_availability, property_id=property_id)
 
     @mcp.tool()
     def get_promotions(property_id: str | None = None) -> Any:
-        """Promociones vigentes, opcionalmente de una propiedad."""
+        """Current promotions, optionally for one property."""
         return run(service.get_promotions, property_id=property_id)
 
     @mcp.tool()
     def check_requirements(property_id: str, lead_profile: dict[str, Any]) -> Any:
-        """Verifica si el lead cumple los requisitos de compra o renta de una propiedad: enganche mínimo
-        (venta y preventa), ingreso mensual mínimo (renta) y referencias (renta). Úsala cuando el lead ya
-        dijo cuánto tiene de enganche o cuánto gana al mes. Los tres campos de lead_profile van siempre,
-        en pesos; si uno no aplica a esa operación o el lead no lo dijo, 0 o false."""
+        """Check whether the lead meets the requirements to buy or rent a property: minimum down
+        payment (sale and pre-sale), minimum monthly income (rent) and references (rent). Use it once
+        the lead has said how much they have for the down payment or how much they earn per month. The
+        three lead_profile fields are always sent, in US dollars (USD); if one does not apply to that
+        deal or the lead did not say it, send 0 or false."""
         return run(service.check_requirements, property_id=property_id, lead_profile=lead_profile)
 
     return mcp

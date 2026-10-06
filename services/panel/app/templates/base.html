@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   {% if refresh_seconds %}<meta http-equiv="refresh" content="{{ refresh_seconds }}">{% endif %}
-  <title>{% block title %}Panel de asesores{% endblock %}</title>
+  <title>{% block title %}Agent panel{% endblock %}</title>
   <style>
     :root {
       --bg: #f4f6f8; --surface: #ffffff; --surface-2: #f0f2f5;
@@ -129,7 +129,7 @@
   </style>
 </head>
 <body>
-  <a class="skip" href="#main">Saltar al contenido</a>
+  <a class="skip" href="#main">Skip to content</a>
   {% set path = request.url.path %}
   {% set active = 'negocio' if path.endswith('/negocio')
       else 'funnel' if path.endswith('/funnel')
@@ -137,31 +137,31 @@
       else 'leads' %}
   {% macro nav_links(token, unread, active) -%}
   <ul class="nav">
-    <li><a href="/panel/{{ token }}"{% if active == 'leads' %} aria-current="page"{% endif %}>Mis leads</a></li>
+    <li><a href="/panel/{{ token }}"{% if active == 'leads' %} aria-current="page"{% endif %}>My leads</a></li>
     <li><a href="/panel/{{ token }}/avisos"{% if active == 'avisos' %} aria-current="page"{% endif %}>
-      <span>Avisos</span>
-      {% if unread %}<span class="badge badge-count" title="{{ unread }} sin leer">{{ unread }}</span>{% endif %}
+      <span>Notifications</span>
+      {% if unread %}<span class="badge badge-count" title="{{ unread }} unread">{{ unread }}</span>{% endif %}
     </a></li>
     <li><a href="/panel/{{ token }}/funnel"{% if active == 'funnel' %} aria-current="page"{% endif %}>Funnel</a></li>
-    <li><a href="/panel/{{ token }}/negocio"{% if active == 'negocio' %} aria-current="page"{% endif %}>Negocio</a></li>
+    <li><a href="/panel/{{ token }}/negocio"{% if active == 'negocio' %} aria-current="page"{% endif %}>Business</a></li>
   </ul>
   {%- endmacro %}
   <div class="shell">
     <aside class="sidebar">
       <span class="brand-name">{{ advisor.name }}</span>
-      <span class="muted">Zona {{ advisor.zone }}</span>
-      <nav aria-label="Principal">{{ nav_links(token, unread, active) }}</nav>
+      <span class="muted">Area {{ advisor.zone }}</span>
+      <nav aria-label="Main">{{ nav_links(token, unread, active) }}</nav>
     </aside>
     <div class="main-col">
       <header class="topbar">
         <span class="brand-name">{{ advisor.name }} · {{ advisor.zone }}</span>
         <details class="menu">
-          <summary class="btn btn-ghost">Menú</summary>
-          <nav aria-label="Principal">{{ nav_links(token, unread, active) }}</nav>
+          <summary class="btn btn-ghost">Menu</summary>
+          <nav aria-label="Main">{{ nav_links(token, unread, active) }}</nav>
         </details>
       </header>
       <main id="main">
-        {% if gestionado %}<p class="flash" role="status">Lead en gestión.</p>{% endif %}
+        {% if gestionado %}<p class="flash" role="status">Lead marked as in progress.</p>{% endif %}
         <header class="page-head">
           <h1>{% block heading %}{% endblock %}</h1>
           <p class="muted">{% block subheading %}{% endblock %}</p>

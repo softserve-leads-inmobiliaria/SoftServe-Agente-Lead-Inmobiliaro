@@ -25,7 +25,7 @@ def engine(database_url):
 
 
 class _AgendaCaida:
-    async def assign_advisor(self, lead_id, zone=None, language="es", registered_only=False):
+    async def assign_advisor(self, lead_id, zone=None, language="en", registered_only=False):
         from app.scheduling_client import SchedulingError
 
         raise SchedulingError("UPSTREAM_UNAVAILABLE", "sin catálogo en los tests")

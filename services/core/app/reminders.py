@@ -1,6 +1,6 @@
 """Recordatorio de la visita el día anterior (B-13), como *job* del *scheduler* (A-17, DT-44).
 
-El turno que reserva la visita (B-8) lo programa para las 18:00 del día anterior, en hora de Guadalajara.
+El turno que reserva la visita (B-8) lo programa para las 18:00 del día anterior, en hora de Colombia.
 Si esa hora ya pasó al reservar (p. ej. una visita para mañana reservada esta noche), no hay recordatorio:
 el lead acaba de recibir la confirmación. Uno por visita: su clave es el `visit_id`.
 """
@@ -13,7 +13,7 @@ from typing import Any, Mapping
 from sqlalchemy.orm import Session
 
 from app import jobs
-from app.visits import LOCAL_TZ
+from app.visits import LOCAL_TZ, slot_label
 
 VISIT_REMINDER_KIND = "visit_reminder"
 REMINDER_TIME = time(18, 0)  # hora local del día anterior
@@ -41,7 +41,7 @@ def schedule(session: Session, lead_id: uuid.UUID, conversation_id: uuid.UUID, v
 
 
 def reminder_text(title: str, scheduled_at: datetime, address: str | None) -> str:
-    local = scheduled_at.astimezone(LOCAL_TZ)
-    where = f", en {address}" if address else ""
-    return (f"Te recuerdo tu visita de mañana a {title}: el {local:%d/%m} a las {local:%H:%M}{where}. "
-            "Si no puedes ir, avísame por aquí.")
+    """En inglés, como todo lo que lee el lead (#202): la fecha con el mismo formato que la oferta de horarios."""
+    where = f", at {address}" if address else ""
+    return (f"Just a reminder of your visit to {title} tomorrow, {slot_label(scheduled_at.isoformat())}{where}. "
+            "If you can't make it, just let me know here.")

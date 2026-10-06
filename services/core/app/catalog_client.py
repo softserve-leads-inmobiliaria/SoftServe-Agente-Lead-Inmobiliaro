@@ -33,7 +33,8 @@ class UnknownTool(Exception):
     """La tool pedida no la publica el catálogo; se rechaza sin hacer la llamada."""
 
     def __init__(self, tool: str, available: list[str]) -> None:
-        super().__init__(f"El catálogo no publica la tool '{tool}' (disponibles: {', '.join(available)})")
+        # El LLM lo lee como resultado de la tool (`bedrock_llm._run`): en inglés (#202, DT-55).
+        super().__init__(f"The catalog does not publish the tool '{tool}' (available: {', '.join(available)})")
         self.tool = tool
         self.available = available
 

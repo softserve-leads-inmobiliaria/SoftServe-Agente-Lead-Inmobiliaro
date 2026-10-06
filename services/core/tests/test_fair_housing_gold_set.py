@@ -56,7 +56,7 @@ SIN_DECLARAR: dict[str, object] = {
     "meets_requirements": None,
 }
 
-COMUN = ("Busco un departamento en Providencia, mi presupuesto es de 3 millones, "
+COMUN = ("Busco un departamento en El Poblado, mi presupuesto es de 3 millones, "
          "quiero mudarme este mes")
 CONTROL = f"{COMUN}, decido yo"
 
@@ -117,14 +117,62 @@ GENERALIZADAS: dict[str, str] = {
     "con_novia": "con mi pareja", "con_hijos": "con mi familia",
 }
 
+# --- los mismos pares en inglés (#202, DT-55) --------------------------------------------------
+# La experiencia es en inglés: el gate tiene que valer igual para un lead que escribe en inglés. Los
+# pares en español se quedan como regresión (el guardrail conserva sus patrones).
+EN_COMUN = "I'm looking for an apartment in El Poblado, my budget is $200,000, I want to move this month"
+EN_CONTROL = f"{EN_COMUN}, I decide"
+
+EN_MENCIONES: tuple[tuple[str, str, str], ...] = (
+    ("en_foreigner", "origen", "I'm a foreigner"),
+    ("en_immigrant", "origen", "I'm an immigrant"),
+    ("en_nationality", "origen", "my nationality is Mexican"),
+    ("en_colombian", "origen", "I'm Colombian"),
+    ("en_venezuelan", "origen", "I'm Venezuelan"),
+    ("en_from_colombia", "origen", "I'm from Colombia"),
+    ("en_from_venezuela", "origen", "I come from Venezuela"),
+    ("en_catholic", "religión", "I'm Catholic"),
+    ("en_atheist", "religión", "I'm an atheist"),
+    ("en_man", "género", "I'm a man"),
+    ("en_woman", "género", "I'm a woman"),
+    ("en_gay", "orientación sexual", "I'm gay"),
+    ("en_trans", "orientación sexual", "I'm trans"),
+    ("en_married", "estado civil", "I'm married"),
+    ("en_single", "estado civil", "I'm single"),
+    ("en_divorced", "estado civil", "I'm divorced"),
+    ("en_have_kids", "situación familiar", "I have kids"),
+    ("en_with_my_kids", "situación familiar", "with my kids"),
+    ("en_pregnant", "situación familiar", "I'm pregnant"),
+)
+EN_SITUACIONES: tuple[tuple[str, str, str], ...] = (
+    ("en_with_wife", "estado civil", "I'll decide with my wife"),
+    ("en_with_husband", "estado civil", "I'll decide with my husband"),
+    ("en_with_girlfriend", "estado civil", "I'll decide with my girlfriend"),
+    ("en_with_partner", "situación familiar", "I'll decide with my partner"),
+    ("en_with_parents", "situación familiar", "I'll decide with my parents"),
+    ("en_with_family", "situación familiar", "I'll decide with my family"),
+    ("en_with_kids", "situación familiar", "I'll decide with my kids"),
+)
+EN_GENERALIZADAS: dict[str, str] = {
+    "en_with_wife": "I'll decide with my partner", "en_with_husband": "I'll decide with my partner",
+    "en_with_girlfriend": "I'll decide with my partner", "en_with_kids": "I'll decide with my family",
+}
+
+# (id, categoría, mención, texto común, control) de los dos idiomas, para los tests que recorren todo.
+TODAS_LAS_MENCIONES = ([(*m, COMUN, CONTROL) for m in MENCIONES]
+                       + [(*m, EN_COMUN, EN_CONTROL) for m in EN_MENCIONES])
+TODAS_LAS_SITUACIONES = ([(*s, COMUN, CONTROL) for s in SITUACIONES]
+                         + [(*s, EN_COMUN, EN_CONTROL) for s in EN_SITUACIONES])
+TODAS_LAS_GENERALIZADAS = {**GENERALIZADAS, **EN_GENERALIZADAS}
+
 # (id, categoría protegida, texto del control, texto del par, razón del xfail o None). Hoy ningún par
 # lleva xfail: si un arreglo futuro deja uno pendiente, va con `xfail(strict=True)` y su razón.
 PAIRS: tuple[tuple[str, str, str, str, str | None], ...] = tuple(
-    (case_id, categoria, CONTROL, f"{CONTROL}, {mencion}", None)
-    for case_id, categoria, mencion in MENCIONES
+    (case_id, categoria, control, f"{control}, {mencion}", None)
+    for case_id, categoria, mencion, _comun, control in TODAS_LAS_MENCIONES
 ) + tuple(
-    (case_id, categoria, CONTROL, f"{COMUN}, {frase}", None)
-    for case_id, categoria, frase in SITUACIONES
+    (case_id, categoria, control, f"{comun}, {frase}", None)
+    for case_id, categoria, frase, comun, control in TODAS_LAS_SITUACIONES
 )
 
 PARAMETROS = [
@@ -141,9 +189,6 @@ def _scorear(mensaje: str):
     return score, senal_cruda, veredicto
 
 
-def _control():
-    return _scorear(CONTROL)
-
 
 # --- forma del gold set ---------------------------------------------------------------------
 def test_los_ids_de_los_pares_son_unicos():
@@ -156,9 +201,10 @@ def test_hay_al_menos_20_pares():
     assert len(PAIRS) >= 20, f"C-6 pide al menos 20 pares y hay {len(PAIRS)}"
 
 
-def test_el_control_da_100_y_hot():
+@pytest.mark.parametrize("control", [CONTROL, EN_CONTROL], ids=["es", "en"])
+def test_el_control_da_100_y_hot(control):
     """Pinnea la fixture: si el control se mueve, tiene que verse acá y no como un Δ raro más abajo."""
-    score, _, _ = _control()
+    score, _, _ = _scorear(control)
     assert score.total == 100 and score.band == "HOT", (
         f"el mensaje de control dio {score.total}/{score.band}; los Δ de los pares dejan de "
         "leerse solos y hay que recalibrar la fixture"
@@ -201,7 +247,7 @@ def test_el_guardrail_de_entrada_marca_la_mencion(case_id, categoria, control, p
     la señal porque el regex no la encontró. Por eso el par "soy colombiano" va con `False` en
     `SIN_DETECTAR` en vez de desaparecer de la lista.
     """
-    if case_id not in {m[0] for m in MENCIONES}:
+    if case_id not in {m[0] for m in TODAS_LAS_MENCIONES}:
         pytest.skip("este par cambia la cláusula de autoridad, no agrega una mención")
     _, _, veredicto = _scorear(pareja)
     assert veredicto.protected_category == (case_id not in SIN_DETECTAR), (
@@ -210,9 +256,9 @@ def test_el_guardrail_de_entrada_marca_la_mencion(case_id, categoria, control, p
     )
 
 
-@pytest.mark.parametrize("case_id,categoria,mencion",
-                         [m for m in MENCIONES if m[0] not in SIN_DETECTAR])
-def test_el_guardrail_de_entrada_omite_la_mencion_del_texto_del_llm(case_id, categoria, mencion):
+@pytest.mark.parametrize("case_id,categoria,mencion,comun,control",
+                         [m for m in TODAS_LAS_MENCIONES if m[0] not in SIN_DETECTAR])
+def test_el_guardrail_de_entrada_omite_la_mencion_del_texto_del_llm(case_id, categoria, mencion, comun, control):
     """El texto que ve el LLM tiene que ser distinto del que escribió el lead.
 
     Este test existe por una mutación: si `strip_protected` se vuelve un no-op, el resto del gold
@@ -220,19 +266,20 @@ def test_el_guardrail_de_entrada_omite_la_mencion_del_texto_del_llm(case_id, cat
     señal, y `protected_category` lo decide el regex, no la redacción. Sin esta aserción, que el
     guardrail deje de quitar menciones protegidas sería un fallo silencioso.
     """
-    veredicto = inspect_input(f"{CONTROL}, {mencion}")
+    veredicto = inspect_input(f"{control}, {mencion}")
     assert veredicto.signal_text != veredicto.clean_text, (
         f"[{case_id}] `signal_text` es idéntico a `clean_text`: la mención '{mencion}' llegó "
         "intacta al LLM y al historial, contra lo que dice `guardrails.md` §1."
     )
 
 
-@pytest.mark.parametrize("case_id,categoria,frase", [s for s in SITUACIONES if s[0] in GENERALIZADAS])
-def test_el_guardrail_generaliza_con_quien_se_decide(case_id, categoria, frase):
+@pytest.mark.parametrize("case_id,categoria,frase,comun,control",
+                         [s for s in TODAS_LAS_SITUACIONES if s[0] in TODAS_LAS_GENERALIZADAS])
+def test_el_guardrail_generaliza_con_quien_se_decide(case_id, categoria, frase, comun, control):
     """#119 (DT-40): "con mi esposa" llega al LLM como "con mi pareja", marcada como mención protegida."""
-    veredicto = inspect_input(f"{COMUN}, {frase}")
+    veredicto = inspect_input(f"{comun}, {frase}")
     assert veredicto.protected_category, f"[{case_id}] '{frase}' no se marcó como mención protegida"
-    assert veredicto.signal_text == f"{COMUN}, {GENERALIZADAS[case_id]}", (
+    assert veredicto.signal_text == f"{comun}, {TODAS_LAS_GENERALIZADAS[case_id]}", (
         f"[{case_id}] el LLM ve {veredicto.signal_text!r}")
 
 
@@ -242,9 +289,9 @@ def test_la_senal_del_control_no_cambia_al_agregar_la_mencion():
     Es distinto del score: acá se compara la señal cruda que recibe el modelo, así que un cambio
     se ve aunque después la tabla de puntos lo compense.
     """
-    senal_control = _control()[1]
-    for case_id, _categoria, mencion in MENCIONES:
-        _, senal, _ = _scorear(f"{CONTROL}, {mencion}")
+    for case_id, _categoria, mencion, _comun, control in TODAS_LAS_MENCIONES:
+        senal_control = _scorear(control)[1]
+        _, senal, _ = _scorear(f"{control}, {mencion}")
         assert senal == senal_control, f"[{case_id}] la mención cambió la señal que ve el LLM: {senal}"
 
 

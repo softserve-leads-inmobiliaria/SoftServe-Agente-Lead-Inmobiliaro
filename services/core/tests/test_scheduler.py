@@ -64,7 +64,7 @@ class Lead:
         self.engine = engine
         self.conversation_id, self.lead_id = str(uuid.uuid4()), str(uuid.uuid4())
 
-    def say(self, message="Hola"):
+    def say(self, message="Hi"):
         event = INBOUND | {"conversation_id": self.conversation_id, "lead_id": self.lead_id,
                            "event_id": str(uuid.uuid4()), "text": message}
         return asyncio.run(process_turn(self.engine, event, Catalog()))
@@ -121,7 +121,7 @@ def test_nothing_runs_before_it_is_due(engine):
 def test_a_state_without_no_response_edge_schedules_nothing(engine):
     lead = Lead(engine)
     lead.say()
-    lead.say("Busco una casa")  # DISCOVERY -> QUALIFY: ahí no hay arista no_response
+    lead.say("I'm looking for a house")  # DISCOVERY -> QUALIFY: ahí no hay arista no_response
     assert lead.state() == "QUALIFY" and lead.pending() is None
     assert lead.jobs()[-1][0] == "cancelled"
 
@@ -163,7 +163,7 @@ def test_the_lead_replying_restarts_the_count(engine):
     lead.say()
     _run(engine, datetime.now(UTC) + 25 * HOUR, channel)
     assert lead.pending()[1] == 2
-    lead.say("Hola")  # sigue en DISCOVERY
+    lead.say("Hi")  # sigue en DISCOVERY
     assert lead.state() == "DISCOVERY" and lead.pending()[:2] == ("DISCOVERY", 1)
 
 
@@ -174,7 +174,7 @@ def test_a_lead_returning_from_nurture_goes_back_to_discovery_with_a_fresh_count
     for hours in (25, 49, 73):
         _run(engine, t0 + hours * HOUR, Channel())
     assert lead.state() == "NURTURE"
-    lead.say("Hola, sigo buscando")
+    lead.say("Hi, I'm still looking")
     assert lead.state() == "DISCOVERY" and lead.pending()[:2] == ("DISCOVERY", 1)
 
 

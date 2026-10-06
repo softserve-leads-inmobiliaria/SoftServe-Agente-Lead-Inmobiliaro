@@ -55,8 +55,8 @@ def remember_property(tool_results: Mapping[str, Any], previous: Mapping[str, An
 def listing_greeting(listing: Mapping[str, Any]) -> str:
     """Saludo del lead que llega por el anuncio de una propiedad (#122). Título y referencia salen del
     catálogo; la referencia queda en el historial para que el LLM sepa de qué propiedad se habla después."""
-    return (f"¡Hola! Soy el asistente de la inmobiliaria. Veo que llegaste por el anuncio de "
-            f"{listing['title']} (ref. {listing['id']}). ¿Qué te gustaría saber?")
+    return (f"Hi! I'm the agency's assistant. I see you came from the listing for "
+            f"{listing['title']} (ref. {listing['id']}). What would you like to know?")
 
 
 def zone_of_interest(tool_results: Mapping[str, Any]) -> str | None:

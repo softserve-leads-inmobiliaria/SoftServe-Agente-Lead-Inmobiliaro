@@ -5,30 +5,30 @@
   Lead {{ (lead.id|string|replace('-', ''))[:6] }}
   {{ ui.status_badge(lead.status) }}
 {% endblock %}
-{% block subheading %}{{ lead.zone or "sin zona" }} · {{ lead.advisor_id or "sin asignar" }}{% endblock %}
+{% block subheading %}{{ lead.zone or "no area" }} · {{ lead.advisor_id or "unassigned" }}{% endblock %}
 
 {% block content %}
 <div class="card">
-  <h2 class="section-title">Datos</h2>
+  <h2 class="section-title">Details</h2>
   <dl>
-    <dt>Etapa</dt><dd>{{ fsm_state or "—" }}</dd>
-    <dt>Estado</dt>
+    <dt>Stage</dt><dd>{{ fsm_state or "—" }}</dd>
+    <dt>Status</dt>
     <dd>
       {{ ui.status_badge(lead.status) }}
       {% if lead.status in ("nuevo", "mql") %}
       <form class="inline" method="post" action="/panel/{{ token }}/leads/{{ lead.id }}/gestionar">
-        <button type="submit" class="btn">Marcar en gestión</button>
+        <button type="submit" class="btn">Mark as in progress</button>
       </form>
       {% endif %}
     </dd>
     <dt>Telegram</dt><dd class="muted">{{ lead.telegram_user_id }}</dd>
-    <dt>Asesor</dt><dd>{{ lead.advisor_id or "sin asignar" }}</dd>
-    <dt>Zona</dt><dd>{{ lead.zone or "—" }}</dd>
-    <dt>Presupuesto</dt><dd>{{ lead.budget or "—" }}</dd>
-    <dt>Plazo</dt><dd>{{ lead.timing or "—" }}</dd>
-    <dt>Consentimiento</dt><dd>{{ lead.consent_status }}</dd>
-    <dt>Teléfono</dt><dd>{{ lead.phone or "—" }}</dd>
-    <dt>Correo</dt><dd>{{ lead.email or "—" }}</dd>
+    <dt>Agent</dt><dd>{{ lead.advisor_id or "unassigned" }}</dd>
+    <dt>Area</dt><dd>{{ lead.zone or "—" }}</dd>
+    <dt>Budget</dt><dd>{{ lead.budget or "—" }}</dd>
+    <dt>Timeline</dt><dd>{{ lead.timing or "—" }}</dd>
+    <dt>Consent</dt><dd>{{ lead.consent_status }}</dd>
+    <dt>Phone</dt><dd>{{ lead.phone or "—" }}</dd>
+    <dt>Email</dt><dd>{{ lead.email or "—" }}</dd>
   </dl>
 </div>
 
@@ -38,13 +38,13 @@
   <p>{{ ui.band_badge(score.band, score.total ~ "/100") }}</p>
   <div class="table-wrap">
     <table>
-      <thead><tr><th scope="col">Dimensión</th><th scope="col">Puntos</th><th scope="col">Proporción</th></tr></thead>
+      <thead><tr><th scope="col">Dimension</th><th scope="col">Points</th><th scope="col">Share</th></tr></thead>
       <tbody>
-        {% for label, value in (("Necesidad", score.need_fit), ("Presupuesto", score.budget),
-                                ("Decisión", score.authority), ("Plazo", score.timing),
-                                ("Elegibilidad", score.eligibility)) %}
+        {% for name, value in (("Need", score.need_fit), ("Budget", score.budget),
+                               ("Authority", score.authority), ("Timing", score.timing),
+                               ("Eligibility", score.eligibility)) %}
         <tr>
-          <td>{{ label }}</td><td>{{ value }}</td><td>{{ ui.bar(value, 20, label ~ ": " ~ value) }}</td>
+          <td>{{ name }}</td><td>{{ value }}</td><td>{{ ui.bar(value, 20, name ~ ": " ~ value) }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -54,20 +54,20 @@
   <ul class="muted">{% for reason in score.reasons %}<li>{{ reason }}</li>{% endfor %}</ul>
   {% endif %}
   {% else %}
-  <p class="muted">Todavía sin calificar.</p>
+  <p class="muted">Not scored yet.</p>
   {% endif %}
 </div>
 
 <div class="card">
-  <h2 class="section-title">Visitas</h2>
+  <h2 class="section-title">Visits</h2>
   {% if visits %}
   <div class="table-wrap">
     <table>
-      <thead><tr><th scope="col">Fecha</th><th scope="col">Propiedad</th></tr></thead>
+      <thead><tr><th scope="col">Date</th><th scope="col">Property</th></tr></thead>
       <tbody>
         {% for visit in visits %}
         <tr>
-          <td>{{ visit.scheduled_at.strftime("%d/%m/%Y %H:%M") }}</td>
+          <td>{{ visit.scheduled_at.strftime("%b %d, %Y %H:%M") }}</td>
           <td>{{ visit.property_id }}</td>
         </tr>
         {% endfor %}
@@ -75,22 +75,22 @@
     </table>
   </div>
   {% else %}
-  <p class="muted">Sin visitas agendadas.</p>
+  <p class="muted">No visits scheduled.</p>
   {% endif %}
 </div>
 
 <div class="card" id="operacion">
-  <h2 class="section-title">Operación</h2>
+  <h2 class="section-title">Deal</h2>
   {% if deals %}
   <div class="table-wrap">
     <table>
-      <thead><tr><th scope="col">Fecha</th><th scope="col">Propiedad</th><th scope="col">Tipo</th><th scope="col">Precio</th><th scope="col">Asesor</th></tr></thead>
+      <thead><tr><th scope="col">Date</th><th scope="col">Property</th><th scope="col">Type</th><th scope="col">Price</th><th scope="col">Agent</th></tr></thead>
       <tbody>
         {% for deal in deals %}
         <tr>
-          <td>{{ deal.closed_on.strftime("%d/%m/%Y") }}</td>
+          <td>{{ deal.closed_on.strftime("%b %d, %Y") }}</td>
           <td>{{ deal.title }} <span class="muted">({{ deal.property_id }})</span></td>
-          <td>{{ deal.kind }}</td>
+          <td>{{ label("deal_kind", deal.kind) }}</td>
           <td>${{ "{:,.2f}".format(deal.price) }}</td>
           <td>{{ deal.advisor_id }}</td>
         </tr>
@@ -99,26 +99,26 @@
     </table>
   </div>
   {% else %}
-  <p class="muted">Sin operación cerrada.</p>
+  <p class="muted">No closed deal.</p>
   {% endif %}
 
   {% if close_error %}<p class="error">{{ close_error }}</p>{% endif %}
   {% if close_options %}
   <details class="close"{% if close_error %} open{% endif %}>
-    <summary>Cerrar operación</summary>
+    <summary>Close a deal</summary>
     <form class="close" method="post" action="/panel/{{ token }}/leads/{{ lead.id }}/cerrar">
-      <label class="field">Propiedad
+      <label class="field">Property
         <select name="property_id" required>
-          <option value="" disabled{% if not closing %} selected{% endif %}>Elige la propiedad</option>
-          {% for touched, label in ((true, "Las que le interesaron al lead"), (false, "Disponibles en su zona")) %}
+          <option value="" disabled{% if not closing %} selected{% endif %}>Choose the property</option>
+          {% for touched, group_label in ((true, "The ones the lead was interested in"), (false, "Available in their area")) %}
           {% set group = close_options | selectattr("touched", "equalto", touched) | list %}
           {% if group %}
-          <optgroup label="{{ label }}">
+          <optgroup label="{{ group_label }}">
             {% for option in group %}
             <option value="{{ option.id }}" data-kind="{{ option.kind }}"
                     {%- if not option.closable %} disabled{% endif %}
                     {%- if closing and closing.property_id == option.id %} selected{% endif %}>
-              {{ option.title }} ({{ option.id }}) · {{ "ya cerrada" if not option.closable else option.status }}
+              {{ option.title }} ({{ option.id }}) · {{ label("property_status", option.status) }}
             </option>
             {% endfor %}
           </optgroup>
@@ -126,21 +126,21 @@
           {% endfor %}
         </select>
       </label>
-      <label class="field">Tipo
+      <label class="field">Type
         <select name="kind" required>
-          <option value="" disabled{% if not closing %} selected{% endif %}>Renta o venta</option>
+          <option value="" disabled{% if not closing %} selected{% endif %}>Rental or sale</option>
           {% for kind in ("renta", "venta") %}
-          <option value="{{ kind }}"{% if closing and closing.kind == kind %} selected{% endif %}>{{ kind }}</option>
+          <option value="{{ kind }}"{% if closing and closing.kind == kind %} selected{% endif %}>{{ label("deal_kind", kind) }}</option>
           {% endfor %}
         </select>
       </label>
-      <label class="field">Precio de cierre
+      <label class="field">Closing price (USD)
         <input type="number" name="price" min="0" step="0.01" required value="{{ closing.price if closing else '' }}">
       </label>
-      <label class="field">Fecha de cierre
+      <label class="field">Closing date
         <input type="date" name="closed_on" max="{{ today }}" required value="{{ closing.closed_on if closing else today }}">
       </label>
-      <button type="submit" class="btn">Cerrar operación</button>
+      <button type="submit" class="btn">Close the deal</button>
     </form>
   </details>
   <script>
@@ -155,28 +155,28 @@
 
 {% if lead.handoff_summary %}
 <div class="card">
-  <h2 class="section-title">Resumen del traspaso</h2>
+  <h2 class="section-title">Handoff summary</h2>
   <p style="white-space:pre-line;margin:0">{{ lead.handoff_summary }}</p>
   {% if lead.handoff_summary_at %}
-  <p class="muted" style="margin:8px 0 0">Generado el {{ lead.handoff_summary_at.strftime("%d/%m %H:%M") }}</p>
+  <p class="muted" style="margin:8px 0 0">Generated on {{ lead.handoff_summary_at.strftime("%b %d, %H:%M") }}</p>
   {% endif %}
 </div>
 {% endif %}
 
 <div class="card">
-  <h2 class="section-title">Conversación</h2>
+  <h2 class="section-title">Conversation</h2>
   {% if messages %}
     {% for message in messages %}
     <div class="msg msg-{{ message.role }}">
       <div class="msg-role">
-        {{ "Lead" if message.role == "user" else "Agente" }} ·
-        {{ message.created_at.strftime("%d/%m %H:%M") }}
+        {{ "Lead" if message.role == "user" else "Assistant" }} ·
+        {{ message.created_at.strftime("%b %d, %H:%M") }}
       </div>
       <div>{{ message.content }}</div>
     </div>
     {% endfor %}
   {% else %}
-  <p class="muted">Sin mensajes todavía.</p>
+  <p class="muted">No messages yet.</p>
   {% endif %}
 </div>
 {% endblock %}

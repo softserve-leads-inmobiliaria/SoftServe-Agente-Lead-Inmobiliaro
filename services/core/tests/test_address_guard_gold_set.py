@@ -12,38 +12,62 @@ from app.address_guard import check
 # (id, respuesta candidata, lead_qualified, lo que dijo el lead, ¿debe pasar?)
 CASES = [
     # --- lead calificado: la dirección exacta ya es suya para ver -------------------------------------
-    ("calificado_ve_direccion_real", "Está en Calle Lerdo 1204, Providencia.", True, "", True),
+    ("calificado_ve_direccion_real", "Está en Calle Lerdo 1204, El Poblado.", True, "", True),
     ("calificado_ve_blvd_con_sufijo", "Es el Blvd. Puerta de Hierro 4965 PH.", True, "", True),
 
     # --- sin calificar, pero no es una dirección exacta --------------------------------------------
-    ("approx_sin_numero_no_dispara", "Está cerca de Av. Vallarta, en Providencia.", False, "", True),
-    ("solo_zona_no_dispara", "Está en Providencia, muy cerca del centro.", False, "", True),
+    ("approx_sin_numero_no_dispara", "Está cerca de Av. Vallarta, en El Poblado.", False, "", True),
+    ("solo_zona_no_dispara", "Está en El Poblado, muy cerca del centro.", False, "", True),
     ("sin_ninguna_calle", "Tiene 2 recámaras y cuesta $2,350,000.", False, "", True),
-    ("zona_comercial_sin_numero", "Es zona comercial, cerca de Glorieta Chapalita.", False, "", True),
+    ("zona_comercial_sin_numero", "Es zona comercial, cerca de Glorieta Laureles.", False, "", True),
     # El número existe, pero es una distancia, no una dirección (el único falso positivo real de
     # este patrón tan simple — de ahí la salvedad por palabra de unidad).
     ("distancia_no_es_direccion", "Circuito Los Pinos está a 5 minutos de la entrada.", False, "", True),
     ("distancia_en_cuadras_no_es_direccion", "Queda a 10 cuadras de Calle Independencia.", False, "", True),
+    # Dos cifras: antes el patrón retrocedía hasta "1" y perdía la unidad.
+    ("distancia_de_dos_cifras_no_es_direccion", "Avenida Guadalupe está a 15 minutos.", False, "", True),
     # El lead ya dio su propia dirección: repetírsela no es una fuga de la propiedad (mismo criterio
     # que A-5 con los números del lead).
     ("direccion_del_lead_no_es_fuga", "Veo que vives en Av. Independencia 200, busco algo cerca de ahí.",
      False, "vivo en Av. Independencia 200", True),
 
     # --- sin calificar y sí es una dirección exacta: debe bloquearse -------------------------------
-    ("direccion_real_sin_calificar", "Está en Calle Lerdo 1204, Providencia.", False, "", False),
-    ("avenida_abreviada", "Se ubica en Av. Guadalupe 501, Chapalita.", False, "", False),
-    ("avenida_completa", "Se ubica en Avenida Guadalupe 501, Chapalita.", False, "", False),
+    ("direccion_real_sin_calificar", "Está en Calle Lerdo 1204, El Poblado.", False, "", False),
+    ("avenida_abreviada", "Se ubica en Av. Guadalupe 501, Laureles.", False, "", False),
+    ("avenida_completa", "Se ubica en Avenida Guadalupe 501, Laureles.", False, "", False),
     ("blvd_con_sufijo_sin_calificar", "Es el Blvd. Puerta de Hierro 4965 PH.", False, "", False),
-    ("circuito_sin_calificar", "Está en Circuito Los Pinos 45, Zapopan.", False, "", False),
+    ("circuito_sin_calificar", "Está en Circuito Los Pinos 45, Usaquen.", False, "", False),
     ("minuscula_sigue_disparando", "queda en av. juárez 45, cerca del centro", False, "", False),
     ("direccion_al_inicio_de_la_oracion", "Calle Sorolla 88 es la dirección exacta.", False, "", False),
     # El número "88" también aparece como m² en los resultados reales de este turno: A-5 lo dejaría
     # pasar por estar "respaldado" por una tool, pero sigue siendo una dirección — A-6 no depende de
     # qué permitió A-5 este turno (DT-23).
-    ("numero_coincide_con_un_dato_real_del_turno", "Tiene 88 m² y está en Calle Sorolla 88, Providencia.",
+    ("numero_coincide_con_un_dato_real_del_turno", "Tiene 88 m² y está en Calle Sorolla 88, El Poblado.",
      False, "", False),
-    ("direccion_de_otra_propiedad_del_turno", "La otra opción está en Calle Gante 19, Providencia.",
+    ("direccion_de_otra_propiedad_del_turno", "La otra opción está en Calle Gante 19, El Poblado.",
      False, "", False),
+    # Direcciones colombianas (DT-55): el inventario de demo está en Medellín y Bogotá.
+    ("carrera_con_numeral_sin_calificar", "It is at Carrera 37 # 8A-24, El Poblado.", False, "", False),
+    ("calle_con_numeral_sin_calificar", "The address is Calle 37 Sur # 27-80, Envigado.", False, "", False),
+    ("circular_sin_calificar", "It is on Circular 4 # 70-12, Laureles.", False, "", False),
+    ("carrera_abreviada_sin_calificar", "It is on Cra. 76 # 33-50.", False, "", False),
+    ("calificado_ve_carrera", "It is at Carrera 37 # 8A-24, El Poblado.", True, "", True),
+    ("approx_colombiana_no_dispara", "It is in El Poblado, near Parque Lleras.", False, "", True),
+
+    # --- en inglés (#202, DT-55): el LLM responde en inglés y puede traducir el tipo de vía -------------
+    ("en_approx_sin_numero", "It's near Avenida Nutibara, in Laureles.", False, "", True),
+    ("en_distancia_en_minutos", "Avenida El Poblado is 10 minutes away.", False, "", True),
+    ("en_distancia_en_cuadras", "It's 5 blocks from Carrera 43A.", False, "", True),
+    # Una vía numerada sin placa es una referencia aproximada, no la dirección exacta.
+    ("via_numerada_sin_placa", "It's near Calle 10, in El Poblado.", False, "", True),
+    ("via_numerada_con_orientacion_sin_placa", "It's off Calle 37 Sur, in Envigado.", False, "", True),
+    ("via_numerada_con_numero_y_placa", "It's at Calle 10 No. 43-12.", False, "", False),
+    ("en_piso_no_es_direccion", "It's on the 1st floor, with 2 bedrooms.", False, "", True),
+    ("en_direccion_del_lead", "I see you live on Calle 50 # 20-10, I'll look nearby.",
+     False, "I live on Calle 50 # 20-10", True),
+    ("en_calle_traducida", "The address is Street 10 # 43-12, El Poblado.", False, "", False),
+    ("en_avenida_traducida", "It's on Avenue 80 # 33-50.", False, "", False),
+    ("en_calificado_ve_calle", "The address is Street 10 # 43-12, El Poblado.", True, "", True),
 ]
 
 assert len(CASES) >= 15, "el gold set de A-6 tiene que cubrir tanto casos que deben pasar como los que no"

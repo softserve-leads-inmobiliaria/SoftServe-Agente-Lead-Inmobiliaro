@@ -62,42 +62,42 @@ def crudo(demo):
 #
 # (id, respuesta candidata, turno del catálogo, lo que dijo el lead, ¿debe pasar?)
 CASOS = [
-    # --- respuestas correctas: solo repiten lo que devolvieron las tools del turno ---------------------    # Búsqueda de venta en Providencia: prop_00231 ($2,350,000) y prop_00232 ($1,650,000), ambas
+    # --- respuestas correctas: solo repiten lo que devolvieron las tools del turno ---------------------    # Búsqueda de venta en El Poblado: prop_00231 ($185,000) y prop_00232 ($129,000), ambas
     # disponibles; prop_00240 (estudio, renta) también sale por zona.
-    ("precio_depto_providencia_correcto", "Ese departamento cuesta $2,350,000.",
-     "busqueda_venta_providencia", "", True),
-    ("precio_depto_1rec_correcto", "El otro sale en $1,650,000.",
-     "busqueda_venta_providencia", "", True),
+    ("precio_depto_poblado_correcto", "Ese departamento cuesta $185,000.",
+     "busqueda_venta_poblado", "", True),
+    ("precio_depto_1rec_correcto", "El otro sale en $129,000.",
+     "busqueda_venta_poblado", "", True),
     ("m2_depto_correcto", "Tiene 78.5 m² de construcción.",
-     "busqueda_venta_providencia", "", True),
+     "busqueda_venta_poblado", "", True),
     ("recamaras_depto_correctas", "Es de 2 recámaras y 2 baños.",
-     "busqueda_venta_providencia", "", True),
-    ("dos_propiedades_precios_correctos", "Uno en $2,350,000 y otro en $1,650,000.",
-     "busqueda_venta_providencia", "", True),
-    # Rental: prop_00235 ($18,500) y prop_00240 ($9,500) disponibles; prop_00236 ($12,000) va a
+     "busqueda_venta_poblado", "", True),
+    ("dos_propiedades_precios_correctos", "Uno en $185,000 y otro en $129,000.",
+     "busqueda_venta_poblado", "", True),
+    # Rental: prop_00235 ($1,150) y prop_00240 ($600) disponibles; prop_00236 ($750) va a
     # `unavailable` por estar apartado.
-    ("renta_precio_correcto", "El depto de Chapalita en renta cuesta $18,500.",
+    ("renta_precio_correcto", "El depto de Laureles en renta cuesta $1,150.",
      "busqueda_renta", "", True),
-    ("renta_precio_estudio_correcto", "El estudio sale en $9,500.",
+    ("renta_precio_estudio_correcto", "El estudio sale en $600.",
      "busqueda_renta", "", True),
     ("renta_m2_correcto", "El depto tiene 70 m².",
      "busqueda_renta", "", True),
     ("renta_tipo_correcto", "Ese es en renta, no en venta.",
      "busqueda_renta", "", True),
-    # Preventa: prop_00237 ($3,900,000) y prop_00238 ($8,500,000), ambas disponibles.
-    ("preventa_precio_correcto", "El depto en preventa cuesta $3,900,000.",
+    # Preventa: prop_00237 ($295,000) y prop_00238 ($640,000), ambas disponibles.
+    ("preventa_precio_correcto", "El depto en preventa cuesta $295,000.",
      "busqueda_preventa", "", True),
-    ("preventa_penthouse_correcto", "El penthouse cuesta $8,500,000.",
+    ("preventa_penthouse_correcto", "El penthouse cuesta $640,000.",
      "busqueda_preventa", "", True),
     # Sin recámaras (C-9): estudio, terreno y local, los tres con `bedrooms: 0` real.
     ("terreno_m2_correcto", "El terreno tiene 620 m².",
      "busqueda_sin_recamaras", "", True),
     ("estudio_cero_recamaras_real", "El estudio no tiene recámaras, es un estudio.",
      "busqueda_sin_recamaras", "", True),
-    ("terreno_precio_correcto", "El terreno cuesta $2,100,000.",
+    ("terreno_precio_correcto", "El terreno cuesta $160,000.",
      "busqueda_sin_recamaras", "", True),
     # Ficha completa (get_property).
-    ("ficha_precio_correcto", "La ficha completa: $2,350,000, 78.5 m², 2 recámaras.",
+    ("ficha_precio_correcto", "La ficha completa: $185,000, 78.5 m², 2 recámaras.",
      "ficha_venta", "", True),
     ("ficha_terreno_banos_cero", "El terreno no tiene baños.",
      "ficha_terreno_calificado", "", True),
@@ -123,36 +123,36 @@ CASOS = [
     ("sin_coincidencia_sin_cifras", "No tengo nada que coincida con lo que buscas.",
      "busqueda_zona_sin_coincidencia", "", True),
     # Números que dijo el propio lead se pueden repetir.
-    ("repite_presupuesto_del_lead", "Con $3,000,000 tienes buenas opciones.",
-     "busqueda_zona_sin_coincidencia", "mi presupuesto es de 3,000,000", True),
+    ("repite_presupuesto_del_lead", "Con $250,000 tienes buenas opciones.",
+     "busqueda_zona_sin_coincidencia", "mi presupuesto es de 250,000", True),
     # Estado real reportado por A-4: prop_00236 está `apartado` y aparece en `unavailable` con su
     # estado real, así que decir que está apartada sí es verificable.
-    ("estado_apartado_real", "El depto de Chapalita de 1 recámara ya está apartado.",
+    ("estado_apartado_real", "El depto de Laureles de 1 recámara ya está apartado.",
      "busqueda_renta", "", True),
 
     # --- los casos borde del resto del inventario (C-9) ---------------------------------------------
-    # Búsqueda por presupuesto de venta (2M-5M): prop_00231, prop_00233, prop_00237 y prop_00241 se
+    # Búsqueda por presupuesto de venta (150,000-400,000): prop_00231, prop_00233, prop_00237 y prop_00241 se
     # ofrecen; prop_00239 (cerrada) se aparta. Ojo que en este turno `2.5` sí está autorizado (los
-    # 2.5 baños de la casa de Zapopan), así que un caso de m² o baños inventados tiene que usar otro.
-    ("presupuesto_venta_casa_zapopan", "La casa de Zapopan cuesta $4,800,000.",
+    # 2.5 baños de la casa de Usaquen), así que un caso de m² o baños inventados tiene que usar otro.
+    ("presupuesto_venta_casa_usaquen", "La casa de Usaquen cuesta $365,000.",
      "busqueda_presupuesto_venta", "", True),
-    ("presupuesto_venta_cerrada_real", "La de Tlaquepaque ya está cerrada, no la ofrezco.",
+    ("presupuesto_venta_cerrada_real", "La de Chapinero ya está cerrada, no la ofrezco.",
      "busqueda_presupuesto_venta", "", True),
-    # Búsqueda por presupuesto de renta (9,000-20,000): prop_00235 y prop_00240.
-    ("presupuesto_renta_precio_correcto", "Con ese presupuesto, el depto de Chapalita sale en $18,500.",
+    # Búsqueda por presupuesto de renta (550-1,200): prop_00235 y prop_00240.
+    ("presupuesto_renta_precio_correcto", "Con ese presupuesto, el depto de Laureles sale en $1,150.",
      "busqueda_presupuesto_renta", "", True),
     # Una recámara: solo prop_00232 se ofrece; prop_00236 (también de 1 recámara) está apartada.
-    ("una_recamara_precio_correcto", "El depto de una recámara cuesta $1,650,000.",
+    ("una_recamara_precio_correcto", "El depto de una recámara cuesta $129,000.",
      "busqueda_una_recamara", "", True),
-    # Zapopan: prop_00233 y prop_00241 disponibles, prop_00234 (la casa de 4 recámaras) apartada.
-    ("zapopan_terreno_y_casa", "En Zapopan tengo el terreno de $2,100,000 y la casa de $4,800,000.",
-     "busqueda_zapopan", "", True),
+    # Usaquen: prop_00233 y prop_00241 disponibles, prop_00234 (la casa de 4 recámaras) apartada.
+    ("usaquen_terreno_y_casa", "En Usaquen tengo el terreno de $160,000 y la casa de $365,000.",
+     "busqueda_usaquen", "", True),
     # Fichas por tipo de operación.
-    ("ficha_renta_precio_correcto", "Este depto en renta está en $18,500.",
+    ("ficha_renta_precio_correcto", "Este depto en renta está en $1,150.",
      "ficha_renta", "", True),
-    ("ficha_preventa_precio_correcto", "El depto en preventa cuesta $3,900,000.",
+    ("ficha_preventa_precio_correcto", "El depto en preventa cuesta $295,000.",
      "ficha_preventa", "", True),
-    ("ficha_cerrada_precio_correcto", "La casa de Tlaquepaque está en $2,900,000 pero ya está cerrada.",
+    ("ficha_cerrada_precio_correcto", "La casa de Chapinero está en $220,000 pero ya está cerrada.",
      "ficha_cerrada", "", True),
     # Disponibilidad consultada directamente: el estado es lo único que la tool devuelve.
     ("disponibilidad_confirma_apartado", "Confirmo: está apartado.",
@@ -168,14 +168,14 @@ CASOS = [
      "requisitos_venta_cumple", "", True),
     ("requisitos_renta_cumplidos", "Cumples los requisitos para rentar.",
      "requisitos_renta_cumple", "", True),
-    ("cifra_sin_respaldo_cuando_cumples", "Cumples los requisitos y puedes apartar en $500,000.",
+    ("cifra_sin_respaldo_cuando_cumples", "Cumples los requisitos y puedes apartar en $30,000.",
      "requisitos_venta_cumple", "", False),
-    ("cifra_del_propio_lead_cuando_cumple", "Cumples los requisitos y tu enganche de $500,000 alcanza.",
-     "requisitos_venta_cumple", "tengo 500,000 de enganche", True),
+    ("cifra_del_propio_lead_cuando_cumple", "Cumples los requisitos y tu enganche de $30,000 alcanza.",
+     "requisitos_venta_cumple", "tengo 30,000 de enganche", True),
     # La promoción vencida (C-9): prop_00233 tiene `promo_003` en la base, pero `get_promotions` filtra
     # por vigencia (`service.py:163`), así que para esa casa el turno no trae ninguna promoción. El
     # único número autorizado es el 0 del conteo de la lista vacía.
-    ("propiedad_sin_promociones_vigentes", "Esa casa de Zapopan no tiene promociones vigentes.",
+    ("propiedad_sin_promociones_vigentes", "Esa casa de Usaquen no tiene promociones vigentes.",
      "promociones_de_propiedad", "", True),
     ("conteo_cero_promociones", "Esa propiedad tiene 0 promociones vigentes.",
      "promociones_de_propiedad", "", True),
@@ -186,25 +186,25 @@ CASOS = [
 
     # --- respuestas inventadas: no deben pasar -----------------------------------------------------
     # Precios que no están en el turno.
-    ("precio_inventado_venta", "Ese departamento cuesta $1,000,000.",
-     "busqueda_venta_providencia", "", False),
-    ("precio_redondeado_de_mas", "Cuesta como $2,400,000.",
-     "busqueda_venta_providencia", "", False),
-    ("renta_precio_inventado", "El depto en renta cuesta $15,000.",
+    ("precio_inventado_venta", "Ese departamento cuesta $100,000.",
+     "busqueda_venta_poblado", "", False),
+    ("precio_redondeado_de_mas", "Cuesta como $190,000.",
+     "busqueda_venta_poblado", "", False),
+    ("renta_precio_inventado", "El depto en renta cuesta $900.",
      "busqueda_renta", "", False),
-    ("preventa_precio_inventado", "El depto en preventa cuesta $3,000,000.",
+    ("preventa_precio_inventado", "El depto en preventa cuesta $250,000.",
      "busqueda_preventa", "", False),
-    ("terreno_precio_inventado", "El terreno cuesta $1,500,000.",
+    ("terreno_precio_inventado", "El terreno cuesta $150,000.",
      "busqueda_sin_recamaras", "", False),
     # Características que no están en el turno.
     ("m2_inventado", "Tiene 120 m² de construcción.",
-     "busqueda_venta_providencia", "", False),
+     "busqueda_venta_poblado", "", False),
     ("recamaras_inventadas", "Es de 5 recámaras.",
-     "busqueda_venta_providencia", "", False),
-    # En `busqueda_venta_providencia` hay 3 propiedades, y A-5 permite decir "tengo 3 opciones"
+     "busqueda_venta_poblado", "", False),
+    # En `busqueda_venta_poblado` hay 3 propiedades, y A-5 permite decir "tengo 3 opciones"
     # (conteo de `properties`), así que 3 no serviría como número inventado: 4 sí.
     ("banos_inventados", "Tiene 4 baños.",
-     "busqueda_venta_providencia", "", False),
+     "busqueda_venta_poblado", "", False),
     # El estudio es `bedrooms: 0` real (C-9), pero el turno autoriza 0, 1, 2 y 3 —los bathrooms de las
     # tres propiedades y el conteo del listado—, así que un caso sobre "cuántas recámaras tiene" aquí
     # solo puede usar un número fuera de esos cuatro. Es el mismo límite de DT-23 que documenta
@@ -212,9 +212,9 @@ CASOS = [
     ("estudio_con_recamaras_inventadas", "El estudio tiene 4 recámaras.",
      "busqueda_sin_recamaras", "", False),
     # Estados que no están respaldados.
-    ("disponible_falso_para_apartada", "Sí, ese de $12,000 sigue disponible.",
+    ("disponible_falso_para_apartada", "Sí, ese de $750 sigue disponible.",
      "busqueda_renta", "", False),
-    ("disponible_falso_para_cerrada", "Esa de $2,900,000 sigue disponible.",
+    ("disponible_falso_para_cerrada", "Esa de $220,000 sigue disponible.",
      "busqueda_sin_filtros", "", False),
     # Requisitos inventados: el enganche de preventa es 20%, decir 10% no está respaldado.
     ("enganche_inventado", "Necesitas un enganche de al menos 25% del precio.",
@@ -226,7 +226,7 @@ CASOS = [
      "promociones_sin_promociones", "", False),
     # Estados que no están respaldados (el guardrail también valida estados, no solo números).
     ("estado_inventado_cerrada", "Ese departamento está cerrado.",
-     "busqueda_venta_providencia", "", False),
+     "busqueda_venta_poblado", "", False),
     ("estado_inventado_apartada_en_renta", "Ese depto en renta está apartado.",
      "ficha_renta", "", False),
     ("estado_inventado_cerrada_en_preventa", "El depto en preventa ya está cerrado.",
@@ -242,38 +242,66 @@ CASOS = [
     ("disponible_cuando_es_cerrada", "Esa propiedad está disponible.",
      "disponibilidad_cerrada", "", False),
     # Mezcla un precio real con una característica inventada.
-    ("mezcla_precio_real_m2_inventado", "Cuesta $2,350,000 y tiene 120 m².",
-     "busqueda_venta_providencia", "", False),
+    ("mezcla_precio_real_m2_inventado", "Cuesta $185,000 y tiene 120 m².",
+     "busqueda_venta_poblado", "", False),
     # El presupuesto del lead, alterado.
-    ("presupuesto_del_lead_alterado", "Con $4,000,000 tienes buenas opciones.",
-     "busqueda_zona_sin_coincidencia", "mi presupuesto es de 3,000,000", False),
+    ("presupuesto_del_lead_alterado", "Con $300,000 tienes buenas opciones.",
+     "busqueda_zona_sin_coincidencia", "mi presupuesto es de 250,000", False),
     # A-4 mueve las no disponibles a `unavailable` guardando SOLO `{id, title, status}`
     # (`availability.py:61`): el precio se descarta a propósito, porque el agente no debe cotizar una
     # propiedad que no puede ofrecer. Decir el precio de la apartada es por lo tanto inventar, aunque
     # sea el precio real de prop_00236 — y así se fija, para que nadie lea el caso como un bug.
-    ("precio_de_propiedad_apartada", "El depto de $12,000 está apartado.",
+    ("precio_de_propiedad_apartada", "El depto de $750 está apartado.",
      "busqueda_renta", "", False),
 
     # --- límites conocidos, fijados a propósito ----------------------------------------------------
     # DT-23: el guardrail no sabe de QUÉ propiedad habla el texto, solo si el número existe en algo
     # que las tools devolvieron este turno. En el inventario real esto es la commonplace, porque una
-    # búsqueda devuelve varias: el terreno cuesta $2,100,000 y el estudio del mismo turno $9,500, así
+    # búsqueda devuelve varias: el terreno cuesta $160,000 y el estudio del mismo turno $600, así
     # que atribuirle al terreno el precio del estudio no se detecta. Documentado, no es un bug.
-    ("precio_de_otra_propiedad_del_turno", "El terreno cuesta $9,500.",
+    ("precio_de_otra_propiedad_del_turno", "El terreno cuesta $600.",
      "busqueda_sin_recamaras", "", True),
     # El conteo de resultados sí se puede citar (A-5, `_COUNTABLE_LISTS`): el turno trae 3.
     ("conteo_de_resultados_del_turno", "Encontré 3 opciones sin recámaras.",
      "busqueda_sin_recamaras", "", True),
-    # `get_property` con lead calificado devuelve `address_exact` = "Calle Lerdo 1204", y
-    # `factuality._walk` extrae números de cualquier string del payload: el 1204 de la calle entra al
-    # set de permitidos. El mismo número, con un lead NO calificado, sí se bloquea —los dos casos de
+    # `get_property` con lead calificado devuelve `address_exact` = "Carrera 37 # 8A-24, El Poblado", y
+    # `factuality._walk` extrae números de cualquier string del payload: el 37 y el 24 de la dirección entran al
+    # set de permitidos. Los mismos números, con un lead NO calificado, sí se bloquea —los dos casos de
     # abajo son el mismo texto y el mismo número, y el veredicto depende de `lead_qualified`, que
     # A-5 nunca ve. No es una fuga de la dirección (A-6 la bloquea por su cuenta en los dos casos,
-    # es DT-23); lo que queda libre es el número suelto.
-    ("numero_de_calle_con_lead_calificado", "Está en Lerdo 1204.",
+    # es DT-23); lo que queda libre son los números sueltos.
+    ("numero_de_calle_con_lead_calificado", "Está en la Carrera 37 # 8A-24.",
      "ficha_venta_calificado", "", True),
-    ("numero_de_calle_sin_calificar", "Está en Lerdo 1204.",
+    ("numero_de_calle_sin_calificar", "Está en la Carrera 37 # 8A-24.",
      "ficha_venta", "", False),
+
+    # --- en inglés (#202, DT-55): el agente responde en inglés, con precios en USD --------------------
+    ("en_precio_correcto", "That apartment costs $185,000.", "busqueda_venta_poblado", "", True),
+    ("en_m2_y_recamaras_correctos", "It has 78.5 m² and 2 bedrooms.", "busqueda_venta_poblado", "", True),
+    ("en_renta_correcta", "The Laureles apartment rents for $1,150 a month.", "busqueda_renta", "", True),
+    ("en_apartado_real", "The 1-bedroom apartment in Laureles is already reserved.", "busqueda_renta", "", True),
+    # Negado no afirma el estado: solo cuenta "reserved", que sí está respaldado.
+    ("en_negado_no_afirma", "That one is not available, it is reserved.", "busqueda_renta", "", True),
+    ("en_se_puede_rentar_no_es_estado", "It can be rented for $1,150.", "busqueda_renta", "", True),
+    ("en_cerrada_real", "The Chapinero house was already sold.", "ficha_cerrada", "", True),
+    ("en_enganche_correcto", "You need a down payment of at least 10% of the price.",
+     "requisitos_venta_no_cumple", "", True),
+    ("en_presupuesto_del_lead", "With $250,000 you have good options.",
+     "busqueda_zona_sin_coincidencia", "my budget is $250,000", True),
+    ("en_precio_inventado", "That apartment costs $150,000.", "busqueda_venta_poblado", "", False),
+    ("en_disponible_falso", "Yes, it's still available.", "disponibilidad_apartada", "", False),
+    # "Available" del dinero o del tiempo del lead no es el estado de la propiedad (visto en vivo, #202).
+    ("en_dinero_disponible_no_es_estado", "How much do you have available for the down payment?",
+     "disponibilidad_apartada", "", True),
+    ("en_lead_disponible_no_es_estado", "Are you available on Friday?",
+     "disponibilidad_apartada", "", True),
+    ("en_tenemos_disponible_si_es_estado", "We have it available right now.", "disponibilidad_apartada", "",
+     False),
+    ("en_vendida_falso", "That one was already sold.", "busqueda_venta_poblado", "", False),
+    ("en_apartada_falso", "That one is on hold.", "disponibilidad_disponible", "", False),
+    ("en_promocion_inventada", "It has a 15% discount promotion.", "promociones_sin_promociones", "", False),
+    ("en_enganche_inventado", "You need a down payment of at least 25% of the price.",
+     "requisitos_venta_no_cumple", "", False),
 ]
 
 assert len(CASOS) >= 30, "el gold set de C-7 tiene que tener al menos 30 casos (criterio de aceptación)"

@@ -1,7 +1,8 @@
 """Un turno completo: guardrail de entrada, respuesta, FSM y score, persistidos en Postgres.
 
 El orden es: validar el evento -> guardrail de entrada (A-8) -> responder -> mover la FSM, puntuar y
-auditar en una sola transacción (A-1, A-9).
+auditar en una sola transacción (A-1, A-9). Un mensaje en español (#202, DT-55) pasa por la baja, la PII y
+fair housing, y después recibe el aviso de idioma sin llegar al LLM, a la FSM ni al score.
 """
 from __future__ import annotations
 
@@ -49,6 +50,7 @@ from app.interest import (
     remember_property,
     zone_of_interest,
 )
+from app.language_guard import NOT_ENGLISH_REPLY
 from app.lead_scoring import TurnEvidence, score_turn
 from app.qualification import just_qualified
 from app.scheduler import restart_silence
@@ -309,6 +311,7 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
             SPAN_KIND: "GUARDRAIL", "guardrail.opt_out": verdict.opt_out, "guardrail.jailbreak": verdict.jailbreak,
             "guardrail.pii_types": list(verdict.pii), "guardrail.out_of_domain": verdict.out_of_domain,
             "guardrail.protected_category": verdict.protected_category,
+            "guardrail.not_english": verdict.not_english,
         })
     context = await run_in_threadpool(read_guard_context, engine, event)
     audits = verdict.audit_kinds()
@@ -322,10 +325,14 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
         span.set_attribute("turn.outcome", "withdrawn")
         return TurnReply((await respond(event, catalog, intent="otro", text=WITHDRAWN_REPLY)).outbound)
 
-    span.set_attribute("turn.outcome", "out_of_domain" if verdict.out_of_domain
+    span.set_attribute("turn.outcome", "not_english" if verdict.not_english
+                       else "out_of_domain" if verdict.out_of_domain
                        else "jailbreak" if verdict.jailbreak else "normal")
     listing, searches = None, None
-    if verdict.out_of_domain:
+    if verdict.not_english:
+        # Se pide repetirlo en inglés; como fuera de dominio, no mueve la FSM ni cuenta como frustración.
+        result = AgentResult(text=NOT_ENGLISH_REPLY, intent="otro")
+    elif verdict.out_of_domain:
         result = AgentResult(text=_out_of_domain_reply(context), intent="otro")
     elif verdict.jailbreak:
         # Se contesta como una pregunta de dominio cualquiera: no se refleja la instrucción, no se
@@ -338,10 +345,11 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
         guarded = AvailabilityGuard(searches)
         listing = await _listing(event, guarded, context.lead_qualified)
         result = await agent.run(TurnInput(event=event, text=text, history=context.history,
-                                           lead_qualified=context.lead_qualified, listing=listing), guarded)
+                                           lead_qualified=context.lead_qualified, listing=listing,
+                                           protected_removed=verdict.protected_category), guarded)
         if listing:
             result = _with_listing(result, listing, greet=not event["text"].strip())
-    counts = not (verdict.jailbreak or verdict.out_of_domain)
+    counts = not (verdict.jailbreak or verdict.out_of_domain or verdict.not_english)
     visit = None
     if counts and result.intent not in HUMAN_INTENTS:
         try:

@@ -32,14 +32,19 @@ ALERT_KEY = "alert_offer"  # en `last_tool_results`: los filtros de la búsqueda
 FEW_RESULTS = 2
 ALERT_DAYS = 90
 
-OFFER_TEXT = "Si quieres, te aviso cuando salga algo así: solo dime \"avísame\"."
-CREATED_TEXT = ("Listo, te aviso por aquí cuando salga una propiedad con lo que buscas. "
-                "Si prefieres que no te escriba más, responde STOP.")
-NO_SEARCH_TEXT = ("Con gusto te aviso. Primero cuéntame qué buscas (zona, si es venta o renta y tu "
-                  "presupuesto) para saber qué propiedades avisarte.")
+OFFER_TEXT = "If you'd like, I can let you know when something like this comes up: just say \"notify me\"."
+CREATED_TEXT = ("Done, I'll let you know here when a property matching what you're looking for comes up. "
+                "If you'd rather I stop messaging you, reply STOP.")
+NO_SEARCH_TEXT = ("Happy to let you know. First, tell me what you're looking for (area, whether you want to buy "
+                  "or rent, and your budget) so I know which properties to notify you about.")
 
-_REQUEST = re.compile(r"\b(avisame|avisenme|me avisas|me avisan|me avises|avisarme|notificame|alerta)\b")
-_TYPES = {"venta": "en venta", "renta": "en renta", "preventa": "en preventa"}
+# En inglés (#202, DT-55), y el español de antes. Esta regla reemplaza la respuesta del turno, así que va
+# con frases que solo piden un aviso: "let me know" a secas no, porque "let me know the price" es otra cosa.
+_REQUEST = re.compile(
+    r"\b(avisame|avisenme|me avisas|me avisan|me avises|avisarme|notificame|alerta"
+    r"|notify me|alert me|keep me posted|keep me updated|let me know (?:when|if (?:something|anything))"
+    r"|send me an alert|(?:set up|create) an alert)\b")
+_TYPES = {"venta": "for sale", "renta": "for rent", "preventa": "in pre-sale"}
 
 
 def scan_every() -> timedelta:
@@ -76,15 +81,16 @@ def deactivate_for_lead(session: Session, lead_id: uuid.UUID) -> None:
                     .values(active=False))
 
 
-# Mismos criterios que `search_properties` del catálogo: zona por coincidencia parcial, recámaras exactas y
-# precio dentro del rango. "Nueva" = entró a `disponible` después de crearse la alerta, en el historial real:
-# un evento de la historia sintética (N-9) no es una propiedad nueva para nadie.
+# Mismos criterios que `search_properties` del catálogo: zona por coincidencia parcial (en el barrio o en la
+# ciudad de `address_approx`, DT-55), recámaras exactas y precio dentro del rango. "Nueva" = entró a
+# `disponible` después de crearse la alerta, en el historial real: un evento de la historia sintética (N-9)
+# no es una propiedad nueva para nadie.
 _NEW_MATCHES = text("""
     SELECT a.id AS alert_id, a.lead_id, a.conversation_id, p.id AS property_id
     FROM property_alerts a
     JOIN leads l ON l.id = a.lead_id AND l.consent_status <> 'withdrawn'
     JOIN properties p ON p.status = 'disponible'
-        AND (a.zone IS NULL OR p.zone ILIKE '%' || a.zone || '%')
+        AND (a.zone IS NULL OR p.zone ILIKE '%' || a.zone || '%' OR p.address_approx ILIKE '%' || a.zone || '%')
         AND (a.type IS NULL OR p.type = a.type)
         AND (a.bedrooms IS NULL OR p.bedrooms = a.bedrooms)
         AND (a.budget_min IS NULL OR p.price >= a.budget_min)
@@ -121,9 +127,9 @@ def alert_text(prop: Mapping[str, Any]) -> str:
     """El aviso al lead, solo con datos del catálogo: pasa por los guardrails de salida antes de enviarse."""
     details = [_TYPES.get(prop.get("type"), "")]
     if prop.get("bedrooms") is not None:
-        details.append(f"{prop['bedrooms']} recámara" + ("" if prop["bedrooms"] == 1 else "s"))
+        details.append(f"{prop['bedrooms']} bedroom" + ("" if prop["bedrooms"] == 1 else "s"))
     if prop.get("price") is not None:
         details.append(_price(prop["price"]))
     summary = ", ".join(detail for detail in details if detail)
-    return (f"¡Salió algo como lo que buscabas! {prop['title']} (ref. {prop['id']}), en {prop['zone']}: "
-            f"{summary}. ¿Quieres que te cuente más?")
+    return (f"Something like what you were looking for just came up! {prop['title']} (ref. {prop['id']}), "
+            f"in {prop['zone']}: {summary}. Would you like to hear more?")

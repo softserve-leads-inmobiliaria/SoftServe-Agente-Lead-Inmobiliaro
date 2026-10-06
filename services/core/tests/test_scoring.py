@@ -128,6 +128,23 @@ def test_each_dimension_has_a_reason():
     assert len(compute_score(signal()).reasons) == 5
 
 
+def test_the_reasons_are_in_english_without_contract_values():
+    # #202: las lee el asesor en la tarjeta y en el panel; "3_meses" o "declarado" no son texto.
+    s = compute_score(signal(budget_hint="$300,000", decision_maker="declarado", urgency="3_meses",
+                             matching_properties=1, meets_requirements=True))
+    assert s.reasons == (
+        "Need fit: 1 property matches",
+        "Budget: budget stated",
+        "Authority: how the decision is made was stated",
+        "Timing: within 3 months",
+        "Eligibility: meets the requirements",
+    )
+    assert compute_score(signal()).reasons[2:] == (
+        "Authority: how the decision is made wasn't stated", "Timing: not stated",
+        "Eligibility: requirements not checked yet",
+    )
+
+
 def test_is_deterministic():
     sig = signal(budget_hint="1M", decision_maker="declarado", urgency="explorando")
     assert compute_score(sig) == compute_score(sig)

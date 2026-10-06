@@ -19,13 +19,13 @@ INBOUND = {key: value for key, value in json.loads(
 
 # Frases que el fake LLM clasifica en cada intención.
 SAY = {
-    "saludo": "Hola",
-    "busqueda_propiedad": "Busco un departamento",
-    "consulta_precio": "¿Cuánto cuesta?",
-    "agendar_visita": "Quiero agendar una visita",
-    "solicitud_humano": "Quiero hablar con un asesor",
-    "otro": "¿Cómo va el clima hoy?",
-    "horario_preferido": "Mañana a las 10",  # B-8: respuesta a la agenda, sin intención propia
+    "saludo": "Hi",
+    "busqueda_propiedad": "I'm looking for an apartment",
+    "consulta_precio": "How much does it cost?",
+    "agendar_visita": "I'd like to schedule a visit",
+    "solicitud_humano": "I want to talk to an agent",
+    "otro": "How's the weather today?",
+    "horario_preferido": "Tomorrow at 10",  # B-8: respuesta a la agenda, sin intención propia
 }
 
 
@@ -167,10 +167,10 @@ def _score_row(engine, lead_id):
 def test_the_score_accumulates_turn_after_turn_and_is_persisted(engine):
     chat = Conversation(engine)
     steps = [
-        ("Hola", (0, "COLD")),
-        ("Busco un departamento", (10, "COLD")),                       # 1 propiedad del catálogo -> need_fit 10
-        ("Mi presupuesto es de 3 millones", (30, "COLD")),
-        ("Decido yo, lo necesito urgente", (70, "WARM")),
+        ("Hi", (0, "COLD")),
+        ("I'm looking for an apartment", (10, "COLD")),                       # 1 propiedad del catálogo -> need_fit 10
+        ("My budget is 3 million", (30, "COLD")),
+        ("I decide, I need it urgently", (70, "WARM")),
     ]
     for message, (total, band) in steps:
         event = INBOUND | {"conversation_id": chat.conversation_id, "lead_id": chat.lead_id,
@@ -197,13 +197,13 @@ def test_the_persisted_signal_and_score_form_a_valid_fsm_state_contract(engine):
 
     chat = Conversation(engine)
     event = INBOUND | {"conversation_id": chat.conversation_id, "lead_id": chat.lead_id,
-                       "text": "Busco casa, mi presupuesto es 2 millones, decido yo y es urgente"}
+                       "text": "I'm looking for a house, my budget is 2 million, I decide and it's urgent"}
     asyncio.run(process_turn(engine, event, StubCatalog()))
     with session_scope(engine) as session:
         state = StateStore(session).lock(uuid.UUID(chat.conversation_id), uuid.UUID(chat.lead_id))
     contract = state.to_contract()
     Draft202012Validator(_fsm_state_contract(), format_checker=FormatChecker()).validate(contract)
-    assert contract["score_signal"] == {"budget_hint": "presupuesto es 2 millones", "decision_maker": "declarado",
+    assert contract["score_signal"] == {"budget_hint": "budget is 2 million", "decision_maker": "declarado",
                                         "urgency": "inmediata", "matching_properties": 1,
                                         "meets_requirements": None}
     assert contract["score"]["total"] == 10 + 20 + 20 + 20 and contract["score"]["band"] == "WARM"
@@ -212,12 +212,12 @@ def test_the_persisted_signal_and_score_form_a_valid_fsm_state_contract(engine):
 def test_the_score_survives_a_restart(engine, database_url):
     chat = Conversation(engine)
     event = INBOUND | {"conversation_id": chat.conversation_id, "lead_id": chat.lead_id,
-                       "text": "Busco casa, decido yo"}
+                       "text": "I'm looking for a house, I decide"}
     asyncio.run(process_turn(engine, event, StubCatalog()))
     restarted = create_engine(database_url)
     try:
         follow_up = INBOUND | {"conversation_id": chat.conversation_id, "lead_id": chat.lead_id,
-                               "event_id": str(uuid.uuid4()), "text": "Lo necesito urgente"}
+                               "event_id": str(uuid.uuid4()), "text": "I need it urgently"}
         asyncio.run(process_turn(restarted, follow_up, StubCatalog()))
         assert _score_row(restarted, chat.lead_id).total == 10 + 20 + 20
     finally:
@@ -253,7 +253,7 @@ def test_the_conversation_is_scored_even_after_it_reaches_a_terminal_state(engin
     chat.say("solicitud_humano")
     assert chat.state == "HUMAN_HANDOFF"
     event = INBOUND | {"conversation_id": chat.conversation_id, "lead_id": chat.lead_id,
-                       "event_id": str(uuid.uuid4()), "text": "Por cierto, decido yo y es urgente"}
+                       "event_id": str(uuid.uuid4()), "text": "By the way, I decide and it's urgent"}
     asyncio.run(process_turn(engine, event, StubCatalog()))
     assert chat.state == "HUMAN_HANDOFF" and _score_row(engine, chat.lead_id).total == 40
 
@@ -282,7 +282,7 @@ def test_advance_reports_the_score(engine):
 
 # --- #122: la propiedad del anuncio (`?start=prop_<id>`) -------------------------------------------------------
 
-LISTING = {"id": "prop_00231", "title": "Depto 2 rec. en Providencia", "zone": "Providencia", "status": "disponible"}
+LISTING = {"id": "prop_00231", "title": "Depto 2 rec. en El Poblado", "zone": "El Poblado", "status": "disponible"}
 
 
 class ListingCatalog:
@@ -318,16 +318,16 @@ def _lead_zone(engine, lead_id):
 def test_the_listing_greeting_names_the_property_the_lead_came_from(engine):
     chat = Conversation(engine)
     reply = _deep_link(chat, ListingCatalog())
-    assert "Depto 2 rec. en Providencia" in reply["text"] and "ref. prop_00231" in reply["text"]
+    assert "Depto 2 rec. en El Poblado" in reply["text"] and "ref. prop_00231" in reply["text"]
     assert chat.state == "DISCOVERY"
 
 
 def test_the_listing_is_looked_up_by_the_code_and_gives_the_lead_its_zone(engine):
     chat = Conversation(engine)
     catalog = ListingCatalog()
-    _deep_link(chat, catalog, message="Hola, me interesa esta propiedad")
+    _deep_link(chat, catalog, message="Hi, I'm interested in this property")
     assert ("get_property", {"property_id": "prop_00231", "lead_qualified": False}) in catalog.calls
-    assert _lead_zone(engine, chat.lead_id) == "Providencia"
+    assert _lead_zone(engine, chat.lead_id) == "El Poblado"
     with engine.connect() as connection:
         saved = connection.execute(text("SELECT last_tool_results FROM fsm_context WHERE conversation_id = :c"),
                                    {"c": chat.conversation_id}).scalar()

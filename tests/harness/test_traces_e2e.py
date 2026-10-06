@@ -91,7 +91,7 @@ def test_a_real_turn_exports_its_trace_over_otlp(traced_stack, tmp_path):
     core_url, collector = traced_stack
     collector.spans.clear()
     script = tmp_path / "traza.jsonl"
-    script.write_text(json.dumps({"text": "Busco un departamento, mi presupuesto es 3 millones"}) + chr(10),
+    script.write_text(json.dumps({"text": "I'm looking for an apartment, my budget is 3 million"}) + chr(10),
                       encoding="utf-8")
     replay(script, http_responder(core_url))
 
@@ -111,7 +111,7 @@ def test_the_exported_trace_is_one_tree_rooted_at_the_turn(traced_stack, tmp_pat
     core_url, collector = traced_stack
     collector.spans.clear()
     script = tmp_path / "arbol.jsonl"
-    script.write_text(json.dumps({"text": "Hola, buenas tardes"}) + chr(10), encoding="utf-8")
+    script.write_text(json.dumps({"text": "Hi, good afternoon"}) + chr(10), encoding="utf-8")
     replay(script, http_responder(core_url))
     assert collector.wait_for("turn")
     time.sleep(0.6)
@@ -124,7 +124,7 @@ def test_the_exported_trace_is_one_tree_rooted_at_the_turn(traced_stack, tmp_pat
 
 def test_what_the_lead_wrote_never_reaches_the_collector(traced_stack, tmp_path):
     core_url, collector = traced_stack
-    secret = "Busco casa en la colonia Secretísima, mi tarjeta es 4111 1111 1111 1111"
+    secret = "I'm looking for a house in the Secretisima neighborhood, my card is 4111 1111 1111 1111"
     script = tmp_path / "secreto.jsonl"
     script.write_text(json.dumps({"text": secret}) + chr(10), encoding="utf-8")
     replay(script, http_responder(core_url))
@@ -132,5 +132,5 @@ def test_what_the_lead_wrote_never_reaches_the_collector(traced_stack, tmp_path)
     everything = b"".join(collector.raw)
     assert everything
     # "4111 1111" y no "4111": las trazas llevan UUID aleatorios y en un v4 sale "-4111-" (#126).
-    for fragment in ("Secretísima", "4111 1111", "tarjeta es", "colonia"):
+    for fragment in ("Secretisima", "4111 1111", "card is", "neighborhood"):
         assert fragment.encode("utf-8") not in everything, fragment

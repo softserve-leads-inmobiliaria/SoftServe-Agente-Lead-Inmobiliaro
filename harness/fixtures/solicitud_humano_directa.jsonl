@@ -1,2 +1,2 @@
-{"text": "Hola, buenas tardes", "expect_reply_contains": "asistente"}
-{"text": "Prefiero hablar directo con un asesor", "expect_reply_contains": "asesor"}
+{"text": "Hi, good afternoon", "expect_reply_contains": "assistant"}
+{"text": "I'd rather talk directly to an agent", "expect_reply_contains": "agent"}

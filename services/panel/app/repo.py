@@ -201,7 +201,10 @@ MAX_PRICE = Decimal("999999999999.99")  # lo que cabe en `deals.price` (Numeric(
 
 
 class ClosingRejected(ValueError):
-    """El cierre no se registró: el mensaje es para el asesor, en el formulario."""
+    """El cierre no se registró: el mensaje es para el asesor, en el formulario (en inglés, #202)."""
+
+
+NOT_LINKED = "That property is not linked to this lead."
 
 
 @dataclass(frozen=True)
@@ -273,34 +276,34 @@ def close_deal(session: Session, advisor, lead_id: uuid.UUID, closing: Closing, 
     if lead is None:
         return False
     if closing.kind not in DEAL_KINDS:
-        raise ClosingRejected("Elige si la operación es renta o venta.")
+        raise ClosingRejected("Choose whether the deal is a rental or a sale.")
     try:
         price = Decimal(closing.price.strip().replace(",", ""))
     except (InvalidOperation, AttributeError):
         price = None
     if price is None or not price.is_finite():
-        raise ClosingRejected("El precio de cierre tiene que ser un número.")
+        raise ClosingRejected("The closing price has to be a number.")
     if price < 0:
-        raise ClosingRejected("El precio de cierre no puede ser negativo.")
+        raise ClosingRejected("The closing price cannot be negative.")
     if price > MAX_PRICE:  # antes de redondear: `quantize` de un número enorme lanza InvalidOperation
-        raise ClosingRejected("El precio de cierre es demasiado alto.")
+        raise ClosingRejected("The closing price is too high.")
     price = price.quantize(Decimal("0.01"))
     try:
         closed_on = date.fromisoformat(closing.closed_on.strip())
     except (ValueError, AttributeError):
-        raise ClosingRejected("La fecha de cierre no es válida.") from None
+        raise ClosingRejected("The closing date is invalid.") from None
     if closed_on > now.astimezone(LOCAL_TZ).date():
-        raise ClosingRejected("La fecha de cierre no puede ser futura.")
+        raise ClosingRejected("The closing date cannot be in the future.")
     if closing.property_id not in {option.id for option in close_options(session, lead)}:
-        raise ClosingRejected("Esa propiedad no está entre las de este lead.")
+        raise ClosingRejected(NOT_LINKED)
 
     closed_at = closing_time(closed_on, now)
     try:
         set_status(session, closing.property_id, "cerrado", actor=advisor.id, at=closed_at)
     except StatusUnchanged:
-        raise ClosingRejected("Esa propiedad ya está cerrada: no se registró nada.") from None
+        raise ClosingRejected("That property is already off the market: nothing was recorded.") from None
     except UnknownProperty:
-        raise ClosingRejected("Esa propiedad no está entre las de este lead.") from None
+        raise ClosingRejected(NOT_LINKED) from None
     session.add(Deal(property_id=closing.property_id, lead_id=lead.id, advisor_id=advisor.id,
                      kind=closing.kind, price=price, closed_at=closed_at))
     session.execute(

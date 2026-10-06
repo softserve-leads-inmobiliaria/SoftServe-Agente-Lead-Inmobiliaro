@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Callable
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app import data
@@ -29,6 +30,25 @@ class CatalogError(Exception):
         return {"error_code": self.error_code, "message": self.message}
 
 
+def requirements_of(deal_type: str, price: float | None) -> dict[str, Any]:
+    """Los requisitos de la operación, con sus montos sobre el precio (#201, DT-56).
+
+    `get_property` los devuelve para que el agente pueda enumerarlos ante "¿qué requisitos piden?"
+    antes de verificar nada: son las mismas reglas que aplica `check_requirements`. Los montos van
+    calculados para que la factualidad (A-5) encuentre en el resultado de la tool el número que cite
+    el agente (el 10 %, los USD 18,500).
+    """
+    rules = data.REQUIREMENTS[deal_type]
+    ratio, multiple = rules["down_payment_ratio"], rules["income_multiple"]
+    return {
+        "down_payment_percent": round(ratio * 100) if ratio is not None else None,
+        "down_payment_min": round(price * ratio, 2) if ratio is not None and price is not None else None,
+        "income_multiple": multiple,
+        "monthly_income_min": round(price * multiple, 2) if multiple is not None and price is not None else None,
+        "references_required": rules["references"],
+    }
+
+
 class CatalogService:
     def __init__(
         self,
@@ -45,17 +65,17 @@ class CatalogService:
 
     def _check_upstream(self) -> None:
         if not self._available():
-            raise CatalogError("UPSTREAM_UNAVAILABLE", "El catálogo no está disponible por ahora.")
+            raise CatalogError("UPSTREAM_UNAVAILABLE", "The catalog is not available right now.")
 
     def _find(self, db: Session, property_id: Any) -> Property:
         """Busca una propiedad en la base de datos; lanza error si es inválida o no existe."""
         if not isinstance(property_id, str) or not property_id:
-            raise CatalogError("INVALID_INPUT", "property_id debe ser un texto no vacío.")
+            raise CatalogError("INVALID_INPUT", "property_id must be a non-empty string.")
         
         prop = db.query(Property).filter(Property.id == property_id).first()
 
         if not prop:
-            raise CatalogError("NOT_FOUND", f"No existe la propiedad {property_id}.")
+            raise CatalogError("NOT_FOUND", f"Property {property_id} does not exist.")
         
         return prop
 
@@ -72,17 +92,20 @@ class CatalogService:
 
         # Validamos el rango de presupuesto según las reglas de negocio
         if budget_range is not None and budget_range["min"] > budget_range["max"]:
-            raise CatalogError("INVALID_INPUT", "budget_range.min no puede ser mayor que max.")
+            raise CatalogError("INVALID_INPUT", "budget_range.min cannot be greater than max.")
         # `type` es la operación (venta/renta/preventa); `kind`, el inmueble (#188).
         if kind is not None and kind not in PROPERTY_KINDS:
-            raise CatalogError("INVALID_INPUT", f"kind debe ser uno de: {', '.join(PROPERTY_KINDS)}.")
+            raise CatalogError("INVALID_INPUT", f"kind must be one of: {', '.join(PROPERTY_KINDS)}.")
 
         with self._db_session_factory() as db:
             query = db.query(Property)
 
             # Aplicamos filtros condicionales sobre la consulta de SQLAlchemy
+            # La zona es el barrio y la ciudad va en `address_approx` (DT-55): "Medellin" trae todos sus
+            # barrios. `address_exact` nunca entra al filtro, para no delatarla por el resultado.
             if zone is not None:
-                query = query.filter(Property.zone.ilike(f"%{zone}%"))
+                pattern = f"%{zone}%"
+                query = query.filter(or_(Property.zone.ilike(pattern), Property.address_approx.ilike(pattern)))
             if type is not None:
                 query = query.filter(Property.type == type)
             if bedrooms is not None:
@@ -142,6 +165,7 @@ class CatalogService:
 
         result["address_exact"] = prop.address_exact if lead_qualified else None
         result["photo_url"] = prop.photo_url  # B-10: opcional; sin foto el canal manda solo el texto
+        result["requirements"] = requirements_of(prop.type, result["price"])  # #201
 
         return result
 
@@ -210,11 +234,11 @@ class CatalogService:
 
             notes = []
             if not down_ok:
-                notes.append(f"Se requiere un enganche de al menos {int(ratio * 100)}% del precio.")
+                notes.append(f"A down payment of at least {int(ratio * 100)}% of the price is required.")
             if not income_ok:
-                notes.append(f"Se requiere un ingreso mensual de al menos {multiple} veces la renta.")
+                notes.append(f"A monthly income of at least {multiple} times the rent is required.")
             if not references_ok:
-                notes.append("Se requieren referencias.")
+                notes.append("References are required.")
             
             return {
                 "meets_requirements": down_ok and income_ok and references_ok,
@@ -222,6 +246,6 @@ class CatalogService:
                     "down_payment_ok": down_ok, 
                     "income_ok": income_ok,
                     "references_ok": references_ok,
-                    "notes": " ".join(notes) or "Cumple los requisitos."
+                    "notes": " ".join(notes) or "Meets the requirements."
                 },
             }

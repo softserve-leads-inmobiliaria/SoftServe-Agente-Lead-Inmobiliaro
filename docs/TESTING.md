@@ -58,9 +58,11 @@ servicios que usen la base dependerán de él.
 Con un bot creado en @BotFather: poner `TELEGRAM_BOT_TOKEN` en el `.env` y `docker compose up -d --build core`
 (*long polling*, no hace falta URL pública). Sin token, `core` arranca igual y no levanta el bot. Comprobar:
 
-1. Un saludo → aviso de privacidad más la respuesta del agente.
+Al lead se le escribe en inglés (#202, DT-55): un mensaje en español recibe el aviso de "solo en inglés".
+
+1. Un saludo ("Hi") → aviso de privacidad más la respuesta del agente.
 2. `https://t.me/<bot>?start=prop_00231` → el saludo nombra la propiedad del anuncio (`ref. prop_00231`), el
-   lead queda con la zona de esa propiedad y, con Bedrock, "¿sigue disponible?" se responde sobre ella sin
+   lead queda con la zona de esa propiedad y, con Bedrock, "is it still available?" se responde sobre ella sin
    pedir la referencia (#122).
 3. `STOP` y `/stop` → `consent_status=withdrawn` y `status=closed_lost` en `leads`, sin pasar por el LLM.
 4. Un segundo `getUpdates` externo devuelve `409 Conflict`: confirma que el *polling* corre de verdad.
@@ -68,21 +70,21 @@ Con un bot creado en @BotFather: poner `TELEGRAM_BOT_TOKEN` en el `.env` y `dock
 ### Ver el panel de asesores (B-5)
 
 `docker compose up -d --build` ejecuta `seed`, que imprime una línea por asesor con su URL:
-`docker compose logs seed` → `adv_001  Valeria Ortiz  Providencia  /panel/<token>`. Abrir
+`docker compose logs seed` → `adv_001  Valeria Ortiz  El Poblado  /panel/<token>`. Abrir
 `http://localhost:8080/panel/<token>`. El panel filtra por `Lead.zone`, que el core rellena con la zona de la
 primera propiedad que el lead consulta (#81; el ruteo por zona al asesor es A-10). Para verlo con datos sin
-pasar por una búsqueda, asignar la zona a mano (`update leads set zone='Providencia' where ...`). Un token
+pasar por una búsqueda, asignar la zona a mano (`update leads set zone='El Poblado' where ...`). Un token
 inventado y un lead de otra zona dan el mismo 404.
 
 La vista de inventario y negocio (N-8) está en `http://localhost:8080/panel/<token>/negocio`, enlazada desde
-el funnel. Sin cierres ni historial de estados cada sección dice "sin datos": para verla con datos hay que
-sembrar la historia sintética de N-9 (ver "Historia sintética para la demo") y marcar "Incluir historia de
-demo".
+el funnel. Sin cierres ni historial de estados cada sección dice "No data for this period.": para verla con datos
+hay que sembrar la historia sintética de N-9 (ver "Historia sintética para la demo") y marcar "Include demo
+history".
 
 Tiempo de atención (B-12): un lead HOT que calificó hace más de `SLA_HOT_MINUTES` (30 por defecto) y que
-nadie marcó "en gestión" sale resaltado en la cola, con cuánto lleva esperando. Para verlo sin esperar,
+nadie marcó "Mark as in progress" sale resaltado en la cola, con cuánto lleva esperando. Para verlo sin esperar,
 poner `SLA_HOT_MINUTES=1` en `.env` y reiniciar el panel. La mediana por asesor aparece en la vista de
-negocio una vez que alguien toma un lead calificado, o con la historia de N-9 y "Incluir historia de demo".
+negocio una vez que alguien toma un lead calificado, o con la historia de N-9 y "Include demo history".
 
 ### Avisos al asesor: en el panel, y por Telegram si lo registró (B-7, A-12, B-15)
 
@@ -94,7 +96,7 @@ prueba todo.
 
 Telegram es un canal adicional. Con `TELEGRAM_BOT_TOKEN` puesto, un asesor se registra una vez abriendo su
 enlace `https://t.me/<bot>?start=adv_<token>` (el `<token>` es el de su URL del panel:
-`docker compose logs seed`). El bot responde "te voy a avisar…" y guarda su chat en
+`docker compose logs seed`). El bot responde "I'll let you know here…" y guarda su chat en
 `advisors.telegram_chat_id`; un enlace inválido no registra a nadie y no dice por qué. Registrado, recibe
 además cada aviso en el chat.
 
@@ -106,9 +108,10 @@ además cada aviso en el chat.
   la **transcripción completa** (en varios mensajes si excede el tope de Telegram). Va al mismo asesor que
   ya tenía el lead; si el mismo turno califica y traspasa, llega solo la ficha.
 
-Para verlo: escribirle al bot como lead y pedir "quiero hablar con un asesor", y abrir los avisos del
+Para verlo: escribirle al bot como lead y pedir "I want to talk to an agent", y abrir los avisos del
 asesor de la zona en el panel. En el panel van el resumen y el motivo, sin la transcripción, que está en la
-ficha. Si el envío por Telegram falla, el aviso queda igual en el panel.
+ficha. Si el envío por Telegram falla, el aviso queda igual en el panel. Todo lo que lee el asesor (la
+tarjeta, la ficha con su resumen, el panel y el reporte semanal) está en inglés (#202).
 
 ### Usar el LLM real (Bedrock)
 
@@ -188,8 +191,9 @@ bash scripts/demo/down.sh     # exporta las conversaciones a txt y apaga borrand
   empezar como lead. También el enlace de Telegram de cada asesor, que es opcional: los avisos quedan en
   el panel y el enlace solo agrega una copia al chat (DT-42).
 - `python scripts/demo/conversar.py [escenario ...]`: ensayo automático por `POST /events` contra el LLM
-  del `.env` (deep-link hasta el asesor, búsqueda y recomendación, guardrails, y deep-link hasta HOT
-  verificando los requisitos), con 20 segundos entre turnos para no pasar el cupo de 10 llamadas por minuto:
+  del `.env` (deep-link hasta el asesor, búsqueda y recomendación, guardrails, deep-link hasta HOT
+  verificando los requisitos, lead que escribe en español, y requisitos y fair housing: se enumeran los
+  requisitos antes de verificarlos y "does that matter?" se contesta), con 20 segundos entre turnos para no pasar el cupo de 10 llamadas por minuto:
   un turno con herramientas hace 3 o 4. Los avisos al asesor no salen por esta vía: solo por Telegram.
 - `python scripts/demo/exportar.py [minutos]`: guarda en txt las conversaciones activas en ese lapso
   (por defecto 60), con el estado final de cada una. `down.sh` lo corre solo antes de borrar la base.
@@ -248,10 +252,12 @@ desde su Telegram con `core` levantado con `TELEGRAM_BOT_TOKEN`, y después se v
 panel:
 
 1. `https://t.me/<bot>?start=prop_00231` → saludo con aviso de privacidad y la propiedad del anuncio.
-2. "¿Cuánto cuesta?" → responde sobre esa propiedad.
-3. "Quiero hablar con un asesor" → `HUMAN_HANDOFF` en `conversations`; el lead aparece en el panel de
-   Providencia con la transcripción.
+2. "How much is it?" → responde sobre esa propiedad.
+3. "I want to talk to an agent" → `HUMAN_HANDOFF` en `conversations`; el lead aparece en el panel de
+   El Poblado con la transcripción.
 4. `STOP` → `consent_status=withdrawn` en `leads` y una fila `input.opt_out` en `audit_log`.
+5. "Hola, busco casa" → el aviso de "solo en inglés", sin mover la FSM, y una fila `input.not_english` en
+   `audit_log`.
 
 ## Pruebas automáticas
 
@@ -319,7 +325,7 @@ búsqueda aparecen `catalog.get_availability` además de `catalog.search_propert
 (C-7) hace lo mismo sobre la **salida real** del catálogo de demo: sus fixtures las produce
 `services/core/tests/demo_catalogo.py`, que corre `CatalogService` de verdad contra la base migrada que ya
 monta el `conftest.py` de `core`, sembrada con `scripts/seed_catalog.seed()` — el mismo del compose, así que
-el inventario no está duplicado en ningún lado. **75 casos** (46 que pasan, 29 que bloquean) sobre **27
+el inventario no está duplicado en ningún lado. **93 casos** (57 que pasan, 36 que bloquean) sobre **27
 turnos**, que cubren las 12 propiedades del inventario y las 5 tools. No llama a ningún LLM.
 
 Es el complemento de A-5, no su reemplazo: los 32 casos de A-5 no se tocan (prueban un criterio que sigue
@@ -337,7 +343,7 @@ vivo, DT-23, y la política del repo es no borrar casos antiguos). Lo que C-7 ag
   `availability_checked_at` y `unavailable` (con solo `id`, `title` y `status`), `get_property` más
   `availability_checked_at`, y las otras tres tools pasan intactas. Además comprueba que el estado y el
   timestamp que,A-4 estampa son los de `get_availability` y no los del listado.
-- `test_gold_set_is_100_percent_green`: el gate de los 75 casos.
+- `test_gold_set_is_100_percent_green`: el gate de los 93 casos.
 
 **El catálogo corre en un subproceso.** `core` y `catalog` comparten el nombre de paquete `app` (los dos
 `conftest.py` lo ponen en `sys.path`, y CI corre cada carpeta en un proceso distinto por eso), así que el
@@ -415,6 +421,21 @@ detecta gentilicios y frases de procedencia, y el gold set suma los pares `venez
 Para agregar un par se edita `MENCIONES` o `SITUACIONES` en el test; nunca se borra uno viejo salvo que
 deje de aplicar.
 
+### Filtro de idioma (#202)
+
+`services/core/tests/test_language_guard_gold_set.py` fija qué mensaje recibe el aviso de "solo en
+inglés" (DT-55). Tiene tres listas: español típico de un lead ("hola", "¿cuánto cuesta?", "la segunda"),
+inglés ("the second one", "Hola! I'm looking for a 2 bedroom in Laureles") y nombres propios que no son
+de ningún idioma ("El Poblado", "Carrera 37 # 8A-24, El Poblado", "La Candelaria"). El umbral: todo el
+español detectado y 0 falsos positivos, porque rechazar a quien ya escribe en inglés es el error caro.
+El filtro no llama a ningún LLM, así que corre en milisegundos. `test_input_guard_turn.py` prueba el
+turno completo: el aviso no mueve la FSM, no suma al score ni a la frustración, y la baja, la PII y fair
+housing se aplican antes.
+
+Como el filtro frena el español antes del agente, las pruebas de turno y los guiones del arnés le hablan
+al agente en inglés. El agente fake entiende las dos lenguas; sus respuestas fijas siguen en español
+hasta que pasen a inglés con los prompts.
+
 ### El registro de gold sets (OBS-4)
 
 `services/core/tests/test_gold_sets_gate.py` es el lugar donde se ve, de una vez, **qué gold set hay y qué
@@ -482,7 +503,7 @@ docker compose run --rm seed python scripts/seed_history.py          # siembra, 
 docker compose run --rm seed python scripts/seed_history.py --borrar # la borra sin tocar datos reales
 ```
 
-- Todo lleva `synthetic = true`. Solo lo ven la vista de negocio con "Incluir historia de demo"
+- Todo lleva `synthetic = true`. Solo lo ven la vista de negocio con "Include demo history"
   (`/panel/<token>/negocio?demo=1`) y el reporte semanal con `WEEKLY_REPORT_INCLUDE_SYNTHETIC=1`. La
   cola, la ficha, el funnel, el reparto de leads y las alertas no lo ven (DT-49).
 - No cambia el inventario: el historial de cada propiedad termina en el estado que ya tiene. Una propiedad
@@ -496,15 +517,15 @@ Qué se ve en la vista de negocio, con el periodo de los últimos seis meses:
 
 | Caso (propuestas.md §2.2) | Dónde |
 | :--- | :--- |
-| Zonas que rotan rápido | Rentas de Chapalita y Providencia: se rentan en menos de dos semanas |
-| Zonas que rotan lento | Tlaquepaque (venta) y Andares (preventa): meses en el mercado |
+| Zonas que rotan rápido | Rentas de Laureles y El Poblado: se rentan en menos de dos semanas |
+| Zonas que rotan lento | Chapinero (venta) y Envigado (preventa): meses en el mercado |
 | Estancada con consultas y sin visitas | `prop_00231`: se cayó el apartado y lleva más de 90 días disponible |
 | Estancada sin consultas | `prop_00232` (más de 30 días) y `prop_00233` (más de 90) |
 | Cierres atribuibles y no atribuibles al bot | 4 de los 6 cierres: el lead consultó o visitó esa propiedad con el bot |
 | Tiempo de atención por asesor (B-12) | Valeria toma en minutos, Camila en media hora y Andrés en horas |
-| Búsquedas sin resultado | Renta de 3 recámaras en Providencia, la más pedida ("providencia" se junta con "Providencia") |
+| Búsquedas sin resultado | Renta de 3 recámaras en El Poblado, la más pedida ("el poblado" se junta con "El Poblado") |
 
-La última semana tiene al menos un cierre (una unidad de la preventa de Andares).
+La última semana tiene al menos un cierre (una unidad de la preventa de Envigado).
 
 ### Suite de transiciones de la FSM
 

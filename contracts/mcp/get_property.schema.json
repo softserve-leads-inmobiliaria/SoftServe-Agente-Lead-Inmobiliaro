@@ -99,6 +99,56 @@
         ],
         "format": "uri",
         "description": "Foto pública de la propiedad para el canal (B-10). Opcional: sin foto, el canal manda solo el texto. Nunca delata la dirección exacta (A-6)."
+      },
+      "requirements": {
+        "type": "object",
+        "description": "Requisitos de la operación (#201, DT-56), las mismas reglas de check_requirements con sus montos en USD sobre el precio. null en los campos que no aplican a la operación (p. ej. el enganche en una renta). Opcional, como photo_url.",
+        "properties": {
+          "down_payment_percent": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Enganche mínimo, en % del precio (venta y preventa)."
+          },
+          "down_payment_min": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Enganche mínimo, en USD."
+          },
+          "income_multiple": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Ingreso mensual mínimo, en veces la renta (renta)."
+          },
+          "monthly_income_min": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Ingreso mensual mínimo, en USD."
+          },
+          "references_required": {
+            "type": "boolean",
+            "description": "Si la operación pide referencias (renta)."
+          }
+        },
+        "required": [
+          "down_payment_percent",
+          "down_payment_min",
+          "income_multiple",
+          "monthly_income_min",
+          "references_required"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [

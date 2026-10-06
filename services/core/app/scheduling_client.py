@@ -45,7 +45,7 @@ class SchedulingClient:
         raise SchedulingError(payload.get("error_code", "UPSTREAM_UNAVAILABLE"),
                               payload.get("message", f"La agenda respondió {response.status_code}."))
 
-    async def assign_advisor(self, lead_id: str, zone: str | None = None, language: str = "es",
+    async def assign_advisor(self, lead_id: str, zone: str | None = None, language: str = "en",
                              registered_only: bool = False) -> dict[str, Any]:
         """El asesor del lead: el que ya tenía o uno nuevo, que queda escrito en `leads.advisor_id`."""
         body: dict[str, Any] = {"lead_id": lead_id, "language": language, "registered_only": registered_only}

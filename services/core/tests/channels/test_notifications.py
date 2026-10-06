@@ -14,15 +14,15 @@ from app.channels.telegram import reply_to
 from db.models import Advisor, AdvisorNotification, Lead
 from db.session import session_scope
 
-CALIFICA = "Tengo presupuesto de 3 millones, decido yo y es urgente"
+CALIFICA = "My budget is 3 million, I decide and it's urgent"
 
 
 class StubCatalog:
     async def call(self, tool, arguments=None):
         if tool == "get_availability":
             return {"property_id": "prop_00231", "status": "disponible", "checked_at": "2026-01-01T00:00:00Z"}
-        return {"properties": [{"id": "prop_00231", "title": "Depa en Providencia",
-                                "zone": "Providencia", "status": "disponible"}]}
+        return {"properties": [{"id": "prop_00231", "title": "Depa en El Poblado",
+                                "zone": "El Poblado", "status": "disponible"}]}
 
     async def tool_specs(self):
         return []
@@ -53,12 +53,12 @@ def test_el_prefijo_adv_da_el_token_y_los_otros_no():
 
 
 def test_un_token_valido_liga_el_chat_al_asesor(engine):
-    advisor = _advisor(engine, zone="Providencia")
+    advisor = _advisor(engine, zone="El Poblado")
 
     reply = asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="chat-777", text="",
                                  deep_link=f"adv_{advisor.access_token}"))
 
-    assert "te voy a avisar" in reply
+    assert "I'll let you know here" in reply
     with session_scope(engine) as session:
         assert session.get(Advisor, advisor.id).telegram_chat_id == "chat-777"
         # Registrarse no crea un lead: un asesor no es un prospecto.
@@ -73,8 +73,8 @@ def test_un_token_invalido_no_registra_ni_dice_por_que(engine):
 
 
 def test_un_chat_pertenece_a_un_solo_asesor(engine):
-    primero = _advisor(engine, zone="Zapopan", chat_id="chat-779")
-    segundo = _advisor(engine, zone="Andares")
+    primero = _advisor(engine, zone="Usaquen", chat_id="chat-779")
+    segundo = _advisor(engine, zone="Envigado")
 
     advisor_registration.register(engine, access_token=segundo.access_token, chat_id="chat-779")
 
@@ -87,15 +87,15 @@ def test_un_chat_pertenece_a_un_solo_asesor(engine):
 
 def test_se_prefiere_el_asesor_de_la_zona_y_si_no_hay_cualquiera(engine):
     _limpiar_asesores(engine)
-    zapopan = _advisor(engine, zone="Zapopan", chat_id="chat-z")
-    providencia = _advisor(engine, zone="Providencia")  # sin Telegram también cuenta (B-15)
+    usaquen = _advisor(engine, zone="Usaquen", chat_id="chat-z")
+    poblado = _advisor(engine, zone="El Poblado")  # sin Telegram también cuenta (B-15)
 
     with session_scope(engine) as session:
-        assert pick_advisor(session, "Providencia").id == providencia.id
-        assert pick_advisor(session, "Chapalita").id in {zapopan.id, providencia.id}  # cola general
+        assert pick_advisor(session, "El Poblado").id == poblado.id
+        assert pick_advisor(session, "Laureles").id in {usaquen.id, poblado.id}  # cola general
     _limpiar_asesores(engine)
     with session_scope(engine) as session:
-        assert pick_advisor(session, "Providencia") is None
+        assert pick_advisor(session, "El Poblado") is None
 
 
 def test_la_tarjeta_degrada_sin_propiedad_ni_visita():
@@ -104,42 +104,42 @@ def test_la_tarjeta_degrada_sin_propiedad_ni_visita():
     texto = render(card)
 
     assert "WARM · 60/100" in texto
-    assert "sin definir" in texto
+    assert "not set" in texto
     assert "Propiedad" not in texto and "Visita" not in texto
 
 
 def test_la_tarjeta_completa_lleva_propiedad_visita_y_razones():
-    card = LeadCard(lead_id=uuid.uuid4(), zone="Providencia", score_total=80, score_band="HOT",
-                    property_title="Depa en Providencia", property_id="prop_00231",
-                    visit_at="25/09/2026 10:00", reasons=("presupuesto declarado",))
+    card = LeadCard(lead_id=uuid.uuid4(), zone="El Poblado", score_total=80, score_band="HOT",
+                    property_title="Depa en El Poblado", property_id="prop_00231",
+                    visit_at="Fri Sep 25, 10:00", reasons=("Budget: budget stated",))
     texto = render(card)
 
-    assert "Depa en Providencia (prop_00231)" in texto
-    assert "Visita agendada: 25/09/2026 10:00" in texto
-    assert "presupuesto declarado" in texto
+    assert "Depa en El Poblado (prop_00231)" in texto
+    assert "Scheduled visit: Fri Sep 25, 10:00" in texto
+    assert "Why: Budget: budget stated" in texto
 
 
 # --- de punta a punta por el canal -------------------------------------------------------------
 
 def test_al_calificar_el_asesor_de_la_zona_recibe_la_tarjeta_una_vez(engine):
     _limpiar_asesores(engine)
-    advisor = _advisor(engine, zone="Providencia", chat_id="chat-valeria")
+    advisor = _advisor(engine, zone="El Poblado", chat_id="chat-valeria")
     bot = AsyncMock()
     lead = f"tg-{uuid.uuid4().hex[:8]}"
 
     asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id=lead,
-                         text="Busco un departamento", bot=bot))   # fija la zona
+                         text="I'm looking for an apartment", bot=bot))   # fija la zona
     # El turno que califica también busca: así la tarjeta lleva la propiedad de interés.
     asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id=lead,
-                         text=f"Busco un departamento. {CALIFICA}", bot=bot))
-    asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id=lead, text="¿Sigue disponible?",
+                         text=f"I'm looking for an apartment. {CALIFICA}", bot=bot))
+    asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id=lead, text="Is it still available?",
                          bot=bot))
 
     bot.send_message.assert_awaited_once()
     kwargs: dict[str, Any] = bot.send_message.await_args.kwargs
     assert kwargs["chat_id"] == "chat-valeria"
-    assert "Lead calificado (WARM" in kwargs["text"]
-    assert "Depa en Providencia" in kwargs["text"]
+    assert "Qualified lead (WARM" in kwargs["text"]
+    assert "Depa en El Poblado" in kwargs["text"]
     with session_scope(engine) as session:
         row = session.execute(select(Lead).where(Lead.telegram_user_id == lead)).scalar_one()
     assert row.status == "mql" and row.advisor_id == advisor.id
@@ -149,22 +149,22 @@ def test_la_propiedad_que_el_lead_miro_antes_sigue_en_la_tarjeta(engine):
     """`last_tool_results` se sobrescribe cada turno (A-9), pero la propiedad de interés se arrastra
     (B-8): la tarjeta la muestra aunque el turno que califica no la haya mirado."""
     _limpiar_asesores(engine)
-    _advisor(engine, zone="Providencia", chat_id="chat-valeria")
+    _advisor(engine, zone="El Poblado", chat_id="chat-valeria")
     bot = AsyncMock()
     lead = f"tg-{uuid.uuid4().hex[:8]}"
 
     asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id=lead,
-                         text="Busco un departamento", bot=bot))
+                         text="I'm looking for an apartment", bot=bot))
     asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id=lead, text=CALIFICA, bot=bot))
 
     texto = bot.send_message.await_args.kwargs["text"]
-    assert "Zona: Providencia" in texto
-    assert "Propiedad de interés: Depa en Providencia (prop_00231)" in texto
+    assert "Area: El Poblado" in texto
+    assert "Property of interest: Depa en El Poblado (prop_00231)" in texto
 
 
 def test_sin_telegram_el_turno_sigue_y_el_aviso_queda_en_el_panel(engine):
     _limpiar_asesores(engine)
-    offline = _advisor(engine, zone="Providencia")  # existe, pero nunca abrió el bot
+    offline = _advisor(engine, zone="El Poblado")  # existe, pero nunca abrió el bot
     bot = AsyncMock()
     lead = f"tg-{uuid.uuid4().hex[:8]}"
 

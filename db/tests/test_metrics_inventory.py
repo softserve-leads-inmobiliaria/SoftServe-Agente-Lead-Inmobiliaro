@@ -50,15 +50,15 @@ def session(engine):
         transaction = connection.begin()
         with Session(bind=connection) as session:
             session.add_all([
-                Advisor(id="adv_v", name="Valeria", zone="Providencia", access_token=f"t-{uuid.uuid4().hex}"),
-                Advisor(id="adv_a", name="Andrés", zone="Zapopan", access_token=f"t-{uuid.uuid4().hex}"),
+                Advisor(id="adv_v", name="Valeria", zone="El Poblado", access_token=f"t-{uuid.uuid4().hex}"),
+                Advisor(id="adv_a", name="Andrés", zone="Usaquen", access_token=f"t-{uuid.uuid4().hex}"),
             ])
             session.flush()
             yield session
         transaction.rollback()
 
 
-def _property(session, pid, *, zone="Providencia", type_="venta", price=1_000_000,
+def _property(session, pid, *, zone="El Poblado", type_="venta", price=1_000_000,
               listed: datetime | None = None, synthetic=False) -> Property:
     prop = Property(id=pid, title=f"Casa {pid}", price=price, type=type_, kind="casa", zone=zone, m2=100, bedrooms=2,
                     bathrooms=1, address_approx="a", address_exact="b")
@@ -118,8 +118,8 @@ def test_a_period_that_ends_before_it_starts_is_an_error(session):
 
 def test_placements_count_the_deals_of_the_period_by_zone_type_and_advisor(session):
     for pid, zone, type_, advisor, price in [
-        ("p1", "Providencia", "venta", "adv_v", "1000000"), ("p2", "Providencia", "renta", "adv_v", "20000"),
-        ("p3", "Zapopan", "venta", "adv_a", "2000000"),
+        ("p1", "El Poblado", "venta", "adv_v", "1000000"), ("p2", "El Poblado", "renta", "adv_v", "20000"),
+        ("p3", "Usaquen", "venta", "adv_a", "2000000"),
     ]:
         _property(session, pid, zone=zone, type_=type_)
         _close(session, pid, advisor=advisor, price=price)
@@ -129,7 +129,7 @@ def test_placements_count_the_deals_of_the_period_by_zone_type_and_advisor(sessi
     result = placements(session, START, END)
 
     assert (result.deals, result.amount) == (3, Decimal("3020000"))
-    assert [(g.name, g.deals) for g in result.by_zone] == [("Providencia", 2), ("Zapopan", 1)]
+    assert [(g.name, g.deals) for g in result.by_zone] == [("El Poblado", 2), ("Usaquen", 1)]
     assert {g.name: g.deals for g in result.by_type} == {"venta": 2, "renta": 1}
     assert [(g.name, g.deals, g.amount) for g in result.by_advisor] == [
         ("Valeria", 2, Decimal("1020000")), ("Andrés", 1, Decimal("2000000"))]
@@ -149,12 +149,12 @@ def test_days_on_market_go_from_the_first_time_available_to_the_close(session):
     # p3 se apartó y volvió: cuenta desde la primera vez que estuvo disponible.
     set_status(session, "p3", "apartado", "test", at=CLOSED - timedelta(days=20))
     set_status(session, "p3", "disponible", "test", at=CLOSED - timedelta(days=5))
-    _property(session, "z1", zone="Zapopan", type_="renta", listed=CLOSED - timedelta(days=4))
+    _property(session, "z1", zone="Usaquen", type_="renta", listed=CLOSED - timedelta(days=4))
     for pid in ("p1", "p2", "p3", "z1"):
         _close(session, pid)
 
     assert [(d.name, d.median_days, d.deals) for d in days_on_market(session, START, END)] == [
-        ("Providencia", 30.0, 3), ("Zapopan", 4.0, 1)]
+        ("El Poblado", 30.0, 3), ("Usaquen", 4.0, 1)]
     by_type = {d.name: d.median_days for d in days_on_market(session, START, END, "type")}
     assert by_type == {"venta": 30.0, "renta": 4.0}
 
@@ -266,16 +266,16 @@ def _unmet(session, zone, type_, bedrooms, times=1, *, at=START + timedelta(days
 
 
 def test_unmet_demand_groups_the_most_repeated_combinations(session):
-    _unmet(session, "Providencia", "renta", 3, times=2)
-    _unmet(session, "providencia ", "renta", 3)  # la misma zona escrita distinto
-    _unmet(session, "Zapopan", "venta", None, times=2)
+    _unmet(session, "El Poblado", "renta", 3, times=2)
+    _unmet(session, "el poblado ", "renta", 3)  # la misma zona escrita distinto
+    _unmet(session, "Usaquen", "venta", None, times=2)
     _unmet(session, None, None, 1)
-    _unmet(session, "Providencia", "renta", 3, at=END)  # fuera del periodo
+    _unmet(session, "El Poblado", "renta", 3, at=END)  # fuera del periodo
 
     result = unmet_demand(session, START, END)
 
     assert [(u.zone, u.type, u.bedrooms, u.searches) for u in result] == [
-        ("Providencia", "renta", 3, 3), ("Zapopan", "venta", None, 2), (None, None, 1, 1)]
+        ("El Poblado", "renta", 3, 3), ("Usaquen", "venta", None, 2), (None, None, 1, 1)]
 
 
 # --- datos sintéticos ------------------------------------------------------------------------------------
@@ -287,7 +287,7 @@ def test_every_query_can_leave_out_the_synthetic_history(session):
     _close(session, "demo", synthetic=True)
     _property(session, "demo_quieta", listed=END - timedelta(days=60), synthetic=True)
     _interest(session, "demo_quieta", "consulta", synthetic=True)
-    _unmet(session, "Zapopan", "venta", 2, synthetic=True)
+    _unmet(session, "Usaquen", "venta", 2, synthetic=True)
 
     assert placements(session, START, END).deals == 1
     assert placements(session, START, END, include_synthetic=True).deals == 2

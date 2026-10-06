@@ -20,8 +20,8 @@ from db.repo_root import repo_root
 INBOUND = {key: value for key, value in json.loads(
     (repo_root() / "contracts" / "examples" / "event.valid.json").read_text(encoding="utf-8")).items()
     if key != "property_id"}
-ANUNCIO = {"id": "prop_anuncio", "title": "Depto del anuncio", "zone": "Providencia", "status": "disponible"}
-OTRA = {"id": "prop_otra", "title": "Casa en Zapopan", "zone": "Zapopan", "status": "disponible"}
+ANUNCIO = {"id": "prop_anuncio", "title": "Depto del anuncio", "zone": "El Poblado", "status": "disponible"}
+OTRA = {"id": "prop_otra", "title": "Casa en Usaquen", "zone": "Usaquen", "status": "disponible"}
 
 
 # --- interactions: lógica pura -----------------------------------------------------------------------
@@ -70,7 +70,7 @@ def _inventory(engine):
         for prop in (ANUNCIO, OTRA, PROPERTY):
             connection.execute(text(
                 "INSERT INTO properties (id, title, price, type, kind, zone, m2, bedrooms, bathrooms, address_approx,"
-                " address_exact) VALUES (:id, :title, 1, 'renta', 'departamento', 'Providencia', 1, 1, 1, 'a', 'b')"
+                " address_exact) VALUES (:id, :title, 1, 'renta', 'departamento', 'El Poblado', 1, 1, 1, 'a', 'b')"
                 " ON CONFLICT (id) DO NOTHING"), {"id": prop["id"], "title": prop["title"]})
 
 
@@ -82,7 +82,7 @@ class Catalog:
 
     async def call(self, tool, arguments=None):
         if tool == "get_property":
-            return dict(ANUNCIO) | {"address_approx": "Providencia"}
+            return dict(ANUNCIO) | {"address_approx": "El Poblado"}
         if tool == "search_properties":
             return {"properties": list(self.found)}
         return stub_call(tool, arguments)
@@ -128,28 +128,28 @@ def test_the_deep_link_writes_anuncio(engine):
 
 def test_a_search_writes_busqueda_for_each_result(engine):
     lead = Lead(engine)
-    lead.say("Busco un departamento", Catalog(found=(PROPERTY, OTRA)))
+    lead.say("I'm looking for an apartment", Catalog(found=(PROPERTY, OTRA)))
     assert lead.interest() == [("prop_otra", "busqueda"), ("prop_test", "busqueda")]
 
 
 def test_a_get_property_writes_consulta(engine):
     lead = Lead(engine)
-    lead.say("¿Y la casa de Zapopan?", agent=LooksUp())
+    lead.say("What about the house in Usaquen?", agent=LooksUp())
     assert lead.interest() == [("prop_otra", "consulta")]
 
 
 def test_the_same_search_in_two_turns_is_two_rows(engine):
     # Una fila por turno: dos búsquedas son dos interacciones, y N-6 las cuenta así.
     lead = Lead(engine)
-    lead.say("Busco un departamento")
-    lead.say("Busco otro departamento")
+    lead.say("I'm looking for an apartment")
+    lead.say("I'm looking for another apartment")
     assert lead.interest() == [("prop_test", "busqueda"), ("prop_test", "busqueda")]
 
 
 def test_a_booked_visit_writes_visita(engine, monkeypatch):
     monkeypatch.setattr(scheduling_client, "get_scheduling", lambda: ContractAgenda())
     lead = Lead(engine)
-    for message in ("Hola", "Busco un departamento", "¿Cuánto cuesta?", "Quiero agendar una visita"):
+    for message in ("Hi", "I'm looking for an apartment", "How much does it cost?", "I'd like to schedule a visit"):
         lead.say(message)
     assert ("prop_test", "visita") not in lead.interest()  # ofrecer horarios no es una visita
     lead.say("la 2")
@@ -159,7 +159,7 @@ def test_a_booked_visit_writes_visita(engine, monkeypatch):
 def test_a_property_missing_from_the_inventory_is_skipped_without_breaking_the_turn(engine, caplog):
     lead = Lead(engine)
     with caplog.at_level("WARNING", logger="core.state_store"):
-        reply = lead.say("Busco un departamento", Catalog(found=({"id": "prop_no_existe", "title": "x", "status": "disponible"}, OTRA)))
+        reply = lead.say("I'm looking for an apartment", Catalog(found=({"id": "prop_no_existe", "title": "x", "status": "disponible"}, OTRA)))
     assert reply["text"] and lead.interest() == [("prop_otra", "busqueda")]
     [skipped] = [record for record in caplog.records if record.name == "core.state_store"]
     assert (skipped.property_id, skipped.kind) == ("prop_no_existe", "busqueda")
@@ -172,7 +172,7 @@ def test_if_saving_the_interest_fails_the_whole_turn_fails(engine, monkeypatch):
     monkeypatch.setattr(StateStore, "record_interest", broken)
     lead = Lead(engine)
     with pytest.raises(RuntimeError):
-        lead.say("Busco un departamento")
+        lead.say("I'm looking for an apartment")
     assert lead.messages() == 0 and lead.interest() == []
 
 

@@ -22,7 +22,7 @@ class StubCatalog:
 
 
 def test_un_mensaje_crea_el_lead_y_devuelve_respuesta(engine):
-    reply = asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="tg-bot-1", text="hola"))
+    reply = asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="tg-bot-1", text="hi"))
 
     assert reply
     with session_scope(engine) as session:
@@ -49,9 +49,9 @@ def test_el_deep_link_de_propiedad_llega_al_turno(engine, monkeypatch):
 
 
 def test_el_primer_turno_incluye_el_aviso_de_privacidad(engine):
-    primera = asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="tg-bot-3", text="hola"))
+    primera = asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="tg-bot-3", text="hi"))
     segunda = asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="tg-bot-3",
-                                   text="hola de nuevo"))
+                                   text="hi again"))
 
     assert PRIVACY_NOTICE in primera
     assert PRIVACY_NOTICE not in segunda

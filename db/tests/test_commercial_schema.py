@@ -50,7 +50,7 @@ def session(engine):
 
 
 def _property(session, pid="prop_n1", status="disponible") -> Property:
-    prop = Property(id=pid, title="t", price=1, type="renta", kind="casa", zone="Providencia", m2=1, bedrooms=1,
+    prop = Property(id=pid, title="t", price=1, type="renta", kind="casa", zone="El Poblado", m2=1, bedrooms=1,
                     bathrooms=1, address_approx="a", address_exact="b", status=status)
     session.add(prop)
     session.flush()
@@ -65,7 +65,7 @@ def _lead(session) -> Lead:
 
 
 def _advisor(session) -> Advisor:
-    advisor = Advisor(id="adv_n1", name="n", zone="Providencia", access_token=f"tok_{uuid.uuid4().hex}")
+    advisor = Advisor(id="adv_n1", name="n", zone="El Poblado", access_token=f"tok_{uuid.uuid4().hex}")
     session.add(advisor)
     session.flush()
     return advisor
@@ -213,7 +213,7 @@ def test_unknown_interest_kind_is_rejected(session):
 
 
 def test_an_unmet_search_takes_any_subset_of_filters(session):
-    session.add_all([UnmetSearch(), UnmetSearch(zone="Chapalita", type="renta", bedrooms=3,
+    session.add_all([UnmetSearch(), UnmetSearch(zone="Laureles", type="renta", bedrooms=3,
                                                 budget_min=Decimal("0"), budget_max=Decimal("15000"))])
     session.flush()
     with pytest.raises(IntegrityError), session.begin_nested():

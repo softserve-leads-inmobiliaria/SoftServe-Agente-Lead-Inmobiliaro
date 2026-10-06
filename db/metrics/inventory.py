@@ -29,12 +29,12 @@ from decimal import Decimal
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-LOCAL_TZ = timezone(timedelta(hours=-6))  # hora de Guadalajara, la misma de la agenda (DT-32)
+LOCAL_TZ = timezone(timedelta(hours=-5))  # hora de Colombia, la misma de la agenda (DT-32, DT-55)
 STAGNANT_DAYS = (30, 60, 90)
 INQUIRY_KINDS = ("anuncio", "consulta")
 VISIT_KIND = "visita"
-NO_INQUIRIES = "sin consultas"
-INQUIRIES_WITHOUT_VISITS = "consultas sin visitas"
+NO_INQUIRIES = "no inquiries"
+INQUIRIES_WITHOUT_VISITS = "inquiries but no visits"
 RANKING_LIMIT = 10
 UNMET_LIMIT = 10
 
@@ -118,7 +118,7 @@ _RANKING = text("""
     LIMIT :limit
 """)
 
-# La zona la escribe el LLM o el lead: "providencia" y "Providencia" son la misma, y se muestra la forma
+# La zona la escribe el LLM o el lead: "poblado" y "El Poblado" son la misma, y se muestra la forma
 # más repetida.
 _UNMET = text("""
     SELECT mode() WITHIN GROUP (ORDER BY trim(u.zone)) AS zone, u.type, u.bedrooms, count(*) AS searches
@@ -168,7 +168,7 @@ class StagnantProperty:
 
     @property
     def demand(self) -> str | None:
-        """"sin consultas", "consultas sin visitas", o None si tuvo visitas en el periodo."""
+        """"no inquiries", "inquiries but no visits", o None si tuvo visitas en el periodo."""
         if self.visits:
             return None
         return INQUIRIES_WITHOUT_VISITS if self.inquiries else NO_INQUIRIES

@@ -9,10 +9,10 @@ from test_visits_turn import Chat, ContractAgenda
 
 from app import reminders, scheduling_client
 from app.scheduler import Scheduler
-from app.visits import LOCAL_TZ
+from app.visits import LOCAL_TZ, slot_label
 from db.session import session_scope
 
-APPROX, EXACT = "Col. Providencia, Guadalajara", "Av. Providencia 1234"
+APPROX, EXACT = "El Poblado, Medellin", "Carrera 37 # 8A-24"
 
 
 class Channel:
@@ -44,7 +44,7 @@ def _property(engine):
     with engine.begin() as connection:
         connection.execute(text(
             "INSERT INTO properties (id, title, price, type, kind, zone, m2, bedrooms, bathrooms, address_approx,"
-            " address_exact) VALUES (:id, :title, 1, 'renta', 'departamento', 'Providencia', 1, 1, 1, :approx, :exact)"
+            " address_exact) VALUES (:id, :title, 1, 'renta', 'departamento', 'El Poblado', 1, 1, 1, :approx, :exact)"
             " ON CONFLICT (id) DO NOTHING"), {"id": PROPERTY["id"], "title": PROPERTY["title"],
                                              "approx": APPROX, "exact": EXACT})
 
@@ -80,7 +80,7 @@ def _reminders(engine, chat):
 def _saved(engine, chat):
     with engine.connect() as connection:
         return connection.execute(text(
-            "SELECT content FROM messages WHERE conversation_id = :c AND content LIKE 'Te recuerdo%'"),
+            "SELECT content FROM messages WHERE conversation_id = :c AND content LIKE 'Just a reminder%'"),
             {"c": chat.conversation_id}).scalars().all()
 
 
@@ -112,23 +112,23 @@ def test_a_preferred_time_without_booking_has_no_reminder(engine, monkeypatch):
     monkeypatch.setattr(scheduling_client, "get_scheduling", lambda: Down())
     chat = Chat(engine)
     chat.to_schedule()
-    chat.say("el martes a las 10")
+    chat.say("Tuesday at 10")
     assert _reminders(engine, chat) == []
 
 
 @pytest.mark.parametrize("visit,expected", [
-    ("2026-10-06T10:00:00-06:00", "2026-10-05T18:00:00-06:00"),
-    ("2026-10-06T00:30:00-06:00", "2026-10-05T18:00:00-06:00"),
-    ("2026-10-06T23:30:00-06:00", "2026-10-05T18:00:00-06:00"),
-    ("2026-10-06T03:00:00+00:00", "2026-10-04T18:00:00-06:00"),  # en hora local es el 5 a las 21:00
+    ("2026-10-06T10:00:00-05:00", "2026-10-05T18:00:00-05:00"),
+    ("2026-10-06T00:30:00-05:00", "2026-10-05T18:00:00-05:00"),
+    ("2026-10-06T23:30:00-05:00", "2026-10-05T18:00:00-05:00"),
+    ("2026-10-06T03:00:00+00:00", "2026-10-04T18:00:00-05:00"),  # en hora local es el 5 a las 21:00
 ])
 def test_the_reminder_goes_at_six_pm_local_the_day_before(visit, expected):
     assert reminders.reminder_at(datetime.fromisoformat(visit)) == datetime.fromisoformat(expected)
 
 
 def test_a_visit_booked_after_the_reminder_time_gets_none(engine):
-    visit = {"visit_id": str(uuid.uuid4()), "scheduled_at": "2026-10-06T10:00:00-06:00", "property": PROPERTY}
-    late = datetime.fromisoformat("2026-10-05T19:00:00-06:00")
+    visit = {"visit_id": str(uuid.uuid4()), "scheduled_at": "2026-10-06T10:00:00-05:00", "property": PROPERTY}
+    late = datetime.fromisoformat("2026-10-05T19:00:00-05:00")
     with session_scope(engine) as session:
         assert not reminders.schedule(session, uuid.uuid4(), uuid.uuid4(), visit, late)
 
@@ -140,9 +140,9 @@ def test_the_reminder_has_date_time_and_approximate_address(engine, agenda):
     run_at = _reminders(engine, chat)[0].run_at
     assert _run(engine, run_at - timedelta(seconds=1), channel) == 0 and channel.sent == []
     _run(engine, run_at, channel)
-    visit = datetime.fromisoformat(agenda.slots[1])
     [sent] = channel.sent
-    assert f"{visit:%d/%m}" in sent and f"{visit:%H:%M}" in sent and PROPERTY["title"] in sent
+    # En inglés y con el formato de la oferta de horarios (#202): "Fri Oct 9, 11:00".
+    assert slot_label(agenda.slots[1]) in sent and "tomorrow" in sent and PROPERTY["title"] in sent
     assert APPROX in sent and EXACT not in sent
     assert _saved(engine, chat) == [sent] and _reminders(engine, chat)[0].status == "done"
 

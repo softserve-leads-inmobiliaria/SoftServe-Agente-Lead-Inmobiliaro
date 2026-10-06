@@ -47,7 +47,7 @@ _HANDED_OFF = text("""
 """)
 
 _BY_ZONE = text("""
-    SELECT coalesce(l.zone, 'sin zona') AS zone,
+    SELECT coalesce(l.zone, 'no area') AS zone,
            count(*) AS leads,
            count(*) FILTER (WHERE s.band = 'HOT') AS hot,
            count(*) FILTER (WHERE s.band = 'WARM') AS warm,
@@ -55,12 +55,12 @@ _BY_ZONE = text("""
     FROM leads l
     LEFT JOIN lead_scores s ON s.lead_id = l.id
     WHERE NOT l.synthetic
-    GROUP BY coalesce(l.zone, 'sin zona')
+    GROUP BY coalesce(l.zone, 'no area')
     ORDER BY leads DESC, zone
 """)
 
 _BY_ADVISOR = text("""
-    SELECT coalesce(a.name, 'sin asignar') AS advisor,
+    SELECT coalesce(a.name, 'unassigned') AS advisor,
            a.zone AS advisor_zone,
            count(*) AS leads,
            count(*) FILTER (WHERE s.band = 'HOT') AS hot,
