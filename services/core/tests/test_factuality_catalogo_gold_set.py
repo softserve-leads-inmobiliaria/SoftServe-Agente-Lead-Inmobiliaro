@@ -274,6 +274,27 @@ CASOS = [
      "ficha_venta_calificado", "", True),
     ("numero_de_calle_sin_calificar", "Está en la Carrera 37 # 8A-24.",
      "ficha_venta", "", False),
+
+    # --- en inglés (#202, DT-55): el agente responde en inglés, con precios en USD --------------------
+    ("en_precio_correcto", "That apartment costs $185,000.", "busqueda_venta_poblado", "", True),
+    ("en_m2_y_recamaras_correctos", "It has 78.5 m² and 2 bedrooms.", "busqueda_venta_poblado", "", True),
+    ("en_renta_correcta", "The Laureles apartment rents for $1,150 a month.", "busqueda_renta", "", True),
+    ("en_apartado_real", "The 1-bedroom apartment in Laureles is already reserved.", "busqueda_renta", "", True),
+    # Negado no afirma el estado: solo cuenta "reserved", que sí está respaldado.
+    ("en_negado_no_afirma", "That one is not available, it is reserved.", "busqueda_renta", "", True),
+    ("en_se_puede_rentar_no_es_estado", "It can be rented for $1,150.", "busqueda_renta", "", True),
+    ("en_cerrada_real", "The Chapinero house was already sold.", "ficha_cerrada", "", True),
+    ("en_enganche_correcto", "You need a down payment of at least 10% of the price.",
+     "requisitos_venta_no_cumple", "", True),
+    ("en_presupuesto_del_lead", "With $250,000 you have good options.",
+     "busqueda_zona_sin_coincidencia", "my budget is $250,000", True),
+    ("en_precio_inventado", "That apartment costs $150,000.", "busqueda_venta_poblado", "", False),
+    ("en_disponible_falso", "Yes, it's still available.", "disponibilidad_apartada", "", False),
+    ("en_vendida_falso", "That one was already sold.", "busqueda_venta_poblado", "", False),
+    ("en_apartada_falso", "That one is on hold.", "disponibilidad_disponible", "", False),
+    ("en_promocion_inventada", "It has a 15% discount promotion.", "promociones_sin_promociones", "", False),
+    ("en_enganche_inventado", "You need a down payment of at least 25% of the price.",
+     "requisitos_venta_no_cumple", "", False),
 ]
 
 assert len(CASOS) >= 30, "el gold set de C-7 tiene que tener al menos 30 casos (criterio de aceptación)"

@@ -114,7 +114,7 @@ class Chat:
 def test_asking_for_a_visit_offers_numbered_slots_of_the_property_the_lead_looked_at(engine, agenda):
     chat = Chat(engine)
     reply = chat.to_schedule()
-    assert "Casa de prueba" in reply and "1) mar 06/10 10:00" in reply and "3) mié 07/10 16:00" in reply
+    assert "Casa de prueba" in reply and "1) Tue Oct 6, 10:00" in reply and "3) Wed Oct 7, 16:00" in reply
     assert [operation for operation, _ in agenda.calls] == ["assign_advisor", "get_slots"]
     assert agenda.calls[0][1]["registered_only"] is False  # B-15: el asesor no necesita Telegram
 
@@ -126,7 +126,7 @@ def test_choosing_a_slot_books_the_visit_and_hands_the_lead_over(engine, agenda)
     assert agenda.booked() == [{"idempotency_key": f"{chat.conversation_id}:{SLOTS[1]}", "lead_id": chat.lead_id,
                                 "property_id": PROPERTY["id"], "advisor_id": "adv_poblado",
                                 "scheduled_at": SLOTS[1]}]
-    assert "quedó agendada para el mar 06/10 11:00" in reply
+    assert "is booked for Tue Oct 6, 11:00" in reply
     assert chat.state == "HANDOFF" and chat.lead_status == "visit_scheduled"
     assert chat.handoffs == ["visit_scheduled"]
 
@@ -134,7 +134,7 @@ def test_choosing_a_slot_books_the_visit_and_hands_the_lead_over(engine, agenda)
 def test_an_unclear_answer_keeps_the_offer_until_the_lead_picks_one(engine, agenda):
     chat = Chat(engine)
     chat.to_schedule()
-    assert "No me quedó claro" in chat.say("¿y tiene estacionamiento?")
+    assert "I didn't quite get" in chat.say("¿y tiene estacionamiento?")
     assert chat.state == "SCHEDULE" and agenda.booked() == []
     chat.say("a las 16:00")
     assert chat.state == "HANDOFF" and agenda.booked()[0]["scheduled_at"] == SLOTS[2]
@@ -153,7 +153,7 @@ def test_a_slot_taken_meanwhile_is_offered_again_without_handing_off(engine, mon
     monkeypatch.setattr(scheduling_client, "get_scheduling", lambda: fake)
     chat = Chat(engine)
     chat.to_schedule()
-    assert chat.say("2").startswith("Ese horario se acaba de ocupar")
+    assert chat.say("2").startswith("That time was just taken")
     assert chat.state == "SCHEDULE"
     chat.say("3")
     assert chat.state == "HANDOFF" and chat.lead_status == "visit_scheduled"
@@ -193,8 +193,8 @@ def test_a_visit_requested_from_the_listing_books_that_property(engine, agenda):
 def test_without_the_agenda_the_preferred_time_reaches_the_advisor(engine):
     """El fixture de `conftest.py` deja la agenda caída: es el respaldo de la historia."""
     chat = Chat(engine)
-    assert "¿Qué día y hora te acomodan?" in chat.to_schedule()
-    assert "¿Qué día y a qué hora" in chat.say("ok")
+    assert "What day and time work for you?" in chat.to_schedule()
+    assert "What day and time would you like" in chat.say("ok")
     assert chat.state == "SCHEDULE"
     chat.say("El sábado en la mañana")
     assert chat.state == "HANDOFF" and chat.lead_status != "visit_scheduled"

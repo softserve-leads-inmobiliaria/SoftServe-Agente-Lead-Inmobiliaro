@@ -247,7 +247,7 @@ def test_the_visit_button_offers_the_slots_just_like_writing_it(engine, agenda, 
         lead.say(text)
     reply = lead.tap(VISIT_BUTTON)
 
-    assert "Casa de prueba" in reply and "1) mar 06/10 10:00" in reply
+    assert "Casa de prueba" in reply and "1) Tue Oct 6, 10:00" in reply
     assert lead.state == "SCHEDULE" and lead.buttons() == []
     # El botón llegó al turno como un mensaje del lead con su texto fijo, en un evento CT-1 válido.
     assert spy_events[-1]["text"] == BUTTON_TEXTS[VISIT_BUTTON]
@@ -259,7 +259,7 @@ def test_tapping_the_visit_button_twice_books_a_single_visit(engine, agenda):
     for text in TO_RECOMMEND:
         lead.say(text)
     lead.tap(VISIT_BUTTON)
-    assert "1) mar 06/10 10:00" in lead.tap(VISIT_BUTTON)  # en SCHEDULE vuelve a ofrecer, no reserva
+    assert "1) Tue Oct 6, 10:00" in lead.tap(VISIT_BUTTON)  # en SCHEDULE vuelve a ofrecer, no reserva
     lead.say("1")
     assert lead.state == "HANDOFF"
     lead.tap(VISIT_BUTTON)  # ya agendada: abre una conversación nueva (#84), que no reserva nada

@@ -74,7 +74,7 @@ class Channel:
         return self._reachable
 
     def send(self, chat_id, text):
-        if text.startswith("¡Salió algo"):
+        if text.startswith("Something like"):
             self.sent.append(text)
 
 
@@ -108,7 +108,7 @@ class Lead:
 
     def saved(self):
         return [row[0] for row in self._rows(
-            "SELECT content FROM messages WHERE conversation_id = :c AND content LIKE '¡Salió algo%'")]
+            "SELECT content FROM messages WHERE conversation_id = :c AND content LIKE 'Something like%'")]
 
 
 def _list(engine, zone, *, price=15000, bedrooms=2, type_="renta", status="disponible", at=None):
@@ -145,12 +145,17 @@ def _alerted(engine, zone, channel=None, **listing):
 # --- detectar el pedido --------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("message", ["avísame", "Avísame si sale algo así", "¿me avisas?", "me avisan porfa",
-                                     "notifícame", "quiero una alerta", "Avisenme cuando haya"])
+                                     "notifícame", "quiero una alerta", "Avisenme cuando haya",
+                                     "notify me", "Notify me if something like that comes up", "keep me posted",
+                                     "let me know when there's one", "let me know if anything comes up",
+                                     "can you set up an alert?"])
 def test_the_lead_asking_for_an_alert_is_detected(message):
     assert alerts.is_request(message)
 
 
-@pytest.mark.parametrize("message", ["Busco casa en Usaquen", "¿Cuánto cuesta?", "Quiero agendar una visita", ""])
+@pytest.mark.parametrize("message", ["Busco casa en Usaquen", "¿Cuánto cuesta?", "Quiero agendar una visita", "",
+                                     "let me know the price", "I'm looking for a house in Usaquen",
+                                     "I'd like to schedule a viewing"])
 def test_other_messages_are_not_an_alert_request(message):
     assert not alerts.is_request(message)
 
@@ -218,7 +223,7 @@ def test_a_new_matching_property_is_announced_once(engine, zone):
     lead, property_id, channel = _alerted(engine, zone)
     [sent] = channel.sent
     assert "Depto nuevo" in sent and property_id in sent and zone in sent and "$15,000" in sent
-    assert "2 recámaras" in sent and sent.endswith(STOP_HINT)
+    assert "2 bedrooms" in sent and sent.endswith(STOP_HINT)
     assert lead.saved() == [sent]
     assert lead.last_tool_results()[REMEMBERED_KEY]["id"] == property_id  # "me interesa" sabe cuál es
     _run(engine, channel, after=timedelta(minutes=30))
@@ -372,9 +377,9 @@ def test_the_lead_answering_from_nurture_goes_back_to_discovery(engine, zone):
 
 @pytest.mark.parametrize("prop,expected", [
     ({"id": "prop_1", "title": "Casa", "zone": "Usaquen", "type": "venta", "bedrooms": 3, "price": 2350000.0},
-     "Casa (ref. prop_1), en Usaquen: en venta, 3 recámaras, $2,350,000."),
+     "Casa (ref. prop_1), in Usaquen: for sale, 3 bedrooms, $2,350,000."),
     ({"id": "prop_2", "title": "Estudio", "zone": "Centro", "type": "renta", "bedrooms": 1, "price": 8500.5},
-     "Estudio (ref. prop_2), en Centro: en renta, 1 recámara, $8,500.50."),
+     "Estudio (ref. prop_2), in Centro: for rent, 1 bedroom, $8,500.50."),
 ])
 def test_the_alert_text_uses_only_catalog_data(prop, expected):
     assert expected in alerts.alert_text(prop)

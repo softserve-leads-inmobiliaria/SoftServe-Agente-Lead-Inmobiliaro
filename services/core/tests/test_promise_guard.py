@@ -51,6 +51,27 @@ CASES = [
     # --- 7: garantía de cierre de operación -------------------------------------------------------------
     ("garantia_de_cierre", "Esta compra es un hecho, no te va a fallar.", {}, "", False),
     ("trato_hecho", "Es un trato hecho, firmamos la próxima semana.", {}, "", False),
+
+    # --- en inglés (#202, DT-55): el LLM responde en inglés --------------------------------------------
+    ("en_respuesta_neutra", "I'd be happy to schedule a viewing for Saturday.", {}, "", True),
+    ("en_preaprobado_del_lead_no_es_promesa", "Great, since your mortgage is pre-approved, let's look at options.",
+     {}, "my mortgage is already pre-approved", True),
+    ("en_duda_sobre_mascotas", "Let me check with the agent whether pets are allowed.", {}, "", True),
+    ("en_niega_mascotas", "No, pets are not allowed in that unit.", {}, "", True),
+    ("en_duda_sobre_credito", "I don't know yet if your loan is approved, I'll ask.", {}, "", True),
+    ("en_amenidad_negada", "It doesn't have a pool, but it has a garden.",
+     {"get_property": {"id": "p1", "amenities": ["garden"]}}, "", True),
+    ("en_credito_aprobado", "Your mortgage is approved, we can move forward.", {}, "", False),
+    ("en_te_aprobaron", "They approved your loan with the bank.", {}, "", False),
+    ("en_mascotas", "Yes, pets are allowed, no problem.", {}, "", False),
+    ("en_pet_friendly", "It's a pet-friendly building.", {}, "", False),
+    ("en_negociacion", "We can lower the price if you decide today.", {}, "", False),
+    ("en_mejor_precio", "I'll give you a better price if you close this week.", {}, "", False),
+    ("en_apartado", "I'll hold it for you, don't worry.", {}, "", False),
+    ("en_reservada", "It's reserved for you starting now.", {}, "", False),
+    ("en_amenidad_inventada", "That unit has a pool and a gym.", NO_AMENITIES, "", False),
+    ("en_garantia", "It's a done deal, we sign next week.", {}, "", False),
+    ("en_garantia_de_compra", "I guarantee you'll get it.", {}, "", False),
 ]
 
 assert len(CASES) >= 15, "la suite de A-7 tiene que cubrir los 6 claims con código, en positivo y negativo"

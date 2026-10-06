@@ -162,7 +162,7 @@ def test_pii_is_neither_saved_nor_shown_to_the_agent(engine):
     chat = Chat(engine, agent)
     chat.say(f"Busco casa, mi tarjeta es {CARD}")
     assert "4111" not in json.dumps(chat.messages()) and "4111" not in agent.inputs[0].text
-    assert "[dato omitido]" in agent.inputs[0].text
+    assert "[redacted]" in agent.inputs[0].text
 
 
 def test_a_protected_category_is_neither_saved_nor_shown_to_the_agent(engine):
