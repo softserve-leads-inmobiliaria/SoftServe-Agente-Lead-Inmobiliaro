@@ -2,7 +2,14 @@
 import pytest
 
 from db.labels import label
-from db.models import DEAL_KINDS, LEAD_STATUSES, NOTIFICATION_KINDS, PROPERTY_KINDS, PROPERTY_STATUSES, PROPERTY_TYPES
+from db.models import (
+    DEAL_KINDS,
+    LEAD_STATUSES,
+    NOTIFICATION_KINDS,
+    PROPERTY_KINDS,
+    PROPERTY_STATUSES,
+    PROPERTY_TYPES,
+)
 
 
 @pytest.mark.parametrize("field,values", [
@@ -12,7 +19,7 @@ from db.models import DEAL_KINDS, LEAD_STATUSES, NOTIFICATION_KINDS, PROPERTY_KI
 def test_every_value_of_the_database_has_its_label(field, values):
     # Un valor nuevo en `db/models.py` sin etiqueta se vería en español en el panel.
     labels = [label(field, value) for value in values]
-    assert all(text != value for text, value in zip(labels, values))
+    assert all(text != value for text, value in zip(labels, values, strict=True))
     assert len(set(labels)) == len(values)
 
 
