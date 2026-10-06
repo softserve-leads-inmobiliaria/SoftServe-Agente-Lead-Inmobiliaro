@@ -252,7 +252,7 @@ class Advisor(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)  # p. ej. "adv_001"
     name: Mapped[str] = mapped_column(String, nullable=False)
     zone: Mapped[str] = mapped_column(String, index=True, nullable=False)
-    language: Mapped[str] = mapped_column(String, server_default="es", nullable=False)
+    language: Mapped[str] = mapped_column(String, server_default="en", nullable=False)  # DT-55
     # Auth del panel (DT-5): token estático por asesor.
     access_token: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     # A dónde llega la tarjeta del lead calificado (B-7). Lo completa el asesor al abrir el bot.
