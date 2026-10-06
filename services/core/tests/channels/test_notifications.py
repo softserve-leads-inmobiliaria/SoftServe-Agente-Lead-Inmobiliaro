@@ -14,7 +14,7 @@ from app.channels.telegram import reply_to
 from db.models import Advisor, AdvisorNotification, Lead
 from db.session import session_scope
 
-CALIFICA = "Tengo presupuesto de 3 millones, decido yo y es urgente"
+CALIFICA = "My budget is 3 million, I decide and it's urgent"
 
 
 class StubCatalog:

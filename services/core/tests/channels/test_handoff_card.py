@@ -78,7 +78,7 @@ def test_la_ficha_lleva_motivo_score_propiedad_visita_y_la_transcripcion_en_orde
     assert "Traspaso de lead (HUMAN_HANDOFF): el lead pidió hablar con una persona" in resumen
     assert "HOT · 80/100" in resumen and "Depa en El Poblado (prop_00231)" in resumen
     assert "Visita agendada: 25/09/2026 10:00" in resumen
-    assert transcripcion == "Transcripción:\nLead: Hi\nAgente: ¡Hola!\nLead: I want an agent"
+    assert transcripcion == "Transcripción:\nLead: Hi\nAgente: Hello!\nLead: I want an agent"
 
 
 def test_una_conversacion_sin_mensajes_lo_dice_en_vez_de_omitir_la_transcripcion():

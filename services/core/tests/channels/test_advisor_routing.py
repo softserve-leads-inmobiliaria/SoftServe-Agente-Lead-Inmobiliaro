@@ -20,7 +20,7 @@ from app.scheduling_client import SchedulingClient, SchedulingError
 from db.models import Advisor, AdvisorNotification, Lead
 from db.session import session_scope
 
-CALIFICA = "Tengo presupuesto de 3 millones, decido yo y es urgente"
+CALIFICA = "My budget is 3 million, I decide and it's urgent"
 PIDE_HUMANO = "I want to talk to an agent"
 SCORE = {"total": 60, "band": "WARM", "reasons": ["presupuesto declarado"]}
 
