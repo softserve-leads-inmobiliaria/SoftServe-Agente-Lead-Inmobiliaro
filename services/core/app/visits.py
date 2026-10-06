@@ -29,20 +29,31 @@ SEARCH_DAYS = 7
 OFFER_KEY = "visit_offer"  # oferta en curso: horarios ofrecidos, o la espera de un horario preferido
 VISIT_KEY = "visit"  # visita resuelta: reservada (`visit_id`, `scheduled_at`) o con `preferred_time`
 
-_WEEKDAYS = ("lun", "mar", "mié", "jue", "vie", "sáb", "dom")
-_ORDINALS = (("primer", 1), ("segund", 2), ("tercer", 3))
-_CLOCK = re.compile(r"\b(\d{1,2}):(\d{2})\b")
-_AT_HOUR = re.compile(r"\ba las (\d{1,2})\b")
+# Los horarios se muestran en inglés (#202, DT-55); la respuesta del lead se entiende en inglés y en español.
+_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+_ORDINALS = (("primer", 1), ("segund", 2), ("tercer", 3), ("first", 1), ("second", 2), ("third", 3),
+             ("1st", 1), ("2nd", 2), ("3rd", 3))
+# "pm" suma 12: "at 4 pm" y "4:00 pm" son las 16:00, que es como vienen los horarios de la agenda.
+_CLOCK = re.compile(r"\b(\d{1,2}):(\d{2})\s?([ap])?\.?m?\b")
+_AT_HOUR = re.compile(r"\b(?:a las|at) (\d{1,2})(?:\s?([ap])\.?m\b)?")
 _NUMBER = re.compile(r"(?<![\d:])\b(\d{1,2})\b(?![\d:])")
 # Algo que parezca un día o una hora: sin esto, un "ok" quedaría como horario preferido.
 _WHEN = re.compile(r"\d|\b(hoy|manana|pasado|lunes|martes|miercoles|jueves|viernes|sabado|domingo|semana"
-                   r"|tarde|noche|mediodia|temprano)\b")
+                   r"|tarde|noche|mediodia|temprano"
+                   r"|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|week|weekend"
+                   r"|morning|afternoon|evening|night|noon|early|late)\b")
 
-PREFERRED_ASK = ("Ahora no puedo reservar la visita desde aquí. ¿Qué día y hora te acomodan? "
-                 "Se lo paso a tu asesor para que la confirme.")
-PREFERRED_AGAIN = "¿Qué día y a qué hora te gustaría hacer la visita? Se lo paso a tu asesor."
-PREFERRED_THANKS = ("Gracias. Le paso tu horario preferido a tu asesor, que te contactará para "
-                    "confirmar la visita.")
+PREFERRED_ASK = ("I can't book the viewing from here right now. What day and time work for you? "
+                 "I'll pass it on to your agent so they can confirm it.")
+PREFERRED_AGAIN = "What day and time would you like for the viewing? I'll pass it on to your agent."
+PREFERRED_THANKS = ("Thanks. I'll pass your preferred time on to your agent, who will contact you to "
+                    "confirm the viewing.")
+
+
+def _hour(hour: str, meridiem: str | None) -> int:
+    value = int(hour)
+    return value + 12 if meridiem == "p" and value < 12 else value
 
 
 @dataclass(frozen=True)
@@ -60,9 +71,9 @@ def today_local(now: datetime | None = None) -> date:
 
 
 def slot_label(slot: str) -> str:
-    """`2026-10-06T10:00:00-05:00` -> `lun 06/10 10:00`, en hora local."""
+    """`2026-10-06T10:00:00-05:00` -> `Tue Oct 6, 10:00`, en hora local."""
     local = datetime.fromisoformat(slot).astimezone(LOCAL_TZ)
-    return f"{_WEEKDAYS[local.weekday()]} {local:%d/%m %H:%M}"
+    return f"{_WEEKDAYS[local.weekday()]} {_MONTHS[local.month - 1]} {local.day}, {local:%H:%M}"
 
 
 def _listing(slots: list[str]) -> str:
@@ -70,8 +81,8 @@ def _listing(slots: list[str]) -> str:
 
 
 def offer_text(prop: Mapping[str, Any], slots: list[str], intro: str | None = None) -> str:
-    intro = intro or f"Tengo estos horarios para visitar {prop['title']} con tu asesor:"
-    return f"{intro}\n{_listing(slots)}\nRespóndeme con el número del que te acomode."
+    intro = intro or f"Here are the available times to visit {prop['title']} with your agent:"
+    return f"{intro}\n{_listing(slots)}\nReply with the number of the one that works for you."
 
 
 def _normalize(text: str) -> str:
@@ -82,7 +93,8 @@ def _normalize(text: str) -> str:
 def choose_slot(text: str, slots: list[str]) -> str | None:
     """El horario de la oferta que eligió el lead, o None si no se entiende cuál (o hay más de uno).
 
-    Acepta la hora ("10:00", "a las 11"), el número de la opción ("2", "la 2") o el ordinal ("la segunda").
+    Acepta la hora ("10:00", "a las 11", "at 4 pm"), el número de la opción ("2", "la 2", "number 2") o el
+    ordinal ("la segunda", "the second one").
     """
     normalized = _normalize(text)
     local = [datetime.fromisoformat(slot).astimezone(LOCAL_TZ) for slot in slots]
@@ -93,10 +105,12 @@ def choose_slot(text: str, slots: list[str]) -> str | None:
     clocks = _CLOCK.findall(normalized)
     if clocks:
         return unique([slot for slot, at in zip(slots, local, strict=True)
-                       for hour, minute in clocks if (at.hour, at.minute) == (int(hour), int(minute))])
+                       for hour, minute, meridiem in clocks
+                       if (at.hour, at.minute) == (_hour(hour, meridiem), int(minute))])
     hours = _AT_HOUR.findall(normalized)
     if hours:
-        return unique([slot for slot, at in zip(slots, local, strict=True) for hour in hours if at.hour == int(hour)])
+        return unique([slot for slot, at in zip(slots, local, strict=True)
+                       for hour, meridiem in hours if at.hour == _hour(hour, meridiem)])
     numbers = {int(n) for n in _NUMBER.findall(normalized)}
     if numbers:
         return slots[numbers.pop() - 1] if len(numbers) == 1 and 1 <= min(numbers) <= len(slots) else None
@@ -150,7 +164,7 @@ async def follow_up(scheduling: SchedulingClient, conversation_id: str, lead_id:
     slots = list(offer.get("slots") or [])
     chosen = choose_slot(text, slots)
     if chosen is None:
-        intro = "No me quedó claro cuál horario prefieres. Estos son los que tengo:"
+        intro = "I didn't quite get which time you prefer. These are the ones I have:"
         return VisitStep(offer_text(prop, slots, intro), {OFFER_KEY: dict(offer)})
     try:
         visit = await scheduling.book(f"{conversation_id}:{chosen}", lead_id, prop["id"],
@@ -158,9 +172,9 @@ async def follow_up(scheduling: SchedulingClient, conversation_id: str, lead_id:
     except SchedulingError as exc:
         if exc.code == "SLOT_TAKEN":
             return await _offer(scheduling, lead_id, prop, today,
-                                "Ese horario se acaba de ocupar. Estos siguen libres:")
+                                "That time was just taken. These are still free:")
         return ask_preferred(prop)
     booked = {"property": prop, "visit_id": visit.get("visit_id"), "scheduled_at": visit.get("scheduled_at", chosen)}
-    reply = (f"Listo, tu visita a {prop['title']} quedó agendada para el {slot_label(chosen)}. "
-             "Tu asesor te contactará para confirmar los detalles.")
+    reply = (f"Done, your visit to {prop['title']} is booked for {slot_label(chosen)}. "
+             "Your agent will contact you to confirm the details.")
     return VisitStep(reply, {VISIT_KEY: booked}, settled=True, booked=True)

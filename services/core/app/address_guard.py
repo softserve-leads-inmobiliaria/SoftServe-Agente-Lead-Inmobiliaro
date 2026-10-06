@@ -24,22 +24,36 @@ _STREET_TYPES = (
     # Colombia (DT-55): "Carrera 37 # 8A-24", "Diagonal 75B # 2-30". Sin "tv" ni "cr" sueltos: chocan
     # con texto común ("TV de 55 pulgadas").
     "carrera", "cra", "kra", "kr", "diagonal", "transversal", "circular", "autopista",
+    # Inglés (#202): el LLM puede traducir el tipo de vía ("Street 10 # 43-12"). Sin "st" ni "dr" sueltos:
+    # chocan con "1st floor" y "Dr. Gómez".
+    "street", "avenue", "ave", "road", "rd", "boulevard", "lane", "highway",
 )
 _STREET_PREFIX = "|".join(sorted(_STREET_TYPES, key=len, reverse=True))
 # Palabras que, justo después del número, revelan que en realidad es una distancia ("a 5 minutos",
 # "a 10 cuadras") y no una dirección — el único falso positivo real de este patrón tan simple.
-_DISTANCE_UNITS = r"min(?:uto)?s?|cuadras?|km|kil[oó]metros?|metros?"
+_DISTANCE_UNITS = (r"min(?:uto)?s?|cuadras?|km|kil[oó]metros?|metros?"
+                   r"|minutes?|blocks?|miles?|kilometers?|meters?|feet|ft")
 
 _ADDRESS = re.compile(
-    rf"\b(?:{_STREET_PREFIX})\.?\s+(?:[^\d\s,.]+\s+){{0,3}}\d+\w*"
+    # `(?!\w)`: el número completo, sin retroceder. Si no, en "a 10 minutos" el patrón se quedaba con "1"
+    # y la salvedad de la distancia ya no veía la unidad.
+    rf"\b(?:{_STREET_PREFIX})\.?\s+(?P<name>(?:[^\d\s,.]+\s+){{0,3}})\d+\w*(?!\w)"
     rf"(?!\s*(?:{_DISTANCE_UNITS})\b)",
     re.IGNORECASE,
 )
+# En Colombia la calle se nombra con un número ("Calle 10", "Carrera 43A", "Calle 37 Sur"): eso solo es
+# una referencia aproximada. La dirección exacta es la que sigue con la placa ("Carrera 43A # 1-50",
+# "Calle 10 No. 43-12"), así que una vía numerada sin placa no dispara (DT-55).
+_PLATE = re.compile(r"\s*(?:sur|norte|este|oeste|bis|south|north|east|west)?\s*"
+                    r"(?:#|no\.|n[°º]|n[uú]mero|number)\s*\d", re.IGNORECASE)
 
 
 def extract_addresses(text: str) -> set[str]:
-    """Fragmentos con forma de dirección exacta (tipo de vía + nombre + número) en `text`."""
-    return {match.group().strip() for match in _ADDRESS.finditer(text or "")}
+    """Fragmentos con forma de dirección exacta en `text`: tipo de vía + nombre + número ("Calle Lerdo
+    1204"), o vía numerada + placa ("Carrera 37 # 8A-24")."""
+    text = text or ""
+    return {match.group().strip() for match in _ADDRESS.finditer(text)
+            if match.group("name").strip() or _PLATE.match(text, match.end())}
 
 
 def check(text: str, lead_qualified: bool, lead_text: str = "") -> list[Violation]:

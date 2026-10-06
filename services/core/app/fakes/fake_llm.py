@@ -53,16 +53,25 @@ REPLIES: dict[str, str] = {
 # Señal cruda por turno (A-9): solo los tres campos que el contrato deja emitir al LLM. Un `None`
 # significa "no lo dijo en este mensaje"; el número final del score nunca sale de aquí.
 # `decision_maker` solo dice si el lead declaró cómo se decide, no con quién (#119, DT-40).
+# En español y en inglés (#202): el gold set de fair housing corre las dos versiones por este extractor.
 _DECISION_MAKER: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("declarado", ("decido yo", "yo decido", "solo yo", "soy yo quien", "mi pareja", "mi familia",
-                   "mis padres", "mis papas")),
+                   "mis padres", "mis papas",
+                   "i decide", "i make the decision", "i'm the one who decides", "my decision", "decide myself",
+                   "my partner", "my family", "my parents")),
 )
 _URGENCY: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("inmediata", ("urgente", "lo antes posible", "cuanto antes", "de inmediato", "este mes", "ya mismo")),
-    ("3_meses", ("tres meses", "3 meses", "en unos meses", "pronto")),
-    ("explorando", ("explorando", "solo estoy viendo", "curiosidad", "mas adelante", "sin prisa")),
+    ("inmediata", ("urgente", "lo antes posible", "cuanto antes", "de inmediato", "este mes", "ya mismo",
+                   "urgent", "asap", "as soon as possible", "right away", "immediately", "this month")),
+    ("3_meses", ("tres meses", "3 meses", "en unos meses", "pronto",
+                 "three months", "3 months", "in a few months", "soon")),
+    ("explorando", ("explorando", "solo estoy viendo", "curiosidad", "mas adelante", "sin prisa",
+                    "exploring", "just looking", "browsing", "curious", "later on", "no rush")),
 )
-_BUDGET = re.compile(r"presupuesto[^.,;!?\n]*|\$\s?[\d.,]+(?:\s?(?:mil|millones|k))?|\b\d[\d.,]*\s?(?:mil|millones)\b")
+_BUDGET = re.compile(
+    r"presupuesto[^.,;!?\n]*|budget[^.,;!?\n]*"
+    r"|\$\s?[\d.,]+(?:\s?(?:mil|millones|k|m|thousand|million))?"
+    r"|\b\d[\d.,]*\s?(?:mil|millones|k|thousand|million)\b")
 
 # Tipo de inmueble que nombra el lead (#188). "depa" es un prefijo de "departamento", así que caen en
 # el mismo valor. El fake solo mapea `kind`; la zona y el presupuesto los extrae el LLM real.

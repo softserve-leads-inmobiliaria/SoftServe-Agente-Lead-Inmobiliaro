@@ -17,11 +17,11 @@ from db.models import AuditLog, Conversation, Lead
 from db.session import session_scope
 
 PRIVACY_NOTICE: Final = (
-    "Antes de empezar: uso tus datos solo para orientarte en tu búsqueda y, si te interesa, "
-    "ponerte en contacto con un asesor. Escribe STOP cuando quieras y no volvemos a escribirte."
+    "Before we start: I only use your information to help with your search and, if you'd like, to put "
+    "you in touch with an agent. Type STOP at any time and we won't message you again."
 )
 OPT_OUT_CONFIRMATION: Final = (
-    "Listo, registré tu baja y no volveré a escribirte. Si cambias de idea, escríbeme cuando quieras."
+    "Done, you're unsubscribed and I won't message you again. If you change your mind, write to me anytime."
 )
 
 _OPT_OUT_PHRASES: Final[tuple[str, ...]] = (
@@ -34,6 +34,11 @@ _OPT_OUT_PHRASES: Final[tuple[str, ...]] = (
     "cancelar suscripcion",
     "eliminen mis datos",
     "borren mis datos",
+    # Inglés (#202, DT-55): lo demás lo cubre el criterio del core (`input_guard`).
+    "unsubscribe",
+    "delete my data",
+    "erase my data",
+    "remove my data",
 )
 
 
