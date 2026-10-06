@@ -141,6 +141,7 @@ def test_the_card_shows_the_deal_after_closing(client, mundo):
     assert "No closed deal" not in page
     assert "Depa consultado" in page and "$2,350,000.00" in page
     assert "deal closed" in page  # la etiqueta del estado del lead
+    assert "<td>sale</td>" in page and "<td>venta</td>" not in page  # #202: el tipo, en inglés
 
 
 def test_a_lead_without_advisor_stays_with_whoever_closed_it(client, session_factory, mundo):
