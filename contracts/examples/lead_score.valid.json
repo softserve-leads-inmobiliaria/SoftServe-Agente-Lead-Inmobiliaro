@@ -8,10 +8,10 @@
   "total": 62,
   "band": "WARM",
   "reasons": [
-    "Need fit: 1-2 propiedades coinciden con la búsqueda",
-    "Budget: presupuesto declarado",
-    "Authority: quién decide, declarado",
-    "Timing: urgencia a 3 meses",
-    "Eligibility: requisitos aún sin verificar"
+    "Need fit: 2 properties match",
+    "Budget: budget stated",
+    "Authority: how the decision is made was stated",
+    "Timing: within 3 months",
+    "Eligibility: requirements not checked yet"
   ]
 }
