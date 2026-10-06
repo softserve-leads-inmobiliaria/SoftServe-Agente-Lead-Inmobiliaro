@@ -205,17 +205,17 @@ def call(client, tool, arguments=None):
 
 
 def test_a_tool_call_is_a_span_with_the_tool_name(spans, catalog):
-    call(catalog, "search_properties", {"zone": "Providencia"})
+    call(catalog, "search_properties", {"zone": "El Poblado"})
     attrs = dict(only(spans, "catalog.search_properties").attributes)
     assert attrs["tool.name"] == "search_properties" and attrs["tool.is_error"] is False
     assert attrs["openinference.span.kind"] == "TOOL"
 
 
 def test_only_the_argument_names_are_recorded_never_their_values(spans, catalog):
-    call(catalog, "search_properties", {"zone": "Providencia"})
+    call(catalog, "search_properties", {"zone": "El Poblado"})
     span = only(spans, "catalog.search_properties")
     assert span.attributes["tool.argument_names"] == ("zone",)
-    assert "Providencia" not in json.dumps({k: str(v) for k, v in span.attributes.items()})
+    assert "El Poblado" not in json.dumps({k: str(v) for k, v in span.attributes.items()})
 
 
 def test_a_tool_error_marks_the_span_and_keeps_the_error_code(spans, catalog):

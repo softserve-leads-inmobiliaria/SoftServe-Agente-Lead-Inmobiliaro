@@ -75,7 +75,7 @@ def test_a_search_without_results_resets_the_match_count():
 
 # --- A-15: la propiedad del anuncio cuenta como coincidencia -------------------------------------------------
 
-LISTING = {"id": "prop_00231", "title": "Depto 2 rec. en Providencia", "status": "disponible"}
+LISTING = {"id": "prop_00231", "title": "Depto 2 rec. en El Poblado", "status": "disponible"}
 
 
 def from_listing(listing=LISTING, **tool_results):

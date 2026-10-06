@@ -70,4 +70,4 @@ class FakeCatalog:
         if tool == "get_availability":
             return {"property_id": (arguments or {})["property_id"], "status": "disponible",
                     "checked_at": "2026-01-01T00:00:00+00:00"}
-        return {"id": (arguments or {}).get("property_id"), "address_approx": "Providencia"}
+        return {"id": (arguments or {}).get("property_id"), "address_approx": "El Poblado"}

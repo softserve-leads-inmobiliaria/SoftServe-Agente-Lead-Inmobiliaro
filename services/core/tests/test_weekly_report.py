@@ -116,17 +116,17 @@ def test_an_invalid_day_or_hour_fails_at_startup(monkeypatch, name, value):
 # --- el mensaje ------------------------------------------------------------------------------------------
 
 def _stuck(title, days, inquiries=0, visits=0):
-    return StagnantProperty(property_id=title, title=title, zone="Providencia", type="venta",
+    return StagnantProperty(property_id=title, title=title, zone="El Poblado", type="venta",
                             price=Decimal(1), available_since=WEEK_END - timedelta(days=days), days=days,
                             threshold=60, inquiries=inquiries, visits=visits)
 
 
 def test_the_message_has_placements_stagnant_unmet_demand_and_the_link():
     placed = Placements(deals=3, amount=Decimal("3020000"), by_zone=[
-        PlacedGroup("Providencia", 2, Decimal("1020000")), PlacedGroup("Zapopan", 1, Decimal("2000000"))],
+        PlacedGroup("El Poblado", 2, Decimal("1020000")), PlacedGroup("Usaquen", 1, Decimal("2000000"))],
         by_type=[], by_advisor=[])
     stuck = [_stuck("Casa A", 95), _stuck("Casa B", 61, inquiries=2)]
-    unmet = [UnmetDemand("Providencia", "renta", 3, 5), UnmetDemand(None, "venta", None, 1)]
+    unmet = [UnmetDemand("El Poblado", "renta", 3, 5), UnmetDemand(None, "venta", None, 1)]
 
     message = report_text(WEEK_START, WEEK_END, placed, stuck, unmet, "https://panel.example")
 
@@ -134,15 +134,15 @@ def test_the_message_has_placements_stagnant_unmet_demand_and_the_link():
         "Reporte semanal: del 28/09 al 04/10/2026",
         "",
         "Colocadas: 3 ($3,020,000)",
-        "- Providencia: 2",
-        "- Zapopan: 1",
+        "- El Poblado: 2",
+        "- Usaquen: 1",
         "",
         "Estancadas de más de 60 días: 2",
-        "- Casa A (Providencia): 95 días, sin consultas",
-        "- Casa B (Providencia): 61 días, consultas sin visitas",
+        "- Casa A (El Poblado): 95 días, sin consultas",
+        "- Casa B (El Poblado): 61 días, consultas sin visitas",
         "",
         "Demanda sin cubrir:",
-        "- renta en Providencia, 3 recámaras: 5 búsquedas",
+        "- renta en El Poblado, 3 recámaras: 5 búsquedas",
         "- venta en cualquier zona: 1 búsqueda",
         "",
         f"Detalle en el panel: https://panel.example{BUSINESS_PATH}",
@@ -165,13 +165,13 @@ def test_only_the_oldest_stagnant_properties_are_listed():
 
 def _seed_week(engine):
     with session_scope(engine) as session:
-        advisor = Advisor(id=f"adv_{uuid.uuid4().hex[:6]}", name="Valeria", zone="Providencia",
+        advisor = Advisor(id=f"adv_{uuid.uuid4().hex[:6]}", name="Valeria", zone="El Poblado",
                           access_token=uuid.uuid4().hex)
         lead = Lead(telegram_user_id=f"tg-{uuid.uuid4().hex[:8]}")
         session.add_all([advisor, lead])
         ids = {pid: f"{pid}_{uuid.uuid4().hex[:6]}" for pid in ("nr_cerrada", "nr_quieta", "nr_nueva")}
         session.add_all([Property(id=prop_id, title=f"Casa {pid}", price=1_000_000, type="venta", kind="casa",
-                                  zone="Providencia", m2=100, bedrooms=2, bathrooms=1, address_approx="a",
+                                  zone="El Poblado", m2=100, bedrooms=2, bathrooms=1, address_approx="a",
                                   address_exact="b") for pid, prop_id in ids.items()])
         session.flush()
         record_listing(session, ids["nr_cerrada"], "test", at=WEEK_START - timedelta(days=30))
@@ -180,7 +180,7 @@ def _seed_week(engine):
                          price=Decimal("1000000"), closed_at=WEEK_START + timedelta(days=2)))
         record_listing(session, ids["nr_quieta"], "test", at=WEEK_END - timedelta(days=70))
         record_listing(session, ids["nr_nueva"], "test", at=WEEK_END - timedelta(days=10))
-        session.add_all([UnmetSearch(zone="Zapopan", type="renta", bedrooms=3,
+        session.add_all([UnmetSearch(zone="Usaquen", type="renta", bedrooms=3,
                                      created_at=WEEK_START + timedelta(days=1)) for _ in range(2)])
 
 
@@ -205,7 +205,7 @@ def test_each_recipient_gets_the_week_report_once_and_the_plan_reschedules_itsel
     assert "Colocadas: 1 ($1,000,000)" in message
     assert "Estancadas de más de 60 días: 1" in message and "Casa nr_quieta" in message
     assert "Casa nr_nueva" not in message  # 10 días: todavía no está estancada
-    assert "- renta en Zapopan, 3 recámaras: 2 búsquedas" in message
+    assert "- renta en Usaquen, 3 recámaras: 2 búsquedas" in message
     reports = _jobs(engine, REPORT_KIND)
     assert sorted(key for key, *_ in reports) == ["2026-W40:1001", "2026-W40:1002"]
     assert {status for _, status, *_ in reports} == {"done"}
@@ -259,13 +259,13 @@ def test_without_a_bot_the_report_counts_as_a_failure_and_ends_failed(engine):
 
 def test_synthetic_history_is_left_out_unless_configured(engine):
     with session_scope(engine) as session:
-        session.add(UnmetSearch(zone="Tlaquepaque", type="venta", bedrooms=1, synthetic=True,
+        session.add(UnmetSearch(zone="Chapinero", type="venta", bedrooms=1, synthetic=True,
                                 created_at=WEEK_START + timedelta(days=1)))
     with session_scope(engine) as session:
         plain = weekly_report.build(session, WEEK_START, WEEK_END, CONFIG)
         demo = weekly_report.build(session, WEEK_START, WEEK_END,
                                    ReportConfig(chat_ids=("1",), include_synthetic=True))
-    assert "Tlaquepaque" not in plain and "Tlaquepaque" in demo
+    assert "Chapinero" not in plain and "Chapinero" in demo
 
 
 def test_the_report_never_carries_lead_data(engine):

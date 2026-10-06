@@ -20,8 +20,8 @@ from db.repo_root import repo_root
 INBOUND = {key: value for key, value in json.loads(
     (repo_root() / "contracts" / "examples" / "event.valid.json").read_text(encoding="utf-8")).items()
     if key != "property_id"}
-ANUNCIO = {"id": "prop_anuncio", "title": "Depto del anuncio", "zone": "Providencia", "status": "disponible"}
-OTRA = {"id": "prop_otra", "title": "Casa en Zapopan", "zone": "Zapopan", "status": "disponible"}
+ANUNCIO = {"id": "prop_anuncio", "title": "Depto del anuncio", "zone": "El Poblado", "status": "disponible"}
+OTRA = {"id": "prop_otra", "title": "Casa en Usaquen", "zone": "Usaquen", "status": "disponible"}
 
 
 # --- interactions: lógica pura -----------------------------------------------------------------------
@@ -70,7 +70,7 @@ def _inventory(engine):
         for prop in (ANUNCIO, OTRA, PROPERTY):
             connection.execute(text(
                 "INSERT INTO properties (id, title, price, type, kind, zone, m2, bedrooms, bathrooms, address_approx,"
-                " address_exact) VALUES (:id, :title, 1, 'renta', 'departamento', 'Providencia', 1, 1, 1, 'a', 'b')"
+                " address_exact) VALUES (:id, :title, 1, 'renta', 'departamento', 'El Poblado', 1, 1, 1, 'a', 'b')"
                 " ON CONFLICT (id) DO NOTHING"), {"id": prop["id"], "title": prop["title"]})
 
 
@@ -82,7 +82,7 @@ class Catalog:
 
     async def call(self, tool, arguments=None):
         if tool == "get_property":
-            return dict(ANUNCIO) | {"address_approx": "Providencia"}
+            return dict(ANUNCIO) | {"address_approx": "El Poblado"}
         if tool == "search_properties":
             return {"properties": list(self.found)}
         return stub_call(tool, arguments)
@@ -134,7 +134,7 @@ def test_a_search_writes_busqueda_for_each_result(engine):
 
 def test_a_get_property_writes_consulta(engine):
     lead = Lead(engine)
-    lead.say("¿Y la casa de Zapopan?", agent=LooksUp())
+    lead.say("¿Y la casa de Usaquen?", agent=LooksUp())
     assert lead.interest() == [("prop_otra", "consulta")]
 
 

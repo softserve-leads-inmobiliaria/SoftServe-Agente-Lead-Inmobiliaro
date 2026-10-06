@@ -78,12 +78,12 @@ def test_the_agent_gets_the_history_that_was_saved_in_earlier_turns(engine):
     chat = Chat(engine, agent)
     chat.say("Hola")
     chat.say("Busco un departamento")
-    chat.say("En Providencia")
+    chat.say("En El Poblado")
     assert agent.inputs[0].history == ()
     assert agent.inputs[1].history == (("user", "Hola"), ("assistant", "ok"))
     assert agent.inputs[2].history == (("user", "Hola"), ("assistant", "ok"), ("user", "Busco un departamento"),
                                        ("assistant", "ok"))
-    assert agent.inputs[2].text == "En Providencia"
+    assert agent.inputs[2].text == "En El Poblado"
 
 
 def test_the_history_survives_a_restart_because_it_is_not_in_memory(engine, database_url):
@@ -232,13 +232,13 @@ def test_the_llm_reply_reaches_the_lead_and_drives_the_fsm_and_the_score(engine)
     client = ScriptedBedrock(classification("saludo"), text("¡Hola! ¿Qué buscas?"),
                              classification("busqueda_propiedad", budget_hint="3 millones", decision_maker="declarado",
                                             urgency="inmediata"),
-                             tool_use("search_properties", {"zone": "Providencia"}),
-                             text("Tengo una casa en Providencia."))
+                             tool_use("search_properties", {"zone": "El Poblado"}),
+                             text("Tengo una casa en El Poblado."))
     chat = Chat(engine, bedrock(client))
     assert chat.say("Hola") == "¡Hola! ¿Qué buscas?"
     # Una sola propiedad con un filtro de zona: el turno también ofrece la alerta de A-18.
-    assert chat.say("Busco casa en Providencia, decido yo, es urgente y tengo 3 millones") == \
-        f"Tengo una casa en Providencia.\n\n{alerts.OFFER_TEXT}"
+    assert chat.say("Busco casa en El Poblado, decido yo, es urgente y tengo 3 millones") == \
+        f"Tengo una casa en El Poblado.\n\n{alerts.OFFER_TEXT}"
     assert chat.scalar("SELECT fsm_state FROM conversations WHERE id = :c") == "QUALIFY"
     # need_fit 10 (una propiedad del catálogo) + budget 20 + authority 20 + timing 20
     assert chat.scalar("SELECT total FROM lead_scores WHERE lead_id = :l") == 70

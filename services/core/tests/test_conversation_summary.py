@@ -27,11 +27,11 @@ from db.session import session_scope
 CHAT, FAST = "modelo-chat", "modelo-rapido"
 PIDE_HUMANO = "Quiero hablar con un asesor"
 TRANSCRIPT = (
-    ("user", "Busco una casa en Providencia de 3 recámaras, tengo 4 millones"),
-    ("assistant", "Tengo una casa en Providencia por 3,950,000."),
+    ("user", "Busco una casa en El Poblado de 3 recámaras, tengo 4 millones"),
+    ("assistant", "Tengo una casa en El Poblado por 3,950,000."),
     ("user", "Me parece cara y la quiero para marzo"),
 )
-FACTS = SummaryFacts(reason="solicitud_humano", zone="Providencia", budget="4 millones", timing="3_meses")
+FACTS = SummaryFacts(reason="solicitud_humano", zone="El Poblado", budget="4 millones", timing="3_meses")
 
 
 def run(coro):
@@ -39,7 +39,7 @@ def run(coro):
 
 
 def sections(**overrides):
-    return {"busca": "Casa de 3 recámaras en Providencia, presupuesto de 4 millones.",
+    return {"busca": "Casa de 3 recámaras en El Poblado, presupuesto de 4 millones.",
             "objeciones": "Le parece cara.",
             "siguiente_paso": "Llamarle para revisar opciones."} | overrides
 
@@ -66,7 +66,7 @@ class Writes:
 
 def test_the_template_says_what_the_lead_wants_with_the_lead_data():
     result = template(FACTS)
-    assert result["busca"] == "Zona Providencia; presupuesto 4 millones; plazo 3 meses."
+    assert result["busca"] == "Zona El Poblado; presupuesto 4 millones; plazo 3 meses."
     assert result["objeciones"] == summary.NO_OBJECTIONS_TEMPLATE
 
 
@@ -93,7 +93,7 @@ def test_the_template_is_deterministic_and_the_fake_agent_uses_it():
 
 def test_the_summary_keeps_the_three_sections_in_order():
     assert render(sections()).split("\n") == [
-        "Qué busca: Casa de 3 recámaras en Providencia, presupuesto de 4 millones.",
+        "Qué busca: Casa de 3 recámaras en El Poblado, presupuesto de 4 millones.",
         "Objeciones: Le parece cara.",
         "Siguiente paso: Llamarle para revisar opciones.",
     ]
@@ -137,7 +137,7 @@ def test_the_neutral_forms_left_by_the_input_guard_are_allowed(value):
 
 
 def test_mentions_protected_reads_the_same_rules_as_the_input_guard():
-    assert mentions_protected("Soy venezolana") and not mentions_protected("Busco casa en Zapopan")
+    assert mentions_protected("Soy venezolana") and not mentions_protected("Busco casa en Usaquen")
 
 
 # --- generar y validar -----------------------------------------------------------------------------------
@@ -153,7 +153,7 @@ def test_the_agent_gets_the_transcript_as_text_and_the_facts():
     agent = Writes(sections())
     assert run(summary.summarize(agent, TRANSCRIPT, FACTS)) == render(sections())
     transcript, facts = agent.seen[0]
-    assert transcript.split("\n")[0] == "Lead: Busco una casa en Providencia de 3 recámaras, tengo 4 millones"
+    assert transcript.split("\n")[0] == "Lead: Busco una casa en El Poblado de 3 recámaras, tengo 4 millones"
     assert "Agente: Tengo una casa" in transcript and facts == FACTS
 
 
@@ -192,13 +192,13 @@ def bedrock(*responses):
 
 def test_bedrock_summarizes_with_the_chat_model_without_tools_and_without_randomness():
     client, llm = bedrock(text(json.dumps(sections())))
-    assert run(llm.summarize("Lead: hola", "Zona: Providencia")) == sections()
+    assert run(llm.summarize("Lead: hola", "Zona: El Poblado")) == sections()
     (request,) = client.requests
     assert request["modelId"] == CHAT and "toolConfig" not in request
     assert request["inferenceConfig"]["temperature"] == 0.0
     assert request["system"] == [{"text": SUMMARY_SYSTEM}]
     prompt = request["messages"][0]["content"][0]["text"]
-    assert "DATOS DEL LEAD:\nZona: Providencia" in prompt and "CONVERSACIÓN:\nLead: hola" in prompt
+    assert "DATOS DEL LEAD:\nZona: El Poblado" in prompt and "CONVERSACIÓN:\nLead: hola" in prompt
 
 
 def test_the_summary_prompt_forbids_inventing_promising_and_protected_categories():

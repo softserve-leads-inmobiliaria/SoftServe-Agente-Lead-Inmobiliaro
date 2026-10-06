@@ -161,15 +161,15 @@ def test_a_plain_reply_uses_the_chat_model_and_returns_the_text():
 
 
 def test_the_model_can_call_a_tool_and_use_its_result():
-    client = ScriptedBedrock(tool_use("search_properties", {"zone": "Providencia"}), text("Encontré una casa."))
+    client = ScriptedBedrock(tool_use("search_properties", {"zone": "El Poblado"}), text("Encontré una casa."))
     seen = []
 
     async def run_tool(name, arguments):
         seen.append((name, arguments))
         return {"properties": [{"title": "Casa de prueba"}]}
 
-    result = run(llm(client).chat([], "Busco casa en Providencia", SPECS, run_tool))
-    assert seen == [("search_properties", {"zone": "Providencia"})]
+    result = run(llm(client).chat([], "Busco casa en El Poblado", SPECS, run_tool))
+    assert seen == [("search_properties", {"zone": "El Poblado"})]
     assert result.text == "Encontré una casa."
     assert result.tool_results == {"search_properties": {"properties": [{"title": "Casa de prueba"}]}}
     assert result.tool_calls == [{"name": "search_properties", "is_error": False}]
@@ -281,7 +281,7 @@ def test_requests_conform_to_the_bedrock_converse_api():
                  '"urgency": "no_declarada"}'}]}}, "stopReason": "end_turn", "usage": usage,
         "metrics": {"latencyMs": 1}})
     stub.add_response("converse", {"output": {"message": {"role": "assistant", "content": [
-        {"toolUse": {"toolUseId": "t1", "name": "search_properties", "input": {"zone": "Providencia"}}}]}},
+        {"toolUse": {"toolUseId": "t1", "name": "search_properties", "input": {"zone": "El Poblado"}}}]}},
         "stopReason": "tool_use", "usage": usage, "metrics": {"latencyMs": 1}})
     stub.add_response("converse", {"output": {"message": {"role": "assistant", "content": [{"text": "Listo."}]}},
                                    "stopReason": "end_turn", "usage": usage, "metrics": {"latencyMs": 1}})

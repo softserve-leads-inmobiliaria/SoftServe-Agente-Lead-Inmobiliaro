@@ -17,8 +17,8 @@ from app.visits import (
     start,
 )
 
-SLOTS = ["2026-10-06T10:00:00-06:00", "2026-10-06T11:00:00-06:00", "2026-10-07T16:00:00-06:00"]
-PROP = {"id": "prop_00231", "title": "Depto 2 rec. en Providencia", "zone": "Providencia", "status": "disponible"}
+SLOTS = ["2026-10-06T10:00:00-05:00", "2026-10-06T11:00:00-05:00", "2026-10-07T16:00:00-05:00"]
+PROP = {"id": "prop_00231", "title": "Depto 2 rec. en El Poblado", "zone": "El Poblado", "status": "disponible"}
 TODAY = date(2026, 10, 5)
 
 
@@ -36,7 +36,7 @@ class FakeAgenda:
     async def assign_advisor(self, lead_id, zone=None, language="es", registered_only=False):
         self.calls.append(("assign_advisor", lead_id, registered_only))
         self._maybe_fail("assign_advisor")
-        return {"advisor_id": "adv_providencia", "lead_id": lead_id}
+        return {"advisor_id": "adv_poblado", "lead_id": lead_id}
 
     async def get_slots(self, advisor_id, date_from, days=7):
         self.calls.append(("get_slots", advisor_id, date_from, days))
@@ -80,18 +80,18 @@ def test_an_answer_that_does_not_pick_exactly_one_slot_is_not_a_choice(text):
 
 
 def test_slots_are_shown_in_local_time_with_the_weekday():
-    assert slot_label("2026-10-06T16:00:00+00:00") == "mar 06/10 10:00"
+    assert slot_label("2026-10-06T15:00:00+00:00") == "mar 06/10 10:00"
 
 
 # --- ofrecer ----------------------------------------------------------------------------------------------
 
 def test_asking_for_a_visit_offers_the_first_slots_of_the_leads_advisor():
-    agenda = FakeAgenda(slots=SLOTS + ["2026-10-08T09:00:00-06:00"])
+    agenda = FakeAgenda(slots=SLOTS + ["2026-10-08T09:00:00-05:00"])
     step = run(start(agenda, "lead-1", PROP, TODAY))
-    assert agenda.calls[:2] == [("assign_advisor", "lead-1", False), ("get_slots", "adv_providencia", "2026-10-05", 7)]
-    assert offer_of(step) == {"property": {"id": "prop_00231", "title": "Depto 2 rec. en Providencia",
-                                           "zone": "Providencia"},
-                              "advisor_id": "adv_providencia", "slots": SLOTS}
+    assert agenda.calls[:2] == [("assign_advisor", "lead-1", False), ("get_slots", "adv_poblado", "2026-10-05", 7)]
+    assert offer_of(step) == {"property": {"id": "prop_00231", "title": "Depto 2 rec. en El Poblado",
+                                           "zone": "El Poblado"},
+                              "advisor_id": "adv_poblado", "slots": SLOTS}
     assert "1) mar 06/10 10:00" in step.reply and "3) mié 07/10 16:00" in step.reply and "4)" not in step.reply
     assert not step.settled
 
@@ -123,9 +123,9 @@ def _offer():
 def test_choosing_a_slot_books_it_with_an_idempotency_key_per_conversation_and_slot():
     agenda = FakeAgenda()
     step = run(follow_up(agenda, "conv-1", "lead-1", _offer(), "la 2", TODAY))
-    assert agenda.calls == [("book", f"conv-1:{SLOTS[1]}", "lead-1", "prop_00231", "adv_providencia", SLOTS[1])]
+    assert agenda.calls == [("book", f"conv-1:{SLOTS[1]}", "lead-1", "prop_00231", "adv_poblado", SLOTS[1])]
     assert step.settled and step.booked
-    assert "mar 06/10 11:00" in step.reply and "Depto 2 rec. en Providencia" in step.reply
+    assert "mar 06/10 11:00" in step.reply and "Depto 2 rec. en El Poblado" in step.reply
     assert step.tool_results[VISIT_KEY]["scheduled_at"] == SLOTS[1]
 
 

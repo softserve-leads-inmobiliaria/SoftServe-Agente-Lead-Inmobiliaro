@@ -18,13 +18,13 @@ from db.repo_root import repo_root
 INBOUND = {key: value for key, value in json.loads(
     (repo_root() / "contracts" / "examples" / "event.valid.json").read_text(encoding="utf-8")).items()
     if key not in ("property_id", "utm_campaign")}
-FILTROS = {"zone": "Chapalita", "type": "renta", "bedrooms": 3, "budget_range": {"min": 0, "max": 15000}}
+FILTROS = {"zone": "Laureles", "type": "renta", "bedrooms": 3, "budget_range": {"min": 0, "max": 15000}}
 
 
 # --- unmet_filters y SearchLog: sin base -------------------------------------------------------------
 
 def test_the_filters_are_kept_as_columns():
-    assert unmet_filters(FILTROS) == {"zone": "Chapalita", "type": "renta", "bedrooms": 3,
+    assert unmet_filters(FILTROS) == {"zone": "Laureles", "type": "renta", "bedrooms": 3,
                                       "budget_min": 0, "budget_max": 15000}
 
 
@@ -52,14 +52,14 @@ def test_only_searches_without_results_are_logged_once_each():
         log = SearchLog(Catalog())
         await log.call("search_properties", FILTROS)
         await log.call("search_properties", dict(FILTROS))  # repetida en el turno
-        await log.call("search_properties", {"zone": "Zapopan"})
+        await log.call("search_properties", {"zone": "Usaquen"})
         await log.call("get_property", {"property_id": "prop_x"})
         found = SearchLog(Catalog(found=[{"id": "prop_x"}]))
         await found.call("search_properties", FILTROS)
         return log.unmet, found.unmet
 
     unmet, found = asyncio.run(run())
-    assert [search["zone"] for search in unmet] == ["Chapalita", "Zapopan"]
+    assert [search["zone"] for search in unmet] == ["Laureles", "Usaquen"]
     assert found == []
 
 

@@ -23,7 +23,7 @@ from db.session import session_scope
 CONTRACTS = repo_root() / "contracts"
 INBOUND = {key: value for key, value in json.loads(
     (CONTRACTS / "examples" / "event.valid.json").read_text(encoding="utf-8")).items() if key != "property_id"}
-SLOTS = ["2026-10-06T10:00:00-06:00", "2026-10-06T11:00:00-06:00", "2026-10-07T16:00:00-06:00"]
+SLOTS = ["2026-10-06T10:00:00-05:00", "2026-10-06T11:00:00-05:00", "2026-10-07T16:00:00-05:00"]
 TO_SCHEDULE = ("Hola", "Busco un departamento", "¿Cuánto cuesta?", "Quiero agendar una visita")
 
 
@@ -46,8 +46,8 @@ class ContractAgenda:
 
     async def assign_advisor(self, lead_id, zone=None, language="es", registered_only=False):
         body = {"lead_id": lead_id, "language": language, "registered_only": registered_only}
-        return self._call("assign_advisor", body, {"lead_id": lead_id, "advisor_id": "adv_providencia",
-                                                   "name": "Valeria", "zone": "Providencia", "language": "es",
+        return self._call("assign_advisor", body, {"lead_id": lead_id, "advisor_id": "adv_poblado",
+                                                   "name": "Valeria", "zone": "El Poblado", "language": "es",
                                                    "match": "zone_and_language"})
 
     async def get_slots(self, advisor_id, date_from, days=7):
@@ -124,7 +124,7 @@ def test_choosing_a_slot_books_the_visit_and_hands_the_lead_over(engine, agenda)
     chat.to_schedule()
     reply = chat.say("la 2")
     assert agenda.booked() == [{"idempotency_key": f"{chat.conversation_id}:{SLOTS[1]}", "lead_id": chat.lead_id,
-                                "property_id": PROPERTY["id"], "advisor_id": "adv_providencia",
+                                "property_id": PROPERTY["id"], "advisor_id": "adv_poblado",
                                 "scheduled_at": SLOTS[1]}]
     assert "quedó agendada para el mar 06/10 11:00" in reply
     assert chat.state == "HANDOFF" and chat.lead_status == "visit_scheduled"
@@ -170,7 +170,7 @@ def test_asking_for_a_person_while_scheduling_hands_off_without_booking(engine, 
 def test_a_visit_requested_from_the_listing_books_that_property(engine, agenda):
     """El anuncio llega en el `/start`; la visita se pide varios turnos después."""
     chat = Chat(engine)
-    listing = {"id": "prop_00231", "title": "Depto 2 rec. en Providencia", "zone": "Providencia",
+    listing = {"id": "prop_00231", "title": "Depto 2 rec. en El Poblado", "zone": "El Poblado",
                "status": "disponible"}
 
     class ListingCatalog:
@@ -185,7 +185,7 @@ def test_a_visit_requested_from_the_listing_books_that_property(engine, agenda):
     # que la conversación se lleva a RECOMMEND directo, como si el lead ya hubiera calificado.
     with session_scope(engine) as session:
         StateStore(session).save_state(uuid.UUID(chat.conversation_id), "RECOMMEND")
-    assert "Depto 2 rec. en Providencia" in chat.say("Quiero agendar una visita")
+    assert "Depto 2 rec. en El Poblado" in chat.say("Quiero agendar una visita")
     chat.say("1")
     assert agenda.booked()[0]["property_id"] == "prop_00231"
 

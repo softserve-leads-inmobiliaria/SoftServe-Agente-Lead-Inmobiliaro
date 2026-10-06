@@ -124,7 +124,7 @@ def test_out_of_domain_questions_are_flagged(text):
 
 @pytest.mark.parametrize("text", [
     "Busco un departamento", "Hola", "¿Cuánto cuesta la casa?", "Quiero agendar una visita",
-    "¿Cómo está el clima en la zona de Providencia? Busco casa ahí",  # tema ajeno pero dentro de una búsqueda
+    "¿Cómo está el clima en la zona de El Poblado? Busco casa ahí",  # tema ajeno pero dentro de una búsqueda
     "Hablar con un asesor", "¿Qué tan seguro es el fraccionamiento?", "Gracias",
 ])
 def test_real_estate_and_neutral_messages_are_not_out_of_domain(text):
@@ -161,8 +161,8 @@ def test_demonyms_and_origin_phrases_are_flagged(text):
 @pytest.mark.parametrize("text", [
     "Busco en la colonia Americana", "la cocina es americana", "estilo americano",
     "cerca de Av. México", "precio en pesos mexicanos", "quiero comida mexicana cerca",
-    "¿me atienden en español?", "hablo español", "soy de Providencia", "vengo de Zapopan",
-    "somos de Tlaquepaque", "vengo de ver una casa", "el precio es de 3 millones",
+    "¿me atienden en español?", "hablo español", "soy de El Poblado", "vengo de Usaquen",
+    "somos de Chapinero", "vengo de ver una casa", "el precio es de 3 millones",
 ])
 def test_places_and_words_that_look_like_an_origin_are_not_flagged(text):
     """#116: zonas, calles, monedas e idioma no son origen. Lista cerrada de países y, para los
@@ -213,9 +213,9 @@ def test_a_spouse_is_generalized_to_partner(mention):
 # --- general ------------------------------------------------------------------------------------
 
 def test_a_clean_message_passes_through_unchanged():
-    verdict = inspect_input("Busco un departamento de 2 recámaras en Providencia")
+    verdict = inspect_input("Busco un departamento de 2 recámaras en El Poblado")
     assert not verdict.flagged and verdict.audit_kinds() == []
-    assert verdict.clean_text == "Busco un departamento de 2 recámaras en Providencia"
+    assert verdict.clean_text == "Busco un departamento de 2 recámaras en El Poblado"
 
 
 def test_no_script_of_the_harness_is_flagged():
@@ -237,7 +237,7 @@ def test_empty_text_is_clean():
     ("Soy católico y busco un departamento", "Soy y busco un departamento"),
     ("Busco casa. Tengo hijos y presupuesto 3 millones", "Busco casa. y presupuesto 3 millones"),
     ("Hola", "Hola"),
-    ("Busco casa en Providencia", "Busco casa en Providencia"),
+    ("Busco casa en El Poblado", "Busco casa en El Poblado"),
 ])
 def test_the_llm_text_drops_protected_mentions_and_keeps_the_rest_as_written(text, expected):
     from app.input_guard import strip_protected
@@ -253,8 +253,8 @@ def test_a_message_that_is_only_a_protected_mention_leaves_nothing(text):
 
 
 def test_the_llm_text_keeps_capitals_and_accents():
-    verdict = inspect_input("Necesito un Depa en Providencia, soy musulmán")
-    assert "Depa" in verdict.signal_text and "Providencia" in verdict.signal_text
+    verdict = inspect_input("Necesito un Depa en El Poblado, soy musulmán")
+    assert "Depa" in verdict.signal_text and "El Poblado" in verdict.signal_text
     assert "musulm" not in verdict.signal_text.lower()
 
 

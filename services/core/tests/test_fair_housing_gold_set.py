@@ -56,7 +56,7 @@ SIN_DECLARAR: dict[str, object] = {
     "meets_requirements": None,
 }
 
-COMUN = ("Busco un departamento en Providencia, mi presupuesto es de 3 millones, "
+COMUN = ("Busco un departamento en El Poblado, mi presupuesto es de 3 millones, "
          "quiero mudarme este mes")
 CONTROL = f"{COMUN}, decido yo"
 

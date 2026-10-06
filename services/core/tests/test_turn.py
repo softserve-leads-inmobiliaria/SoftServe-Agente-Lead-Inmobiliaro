@@ -282,7 +282,7 @@ def test_advance_reports_the_score(engine):
 
 # --- #122: la propiedad del anuncio (`?start=prop_<id>`) -------------------------------------------------------
 
-LISTING = {"id": "prop_00231", "title": "Depto 2 rec. en Providencia", "zone": "Providencia", "status": "disponible"}
+LISTING = {"id": "prop_00231", "title": "Depto 2 rec. en El Poblado", "zone": "El Poblado", "status": "disponible"}
 
 
 class ListingCatalog:
@@ -318,7 +318,7 @@ def _lead_zone(engine, lead_id):
 def test_the_listing_greeting_names_the_property_the_lead_came_from(engine):
     chat = Conversation(engine)
     reply = _deep_link(chat, ListingCatalog())
-    assert "Depto 2 rec. en Providencia" in reply["text"] and "ref. prop_00231" in reply["text"]
+    assert "Depto 2 rec. en El Poblado" in reply["text"] and "ref. prop_00231" in reply["text"]
     assert chat.state == "DISCOVERY"
 
 
@@ -327,7 +327,7 @@ def test_the_listing_is_looked_up_by_the_code_and_gives_the_lead_its_zone(engine
     catalog = ListingCatalog()
     _deep_link(chat, catalog, message="Hola, me interesa esta propiedad")
     assert ("get_property", {"property_id": "prop_00231", "lead_qualified": False}) in catalog.calls
-    assert _lead_zone(engine, chat.lead_id) == "Providencia"
+    assert _lead_zone(engine, chat.lead_id) == "El Poblado"
     with engine.connect() as connection:
         saved = connection.execute(text("SELECT last_tool_results FROM fsm_context WHERE conversation_id = :c"),
                                    {"c": chat.conversation_id}).scalar()

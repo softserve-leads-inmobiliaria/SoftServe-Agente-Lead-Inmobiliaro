@@ -27,7 +27,7 @@ def agent_for(client):
     return BedrockAgent(BedrockLLM(client, CHAT, FAST, RateLimits(10, 60.0)))
 
 
-def turn(message="Busco casa en Providencia", history=(), lead_qualified=False):
+def turn(message="Busco casa en El Poblado", history=(), lead_qualified=False):
     return TurnInput(event=EVENT, text=message, history=tuple(history), lead_qualified=lead_qualified)
 
 
@@ -43,15 +43,15 @@ def throttled():
 
 def test_a_normal_turn_classifies_calls_the_catalog_and_answers():
     client = ScriptedBedrock(classification("busqueda_propiedad", budget_hint="3 millones"),
-                             tool_use("search_properties", {"zone": "Providencia"}),
-                             text("Encontré una casa en Providencia."))
+                             tool_use("search_properties", {"zone": "El Poblado"}),
+                             text("Encontré una casa en El Poblado."))
     catalog = FakeCatalog()
     result = run(agent_for(client).run(turn(), catalog))
-    assert (result.text, result.intent) == ("Encontré una casa en Providencia.", "busqueda_propiedad")
+    assert (result.text, result.intent) == ("Encontré una casa en El Poblado.", "busqueda_propiedad")
     assert result.raw_signal["budget_hint"] == "3 millones"
     assert result.tool_results == {"search_properties": {"properties": [{"id": "p1", "title": "Casa de prueba", "status": "disponible"}]}}
     assert result.tool_calls == [{"name": "search_properties", "is_error": False}] and result.llm_error is None
-    assert catalog.calls == [("search_properties", {"zone": "Providencia"})]
+    assert catalog.calls == [("search_properties", {"zone": "El Poblado"})]
 
 
 def test_the_classification_and_the_reply_are_two_separate_calls_to_two_models():
@@ -272,18 +272,18 @@ def test_an_address_in_prose_gets_one_chance_to_regenerate_and_the_fix_is_used()
     (violations=2) — la doble red que describe DT-23, no una casualidad del gold set."""
     client = ScriptedBedrock(classification("consulta_precio"),
                              tool_use("get_property", {"property_id": "p1", "lead_qualified": False}),
-                             text("Está en Calle Lerdo 1204, Providencia."),
-                             text("Está en Providencia, cerca de Av. Vallarta."))
+                             text("Está en Calle Lerdo 1204, El Poblado."),
+                             text("Está en El Poblado, cerca de Av. Vallarta."))
     result = run(agent_for(client).run(turn(lead_qualified=False), FakeCatalog()))
-    assert result.text == "Está en Providencia, cerca de Av. Vallarta."
+    assert result.text == "Está en El Poblado, cerca de Av. Vallarta."
     assert result.guard_audits == [("output.factuality_regenerated", {"violations": 2})]
 
 
 def test_an_address_that_survives_regeneration_degrades_to_an_advisor_offer():
     client = ScriptedBedrock(classification("consulta_precio"),
                              tool_use("get_property", {"property_id": "p1", "lead_qualified": False}),
-                             text("Está en Calle Lerdo 1204, Providencia."),
-                             text("Sigue en Calle Lerdo 1204, Providencia."))
+                             text("Está en Calle Lerdo 1204, El Poblado."),
+                             text("Sigue en Calle Lerdo 1204, El Poblado."))
     result = run(agent_for(client).run(turn(lead_qualified=False), FakeCatalog()))
     assert result.text == FACTUALITY_DEGRADE_REPLY and result.intent == "otro"
     assert [a for a, _ in result.guard_audits] == ["output.factuality_regenerated", "output.factuality_degraded"]
@@ -321,7 +321,7 @@ def test_a_throttling_error_during_the_regeneration_still_falls_back_to_the_safe
 
 # --- #122: la propiedad del anuncio -----------------------------------------------------------------------------
 
-LISTING = {"id": "prop_00231", "title": "Depto 2 rec. en Providencia", "zone": "Providencia"}
+LISTING = {"id": "prop_00231", "title": "Depto 2 rec. en El Poblado", "zone": "El Poblado"}
 
 
 def test_the_model_is_told_which_listing_the_lead_came_from():

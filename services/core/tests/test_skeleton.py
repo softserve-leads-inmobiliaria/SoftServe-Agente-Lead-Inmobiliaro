@@ -64,7 +64,7 @@ def test_search_of_a_kind_without_results_says_so():
 
 def test_search_without_a_kind_sends_no_kind_filter():
     catalog = StubCatalog()
-    asyncio.run(handle_event(INBOUND | {"text": "Busco algo en Providencia"}, catalog))
+    asyncio.run(handle_event(INBOUND | {"text": "Busco algo en El Poblado"}, catalog))
     assert catalog.calls == [("search_properties", {})]
 
 

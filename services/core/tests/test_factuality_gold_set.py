@@ -13,20 +13,20 @@ from app.factuality import check
 SEARCH_RESULT = {
     "search_properties": {
         "properties": [
-            {"id": "prop_00231", "title": "Depto 2 rec. en Providencia", "price": 2350000, "type": "venta",
-             "zone": "Providencia", "m2": 78.5, "bedrooms": 2, "bathrooms": 2,
+            {"id": "prop_00231", "title": "Depto 2 rec. en El Poblado", "price": 2350000, "type": "venta",
+             "zone": "El Poblado", "m2": 78.5, "bedrooms": 2, "bathrooms": 2,
              "amenities": ["alberca", "gimnasio"], "status": "disponible"},
-            {"id": "prop_00233", "title": "Casa 3 rec. en Zapopan", "price": 4800000, "type": "venta",
-             "zone": "Zapopan", "m2": 180, "bedrooms": 3, "bathrooms": 2.5,
+            {"id": "prop_00233", "title": "Casa 3 rec. en Usaquen", "price": 4800000, "type": "venta",
+             "zone": "Usaquen", "m2": 180, "bedrooms": 3, "bathrooms": 2.5,
              "amenities": ["jardín", "cochera"], "status": "disponible"},
         ],
-        "unavailable": [{"id": "prop_00234", "title": "Casa 4 rec. en Zapopan", "status": "apartado"}],
+        "unavailable": [{"id": "prop_00234", "title": "Casa 4 rec. en Usaquen", "status": "apartado"}],
     },
 }
 PROPERTY_RESULT = {
-    "get_property": {"id": "prop_00231", "title": "Depto 2 rec. en Providencia", "price": 2350000, "m2": 78.5,
+    "get_property": {"id": "prop_00231", "title": "Depto 2 rec. en El Poblado", "price": 2350000, "m2": 78.5,
                      "bedrooms": 2, "bathrooms": 2, "amenities": ["alberca", "gimnasio"], "status": "disponible",
-                     "address_approx": "Providencia, cerca de Av. Vallarta"},
+                     "address_approx": "El Poblado, cerca de Av. Vallarta"},
 }
 REQUIREMENTS_RESULT = {
     "check_requirements": {"meets_requirements": False,
@@ -55,11 +55,11 @@ CASES = [
     ("promocion_real", "Tiene una promoción: enganche diferido en 6 mensualidades.", PROMOTIONS_RESULT, "", True),
     ("sin_numeros_ni_estados", "¿Buscas para comprar o rentar?", SEARCH_RESULT, "", True),
     ("sin_resultados_sin_numeros", "Por ahora no tengo nada que coincida con lo que buscas.", EMPTY_SEARCH, "", True),
-    ("repite_presupuesto_del_lead", "Con $3,000,000 tienes buenas opciones en Zapopan.", EMPTY_SEARCH,
+    ("repite_presupuesto_del_lead", "Con $3,000,000 tienes buenas opciones en Usaquen.", EMPTY_SEARCH,
      "mi presupuesto es de 3,000,000", True),
     ("repite_recamaras_pedidas", "Busco departamentos de 3 recámaras como pediste.", EMPTY_SEARCH,
      "quiero uno de 3 recámaras", True),
-    ("precio_de_la_otra_propiedad", "La casa de Zapopan está en $4,800,000.", SEARCH_RESULT, "", True),
+    ("precio_de_la_otra_propiedad", "La casa de Usaquen está en $4,800,000.", SEARCH_RESULT, "", True),
     ("bathrooms_decimal_correcto", "Tiene 2.5 baños.", SEARCH_RESULT, "", True),
     # Límite conocido: "4" es real (título de la apartada), pero el guardrail no distingue DE QUÉ
     # propiedad habla el texto — solo que el número existe en algo que las tools devolvieron este

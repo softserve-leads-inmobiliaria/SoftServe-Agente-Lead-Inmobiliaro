@@ -150,7 +150,7 @@ def test_the_lead_asking_for_an_alert_is_detected(message):
     assert alerts.is_request(message)
 
 
-@pytest.mark.parametrize("message", ["Busco casa en Zapopan", "¿Cuánto cuesta?", "Quiero agendar una visita", ""])
+@pytest.mark.parametrize("message", ["Busco casa en Usaquen", "¿Cuánto cuesta?", "Quiero agendar una visita", ""])
 def test_other_messages_are_not_an_alert_request(message):
     assert not alerts.is_request(message)
 
@@ -371,8 +371,8 @@ def test_the_lead_answering_from_nurture_goes_back_to_discovery(engine, zone):
 # --- el texto ----------------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("prop,expected", [
-    ({"id": "prop_1", "title": "Casa", "zone": "Zapopan", "type": "venta", "bedrooms": 3, "price": 2350000.0},
-     "Casa (ref. prop_1), en Zapopan: en venta, 3 recámaras, $2,350,000."),
+    ({"id": "prop_1", "title": "Casa", "zone": "Usaquen", "type": "venta", "bedrooms": 3, "price": 2350000.0},
+     "Casa (ref. prop_1), en Usaquen: en venta, 3 recámaras, $2,350,000."),
     ({"id": "prop_2", "title": "Estudio", "zone": "Centro", "type": "renta", "bedrooms": 1, "price": 8500.5},
      "Estudio (ref. prop_2), en Centro: en renta, 1 recámara, $8,500.50."),
 ])
