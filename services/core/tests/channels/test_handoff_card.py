@@ -130,7 +130,7 @@ def test_al_pedir_un_humano_el_asesor_recibe_la_ficha_una_sola_vez_con_toda_la_c
     completa = "\n".join(transcripcion)
     # Incluye el turno del traspaso: mensaje del lead y respuesta del agente, en orden.
     assert completa.index("Lead: I'm looking for an apartment") < completa.index(f"Lead: {PIDE_HUMANO}")
-    assert "Agente: Claro, te comunico con un asesor" in completa
+    assert "Agente: Sure, I'll put you in touch with one of our agents" in completa
     with session_scope(engine) as session:
         assigned = session.execute(select(Lead.advisor_id).where(Lead.telegram_user_id == lead)).scalar()
     assert assigned == advisor.id
@@ -213,7 +213,7 @@ def test_sin_asesor_registrado_el_turno_del_traspaso_sigue_y_no_manda_nada(engin
 
     reply = _decir(engine, _nuevo_lead(), PIDE_HUMANO, bot)
 
-    assert "asesor" in reply
+    assert "agents" in reply
     bot.send_message.assert_not_awaited()
 
 
@@ -225,4 +225,4 @@ def test_si_telegram_falla_al_enviar_la_ficha_el_lead_igual_recibe_su_respuesta(
 
     reply = _decir(engine, _nuevo_lead(), PIDE_HUMANO, bot)
 
-    assert "asesor" in reply
+    assert "agents" in reply

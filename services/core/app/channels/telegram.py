@@ -37,7 +37,7 @@ from app.turn import Transition, TurnReply, process_turn_reply
 logger = logging.getLogger("core.channels.telegram")
 
 # Lo que ve el lead si el turno falla: nunca se le deja sin respuesta.
-ERROR_REPLY = "Perdona, tuve un problema para responderte. ¿Me lo puedes repetir en un momento?"
+ERROR_REPLY = "Sorry, I had a problem replying to you. Could you send it again in a moment?"
 
 # Espera antes de cada reintento del envío al lead: 3 intentos en total.
 SEND_RETRY_DELAYS: tuple[float, ...] = (1.0, 2.0)

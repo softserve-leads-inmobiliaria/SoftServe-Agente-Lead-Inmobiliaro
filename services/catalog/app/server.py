@@ -110,7 +110,11 @@ def create_mcp(service: CatalogService | None = None) -> FastMCP:
 
     @mcp.tool()
     def get_property(property_id: str, lead_qualified: bool) -> Any:
-        """Full property details. address_exact is only returned with lead_qualified=true."""
+        """Full property details. address_exact is only returned with lead_qualified=true.
+        `requirements` lists what the deal asks for, with the amounts in US dollars (USD): the minimum
+        down payment as a percentage and an amount (sale and pre-sale), the minimum monthly income
+        (rent) and whether references are required. Use it to tell the lead what the requirements are;
+        whether the lead meets them is only answered by check_requirements."""
         return run(service.get_property, property_id=property_id, lead_qualified=lead_qualified)
 
     @mcp.tool()

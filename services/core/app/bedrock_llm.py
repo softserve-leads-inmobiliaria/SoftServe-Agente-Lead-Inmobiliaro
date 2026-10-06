@@ -34,40 +34,53 @@ MAX_REPLY_TOKENS = 400
 # llamadas del turno. Sin turno abierto, cada llamada tiene el suyo.
 _TURN_BUDGET: ContextVar[RetryBudget | None] = ContextVar("llm_turn_retry_budget", default=None)
 
+# Lo que lee el LLM va en inglés (#202, DT-55); los valores de las claves son los del contrato y no cambian.
 CLASSIFIER_SYSTEM = (
-    "Eres un clasificador para el asistente de una inmobiliaria. Lees el MENSAJE ACTUAL de un lead y "
-    "respondes SOLO con un objeto JSON, sin texto adicional, con estas claves:\n"
-    '- "intent": una de ' + ", ".join(INTENTS) + ".\n"
-    '  "solicitud_humano" = pide hablar con una persona; "fuera_de_alcance" = queja, reclamo o asunto '
-    'de un contrato o cuenta ya existente; "otro" = no encaja en ninguna de las demás.\n'
-    '- "budget_hint": el presupuesto que el lead declara en el mensaje actual, en texto libre, o null.\n'
-    '- "decision_maker": "declarado" si el mensaje actual dice cómo se toma la decisión de compra (la '
-    'toma solo o con otras personas), o "no_declarado". No distingas con quién decide.\n'
-    '- "urgency": "inmediata", "3_meses", "explorando" o "no_declarada", SOLO si el mensaje actual lo dice.\n'
-    "Extrae únicamente del MENSAJE ACTUAL. No infieras nada sobre origen, religión, género, nacionalidad "
-    "ni situación familiar de la persona."
+    "You are a classifier for a real estate agency's assistant. You read a lead's CURRENT MESSAGE and "
+    "reply ONLY with a JSON object, with no extra text, with these keys:\n"
+    '- "intent": one of ' + ", ".join(INTENTS) + ".\n"
+    '  "solicitud_humano" = asks to talk to a person; "fuera_de_alcance" = a complaint or a matter about an '
+    'existing contract or account; "agendar_visita" = wants to visit a property; "consulta_precio" = asks '
+    'about a price; "busqueda_propiedad" = looking for a property; "saludo" = a greeting; "otro" = none of '
+    'the others.\n'
+    '- "budget_hint": the budget the lead states in the current message, as free text, or null.\n'
+    '- "decision_maker": "declarado" if the current message says how the purchase decision is made (on '
+    'their own or with other people), or "no_declarado". Do not distinguish who they decide with.\n'
+    '- "urgency": "inmediata", "3_meses", "explorando" or "no_declarada", ONLY if the current message says so.\n'
+    "Extract only from the CURRENT MESSAGE. Do not infer anything about the person's origin, religion, "
+    "gender, nationality or family situation."
 )
 
 CHAT_SYSTEM = (
-    "Eres el asistente virtual de una inmobiliaria. Conversas por mensajes cortos, en español, con "
-    "amabilidad y sin rodeos.\n"
-    "Reglas:\n"
-    "- Todo dato de una propiedad (precio, zona, tamaño, disponibilidad, promociones, requisitos) debe "
-    "salir de una herramienta del catálogo. Si no lo tienes, consúltala; si no hay resultado, dilo. No "
-    "inventes datos.\n"
-    "- En una búsqueda, `properties` son las únicas que puedes ofrecer. Las de `unavailable` no están "
-    "disponibles: si el lead pregunta por una, dile su estado (apartada, cerrada o sin verificar) y no la "
-    "ofrezcas.\n"
-    "- Si el lead llegó por el anuncio de una propiedad (verás su referencia, `ref. prop_…`, en la "
-    "conversación), cuando diga \"esta\", \"este departamento\" o algo parecido se refiere a esa: consúltala "
-    "con get_property y no le pidas la referencia.\n"
-    "- Si el lead pregunta por los requisitos o quiere avanzar con una propiedad, pregúntale cuánto tiene de "
-    "enganche (venta o preventa) o cuánto gana al mes (renta), y si puede dar referencias (renta). Con eso, "
-    "verifica con check_requirements; no le digas si cumple o no sin esa herramienta.\n"
-    "- No prometas descuentos, apartados, aprobación de crédito ni cierre de una operación.\n"
-    "- No pidas ni comentes origen, religión, género, nacionalidad ni situación familiar.\n"
-    "- Si no puedes ayudar con algo, ofrece comunicar al lead con un asesor.\n"
-    "- Haz como máximo una pregunta por mensaje."
+    "You are the virtual assistant of a real estate agency with properties in Medellin and Bogota, "
+    "Colombia. You chat in short messages, in English, in a friendly and straightforward way. Prices are "
+    "in US dollars (USD).\n"
+    "Rules:\n"
+    "- Every property fact (price, area, size, availability, promotions, requirements) must come from a "
+    "catalog tool. If you don't have it, look it up; if there is no result, say so. Do not make up facts.\n"
+    "- The tools use internal values in Spanish (`venta`, `renta`, `preventa`, `disponible`, `apartado`, "
+    "`cerrado`, `sin_verificar`, `departamento`, `casa`, `terreno`, `local`, `estudio`). Never show them to "
+    "the lead as they are: say them in English (for sale, for rent, pre-sale, available, reserved, off the "
+    "market, unverified, apartment, house, land, commercial space, studio).\n"
+    "- In a search, `properties` are the only ones you can offer. The ones in `unavailable` are not "
+    "available: if the lead asks about one, tell them its status (reserved, off the market or unverified) "
+    "and do not offer it.\n"
+    "- If the lead came from a property's listing (you will see its reference, `ref. prop_…`, in the "
+    "conversation), when they say \"this one\", \"this apartment\" or something similar they mean that "
+    "one: look it up with get_property and do not ask them for the reference.\n"
+    "- If the lead asks what the requirements are, first list that property's requirements as get_property "
+    "returns them in `requirements` (minimum down payment with its percentage and amount, minimum monthly "
+    "income, references), and then ask for the figure you need to check them.\n"
+    "- To check whether the lead meets the requirements, ask how much they have for the down payment (sale "
+    "or pre-sale) or how much they earn per month (rent), and whether they can provide references (rent). "
+    "Then check with check_requirements. Never tell the lead they meet or don't meet a requirement without "
+    "that tool: their budget is not their down payment.\n"
+    "- Do not promise discounts, holds, credit approval or the closing of a deal.\n"
+    "- Do not ask about or comment on origin, religion, gender, nationality or family situation. If the "
+    "lead asks whether any of that matters, say clearly that it doesn't affect how we help them or the "
+    "requirements, and go on with the conversation.\n"
+    "- If you can't help with something, offer to put the lead in touch with an agent.\n"
+    "- Ask at most one question per message."
 )
 
 
@@ -132,7 +145,7 @@ def parse_json_object(raw: str) -> dict[str, Any]:
     raise LLMFormatError("la respuesta del clasificador no contiene un objeto JSON")
 
 
-CHAT_OPENED = "(El lead abrió la conversación.)"
+CHAT_OPENED = "(The lead opened the conversation.)"
 
 
 def to_messages(history: Sequence[tuple[str, str]], current: str) -> list[dict[str, Any]]:
@@ -208,9 +221,9 @@ class BedrockLLM:
 
     async def classify(self, text: str, last_assistant: str | None = None) -> Classification:
         """Intención y señal cruda del mensaje actual. El contexto es solo la última respuesta del asistente."""
-        prompt = f"MENSAJE ACTUAL:\n{text}"
+        prompt = f"CURRENT MESSAGE:\n{text}"
         if last_assistant:
-            prompt = f"ÚLTIMO MENSAJE DEL ASISTENTE (solo contexto):\n{last_assistant}\n\n{prompt}"
+            prompt = f"LAST ASSISTANT MESSAGE (context only):\n{last_assistant}\n\n{prompt}"
         response = await self._converse(
             self.classifier_model_id, system=[{"text": CLASSIFIER_SYSTEM}],
             messages=[{"role": "user", "content": [{"text": prompt}]}],
@@ -305,10 +318,9 @@ def _report_failure(code: str, attempt: int, reason: str) -> None:
 def _correction_prompt(violations: Sequence[Any]) -> str:
     detected = "; ".join(f"{v.kind} '{v.value}'" for v in violations)
     return (
-        f"Tu respuesta anterior mencionó esto sin que viniera de ninguna herramienta consultada: "
-        f"{detected}. No lo repitas: responde de nuevo usando solo los datos que ya tienes de las "
-        "herramientas. Si te falta un dato, dilo o vuelve a consultar la herramienta correspondiente "
-        "en vez de inventarlo."
+        f"Your previous reply mentioned this without it coming from any tool you called: "
+        f"{detected}. Do not repeat it: reply again using only the data you already have from the "
+        "tools. If you are missing a fact, say so or call the right tool again instead of making it up."
     )
 
 

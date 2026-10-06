@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 import pytest
-from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 CONTRACTS = Path(__file__).resolve().parents[2] / "contracts"
 TOOLS = [
@@ -98,6 +98,21 @@ def test_get_property_photo_url_is_optional_and_nullable(photo):
     if photo != "omitida":
         item["photo_url"] = photo
     validator(out).validate(item)
+
+
+def test_get_property_requirements_are_optional_but_complete_when_present():
+    # #201 (DT-56): opcional como photo_url; si viene, trae los cinco campos y nada más.
+    out = tool("get_property")["outputSchema"]
+    assert "requirements" not in out["required"]
+    item = example("get_property", "output")
+    validator(out).validate({k: v for k, v in item.items() if k != "requirements"})
+    rent = {**item, "requirements": {"down_payment_percent": None, "down_payment_min": None, "income_multiple": 3,
+                                     "monthly_income_min": 3450, "references_required": True}}
+    validator(out).validate(rent)
+    for broken in ({k: v for k, v in rent["requirements"].items() if k != "references_required"},
+                   {**rent["requirements"], "approved": True}):
+        with pytest.raises(ValidationError):
+            validator(out).validate({**item, "requirements": broken})
 
 
 def test_get_property_input_requires_lead_qualified():

@@ -345,7 +345,8 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
         guarded = AvailabilityGuard(searches)
         listing = await _listing(event, guarded, context.lead_qualified)
         result = await agent.run(TurnInput(event=event, text=text, history=context.history,
-                                           lead_qualified=context.lead_qualified, listing=listing), guarded)
+                                           lead_qualified=context.lead_qualified, listing=listing,
+                                           protected_removed=verdict.protected_category), guarded)
         if listing:
             result = _with_listing(result, listing, greet=not event["text"].strip())
     counts = not (verdict.jailbreak or verdict.out_of_domain or verdict.not_english)

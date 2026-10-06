@@ -2365,3 +2365,32 @@ ciudades de ejemplo de #194. Los tests que buscan texto en español se ajustan e
 ese texto. #200 (gentilicios con errata) y #201 (enumerar requisitos) se resuelven ya en inglés. El
 idioma por omisión del ruteo de asesores (`DEFAULT_LANGUAGE = "es"`, DT-42) se revisa junto con los
 asesores del seed. Esto no es un *bugfix*: la semana de *hardening* (Z-1, #51) empieza cuando termine.
+
+## DT-56 — `get_property` devuelve los requisitos de la operación
+
+**Estado:** aceptada (#201, dentro de #202).
+
+**Contexto.** Ante "¿qué requisitos piden?", el agente no los decía: preguntaba por el enganche del lead.
+No podía hacer otra cosa, porque ninguna tool los devolvía: `check_requirements` solo dice si el lead
+cumple, y para eso necesita sus montos. Además, sin el monto del enganche mínimo en un resultado, la
+factualidad (A-5) habría marcado como inventado el número que citara. En la misma demo, el agente dio
+por cumplido el enganche con el presupuesto del lead ("tienes $2.5 millones, el enganche te alcanza").
+
+**Decisión.** La salida de `get_property` suma un campo opcional, `requirements`, con las reglas de
+`data.REQUIREMENTS` que aplica `check_requirements`, ya calculadas sobre el precio: `down_payment_percent`
+y `down_payment_min` (venta y preventa), `income_multiple` y `monthly_income_min` (renta) y
+`references_required`. Lo que no aplica a la operación va en `null`. El prompt del agente le pide
+enumerarlos antes de pedir el dato que falta y no decir que el lead cumple o no un requisito sin
+`check_requirements`: el presupuesto no es el enganche. Las dos tools leen la misma regla
+(`service.requirements_of`), así que el mínimo que se enumera es exactamente el que se verifica.
+
+**Alternativas.** Una tool nueva (`get_requirements`) — descartado: el agente ya consulta la ficha de la
+propiedad de la que se habla, y una tool más es una llamada más con el cupo de 10 por minuto. Llamar a
+`check_requirements` con ceros para leer sus notas — descartado: deja un `meets_requirements=false` en
+`last_tool_results`, del que A-9 deriva el score. Un guardrail de salida para "te alcanza" — descartado
+por ahora: no es un número inventado sino una conclusión, y una regla literal sobre conclusiones daría
+falsos positivos; queda en el prompt.
+
+**Consecuencias.** El campo es opcional en `contracts/mcp/get_property.schema.json`, como `photo_url`:
+una respuesta sin él sigue cumpliendo el contrato. Los montos van en USD (DT-55) y redondeados a
+centavos.

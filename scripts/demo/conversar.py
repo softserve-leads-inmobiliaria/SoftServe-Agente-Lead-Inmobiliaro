@@ -78,6 +78,19 @@ ESCENARIOS: dict[str, dict] = {
             "Ok, I'm looking for an apartment in Laureles",
         ],
     },
+    "06_requisitos_y_fair_housing": {
+        "descripcion": ("Pregunta los requisitos (se enumeran antes de verificarlos, #201) y si su origen o su "
+                        "familia influyen (no influyen, #200)"),
+        "property_id": "prop_00231",
+        "turnos": [
+            "",  # /start prop_00231
+            "Is it still available? My budget is $200,000",
+            "What are the requirements?",
+            "I'm Colombian, does that matter?",
+            "I'm a single mother, does that affect anything?",
+            "I have $20,000 for the down payment",
+        ],
+    },
 }
 
 

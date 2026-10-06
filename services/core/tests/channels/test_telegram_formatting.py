@@ -13,9 +13,9 @@ from app.channels.formatting import render
 from app.channels.telegram import CAPTION_MAX_CHARS, ChannelReply, send_reply
 
 PHOTO = "https://images.unsplash.com/photo-1?w=1024"
-LISTING = ("Encontré estas opciones:\n"
-           "- **Casa 3 rec.** - $4,800,000 | 180 m² | Usaquen\n"
-           "- **Depa 2 rec.** - $2,100,000 | 85 m² | El Poblado")
+LISTING = ("I found these options:\n"
+           "- **3-bed house** - $4,800,000 | 180 m² | Usaquen\n"
+           "- **2-bed apartment** - $2,100,000 | 85 m² | El Poblado")
 
 
 class _TelegramHtml(HTMLParser):
@@ -50,22 +50,22 @@ def visible(html: str) -> str:
 def test_bold_and_bullets_become_telegram_html():
     rendered = render(LISTING)
     assert "**" not in rendered.html
-    assert "• <b>Casa 3 rec.</b> - $4,800,000 | 180 m² | Usaquen" in rendered.html
-    assert rendered.plain == ("Encontré estas opciones:\n"
-                              "• Casa 3 rec. - $4,800,000 | 180 m² | Usaquen\n"
-                              "• Depa 2 rec. - $2,100,000 | 85 m² | El Poblado")
+    assert "• <b>3-bed house</b> - $4,800,000 | 180 m² | Usaquen" in rendered.html
+    assert rendered.plain == ("I found these options:\n"
+                              "• 3-bed house - $4,800,000 | 180 m² | Usaquen\n"
+                              "• 2-bed apartment - $2,100,000 | 85 m² | El Poblado")
 
 
 @pytest.mark.parametrize("text", [
     "a < b & c > d",
-    "prop_00231 y snake_case_id",
-    "2 * 3 = 6 y un * suelto",
-    "un _ suelto y un ** doble",
-    "<b>no soy una etiqueta</b>",
+    "prop_00231 and snake_case_id",
+    "2 * 3 = 6 and a stray *",
+    "a stray _ and a double **",
+    "<b>not a tag</b>",
     "**a *b** c*",  # marcas cruzadas
-    "***todo***",
-    "`**literal**` dentro de código",
-    "&amp; ya escapado",
+    "***all***",
+    "`**literal**` inside code",
+    "&amp; already escaped",
 ])
 def test_special_characters_always_produce_valid_html_with_the_same_visible_text(text):
     rendered = render(text)
@@ -73,18 +73,18 @@ def test_special_characters_always_produce_valid_html_with_the_same_visible_text
 
 
 def test_loose_characters_are_left_as_written():
-    for text in ["a < b & c > d", "prop_00231 y snake_case_id", "2 * 3 = 6 y un * suelto"]:
+    for text in ["a < b & c > d", "prop_00231 and snake_case_id", "2 * 3 = 6 and a stray *"]:
         assert render(text).plain == text
 
 
 def test_italics_headings_and_code():
-    assert render("*aprox* y _ojo_").html == "<i>aprox</i> y <i>ojo</i>"
-    assert render("### Opciones").html == "<b>Opciones</b>"
+    assert render("*approx.* and _note_").html == "<i>approx.</i> and <i>note</i>"
+    assert render("### Options").html == "<b>Options</b>"
     assert render("`**x**`").html == "<code>**x**</code>"
 
 
 def test_a_markdown_link_keeps_its_url_visible():
-    assert render("[ver ficha](https://x.mx/p?a=1&b=2)").plain == "ver ficha (https://x.mx/p?a=1&b=2)"
+    assert render("[see listing](https://x.mx/p?a=1&b=2)").plain == "see listing (https://x.mx/p?a=1&b=2)"
 
 
 # --- cómo se manda ----------------------------------------------------------------------------------------------
@@ -108,19 +108,19 @@ def test_the_text_goes_as_html():
     asyncio.run(send_reply(message, ChannelReply(LISTING)))
     ((kind, value, parse_mode),) = message.sent
     assert kind == "text" and parse_mode == ParseMode.HTML
-    assert "<b>Casa 3 rec.</b>" in value and "**" not in value
+    assert "<b>3-bed house</b>" in value and "**" not in value
 
 
 def test_the_caption_goes_as_html():
     message = FakeMessage()
-    asyncio.run(send_reply(message, ChannelReply("**Depa 2 rec.** en El Poblado", PHOTO)))
-    assert message.sent == [("photo", "<b>Depa 2 rec.</b> en El Poblado", ParseMode.HTML)]
+    asyncio.run(send_reply(message, ChannelReply("**2-bed apartment** in El Poblado", PHOTO)))
+    assert message.sent == [("photo", "<b>2-bed apartment</b> in El Poblado", ParseMode.HTML)]
 
 
 def test_special_characters_are_escaped_before_sending():
     message = FakeMessage()
-    asyncio.run(send_reply(message, ChannelReply("Precio < $5M & más_info *")))
-    assert message.sent == [("text", "Precio &lt; $5M &amp; más_info *", ParseMode.HTML)]
+    asyncio.run(send_reply(message, ChannelReply("Price < $5M & more_info *")))
+    assert message.sent == [("text", "Price &lt; $5M &amp; more_info *", ParseMode.HTML)]
 
 
 def test_if_telegram_rejects_the_html_the_plain_text_goes(caplog):

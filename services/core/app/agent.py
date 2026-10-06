@@ -20,9 +20,13 @@ from app.summary import template as summary_template
 
 HISTORY_LIMIT = 20  # mensajes previos que se le dan al LLM
 
-LLM_FALLBACK_REPLY = "Disculpa, tuve un problema para procesar tu mensaje. ¿Me lo puedes repetir?"
+LLM_FALLBACK_REPLY = "Sorry, I had a problem processing your message. Could you send it again?"
 # A-5: ni el primer intento ni la regeneración pasaron la factualidad. Nunca se manda el dato dudoso.
-FACTUALITY_DEGRADE_REPLY = "No tengo un dato verificado para responder eso con seguridad." + HANDOFF_OFFER
+FACTUALITY_DEGRADE_REPLY = "I don't have verified information to answer that reliably." + HANDOFF_OFFER
+# #200: el guardrail quitó una mención de categoría protegida y lo que queda es una pregunta ("does that
+# matter?"). El agente sin LLM contesta esto; el LLM recibe la nota de `_turn_notes` y lo dice a su modo.
+PROTECTED_ANSWER = ("That doesn't affect how we help you or the requirements to buy or rent: we treat "
+                    "every client the same way. What kind of property are you looking for?")
 
 # El LLM no decide esto: lo fija el código a partir del estado del lead (A-6, dirección reservada).
 CODE_CONTROLLED_ARGUMENTS = ("lead_qualified",)
@@ -35,6 +39,7 @@ class TurnInput:
     history: tuple[tuple[str, str], ...] = ()  # (rol, contenido), del más viejo al más nuevo
     lead_qualified: bool = False
     listing: Mapping[str, Any] | None = None  # la propiedad del anuncio por el que llegó el lead (#122)
+    protected_removed: bool = False  # el guardrail quitó una mención de categoría protegida (#200)
 
 
 @dataclass(frozen=True)
@@ -67,6 +72,9 @@ class FakeAgent:
     name = "fake"
 
     async def run(self, turn: TurnInput, catalog: Any) -> AgentResult:
+        # Solo si no pregunta otra cosa: "I'm Colombian, how much is it?" sigue siendo una consulta de precio.
+        if turn.protected_removed and "?" in turn.text and FakeLLM().classify_intent(turn.text) == "otro":
+            return AgentResult(text=PROTECTED_ANSWER, intent="otro")
         reply = await respond({**turn.event, "text": turn.text}, catalog)
         return AgentResult(text=reply.outbound["text"], intent=reply.intent,
                            raw_signal=FakeLLM().extract_signal(turn.text), tool_results=reply.tool_results,
@@ -112,7 +120,7 @@ class BedrockAgent:
                 return await catalog.call(name, arguments)
 
             visible = [_visible(s) for s in specs]
-            current = _with_listing_note(turn.text, turn.listing)
+            current = _with_notes(turn.text, turn.listing, turn.protected_removed)
             chat = await self._llm.chat(turn.history, current, visible, run_tool)
             if not chat.text:
                 raise LLMFormatError("respuesta vacía")
@@ -144,12 +152,21 @@ class BedrockAgent:
             return await self._llm.summarize(transcript, "\n".join(facts.lines()))
 
 
-def _with_listing_note(text: str, listing: Mapping[str, Any] | None) -> str:
-    """El mensaje del lead más la referencia del anuncio por el que llegó (#122). Solo la ve el LLM: no se
-    guarda en el historial ni cuenta como algo que dijo el lead para la factualidad."""
-    if not listing:
-        return text
-    return f"{text}\n\n(El lead llegó por el anuncio de {listing.get('title')}, ref. {listing.get('id')}.)"
+PROTECTED_NOTE = ("(Part of the lead's message was removed because it mentioned a personal characteristic "
+                  "such as origin, religion, gender, nationality or family situation. If they ask whether it "
+                  "matters, tell them it doesn't affect how we help them or the requirements.)")
+
+
+def _with_notes(text: str, listing: Mapping[str, Any] | None, protected_removed: bool = False) -> str:
+    """El mensaje del lead más lo que el LLM tiene que saber del turno: la referencia del anuncio por el que
+    llegó (#122) y que el guardrail quitó una mención de categoría protegida (#200), sin el dato quitado.
+    Solo lo ve el LLM: no se guarda en el historial ni cuenta como algo que dijo el lead para la factualidad."""
+    notes = []
+    if listing:
+        notes.append(f"(The lead came from the listing for {listing.get('title')}, ref. {listing.get('id')}.)")
+    if protected_removed:
+        notes.append(PROTECTED_NOTE)
+    return "\n\n".join([text, *notes])
 
 
 def _output_violations(text: str, tool_results: Mapping[str, Any], lead_text: str,

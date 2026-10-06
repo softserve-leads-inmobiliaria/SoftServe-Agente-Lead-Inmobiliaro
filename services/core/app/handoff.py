@@ -24,8 +24,8 @@ UNRESOLVED_INTENT: Final = "otro"
 VISIT_REQUESTED_REASON: Final = "visit_requested"  # visita pedida sin reservar: la coordina el asesor (B-8)
 FRUSTRATION_STREAK: Final = 3  # turnos seguidos sin resolver que se leen como frustración
 
-FRUSTRATION_REPLY: Final = ("Perdona que no te esté ayudando como esperas. "
-                            "Te comunico con un asesor de nuestro equipo.")
+FRUSTRATION_REPLY: Final = ("Sorry I'm not being as helpful as you expected. "
+                            "I'll put you in touch with one of our agents.")
 
 
 def is_unresolved(intent: str, raw_signal: Mapping[str, Any] | None = None) -> bool:

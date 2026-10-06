@@ -58,7 +58,7 @@ class Chat:
 def test_an_out_of_scope_message_reaches_a_human_from_every_state(engine, state):
     chat = Chat(engine)
     chat.put_in(state)
-    assert "asesor" in chat.say("I have a complaint about my contract")
+    assert "agent" in chat.say("I have a complaint about my contract")
     assert chat.state == "HUMAN_HANDOFF"
 
 
@@ -173,7 +173,7 @@ def test_the_lead_is_not_told_about_a_handoff_that_was_already_explicit(engine):
     chat.say(NOISE)
     chat.say(NOISE)
     reply = chat.say("I want to talk to an agent")
-    assert reply != FRUSTRATION_REPLY and "asesor" in reply and chat.state == "HUMAN_HANDOFF"
+    assert reply != FRUSTRATION_REPLY and "agents" in reply and chat.state == "HUMAN_HANDOFF"
 
 
 def test_the_streak_never_goes_negative_and_starts_at_zero(engine):

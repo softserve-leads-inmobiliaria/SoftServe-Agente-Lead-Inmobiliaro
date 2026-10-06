@@ -30,6 +30,25 @@ class CatalogError(Exception):
         return {"error_code": self.error_code, "message": self.message}
 
 
+def requirements_of(deal_type: str, price: float | None) -> dict[str, Any]:
+    """Los requisitos de la operación, con sus montos sobre el precio (#201, DT-56).
+
+    `get_property` los devuelve para que el agente pueda enumerarlos ante "¿qué requisitos piden?"
+    antes de verificar nada: son las mismas reglas que aplica `check_requirements`. Los montos van
+    calculados para que la factualidad (A-5) encuentre en el resultado de la tool el número que cite
+    el agente (el 10 %, los USD 18,500).
+    """
+    rules = data.REQUIREMENTS[deal_type]
+    ratio, multiple = rules["down_payment_ratio"], rules["income_multiple"]
+    return {
+        "down_payment_percent": round(ratio * 100) if ratio is not None else None,
+        "down_payment_min": round(price * ratio, 2) if ratio is not None and price is not None else None,
+        "income_multiple": multiple,
+        "monthly_income_min": round(price * multiple, 2) if multiple is not None and price is not None else None,
+        "references_required": rules["references"],
+    }
+
+
 class CatalogService:
     def __init__(
         self,
@@ -146,6 +165,7 @@ class CatalogService:
 
         result["address_exact"] = prop.address_exact if lead_qualified else None
         result["photo_url"] = prop.photo_url  # B-10: opcional; sin foto el canal manda solo el texto
+        result["requirements"] = requirements_of(prop.type, result["price"])  # #201
 
         return result
 

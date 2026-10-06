@@ -48,14 +48,15 @@ _KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 _PATTERNS = tuple((intent, re.compile("|".join(rf"\b(?:{k})" for k in words))) for intent, words in _KEYWORDS)
 
+# Lo que lee el lead, en inglés (#202, DT-55).
 REPLIES: dict[str, str] = {
-    "solicitud_humano": "Claro, te comunico con un asesor de nuestro equipo.",
-    "fuera_de_alcance": "Eso lo atiende directamente nuestro equipo: te comunico con un asesor.",
-    "agendar_visita": "Con gusto coordinamos una visita. ¿Qué día te acomoda?",
-    "consulta_precio": "Con gusto reviso el precio de esa propiedad y te lo comparto.",
-    "busqueda_propiedad": "Cuéntame más: ¿en qué zona buscas y cuántas recámaras necesitas?",
-    "saludo": "¡Hola! Soy el asistente de la inmobiliaria. ¿En qué te puedo ayudar?",
-    "otro": "Gracias por tu mensaje. ¿Me cuentas qué tipo de propiedad estás buscando?",
+    "solicitud_humano": "Sure, I'll put you in touch with one of our agents.",
+    "fuera_de_alcance": "Our team handles that directly: I'll put you in touch with an agent.",
+    "agendar_visita": "Happy to set up a visit. What day works for you?",
+    "consulta_precio": "Happy to check the price of that property and share it with you.",
+    "busqueda_propiedad": "Tell me more: which area are you looking in and how many bedrooms do you need?",
+    "saludo": "Hi! I'm the agency's assistant. How can I help you?",
+    "otro": "Thanks for your message. What kind of property are you looking for?",
 }
 
 

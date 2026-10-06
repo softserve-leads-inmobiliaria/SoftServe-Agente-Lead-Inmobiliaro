@@ -72,7 +72,7 @@ def test_tracing_is_off_without_an_endpoint(monkeypatch):
 def test_a_turn_works_with_tracing_off(engine, monkeypatch):
     monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
     tracing.reset()
-    assert "asistente" in Chat(engine).say("Hi")["text"]
+    assert "assistant" in Chat(engine).say("Hi")["text"]
 
 
 def test_tracing_turns_on_with_an_endpoint(monkeypatch):
@@ -255,7 +255,7 @@ def test_an_exporter_that_fails_never_breaks_a_turn(engine):
 
     tracing.configure(Failing(), processor=SimpleSpanProcessor, instrument=False)
     try:
-        assert "asistente" in Chat(engine).say("Hi")["text"]
+        assert "assistant" in Chat(engine).say("Hi")["text"]
     finally:
         tracing.reset()
 
