@@ -16,7 +16,7 @@ silencio salvo lo que cada fila indica.
 | PII no solicitada | Datos sensibles ofrecidos sin que el flujo los haya pedido (ej. identificación oficial, tarjeta) | No se persiste ese campo; se responde recordando qué datos sí hacen falta |
 | Opt-out (`/stop`) | Comando explícito o frase equivalente | Determinista (regla, no LLM). Cancela todo *job* pendiente del lead; marca `consent_status=withdrawn`; confirma la baja |
 | Fuera de dominio | Preguntas fuera de bienes raíces, o que piden dictamen legal/fiscal/crediticio formal | Respuesta acotada + oferta de `HUMAN_HANDOFF` si insiste |
-| Categoría protegida en la entrada | El lead menciona origen, religión, situación familiar, género, nacionalidad | Se responde con normalidad al resto del mensaje; el dato no entra a `ScoreSignal` |
+| Categoría protegida en la entrada | El lead menciona origen, religión, situación familiar, género, nacionalidad | Se responde con normalidad al resto del mensaje; el dato no entra a `ScoreSignal`. Si pregunta si influye, se le dice que no (#200) |
 | Idioma (#202) | Mensaje escrito en español | Aviso fijo en inglés para que lo repita en inglés; no llega al LLM, no suma al score ni a la frustración, y se registra en `AuditLog` (`input.not_english`). Corre después de la baja, la PII y fair housing |
 
 El origen se detecta también como lo dice un lead (#116): gentilicios ("soy colombiano", "somos
@@ -25,6 +25,14 @@ lista de países es cerrada, para no marcar "soy de El Poblado". Los gentilicios
 cosa ("pesos mexicanos", "colonia Americana", "cocina americana", "hablo español") solo cuentan detrás
 de "soy" o "somos". El costo de esa regla: "mi esposa es española" no se marca. Un gentilicio con errata
 detrás de "soy/somos" ("soy colombian", "soy venezolan") también cuenta (#200).
+
+Quitar la mención no puede dejar sin respuesta la pregunta del lead: ante "I'm Colombian, does that
+matter?", al agente le llega solo "does that matter?". Por eso el turno marca que se quitó una mención
+(`TurnInput.protected_removed`) y el LLM recibe una nota, sin el dato quitado, que le pide contestar que
+no influye en la atención ni en los requisitos (`agent._with_notes`, como la nota del anuncio de #122). El
+agente sin LLM contesta un texto fijo (`PROTECTED_ANSWER`) si lo que queda es una pregunta sin otra
+intención; "I'm Colombian, how much is it?" sigue siendo una consulta de precio. El clasificador no ve la
+nota: solo lee lo que escribió el lead.
 
 **Idioma (#202, DT-55).** La experiencia es en inglés: los cinco detectores reconocen inglés y conservan
 sus patrones en español, y un sexto, `app/language_guard.py`, contesta un mensaje en español con el aviso

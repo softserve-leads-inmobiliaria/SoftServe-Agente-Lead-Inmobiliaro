@@ -190,8 +190,9 @@ bash scripts/demo/down.sh     # exporta las conversaciones a txt y apaga borrand
   empezar como lead. También el enlace de Telegram de cada asesor, que es opcional: los avisos quedan en
   el panel y el enlace solo agrega una copia al chat (DT-42).
 - `python scripts/demo/conversar.py [escenario ...]`: ensayo automático por `POST /events` contra el LLM
-  del `.env` (deep-link hasta el asesor, búsqueda y recomendación, guardrails, y deep-link hasta HOT
-  verificando los requisitos), con 20 segundos entre turnos para no pasar el cupo de 10 llamadas por minuto:
+  del `.env` (deep-link hasta el asesor, búsqueda y recomendación, guardrails, deep-link hasta HOT
+  verificando los requisitos, lead que escribe en español, y requisitos y fair housing: se enumeran los
+  requisitos antes de verificarlos y "does that matter?" se contesta), con 20 segundos entre turnos para no pasar el cupo de 10 llamadas por minuto:
   un turno con herramientas hace 3 o 4. Los avisos al asesor no salen por esta vía: solo por Telegram.
 - `python scripts/demo/exportar.py [minutos]`: guarda en txt las conversaciones activas en ese lapso
   (por defecto 60), con el estado final de cada una. `down.sh` lo corre solo antes de borrar la base.

@@ -23,8 +23,8 @@ eventos.
 
 Ejemplo:
 
-    {"text": "Hi, good afternoon", "expect_reply_contains": "asistente"}
-    {"text": "I'd like to schedule a visit", "expect_reply_contains": "visita"}
+    {"text": "Hi, good afternoon", "expect_reply_contains": "assistant"}
+    {"text": "I'd like to schedule a visit", "expect_reply_contains": "visit"}
 
 ## Qué valida en cada turno
 
