@@ -15,5 +15,12 @@
   "status": "disponible",
   "address_approx": "El Poblado, Medellin, near Parque Lleras",
   "address_exact": null,
-  "photo_url": "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1024&q=80"
+  "photo_url": "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1024&q=80",
+  "requirements": {
+    "down_payment_percent": 10,
+    "down_payment_min": 18500,
+    "income_multiple": null,
+    "monthly_income_min": null,
+    "references_required": false
+  }
 }
