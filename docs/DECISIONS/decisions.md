@@ -713,7 +713,9 @@ o estado de la respuesta candidata tiene que existir en `last_tool_results` de e
 - `BedrockAgent.run` (`app/agent.py`) aplica el guardrail después de `BedrockLLM.chat`: si hay
   violaciones, `BedrockLLM.regenerate` repite la conversación con la respuesta candidata y una
   instrucción explícita de qué no se pudo verificar — sigue teniendo las tools disponibles, así que
-  puede corregirse consultando de nuevo. Si la respuesta regenerada también falla, se degrada a un
+  puede corregirse consultando de nuevo. La instrucción va en el *system* y no como mensaje `user`, y
+  aclara que el lead no la ve (#213): como mensaje `user`, el modelo creía que el lead lo había corregido,
+  se disculpaba y prometía buscar sin hacerlo. Si la respuesta regenerada también falla, se degrada a un
   texto fijo que ofrece un asesor, con `intent="otro"` (no fuerza `HUMAN_HANDOFF`: si el guardrail
   degrada varias veces seguidas, la racha de turnos sin resolver que ya existía, `app/handoff.py`,
   lo hace transicionar sola — sin una segunda máquina de estados para "fallos del guardrail").
@@ -1876,6 +1878,11 @@ decidir cuatro cosas:
   búsqueda sin ningún filtro no se vuelve alerta.
 - **Oferta:** si una búsqueda con filtros trae 2 propiedades o menos, el turno agrega una línea ofreciendo
   la alerta. Sin eso, casi nadie sabría que existe.
+  - Se ofrece una sola vez por conversación (`alert_offered` en `last_tool_results`, #213): en vivo salía
+    en casi cada turno. Las búsquedas siguientes con pocos resultados igual guardan sus filtros, así que
+    "notify me" sigue creando la alerta con la última.
+  - Cuenta la primera búsqueda del turno, que es la que pidió el lead. Si no trae nada, el agente la repite
+    con un filtro menos para ofrecer alternativas (#213), y la alerta tiene que ser de lo que se buscaba.
 - **Vigencia:** una alerta activa por lead, que reemplaza a la anterior y vence a los 90 días. `/stop` la
   desactiva por los dos caminos de la baja.
 - **"Nueva" significa que entró a `disponible` después de crearse la alerta**, según
@@ -2406,3 +2413,42 @@ falsos positivos; queda en el prompt.
 **Consecuencias.** El campo es opcional en `contracts/mcp/get_property.schema.json`, como `photo_url`:
 una respuesta sin él sigue cumpliendo el contrato. Los montos van en USD (DT-55) y redondeados a
 centavos.
+
+## DT-57 — Una búsqueda sin resultados trae alternativas con un filtro menos, y las busca el código
+
+**Estado:** aceptada (#213).
+
+**Contexto.** En una prueba en vivo por Telegram con Bedrock, el lead pidió una casa en renta, que no
+hay en el catálogo. El agente contestó que no había y volvió a pedirle la ciudad, aunque había
+departamentos en renta en Laureles y casas en venta en Usaquen. Para nombrarlos necesita una búsqueda
+que los traiga en ese turno, porque la factualidad (A-5) solo acepta lo que devolvieron las tools.
+Primero se intentó con una regla en el prompt ("si no hay resultados, busca otra vez sin un filtro"),
+pero en tres corridas el modelo nunca repitió la búsqueda.
+
+**Decisión.**
+- `app/alternatives.py` envuelve al catálogo, debajo de `SearchLog`. Si `search_properties` no trae
+  ninguna propiedad, repite la búsqueda sin la zona y, si tampoco trae nada, sin el tipo de inmueble
+  (`kind`), con la zona. Se queda con la primera que traiga algo.
+- Lo que sale va en `alternatives`, con el filtro que se quitó en `alternatives_without`. `properties`
+  sigue vacía.
+- El prompt le dice al agente que, sin `properties` y con `alternatives`, diga que no hay exactamente
+  lo que pidió y ofrezca las alternativas aclarando en qué no coinciden.
+- El `AvailabilityGuard` (A-4) revalida las alternativas igual que `properties` y descarta las que ya
+  no están disponibles. La factualidad cuenta el tamaño de `alternatives` como un número citable, como
+  el de `properties`.
+
+**Alternativas.**
+- Dejarlo en el prompt: descartado, porque en vivo no se cumplía.
+- Poner las alternativas en `properties`: descartado. Contarían para el ajuste de la necesidad (A-15),
+  para las propiedades de interés y para la foto, como si fueran lo que el lead pidió. Además, la búsqueda
+  dejaría de contar como demanda no atendida (N-5) y no se ofrecería la alerta (A-18).
+- Resolverlo en el catálogo (un parámetro `fallback` en `search_properties`): descartado por ahora. Toca
+  el contrato MCP y su *contract test*, y la regla de qué filtro se suelta es del agente, no del inventario.
+
+**Consecuencias.**
+- `SearchLog` ve solo la búsqueda del lead. La demanda no atendida registra lo que se pidió, y la alerta
+  se ofrece con esos filtros.
+- Una búsqueda vacía cuesta hasta dos llamadas más al catálogo, que no pasan por el LLM ni consumen el
+  cupo de Bedrock.
+- Una búsqueda con solo la zona ("¿qué tienen en Cali?") trae, sin la zona, todo el inventario como
+  alternativas. Eso cubre en parte la pregunta de cobertura de #194.
