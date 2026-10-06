@@ -25,8 +25,17 @@ _STATUS_WORDS = {
     "apartado": "apartado", "apartada": "apartado", "apartados": "apartado", "apartadas": "apartado",
     "cerrado": "cerrado", "cerrada": "cerrado", "cerrados": "cerrado", "cerradas": "cerrado",
     "sin verificar": "sin_verificar", "sin_verificar": "sin_verificar",
+    # Inglés (#202, DT-55). "rented" solo con lo que lo vuelve un estado ("it can be rented" no lo es), y
+    # sin "closed": "closed kitchen" o "closed parking" no hablan de la operación.
+    "available": "disponible", "reserved": "apartado", "on hold": "apartado",
+    "sold": "cerrado", "already rented": "cerrado", "been rented": "cerrado", "is rented": "cerrado",
+    "was rented": "cerrado", "off the market": "cerrado",
+    "unverified": "sin_verificar", "not verified": "sin_verificar",
 }
-_STATUS = re.compile(r"\b(" + "|".join(sorted(_STATUS_WORDS, key=len, reverse=True)) + r")\b", re.IGNORECASE)
+# Negado no es afirmar el estado: "that one is not available, it is reserved" solo dice `apartado`.
+_NOT_BEFORE = r"(?<!not )(?<!n't )(?<!n’t )(?<!no longer )"
+_STATUS = re.compile(_NOT_BEFORE + r"\b(" + "|".join(sorted(_STATUS_WORDS, key=len, reverse=True)) + r")\b",
+                     re.IGNORECASE)
 
 
 @dataclass(frozen=True)

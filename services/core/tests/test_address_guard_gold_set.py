@@ -24,6 +24,8 @@ CASES = [
     # este patrón tan simple — de ahí la salvedad por palabra de unidad).
     ("distancia_no_es_direccion", "Circuito Los Pinos está a 5 minutos de la entrada.", False, "", True),
     ("distancia_en_cuadras_no_es_direccion", "Queda a 10 cuadras de Calle Independencia.", False, "", True),
+    # Dos cifras: antes el patrón retrocedía hasta "1" y perdía la unidad.
+    ("distancia_de_dos_cifras_no_es_direccion", "Avenida Guadalupe está a 15 minutos.", False, "", True),
     # El lead ya dio su propia dirección: repetírsela no es una fuga de la propiedad (mismo criterio
     # que A-5 con los números del lead).
     ("direccion_del_lead_no_es_fuga", "Veo que vives en Av. Independencia 200, busco algo cerca de ahí.",
@@ -51,6 +53,21 @@ CASES = [
     ("carrera_abreviada_sin_calificar", "It is on Cra. 76 # 33-50.", False, "", False),
     ("calificado_ve_carrera", "It is at Carrera 37 # 8A-24, El Poblado.", True, "", True),
     ("approx_colombiana_no_dispara", "It is in El Poblado, near Parque Lleras.", False, "", True),
+
+    # --- en inglés (#202, DT-55): el LLM responde en inglés y puede traducir el tipo de vía -------------
+    ("en_approx_sin_numero", "It's near Avenida Nutibara, in Laureles.", False, "", True),
+    ("en_distancia_en_minutos", "Avenida El Poblado is 10 minutes away.", False, "", True),
+    ("en_distancia_en_cuadras", "It's 5 blocks from Carrera 43A.", False, "", True),
+    # Una vía numerada sin placa es una referencia aproximada, no la dirección exacta.
+    ("via_numerada_sin_placa", "It's near Calle 10, in El Poblado.", False, "", True),
+    ("via_numerada_con_orientacion_sin_placa", "It's off Calle 37 Sur, in Envigado.", False, "", True),
+    ("via_numerada_con_numero_y_placa", "It's at Calle 10 No. 43-12.", False, "", False),
+    ("en_piso_no_es_direccion", "It's on the 1st floor, with 2 bedrooms.", False, "", True),
+    ("en_direccion_del_lead", "I see you live on Calle 50 # 20-10, I'll look nearby.",
+     False, "I live on Calle 50 # 20-10", True),
+    ("en_calle_traducida", "The address is Street 10 # 43-12, El Poblado.", False, "", False),
+    ("en_avenida_traducida", "It's on Avenue 80 # 33-50.", False, "", False),
+    ("en_calificado_ve_calle", "The address is Street 10 # 43-12, El Poblado.", True, "", True),
 ]
 
 assert len(CASES) >= 15, "el gold set de A-6 tiene que cubrir tanto casos que deben pasar como los que no"

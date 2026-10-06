@@ -32,6 +32,8 @@ def test_a_start_with_two_words_is_not_a_deep_link():
 @pytest.mark.parametrize("phrase", [
     "baja", "eliminen mis datos", "borren mis datos",  # las del canal
     "dejen de escribirme", "cancelar", "unsubscribe", "quiero la baja", "/stop", "STOP",  # las del core
+    "delete my data", "please erase my data",  # en inglés, las del canal (#202)
+    "stop messaging me", "opt out", "don't text me anymore",  # en inglés, las del core
 ])
 def test_the_channel_recognizes_every_way_the_core_or_the_channel_understands_an_opt_out(phrase):
     assert is_opt_out(phrase)
@@ -48,4 +50,4 @@ def test_ordinary_messages_are_still_not_an_opt_out(phrase):
 
 
 def test_the_confirmation_does_not_promise_to_delete_the_data():
-    assert "baja" in OPT_OUT_CONFIRMATION and "di de baja tus datos" not in OPT_OUT_CONFIRMATION
+    assert "unsubscribed" in OPT_OUT_CONFIRMATION and "delete" not in OPT_OUT_CONFIRMATION
