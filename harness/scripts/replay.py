@@ -28,7 +28,7 @@ EVENT_SCHEMA = json.loads((ROOT / "contracts" / "event.schema.json").read_text(e
 VALIDATOR = Draft202012Validator(EVENT_SCHEMA, format_checker=FormatChecker())
 
 _NAMESPACE = uuid.UUID("b7e2c1a4-5d3f-4e6a-9c8b-1d2e3f4a5b6c")
-_START = datetime(2026, 9, 14, 15, 0, 0, tzinfo=timezone(timedelta(hours=-6)))
+_START = datetime(2026, 9, 14, 15, 0, 0, tzinfo=timezone(timedelta(hours=-5)))
 _TURN_GAP = timedelta(seconds=30)
 _TURN_FIELDS = {"text", "property_id", "utm_campaign", "expect_reply_contains"}
 # Con Bedrock un turno puede esperar cupo (LLM_MAX_QUEUE_WAIT_SECONDS=15) y reintentos
