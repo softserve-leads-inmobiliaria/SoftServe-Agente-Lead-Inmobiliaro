@@ -13,7 +13,7 @@ from db.repo_root import repo_root
 INBOUND = json.loads((repo_root() / "contracts" / "examples" / "event.valid.json").read_text(encoding="utf-8"))
 
 # Presupuesto + quién decide + urgencia: 60 puntos, WARM, en un solo turno con el fake LLM.
-CALIFICA = "Tengo presupuesto de 3 millones, decido yo y es urgente"
+CALIFICA = "My budget is 3 million, I decide and it's urgent"
 
 
 @pytest.mark.parametrize("previous, current, expected", [
@@ -66,7 +66,7 @@ class Chat:
 
 def test_un_lead_frio_no_dispara_nada(engine):
     chat = Chat(engine)
-    chat.say("Hola")
+    chat.say("Hi")
 
     assert chat.notified == []
     assert chat.lead() == ("nuevo", False)
@@ -74,7 +74,7 @@ def test_un_lead_frio_no_dispara_nada(engine):
 
 def test_al_cruzar_a_warm_se_notifica_y_queda_marcado(engine):
     chat = Chat(engine)
-    chat.say("Hola")
+    chat.say("Hi")
     chat.say(CALIFICA)
 
     assert len(chat.notified) == 1
@@ -87,8 +87,8 @@ def test_los_turnos_siguientes_no_vuelven_a_notificar(engine):
     """El AC: 'no antes, no en un job aparte' — y tampoco dos veces."""
     chat = Chat(engine)
     chat.say(CALIFICA)
-    chat.say("¿Y tienen algo más grande?")
-    chat.say("Es urgente de verdad")
+    chat.say("Do you have anything bigger?")
+    chat.say("It's really urgent")
 
     assert len(chat.notified) == 1
 
@@ -107,7 +107,7 @@ def test_un_lead_reclamado_antes_de_calificar_igual_notifica_y_no_pierde_su_stat
     WARM/HOT. La guarda de `qualify()` no puede depender de `status='nuevo'` para eso, ni pisar
     el `sql` ya ganado por B-6 al marcar calificado."""
     chat = Chat(engine)
-    chat.say("Hola")
+    chat.say("Hi")
     with engine.begin() as connection:
         connection.execute(text("UPDATE leads SET status = 'sql' WHERE id = :l"), {"l": chat.lead_id})
 
@@ -116,7 +116,7 @@ def test_un_lead_reclamado_antes_de_calificar_igual_notifica_y_no_pierde_su_stat
     assert chat.notified[0].qualified is True
     assert chat.lead() == ("sql", True)
 
-    chat.say("¿Y tienen algo más grande?")
+    chat.say("Do you have anything bigger?")
     assert len(chat.notified) == 1  # no se repite aunque status se haya quedado fijo en 'sql'
 
 

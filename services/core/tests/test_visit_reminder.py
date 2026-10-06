@@ -112,7 +112,7 @@ def test_a_preferred_time_without_booking_has_no_reminder(engine, monkeypatch):
     monkeypatch.setattr(scheduling_client, "get_scheduling", lambda: Down())
     chat = Chat(engine)
     chat.to_schedule()
-    chat.say("el martes a las 10")
+    chat.say("Tuesday at 10")
     assert _reminders(engine, chat) == []
 
 

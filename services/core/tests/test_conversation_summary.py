@@ -25,7 +25,7 @@ from db.models import Advisor, AdvisorNotification, Conversation, Lead
 from db.session import session_scope
 
 CHAT, FAST = "modelo-chat", "modelo-rapido"
-PIDE_HUMANO = "Quiero hablar con un asesor"
+PIDE_HUMANO = "I want to talk to an agent"
 TRANSCRIPT = (
     ("user", "Busco una casa en El Poblado de 3 recámaras, tengo 4 millones"),
     ("assistant", "Tengo una casa en El Poblado por 3,950,000."),
@@ -269,7 +269,7 @@ def test_the_handoff_saves_the_summary_and_the_file_shows_it_before_the_transcri
     advisor = _advisor(engine)
     bot = AsyncMock()
     user = f"tg-{uuid.uuid4().hex[:8]}"
-    _say(engine, user, "Busco un departamento", bot)
+    _say(engine, user, "I'm looking for an apartment", bot)
     assert _lead(engine, user).handoff_summary is None  # sin traspaso, sin resumen
 
     _say(engine, user, PIDE_HUMANO, bot)

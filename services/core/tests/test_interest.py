@@ -92,7 +92,7 @@ def _zone(engine, lead_id):
 def test_un_turno_con_busqueda_completa_la_zona_del_lead(engine):
     conversation_id, lead_id = str(uuid.uuid4()), str(uuid.uuid4())
 
-    _say(engine, conversation_id, lead_id, "Busco un departamento")
+    _say(engine, conversation_id, lead_id, "I'm looking for an apartment")
 
     assert _zone(engine, lead_id) == "El Poblado"
 
@@ -100,11 +100,11 @@ def test_un_turno_con_busqueda_completa_la_zona_del_lead(engine):
 def test_la_zona_no_se_pisa_en_turnos_siguientes(engine):
     """La primera zona observada manda: si el lead ya tiene una, un turno nuevo no la cambia."""
     conversation_id, lead_id = str(uuid.uuid4()), str(uuid.uuid4())
-    _say(engine, conversation_id, lead_id, "Busco un departamento")
+    _say(engine, conversation_id, lead_id, "I'm looking for an apartment")
     with engine.begin() as connection:
         connection.execute(text("UPDATE leads SET zone = 'Envigado' WHERE id = :l"), {"l": lead_id})
 
-    _say(engine, conversation_id, lead_id, "Busco otra casa")
+    _say(engine, conversation_id, lead_id, "I'm looking for another house")
 
     assert _zone(engine, lead_id) == "Envigado"
 
@@ -112,6 +112,6 @@ def test_la_zona_no_se_pisa_en_turnos_siguientes(engine):
 def test_un_turno_sin_tools_deja_la_zona_vacia(engine):
     """Limitación conocida (#81): un lead que nunca mira propiedades no entra en ninguna cola."""
     conversation_id, lead_id = str(uuid.uuid4()), str(uuid.uuid4())
-    _say(engine, conversation_id, lead_id, "Hola")
+    _say(engine, conversation_id, lead_id, "Hi")
 
     assert _zone(engine, lead_id) is None

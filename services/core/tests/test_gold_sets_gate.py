@@ -88,6 +88,13 @@ GOLD_SETS = (
         minimo=30,
         nota="75 casos sobre la salida real del catálogo de demo (DT-36).",
     ),
+    GoldSet(
+        historia="#202",
+        modulo="test_language_guard_gold_set",
+        atributo="CASES",
+        minimo=60,
+        nota="Español típico de un lead, inglés y nombres propios (DT-55): 0 falsos positivos en inglés.",
+    ),
 )
 
 
