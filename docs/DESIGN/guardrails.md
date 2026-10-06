@@ -29,9 +29,10 @@ detrás de "soy/somos" ("soy colombian", "soy venezolan") también cuenta (#200)
 Quitar la mención no puede dejar sin respuesta la pregunta del lead: ante "I'm Colombian, does that
 matter?", al agente le llega solo "does that matter?". Por eso el turno marca que se quitó una mención
 (`TurnInput.protected_removed`) y el LLM recibe una nota, sin el dato quitado, que le pide contestar que
-no influye en la atención ni en los requisitos (`agent._with_notes`, como la nota del anuncio de #122). El
-agente sin LLM contesta un texto fijo (`PROTECTED_ANSWER`) si lo que queda es una pregunta sin otra
-intención; "I'm Colombian, how much is it?" sigue siendo una consulta de precio. El clasificador no ve la
+no influye en la atención ni en los requisitos (`agent._with_notes`, como la nota del anuncio de #122). Si
+lo que queda es una pregunta sin otra intención, los dos agentes contestan un texto fijo (`PROTECTED_ANSWER`)
+sin pasar por el chat: en vivo (#202) el modelo ignoraba la nota y volvía al enganche. "I'm Colombian, how
+much is it?" sigue siendo una consulta de precio, y ahí el LLM contesta con la nota. El clasificador no ve la
 nota: solo lee lo que escribió el lead.
 
 El resumen del traspaso para el asesor (A-16) habla del lead en tercera persona, y en inglés "the lead is
