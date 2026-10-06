@@ -2,11 +2,11 @@
   "properties": [
     {
       "id": "prop_00231",
-      "title": "Depto 2 rec. en Providencia",
-      "price": 2350000,
+      "title": "2-bedroom apartment in El Poblado",
+      "price": 185000,
       "type": "venta",
       "kind": "departamento",
-      "zone": "Providencia",
+      "zone": "El Poblado",
       "m2": 78.5,
       "bedrooms": 2,
       "bathrooms": 2,
@@ -15,8 +15,8 @@
         "gimnasio"
       ],
       "status": "disponible",
-      "address_approx": "Providencia, cerca de Av. Vallarta",
-      "address_exact": "Calle Falsa 123, Col. Providencia"
+      "address_approx": "El Poblado, Medellin, near Parque Lleras",
+      "address_exact": "Carrera 37 # 8A-24, El Poblado"
     }
   ]
 }

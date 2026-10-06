@@ -1,10 +1,10 @@
 {
   "id": "prop_00231",
-  "title": "Depto 2 rec. en Providencia",
-  "price": 2350000,
+  "title": "2-bedroom apartment in El Poblado",
+  "price": 185000,
   "type": "venta",
   "kind": "departamento",
-  "zone": "Providencia",
+  "zone": "El Poblado",
   "m2": 78.5,
   "bedrooms": 2,
   "bathrooms": 2,
@@ -13,7 +13,7 @@
     "gimnasio"
   ],
   "status": "disponible",
-  "address_approx": "Providencia, cerca de Av. Vallarta",
+  "address_approx": "El Poblado, Medellin, near Parque Lleras",
   "address_exact": null,
   "photo_url": "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1024&q=80"
 }

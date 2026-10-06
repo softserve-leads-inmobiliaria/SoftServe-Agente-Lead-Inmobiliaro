@@ -6,7 +6,7 @@
   "channel": "telegram",
   "direction": "inbound",
   "text": "Hola, me interesa esta propiedad",
-  "timestamp": "2026-09-14T15:00:00-06:00",
+  "timestamp": "2026-09-14T15:00:00-05:00",
   "property_id": "prop_00231",
   "utm_campaign": "septiembre_redes"
 }
