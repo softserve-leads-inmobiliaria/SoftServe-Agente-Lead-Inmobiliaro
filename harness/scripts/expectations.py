@@ -10,7 +10,8 @@ EXPECTED_FINAL_STATE = {
     "saludo_y_busqueda": "RECOMMEND",
     "deep_link_y_visita": "HUMAN_HANDOFF",
     "flujo_completo_hasta_handoff": "HANDOFF",
-    "lead_que_declara_todo": "QUALIFY",
+    # #229 (DT-61): el presupuesto, quién decide y cuándo cierran QUALIFY, sin esperar a `consulta_precio`.
+    "lead_que_declara_todo": "RECOMMEND",
     "queja_a_humano": "HUMAN_HANDOFF",
     "solicitud_humano_directa": "HUMAN_HANDOFF",
     "sigue_explorando_zona": "DISCOVERY",

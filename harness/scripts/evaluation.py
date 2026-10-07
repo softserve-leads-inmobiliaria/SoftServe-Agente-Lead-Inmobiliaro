@@ -13,7 +13,7 @@ from scenarios import ALWAYS_FORBIDDEN, Scenario, Turn
 
 # Textos fijos de `services/core/app/agent.py` (un test comprueba que sigan iguales allá).
 LLM_FALLBACK_REPLY = "Sorry, I had a problem processing your message. Could you send it again?"
-FACTUALITY_DEGRADE_PREFIX = "I don't have verified information to answer that reliably."
+FACTUALITY_DEGRADE_PREFIX = "That's a detail I'd rather have one of our agents confirm, so you get it right."
 REGENERATED = "output.factuality_regenerated"
 DEGRADED = "output.factuality_degraded"
 
