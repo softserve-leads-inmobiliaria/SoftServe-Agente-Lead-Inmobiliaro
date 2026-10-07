@@ -13,10 +13,31 @@ traspaso con mensajes adversariales.
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Final, Mapping
 
 from app.fsm import HUMAN_INTENTS, HUMAN_REQUESTED, VISIT_SCHEDULED
 from app.lead_scoring import declared_signal
+
+# #228: lo que hace de un mensaje un pedido de hablar con una persona. El clasificador lo decide con la última
+# respuesta del asistente como contexto, y en vivo leyó como pedido un mensaje que no pedía nada (datos
+# sensibles ya quitados, después de que el agente ofreciera un asesor). Su `solicitud_humano` solo vale si el
+# mensaje lo pide, o si acepta la oferta de un asesor que le acababan de hacer.
+_ASKS_FOR_A_PERSON: Final = re.compile(
+    r"\b(?:agents?|advisors?|realtors?|brokers?|representatives?|salesperson|human|real person|someone|somebody"
+    r"|a person|manager|supervisor|call me|phone call|a call)\b", re.IGNORECASE)
+_AGREES: Final = re.compile(r"^\W*(?:yes|yeah|yep|sure|ok(?:ay)?|please|go ahead|of course|sounds good|that would"
+                            r" be (?:great|good)|i'd like that|let's do it)\b", re.IGNORECASE)
+_OFFERS_A_PERSON: Final = re.compile(r"\b(?:agents?|advisors?|put you in touch|connect you)\b", re.IGNORECASE)
+_SHORT_REPLY_WORDS: Final = 8  # "yes please, that would be great": aceptar la oferta, no contar otra cosa
+
+
+def asks_for_a_person(text: str, last_assistant: str | None = None) -> bool:
+    """Si el mensaje del lead pide hablar con una persona, o acepta la oferta de un asesor del turno anterior."""
+    if _ASKS_FOR_A_PERSON.search(text):
+        return True
+    offered = bool(last_assistant and _OFFERS_A_PERSON.search(last_assistant))
+    return offered and bool(_AGREES.search(text)) and len(text.split()) <= _SHORT_REPLY_WORDS
 
 HANDOFF_STATES: Final = frozenset({"HANDOFF", "HUMAN_HANDOFF"})  # estados en los que un asesor toma el lead
 
