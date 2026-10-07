@@ -2586,8 +2586,10 @@ Hay además dos fallas que la comparación literal no puede ver:
   - **un número escrito fuera de un marcador,** salvo:
     - los que dijo el lead en la conversación;
     - la numeración de una lista al principio de la línea ("1.", "2)");
-    - un dato de una sola propiedad, con prioridad para las del turno. Si dos propiedades lo tienen, podría
-      ser el de la otra, y se bloquea;
+    - un dato de la propiedad de la que habla. Cuál es lo dice la línea: la que nombra con un marcador o con
+      su referencia ("• Studio in El Poblado, 35 m² (ref. prop_00240)"). Si nombra una propiedad y el número
+      es de otra, se bloquea. Si no nombra ninguna, tiene que ser de una sola, con prioridad para las del turno:
+      si dos lo tienen, podría ser el de la otra;
   - **una referencia `prop_…` fuera de un marcador** que ninguna tool dio.
 - **La corrección le dice al modelo qué marcador usar.** Si un número suelto es un dato de varias propiedades,
   `_correction_prompt` nombra los marcadores entre los que elegir ("write `{prop_00231.bathrooms}` or
@@ -2627,8 +2629,8 @@ Hay además dos fallas que la comparación literal no puede ver:
 - **Bloquear todo número escrito fuera de un marcador:** fue la primera versión. En dos corridas cortas de la
   evaluación en vivo (#243) el modelo siguió escribiendo a mano los datos de la propiedad de la que hablaba,
   que tiene a la vista en el historial: se regeneraron 24% y 43% de los turnos, contra el 11% de la línea base
-  de DT-59, y cada regeneración es una llamada más. Se aceptan los de una sola propiedad: es el paso atrás que
-  esta misma decisión preveía.
+  de DT-59, y cada regeneración es una llamada más. Se aceptan los de la propiedad que nombra la línea, o los de
+  una sola propiedad: es el paso atrás que esta misma decisión preveía.
 - **Aceptar fuera de un marcador cualquier número que exista en las tools,** como hacía la factualidad:
   descartado. Es lo que deja pasar el dato de otra propiedad cuando dos lo tienen.
 - **Guardar en el historial la versión con marcadores:** descartado. El modelo dejaría de ver los valores con
@@ -2639,8 +2641,8 @@ Hay además dos fallas que la comparación literal no puede ver:
 
 **Consecuencias.**
 - Un precio inventado se sigue bloqueando, y con un marcador no se puede escribir.
-- **Límite conocido:** escrito a mano, el valor de una propiedad pasa aunque la frase hable de otra, si ninguna
-  otra tiene ese valor ("The 2-bedroom one costs $129,000", cuando $129,000 es la de un dormitorio). Con el
+- **Límite conocido:** escrito a mano en una línea que no nombra ninguna propiedad, el valor de una pasa aunque
+  la frase hable de otra, si ninguna otra tiene ese valor ("The 2-bedroom one costs $129,000", cuando $129,000 es la de un dormitorio). Con el
   marcador no pasa. El gold set lo deja fijado como límite.
 - Un número escrito en palabras ("two bedrooms") no pasa por la regla de los números, igual que hoy.
 - `factuality.py` queda para los estados y para la regla de #230, y los gold sets de DT-23 siguen igual. Los

@@ -70,7 +70,8 @@ del turno o la memoria de hechos (el estado, solo del turno). Se bloquea, con el
 - un marcador que no se puede completar (una propiedad o un campo que ninguna tool dio, o `address_exact` sin
   `lead_qualified`);
 - un número escrito fuera de un marcador, salvo los del lead en la conversación, la numeración de una lista y
-  un dato de una sola propiedad (si dos lo tienen, podría ser el de la otra);
+  un dato de la propiedad que nombra la línea (con un marcador o su referencia) o, si no nombra ninguna, de una
+  sola propiedad (si dos lo tienen, podría ser el de la otra);
 - una referencia `prop_…` que ninguna tool dio, salvo la del anuncio o una que escribió el lead.
 
 Si un número suelto es un dato de varias propiedades, la corrección le dice al modelo entre qué marcadores
