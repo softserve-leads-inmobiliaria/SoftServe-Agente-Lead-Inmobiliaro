@@ -10,7 +10,9 @@ from botocore.stub import Stubber
 from app.bedrock_llm import (
     CHAT_OPENED,
     CHAT_SYSTEM,
+    CLASSIFIER_FLAGS,
     CLASSIFIER_SYSTEM,
+    MARKER_FIELDS,
     MAX_TOOL_ROUNDS,
     BedrockLLM,
     LLMError,
@@ -124,6 +126,21 @@ def test_every_intent_of_the_taxonomy_is_offered_to_the_classifier():
     assert all(intent in CLASSIFIER_SYSTEM for intent in INTENTS)
 
 
+def test_classify_returns_the_yes_or_no_answers_the_code_decides_with():
+    # DT-60: reemplazan a las reglas de `handoff.asks_for_a_person` y `alerts.is_request`.
+    client = ScriptedBedrock(classification("solicitud_humano", asks_for_person=True, wants_alert=False,
+                                            wants_visit=False))
+    flags = run(llm(client).classify("I want to talk to an agent")).flags
+    assert flags == {"asks_for_person": True, "wants_alert": False, "wants_visit": False}
+    assert all(f'"{flag}"' in CLASSIFIER_SYSTEM for flag in CLASSIFIER_FLAGS)
+
+
+def test_a_yes_or_no_answer_that_is_missing_or_not_a_boolean_is_left_out():
+    """Sin el campo, el código usa su regla: un "yes" en texto no se toma como sí."""
+    client = ScriptedBedrock(text('{"intent": "otro", "asks_for_person": "yes", "wants_alert": null}'))
+    assert run(llm(client).classify("Hi")).flags == {}
+
+
 def test_missing_signal_keys_are_none():
     client = ScriptedBedrock(text('{"intent": "saludo"}'))
     assert run(llm(client).classify("Hi")).signal == {"budget_hint": None, "decision_maker": None, "urgency": None}
@@ -154,8 +171,8 @@ def test_the_prompts_are_in_english_with_the_market_and_the_currency():
     # #202 (DT-55): el LLM lee en inglés, y el mercado es Medellín y Bogotá con precios en USD.
     assert "in English" in CHAT_SYSTEM and "Medellin and Bogota" in CHAT_SYSTEM and "USD" in CHAT_SYSTEM
     assert not is_spanish(CHAT_SYSTEM) and not is_spanish(CLASSIFIER_SYSTEM)
-    # Los valores de los contratos siguen en español (DT-55): el prompt dice cómo nombrarlos al lead.
-    assert all(f"`{value}`" in CHAT_SYSTEM for value in ("venta", "renta", "preventa", "disponible", "apartado", "cerrado", "sin_verificar"))
+    # Los valores de los contratos siguen en español (DT-55): los marcadores los dicen en inglés (DT-60).
+    assert all(f"{{ref.{field}}}" in CHAT_SYSTEM for field in ("type", "kind", "status"))
 
 
 def test_the_prompt_lists_the_requirements_before_checking_them():
@@ -169,11 +186,17 @@ def test_the_prompt_answers_whether_a_protected_characteristic_matters():
     assert "asks whether any of that matters" in CHAT_SYSTEM and "doesn't affect" in CHAT_SYSTEM
 
 
-def test_the_prompt_does_not_repeat_figures_from_earlier_turns():
-    # #202, en vivo: el modelo repetía en cada turno el precio y el enganche de turnos anteriores, la
-    # factualidad (A-5) solo acepta lo de las tools de este turno, y la respuesta terminaba degradada.
-    assert "only if you got it from a tool in this same reply" in CHAT_SYSTEM
-    assert "don't repeat it" in CHAT_SYSTEM
+def test_the_prompt_asks_for_markers_instead_of_figures():
+    # DT-60: el modelo no escribe los datos de la propiedad, los completa el código. Reemplaza a "mention a price
+    # only if you got it from a tool in this same reply", que el modelo no siempre seguía (#202, #217).
+    assert "Never type one yourself: write a marker" in CHAT_SYSTEM and "{prop_00231.price}" in CHAT_SYSTEM
+    assert all(field in CHAT_SYSTEM for field in MARKER_FIELDS) and "{search.count}" in CHAT_SYSTEM
+    assert "only if you got it from a tool in this same reply" not in CHAT_SYSTEM
+
+
+def test_the_prompt_gives_the_real_reason_for_holding_back_the_exact_address():
+    # Revisión del agente: sin un motivo, el modelo inventaba uno.
+    assert "shared only once the lead is qualified" in CHAT_SYSTEM and "don't give any other reason" in CHAT_SYSTEM
 
 
 def test_the_prompt_offers_the_alternatives_of_an_empty_search():
@@ -185,7 +208,7 @@ def test_the_prompt_offers_the_alternatives_of_an_empty_search():
 
 def test_the_prompt_answers_coverage_with_list_zones():
     # #194, en vivo con Sonnet: contestaba de memoria y nombraba un barrio sin inventario ("Chicó").
-    assert "call list_zones and name only the areas it returns" in CHAT_SYSTEM
+    assert "call list_zones and give the areas with {zones}" in CHAT_SYSTEM
     assert "one we don't cover" in CHAT_SYSTEM
 
 
