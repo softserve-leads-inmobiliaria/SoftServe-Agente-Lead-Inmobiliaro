@@ -586,3 +586,60 @@ def test_the_classifiers_answers_reach_the_turn():
                              text("Sure."))
     result = run(agent_for(client).run(turn("Let me know when one comes up"), FakeCatalog()))
     assert result.flags == {"wants_alert": True, "wants_visit": False}
+
+
+def test_when_the_agenda_answers_only_the_classifier_is_called():
+    """#229: en vivo el modelo contestaba igual a "1", copiaba los horarios, y se regeneraba para nada."""
+    client = ScriptedBedrock(classification("otro", wants_visit=True))
+    asked = []
+    message = TurnInput(event=EVENT, text="Can I go see it?",
+                        answered_by_code=lambda intent, flags: asked.append((intent, flags)) or True)
+    result = run(agent_for(client).run(message, FakeCatalog()))
+    assert (result.text, result.flags) == ("", {"wants_visit": True}) and client.calls_to(CHAT) == []
+    assert asked == [("otro", {"wants_visit": True})]
+
+
+def test_a_human_request_is_answered_even_if_the_agenda_would_take_the_turn():
+    client = ScriptedBedrock(classification("solicitud_humano", asks_for_person=True))
+    message = TurnInput(event=EVENT, text="I want to talk to an agent", answered_by_code=lambda intent, flags: True)
+    assert run(agent_for(client).run(message, FakeCatalog())).intent == "solicitud_humano"
+
+
+
+def test_the_visit_flag_decides_over_the_intent():
+    """#247: "Can I reserve the 4-bedroom one?" sale `agendar_visita`, pero no pide una visita."""
+    from app.turn import _schedules
+
+    prop = {"id": "p1"}
+    assert not _schedules("QUALIFY", "agendar_visita", {"wants_visit": False}, prop, None, "")
+    assert _schedules("QUALIFY", "otro", {"wants_visit": True}, prop, None, "")
+    assert _schedules("QUALIFY", "agendar_visita", {}, prop, None, "")  # sin el campo, la intención
+
+
+
+def test_the_status_of_the_properties_the_reply_names_is_looked_up():
+    """#247: "the only available house is the 3-bedroom one (ref. prop_00233)", sin tool del turno: el código
+    consulta las que nombra la respuesta, y la apartada no hace pasar por disponible a la otra."""
+    client = ScriptedBedrock(classification("otro"),
+                             text("The one in Chapinero (ref. prop_2) is reserved; the only available one is ref. prop_1."))
+
+    class Statuses(FakeCatalog):
+        async def call(self, tool, arguments=None):
+            self.calls.append((tool, dict(arguments or {})))
+            status = {"prop_1": "disponible", "prop_2": "apartado"}[arguments["property_id"]]
+            return {"property_id": arguments["property_id"], "status": status, "checked_at": "2026-10-07"}
+
+    catalog = Statuses()
+    message = TurnInput(event=EVENT, text="What about the house in Chapinero?", remembered={"prop_1": {}, "prop_2": {}})
+    result = run(agent_for(client).run(message, catalog))
+    assert result.guard_audits == [] and {args["property_id"] for _, args in catalog.calls} == {"prop_1", "prop_2"}
+
+
+def test_the_model_sees_the_references_of_the_properties_already_shown():
+    """#247: sin ellas, el modelo adivinaba la referencia para escribir el marcador ({prop_00455.price})."""
+    client = ScriptedBedrock(classification("consulta_precio"), text("It's {prop_00242.m2} m²."))
+    remembered = {"prop_00242": {"title": "Commercial space for rent in Chapinero", "m2": 120.0}}
+    message = TurnInput(event=EVENT, text="How big is it?", remembered=remembered)
+    result = run(agent_for(client).run(message, FakeCatalog()))
+    sent = client.calls_to(CHAT)[0]["messages"][-1]["content"][0]["text"]
+    assert "prop_00242 (Commercial space for rent in Chapinero)" in sent and result.text == "It's 120 m²."

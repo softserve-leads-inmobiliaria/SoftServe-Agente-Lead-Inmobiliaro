@@ -14,7 +14,11 @@ from app.turn import process_turn
 from db.repo_root import repo_root
 from db.session import session_scope
 
-INBOUND = json.loads((repo_root() / "contracts" / "examples" / "event.valid.json").read_text(encoding="utf-8"))
+# Sin el anuncio: en Telegram solo lo trae el `/start` (canonical.py), y una propiedad mirada cierra DISCOVERY
+# (#229). Estos tests son de la racha y del embudo, no del deep-link.
+INBOUND = {key: value for key, value in json.loads(
+    (repo_root() / "contracts" / "examples" / "event.valid.json").read_text(encoding="utf-8")).items()
+    if key != "property_id"}
 HAPPY_PATH = ["Hi", "I'm looking for an apartment", "How much does it cost?", "I'd like to schedule a visit",
               "Tomorrow at 10"]  # la agenda no responde en los tests: el lead deja su horario preferido
 

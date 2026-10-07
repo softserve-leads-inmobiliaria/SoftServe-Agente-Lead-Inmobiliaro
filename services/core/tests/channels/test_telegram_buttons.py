@@ -99,9 +99,12 @@ def test_an_unknown_button_reaches_no_handler(engine, data):
 
 @pytest.mark.parametrize("prop,state,expected", [
     (None, "RECOMMEND", ()),
-    (PROPERTY, "DISCOVERY", (ADVISOR_BUTTON,)),
-    (PROPERTY, "QUALIFY", (ADVISOR_BUTTON,)),
+    # #229: la visita se puede pedir desde cualquier estado activo; en SCHEDULE ya se está agendando.
+    (PROPERTY, "DISCOVERY", (VISIT_BUTTON, ADVISOR_BUTTON)),
+    (PROPERTY, "QUALIFY", (VISIT_BUTTON, ADVISOR_BUTTON)),
     (PROPERTY, "RECOMMEND", (VISIT_BUTTON, ADVISOR_BUTTON)),
+    (PROPERTY, "SCHEDULE", (ADVISOR_BUTTON,)),
+    (PROPERTY, "HANDOFF", (ADVISOR_BUTTON,)),
 ])
 def test_the_visit_button_only_shows_where_asking_for_a_visit_books_it(prop, state, expected):
     assert buttons_for(TurnReply({}, prop, state)) == expected
@@ -228,11 +231,12 @@ def test_in_recommend_the_property_reply_carries_both_buttons(engine, agenda):
     assert lead.buttons() == ["lead:visita", "lead:asesor"]
 
 
-def test_before_recommend_only_the_advisor_button_shows(engine, agenda):
+def test_before_recommend_the_property_reply_also_offers_the_visit(engine, agenda):
+    """#229: pedir la visita ya no espera a RECOMMEND."""
     lead = Lead_(engine, 961)
     lead.say("Hi")
     lead.say("How much does it cost?")
-    assert lead.state == "DISCOVERY" and lead.buttons() == ["lead:asesor"]
+    assert lead.state != "RECOMMEND" and lead.buttons() == ["lead:visita", "lead:asesor"]
 
 
 def test_a_reply_that_is_not_about_a_property_has_no_buttons(engine, agenda):

@@ -70,6 +70,21 @@ CASES = [
     ("en_apartado", "I'll hold it for you, don't worry.", {}, "", False),
     ("en_reservada", "It's reserved for you starting now.", {}, "", False),
     ("en_amenidad_inventada", "That unit has a pool and a gym.", NO_AMENITIES, "", False),
+    # #247, prueba de jurado: nombrarla como algo que confirma un asesor no la afirma, aunque quede lejos de la duda.
+    ("en_amenidad_a_confirmar", "An agent can confirm both the parking and pet policy for you.", NO_AMENITIES, "",
+     True),
+    ("en_amenidad_en_una_lista_de_dudas", "An agent can give you all of this information: the floor, building "
+     "age, parking, and pet policy.", NO_AMENITIES, "", True),
+    ("en_amenidad_entre_preguntas", "Want me to connect you with an agent to answer all these questions: parking, "
+     "pets, floor?", NO_AMENITIES, "", True),
+    # #247: la visita la reserva la agenda; si el modelo dice que quedó agendada, es falso.
+    ("en_visita_agendada_por_el_modelo", "Perfect! Your visit is being scheduled for Sunday.", {}, "", False),
+    ("en_visita_reservada_por_el_modelo", "I've booked your visit for tomorrow at 3pm.", {}, "", False),
+    ("en_ofrecer_la_visita_no_la_agenda", "Would you like to schedule a visit to see it?", {}, "", True),
+    ("en_amenidad_que_da_un_asesor", "I don't have those details in the system. An agent can give you that "
+     "information along with the pet policy and parking.", NO_AMENITIES, "", True),
+    ("en_amenidad_afirmada_aunque_haya_que_confirmar", "It has parking, and an agent can confirm the details.",
+     NO_AMENITIES, "", False),
     ("en_garantia", "It's a done deal, we sign next week.", {}, "", False),
     ("en_garantia_de_compra", "I guarantee you'll get it.", {}, "", False),
 ]

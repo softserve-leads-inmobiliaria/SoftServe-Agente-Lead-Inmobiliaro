@@ -13,7 +13,7 @@ from catalog_stub import PROPERTY, stub_call
 from jsonschema import Draft202012Validator, FormatChecker
 from sqlalchemy import text
 
-from app import scheduling_client
+from app import scheduling_client, visits
 from app.scheduling_client import SchedulingError
 from app.state_store import StateStore
 from app.turn import process_turn
@@ -131,10 +131,12 @@ def test_choosing_a_slot_books_the_visit_and_hands_the_lead_over(engine, agenda)
     assert chat.handoffs == ["visit_scheduled"]
 
 
-def test_an_unclear_answer_keeps_the_offer_until_the_lead_picks_one(engine, agenda):
+def test_a_question_while_scheduling_is_answered_and_the_offer_stays_open(engine, agenda):
+    """#247: antes contestaba "I didn't quite get which time" a cualquier pregunta, y el lead no podía salir."""
     chat = Chat(engine)
     chat.to_schedule()
-    assert "I didn't quite get" in chat.say("and does it have parking?")
+    reply = chat.say("and does it have parking?")
+    assert "I didn't quite get" not in reply and reply.endswith(visits.OFFER_REMINDER)
     assert chat.state == "SCHEDULE" and agenda.booked() == []
     chat.say("at 16:00")
     assert chat.state == "HANDOFF" and agenda.booked()[0]["scheduled_at"] == SLOTS[2]
@@ -196,8 +198,74 @@ def test_without_the_agenda_the_preferred_time_reaches_the_advisor(engine):
     """El fixture de `conftest.py` deja la agenda caída: es el respaldo de la historia."""
     chat = Chat(engine)
     assert "What day and time work for you?" in chat.to_schedule()
-    assert "What day and time would you like" in chat.say("ok")
+    assert chat.say("ok").endswith(visits.PREFERRED_REMINDER)
     assert chat.state == "SCHEDULE"
     chat.say("Saturday morning")
     assert chat.state == "HANDOFF" and chat.lead_status != "visit_scheduled"
     assert chat.handoffs == ["visit_requested"]
+
+
+def test_a_lead_from_a_listing_gets_slots_without_having_searched(engine, agenda):
+    """#229: llega por el anuncio, pregunta y pide la visita; nunca buscó ni pasó por RECOMMEND."""
+    chat = Chat(engine)
+    listing = {"id": "prop_00231", "title": "Depto 2 rec. en El Poblado", "zone": "El Poblado",
+               "status": "disponible"}
+
+    class ListingCatalog:
+        async def call(self, tool, arguments=None):
+            return dict(listing) if tool == "get_property" else stub_call(tool, arguments)
+
+    event = INBOUND | {"conversation_id": chat.conversation_id, "lead_id": chat.lead_id,
+                       "event_id": str(uuid.uuid4()), "text": "", "property_id": "prop_00231"}
+    asyncio.run(process_turn(engine, event, ListingCatalog()))
+    chat.say("thanks")
+    assert chat.state in ("DISCOVERY", "QUALIFY")
+    reply = chat.say("I'd like to schedule a visit")
+    assert "Depto 2 rec. en El Poblado" in reply and "1) Tue Oct 6, 10:00" in reply
+    assert chat.state == "SCHEDULE"
+    chat.say("1")
+    assert chat.state == "HANDOFF" and agenda.booked()[0]["property_id"] == "prop_00231"
+
+
+def test_a_visit_without_a_property_of_interest_is_left_to_the_agent(engine, agenda):
+    """Antes de RECOMMEND, sin una propiedad no hay qué agendar: contesta el agente, que pregunta cuál."""
+    chat = Chat(engine)
+    chat.say("Hi")
+    chat.say("I'd like to schedule a visit")
+    assert chat.state == "DISCOVERY" and agenda.calls == []
+
+
+def test_a_visit_is_not_booked_for_a_guessed_property(engine, agenda):
+    """#247: con varios resultados de búsqueda y sin una propiedad de interés, no se agenda la primera; contesta
+    el agente, que pregunta cuál."""
+    chat = Chat(engine)
+    chat.say("Hi")
+    chat.say("I'd like to schedule a visit")
+    assert agenda.calls == [] and chat.state != "SCHEDULE"
+
+
+def test_asking_for_the_visit_again_while_scheduling_offers_the_slots_again(engine, agenda):
+    chat = Chat(engine)
+    chat.to_schedule()
+    chat.say("does it have parking?")
+    assert "1) Tue Oct 6, 10:00" in chat.say("I'd like to schedule a visit")
+    chat.say("2")
+    assert chat.state == "HANDOFF" and agenda.booked()[0]["scheduled_at"] == SLOTS[1]
+
+
+def test_no_visit_is_offered_for_a_property_that_is_not_available(engine, agenda):
+    """#247: "Can I reserve the 4-bedroom one?" (apartada) ofrecía horarios; contesta el agente."""
+    chat = Chat(engine)
+    reserved = {"id": "prop_00234", "title": "4-bedroom house in Usaquen", "zone": "Usaquen", "status": "apartado"}
+
+    class ReservedCatalog:
+        async def call(self, tool, arguments=None):
+            if tool == "get_availability":  # A-4 toma el estado de acá
+                return {"property_id": reserved["id"], "status": "apartado", "checked_at": "2026-10-07T10:00:00Z"}
+            return dict(reserved) if tool == "get_property" else stub_call(tool, arguments)
+
+    event = INBOUND | {"conversation_id": chat.conversation_id, "lead_id": chat.lead_id,
+                       "event_id": str(uuid.uuid4()), "text": "I'd like to schedule a visit",
+                       "property_id": "prop_00234"}
+    asyncio.run(process_turn(engine, event, ReservedCatalog()))
+    assert agenda.calls == [] and chat.state != "SCHEDULE"
