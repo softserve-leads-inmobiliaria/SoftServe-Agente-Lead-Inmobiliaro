@@ -593,7 +593,7 @@ def test_when_the_agenda_answers_only_the_classifier_is_called():
     client = ScriptedBedrock(classification("otro", wants_visit=True))
     asked = []
     message = TurnInput(event=EVENT, text="Can I go see it?",
-                        answered_by_code=lambda intent, flags, when: asked.append((intent, flags)) or True)
+                        answered_by_code=lambda c: asked.append((c.intent, c.flags)) or True)
     result = run(agent_for(client).run(message, FakeCatalog()))
     assert (result.text, result.flags) == ("", {"wants_visit": True}) and client.calls_to(CHAT) == []
     assert asked == [("otro", {"wants_visit": True})]
@@ -601,7 +601,7 @@ def test_when_the_agenda_answers_only_the_classifier_is_called():
 
 def test_a_human_request_is_answered_even_if_the_agenda_would_take_the_turn():
     client = ScriptedBedrock(classification("solicitud_humano", asks_for_person=True))
-    message = TurnInput(event=EVENT, text="I want to talk to an agent", answered_by_code=lambda intent, flags, when: True)
+    message = TurnInput(event=EVENT, text="I want to talk to an agent", answered_by_code=lambda c: True)
     assert run(agent_for(client).run(message, FakeCatalog())).intent == "solicitud_humano"
 
 
@@ -630,7 +630,7 @@ def test_the_classifier_says_when_the_lead_wants_to_visit():
     client = ScriptedBedrock(classification("agendar_visita", visit_when={"days": ["sat", "sun"],
                                                                           "part_of_day": "morning"}))
     result = run(agent_for(client).run(TurnInput(event=EVENT, text="This weekend in the morning",
-                                                 answered_by_code=lambda intent, flags, when: True), FakeCatalog()))
+                                                 answered_by_code=lambda c: True), FakeCatalog()))
     assert result.visit_when == {"days": [5, 6], "part": "morning", "other_day": False}
 
 
