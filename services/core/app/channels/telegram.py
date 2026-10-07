@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import weakref
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Mapping
@@ -61,6 +62,17 @@ _AGENT_KEY = "agent"
 
 _application: Application | None = None
 
+# #227: los mensajes de un mismo chat se atienden de a uno, en orden de llegada. Débil: el lock de un chat
+# vive mientras algún turno suyo lo usa o lo espera, y después se libera solo.
+_chat_locks: weakref.WeakValueDictionary[str, asyncio.Lock] = weakref.WeakValueDictionary()
+
+
+def _chat_lock(telegram_user_id: str) -> asyncio.Lock:
+    lock = _chat_locks.get(telegram_user_id)
+    if lock is None:
+        lock = _chat_locks[telegram_user_id] = asyncio.Lock()
+    return lock
+
 
 @dataclass(frozen=True)
 class ChannelReply:
@@ -82,7 +94,7 @@ def _quiet_http_logs() -> None:
 def build_application(token: str, *, engine: Engine, catalog: Catalog, agent: Agent | None = None) -> Application:
     # Un solo manejador para todo texto, comandos incluidos: `/stop` (la baja) no puede quedar sin
     # atender. `concurrent_updates` evita que un turno lento (p. ej. esperando cupo del LLM) bloquee
-    # a los demás leads; el orden de un mismo lead lo garantiza el bloqueo por conversación.
+    # a los demás leads; los mensajes de un mismo chat van de a uno (`reply_turn`, #227).
     application = ApplicationBuilder().token(token).concurrent_updates(True).build()
     application.bot_data[_ENGINE_KEY] = engine
     application.bot_data[_CATALOG_KEY] = catalog
@@ -300,7 +312,21 @@ async def reply_to(engine: Engine, catalog: Catalog, *, telegram_user_id: str, t
 async def reply_turn(engine: Engine, catalog: Catalog, *, telegram_user_id: str, text: str,
                      deep_link: str | None = None, timestamp: datetime | None = None,
                      agent: Agent | None = None, bot: Sender | None = None) -> ChannelReply:
-    """Como `reply_to`, pero con lo que el canal arma alrededor del texto (la foto y los botones)."""
+    """Como `reply_to`, pero con lo que el canal arma alrededor del texto (la foto y los botones).
+
+    Los mensajes de un mismo chat se atienden de a uno (#227). El bloqueo de la conversación en Postgres solo
+    cubre el guardado: sin esto, dos mensajes seguidos leían el mismo contexto, el segundo no veía el primero en
+    su historial y el que guardaba último pisaba lo del otro (memoria de hechos, oferta de horarios, foto).
+    También evita crear dos leads con los dos primeros mensajes de alguien nuevo.
+    """
+    async with _chat_lock(telegram_user_id):
+        return await _reply_turn(engine, catalog, telegram_user_id=telegram_user_id, text=text,
+                                 deep_link=deep_link, timestamp=timestamp, agent=agent, bot=bot)
+
+
+async def _reply_turn(engine: Engine, catalog: Catalog, *, telegram_user_id: str, text: str,
+                      deep_link: str | None, timestamp: datetime | None, agent: Agent | None,
+                      bot: Sender | None) -> ChannelReply:
     # B-7: un asesor abriendo su enlace de registro no es un lead; no genera turno ni score.
     token = canonical.advisor_token(deep_link)
     if token is not None:
