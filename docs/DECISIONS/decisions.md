@@ -2537,7 +2537,7 @@ evaluación en vivo (#216) era el patrón de la mayoría de las regeneraciones: 
 
 ## DT-60 — Los datos de la propiedad los escribe el código: el modelo pone marcadores
 
-**Estado:** propuesta (#243, con #219 y #218).
+**Estado:** aceptada (#243, con #219 y #218).
 
 **Contexto.** La factualidad (A-5, DT-23) lee la prosa del modelo para adivinar si cada número y cada estado
 salió de una tool. Es una comparación literal, y cada redacción nueva que apareció en vivo trajo su

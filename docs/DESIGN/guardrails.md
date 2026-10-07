@@ -63,6 +63,21 @@ degrada a una respuesta segura o a `HUMAN_HANDOFF`.
 
 ### 2.1 Factualidad (`A-5`)
 
+**Desde DT-60 (#243), los datos de la propiedad los escribe el código.** El modelo escribe un marcador con la
+referencia y el campo (`{prop_00231.price}`), y `app/markers.py` lo completa con lo que devolvieron las tools
+del turno o la memoria de hechos (el estado, solo del turno). Se bloquea, con el mismo regenerar/degradar:
+
+- un marcador que no se puede completar (una propiedad o un campo que ninguna tool dio, o `address_exact` sin
+  `lead_qualified`);
+- un número escrito fuera de un marcador, salvo los del lead en la conversación y la numeración de una lista;
+- una referencia `prop_…` que ninguna tool dio, salvo la del anuncio o una que escribió el lead.
+
+Si un número suelto es un único dato de una única propiedad, la corrección le dice al modelo qué marcador
+usar. Así deja de pasar el valor real de *otra* propiedad, el límite que DT-23 dejaba abierto. Lo que el modelo
+escribe fuera de los marcadores sigue pasando por la revisión de estados y por la regla de #230 que se describen
+abajo; la dirección reservada (A-6) y las promesas (A-7) se revisan sobre el texto ya completado. El gold set
+de los marcadores (`test_markers_gold_set.py`) usa la salida real del catálogo de demo.
+
 Todo número/estado de la respuesta candidata se compara literalmente contra `last_tool_results`
 del turno (`app/factuality.py`, DT-23) — también se admite lo que el propio lead dijo, para repetir lo suyo
 (su presupuesto, lo que pidió). No para confirmarlo como dato de la propiedad (#230): si la frase lo
@@ -122,7 +137,7 @@ existir) — se actualiza en el mismo PR que cierra la historia correspondiente.
 | Guardrail | Historia | Estado |
 | :--- | :--- | :--- |
 | Disponibilidad (revalidación tras cada búsqueda/ficha) | `A-4` | Implementado: `services/core/app/availability.py`, aplicado por `process_turn` a todo agente |
-| Factualidad | `A-5` | Implementado: `services/core/app/factuality.py`, aplicado por `BedrockAgent` (DT-23). Solo cubre a `BedrockAgent`: `FakeAgent` construye su respuesta directo de los resultados reales, no necesita el guardrail |
+| Factualidad | `A-5` | Implementado: los marcadores de `services/core/app/markers.py` (DT-60) y los estados y la regla de #230 de `services/core/app/factuality.py`, aplicados por `BedrockAgent` (DT-23). Solo cubre a `BedrockAgent`: `FakeAgent` construye su respuesta directo de los resultados reales, no necesita el guardrail |
 | Dirección reservada | `A-6` | Implementado: `services/core/app/address_guard.py`, aplicado por `BedrockAgent` en el mismo *pipeline* de regenerar/degradar que A-5 (DT-23). No es literal como A-5: detecta la forma de una dirección exacta (tipo de vía + nombre + número, o vía numerada + placa: "Carrera 37 # 8A-24") en prosa, en español y en inglés. Una vía numerada sin placa ("near Calle 10") es una referencia aproximada y no dispara (DT-55), porque el catálogo nunca devuelve `address_exact` sin `lead_qualified=true` y no hay valor real contra el que comparar. Solo cubre a `BedrockAgent`: `FakeAgent` nunca ve `address_exact` (el catálogo la redacta antes de que llegue) |
 | Promesas no autorizadas (8 *claims*) | `A-7` | Implementado 6/8 con código: `services/core/app/promise_guard.py`, aplicado por `BedrockAgent` en el mismo *pipeline* que A-5/A-6 (DT-26). El 8 ya lo cubría A-5 sin cambios; el 6 queda parcial (ver §2.2). Detalle de cuál cubre cada uno en §2.2 |
 | Resumen para el asesor | `A-16` | Implementado: `services/core/app/summary.py` pasa el resumen del traspaso por A-5, A-6 y A-7, con la transcripción guardada y los datos del lead como fuente, y rechaza toda mención de categoría protegida (las reglas de A-8, más "su esposa" o "sus hijos" en tercera persona). Si algo no pasa, se descarta sin regenerar y la ficha sale sin resumen (DT-46) |
@@ -137,6 +152,7 @@ existir) — se actualiza en el mismo PR que cierra la historia correspondiente.
 | Disponibilidad | `services/core/tests/test_availability.py` | Sí — corre con la suite de `core` |
 | Factualidad | Gold set de 32 casos, fusionado en `A-5` (`services/core/tests/test_factuality_gold_set.py`) | Sí — 100%. Sus `tool_results` están escritos a mano y ya no coinciden con el contrato desde C-1: **no se modifican** (prueban DT-23, y no se borran casos antiguos) |
 | Factualidad sobre el catálogo de demo | Gold set de 103 casos sobre la salida real de `CatalogService`, ya pasada por el `AvailabilityGuard` real (`C-7`, `services/core/tests/test_factuality_catalogo_gold_set.py`) + validación de cada turno contra `contracts/mcp/` | Sí — 100%, sin `xfail`. 28/28 turnos y 12/12 propiedades del inventario. Cierra el hueco que dejó el de A-5: sus fixtures ya no son la salida de ninguna tool y nada lo señalaba (DT-36) |
+| Marcadores (datos por construcción) | Gold set de 37 casos sobre la salida real del catálogo de demo (#243, `services/core/tests/test_markers_gold_set.py`): qué lee el lead y qué se bloquea | Sí — 100% |
 | Dirección reservada | Gold set de dirección reservada, fusionado en `A-6` (`services/core/tests/test_address_guard_gold_set.py`) — antes iba a ser `C-8`, ver notas de `A-06.md` | Sí — 0 fugas |
 | *Claims* prohibidos | Suite adversarial de A-7 (`services/core/tests/test_promise_guard.py`) — los 6 cubiertos con código, en positivo y negativo | Sí — corre con la suite de `core` |
 | Fair housing | Gold set de perfiles pareados, 27 pares (`C-6`, `services/core/tests/test_fair_housing_gold_set.py`) | Sí — 27/27 con diferencia 0, sin `xfail`. Los 6 pares de "con quién compras" daban −8/−12/−20 (DT-35) hasta que A-11 los arregló (DT-38) |
