@@ -2572,7 +2572,9 @@ Hay además dos fallas que la comparación literal no puede ver:
   - `{zones}`: la cobertura de `list_zones`, armada por el código ("El Poblado and Laureles in Medellin…");
   - de una promoción, `{promo_<id>.title}`, `{promo_<id>.description}` y `{promo_<id>.valid_until}`.
 - **De dónde sale cada valor.** De las tools del turno y de la memoria de hechos (DT-59). El estado sale
-  solo de las tools del turno, igual que hoy.
+  solo de las tools del turno, igual que hoy. Si el texto pide el estado de una propiedad conocida que ninguna
+  tool del turno dio (`{ref.status}`, o "it's reserved" sin marcador), lo consulta el código con
+  `get_availability`: es una llamada al catálogo, no al LLM, y como mucho tres por respuesta.
 - **Formato.**
   - El dinero va con `$` y separador de miles, y un `$` que el modelo haya escrito antes del marcador no se
     duplica. Lo mismo con el `%` del porcentaje.
@@ -2584,10 +2586,14 @@ Hay además dos fallas que la comparación literal no puede ver:
   - **un número escrito fuera de un marcador,** salvo:
     - los que dijo el lead en la conversación;
     - la numeración de una lista al principio de la línea ("1.", "2)");
+    - un dato de una sola propiedad, con prioridad para las del turno. Si dos propiedades lo tienen, podría
+      ser el de la otra, y se bloquea;
   - **una referencia `prop_…` fuera de un marcador** que ninguna tool dio.
-- **La corrección le dice al modelo qué marcador usar.** Si un número suelto coincide con un único campo de
-  una única propiedad, `_correction_prompt` lo nombra ("write `{prop_00231.price}` instead of 185000").
-  Así, la regeneración no depende de que el modelo lo adivine.
+- **La corrección le dice al modelo qué marcador usar.** Si un número suelto es un dato de varias propiedades,
+  `_correction_prompt` nombra los marcadores entre los que elegir ("write `{prop_00231.bathrooms}` or
+  `{prop_00232.bathrooms}` instead"). Así, la regeneración no depende de que el modelo lo adivine.
+- **Qué marcó el guardrail queda en el log del core,** en cada intento: el tipo y el marcador sugerido, y con
+  `TRACE_CONTENT=1` también el valor y el borrador (OBS-7). Así se ajusta el prompt con la evaluación en vivo.
 - **Lo que se sigue revisando como hoy:**
   - **los estados escritos fuera de un marcador,** con las excepciones de #202 y #220;
   - **la regla de #230,** sobre los números del lead que se afirman como dato de la propiedad: "Is it
@@ -2618,9 +2624,13 @@ Hay además dos fallas que la comparación literal no puede ver:
   una regla, y las reglas chocan entre sí (#234).
 - **Un segundo LLM que juzgue cada respuesta:** descartado. Suma una llamada por turno contra una cuota de 10
   por minuto que no se puede subir (DT-19), y su criterio tampoco es determinista.
-- **Aceptar fuera de un marcador los números que existen en las tools,** como hace hoy la factualidad:
-  descartado como regla de base. Es lo que deja pasar el precio de otra propiedad. Si en la evaluación en
-  vivo las regeneraciones suben sobre la línea base de DT-59 (11%), es el primer paso atrás.
+- **Bloquear todo número escrito fuera de un marcador:** fue la primera versión. En dos corridas cortas de la
+  evaluación en vivo (#243) el modelo siguió escribiendo a mano los datos de la propiedad de la que hablaba,
+  que tiene a la vista en el historial: se regeneraron 24% y 43% de los turnos, contra el 11% de la línea base
+  de DT-59, y cada regeneración es una llamada más. Se aceptan los de una sola propiedad: es el paso atrás que
+  esta misma decisión preveía.
+- **Aceptar fuera de un marcador cualquier número que exista en las tools,** como hacía la factualidad:
+  descartado. Es lo que deja pasar el dato de otra propiedad cuando dos lo tienen.
 - **Guardar en el historial la versión con marcadores:** descartado. El modelo dejaría de ver los valores con
   los que razona, y hace falta una columna nueva en `messages`.
 - **Detectar en prosa los barrios que no están en el catálogo** (#218): sin una lista de todos los barrios
@@ -2628,12 +2638,14 @@ Hay además dos fallas que la comparación literal no puede ver:
   la cobertura salen de marcadores (`{prop_….zone}`, `{zones}`), y las referencias tienen que existir.
 
 **Consecuencias.**
-- Un precio inventado ya no se detecta: no se puede escribir. Tampoco el precio real de otra propiedad,
-  salvo que el modelo nombre mal la referencia del marcador.
+- Un precio inventado se sigue bloqueando, y con un marcador no se puede escribir.
+- **Límite conocido:** escrito a mano, el valor de una propiedad pasa aunque la frase hable de otra, si ninguna
+  otra tiene ese valor ("The 2-bedroom one costs $129,000", cuando $129,000 es la de un dormitorio). Con el
+  marcador no pasa. El gold set lo deja fijado como límite.
 - Un número escrito en palabras ("two bedrooms") no pasa por la regla de los números, igual que hoy.
 - `factuality.py` queda para los estados y para la regla de #230, y los gold sets de DT-23 siguen igual. Los
   marcadores tienen su propio gold set, con salidas reales del catálogo.
-- `address_guard` queda como respaldo: un número de calle fuera de un marcador ya es un número suelto.
+- `address_guard` sigue igual: un número de calle escrito a mano puede coincidir con un dato de una propiedad.
 - #218 se cierra con lo que cubre esta decisión. Un barrio inventado que el modelo nombre en prosa sigue sin
   bloquearse, y lo mide la evaluación en vivo (`INVENTED_ZONES`).
 - La evaluación en vivo (#216) mide el efecto en las regeneraciones, las respuestas degradadas y la tool

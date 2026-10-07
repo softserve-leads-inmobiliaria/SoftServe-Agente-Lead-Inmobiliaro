@@ -69,11 +69,15 @@ del turno o la memoria de hechos (el estado, solo del turno). Se bloquea, con el
 
 - un marcador que no se puede completar (una propiedad o un campo que ninguna tool dio, o `address_exact` sin
   `lead_qualified`);
-- un número escrito fuera de un marcador, salvo los del lead en la conversación y la numeración de una lista;
+- un número escrito fuera de un marcador, salvo los del lead en la conversación, la numeración de una lista y
+  un dato de una sola propiedad (si dos lo tienen, podría ser el de la otra);
 - una referencia `prop_…` que ninguna tool dio, salvo la del anuncio o una que escribió el lead.
 
-Si un número suelto es un único dato de una única propiedad, la corrección le dice al modelo qué marcador
-usar. Así deja de pasar el valor real de *otra* propiedad, el límite que DT-23 dejaba abierto. Lo que el modelo
+Si un número suelto es un dato de varias propiedades, la corrección le dice al modelo entre qué marcadores
+elegir. Así deja de pasar el valor de *otra* propiedad cuando las dos lo tienen, el límite que DT-23 dejaba
+abierto; si solo una lo tiene, pasa aunque la frase hable de otra (límite conocido de DT-60). El estado de una
+propiedad conocida que no vino en el turno lo consulta el código con `get_availability`, sin gastar una llamada
+al LLM. Lo que el modelo
 escribe fuera de los marcadores sigue pasando por la revisión de estados y por la regla de #230 que se describen
 abajo; la dirección reservada (A-6) y las promesas (A-7) se revisan sobre el texto ya completado. El gold set
 de los marcadores (`test_markers_gold_set.py`) usa la salida real del catálogo de demo.
