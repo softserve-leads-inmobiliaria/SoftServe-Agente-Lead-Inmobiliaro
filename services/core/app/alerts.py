@@ -70,6 +70,13 @@ def is_request(text: str) -> bool:
     return bool(_REQUEST.search(_normalize(text)))
 
 
+def requested(text: str, flags: Mapping[str, bool] | None = None) -> bool:
+    """¿El lead pide la alerta? Lo contesta el clasificador (`wants_alert`, DT-60), que ve también la oferta del
+    turno anterior. Si no lo contestó (o el agente es `FakeAgent`), decide `is_request`."""
+    answer = (flags or {}).get("wants_alert")
+    return answer if isinstance(answer, bool) else is_request(text)
+
+
 def has_filters(filters: Mapping[str, Any] | None) -> bool:
     """Una alerta sin ningún filtro avisaría de cualquier propiedad: no se guarda. El tipo de inmueble solo
     tampoco alcanza (#209): "cualquier apartment, en cualquier zona" avisaría de casi todo lo que entra. Se

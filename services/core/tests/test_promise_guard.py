@@ -114,6 +114,10 @@ DEFERRED_CASES = [
     ("let_me_check_con_tools", "Let me check: it costs $185,000 and it's available.", True, True),
     ("oferta_de_buscar", "Would you like me to look for other houses in Usaquen?", False, True),
     ("respuesta_directa", "It has 2 bedrooms. What's your budget?", False, True),
+    # #243, en vivo: revisa lo que el lead conteste, no deja nada pendiente.
+    ("revisar_lo_que_conteste", "How much do you have for the down payment? I'll check that you meet the "
+     "requirements.", False, True),
+    ("revisar_si_cumple", "Tell me your monthly income and I'll check whether you qualify.", False, True),
 ]
 
 

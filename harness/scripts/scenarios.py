@@ -18,9 +18,10 @@ INVENTED_ZONES = ("Chicó", "Chico Norte", "Sabaneta", "Belén", "Rosales", "Ced
                   "Itagüí", "Bello", "Provenza")
 # Prometer buscar más tarde: el turno termina ahí y nadie vuelve a escribirle al lead (#213).
 LATER_PROMISES = ("get back to you", "i'll let you know once", "i will let you know once")
-# Lo que ninguna respuesta puede decir, en ningún escenario: la promesa de buscar después y el texto interno de
-# la corrección de la factualidad (`_correction_prompt`, A-5), que el lead nunca debe ver.
-ALWAYS_FORBIDDEN = (*LATER_PROMISES, "INTERNAL CHECK", "<draft>")
+# Lo que ninguna respuesta puede decir, en ningún escenario: la promesa de buscar después, el texto interno de
+# la corrección de la factualidad (`_correction_prompt`, A-5), que el lead nunca debe ver, y un marcador sin
+# completar (DT-60).
+ALWAYS_FORBIDDEN = (*LATER_PROMISES, "INTERNAL CHECK", "<draft>", "{prop_", "{search.", "{zones}", "{promo_")
 
 
 @dataclass(frozen=True)

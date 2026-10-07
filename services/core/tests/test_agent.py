@@ -208,9 +208,10 @@ def test_the_agents_have_names_for_the_traces():
 # --- A-5: factualidad de la respuesta -----------------------------------------------------------------------------
 
 def test_a_factual_reply_never_triggers_a_regeneration_call():
-    """Una llamada de más al modelo haría fallar el test con `IndexError` (`ScriptedBedrock`)."""
+    """Una llamada de más al modelo haría fallar el test con `IndexError` (`ScriptedBedrock`). El precio lo pone
+    el código en el marcador (DT-60)."""
     client = ScriptedBedrock(classification("busqueda_propiedad"), tool_use("search_properties", {"zone": "Prov."}),
-                             text("I have one at $2,350,000."))
+                             text("I have one at {p1.price}."))
     catalog = FakeCatalog(properties=[{"id": "p1", "title": "Casa", "price": 2350000, "status": "disponible"}])
     result = run(agent_for(client).run(turn(), catalog))
     assert result.text == "I have one at $2,350,000." and result.guard_audits == []
@@ -218,7 +219,7 @@ def test_a_factual_reply_never_triggers_a_regeneration_call():
 
 def test_an_invented_price_gets_one_chance_to_regenerate_and_the_fix_is_used():
     client = ScriptedBedrock(classification("busqueda_propiedad"), tool_use("search_properties", {"zone": "Prov."}),
-                             text("I have one at $9,999,999."), text("I have one at $2,350,000."))
+                             text("I have one at $9,999,999."), text("I have one at {p1.price}."))
     catalog = FakeCatalog(properties=[{"id": "p1", "title": "Casa", "price": 2350000, "status": "disponible"}])
     result = run(agent_for(client).run(turn(), catalog))
     assert result.text == "I have one at $2,350,000." and result.intent == "busqueda_propiedad"
@@ -249,7 +250,7 @@ def test_the_regeneration_can_call_a_tool_again_and_the_calls_are_all_kept():
     client = ScriptedBedrock(classification("busqueda_propiedad"), tool_use("search_properties", {"zone": "Prov."}),
                              text("I have one at $9,999,999."),
                              tool_use("search_properties", {"zone": "Prov."}, tool_use_id="tool-2"),
-                             text("I have one at $2,350,000."))
+                             text("I have one at {p1.price}."))
     catalog = FakeCatalog(properties=[{"id": "p1", "title": "Casa", "price": 2350000, "status": "disponible"}])
     result = run(agent_for(client).run(turn(), catalog))
     assert result.text == "I have one at $2,350,000."
@@ -260,7 +261,7 @@ def test_the_regeneration_can_call_a_tool_again_and_the_calls_are_all_kept():
 def test_the_regeneration_already_has_the_tool_results_and_does_not_ask_for_them_again():
     """#232: antes, la regeneración partía del historial sin las rondas de tools y el modelo volvía a buscar."""
     client = ScriptedBedrock(classification("busqueda_propiedad"), tool_use("search_properties", {"zone": "Prov."}),
-                             text("I have one at $9,999,999."), text("I have one at $2,350,000."))
+                             text("I have one at $9,999,999."), text("I have one at {p1.price}."))
     catalog = FakeCatalog(properties=[{"id": "p1", "title": "Casa", "price": 2350000, "status": "disponible"}])
     result = run(agent_for(client).run(turn(), catalog))
     assert result.text == "I have one at $2,350,000."
@@ -271,7 +272,7 @@ def test_the_regeneration_already_has_the_tool_results_and_does_not_ask_for_them
 
 def test_the_correction_prompt_shows_the_model_its_own_reply_and_what_was_wrong():
     client = ScriptedBedrock(classification("busqueda_propiedad"), tool_use("search_properties", {"zone": "Prov."}),
-                             text("I have one at $9,999,999."), text("I have one at $2,350,000."))
+                             text("I have one at $9,999,999."), text("I have one at {p1.price}."))
     catalog = FakeCatalog(properties=[{"id": "p1", "title": "Casa", "price": 2350000, "status": "disponible"}])
     run(agent_for(client).run(turn(), catalog))
     correction_request = client.calls_to(CHAT)[-1]
@@ -283,7 +284,7 @@ def test_the_correction_goes_in_the_system_so_the_model_answers_the_lead_and_not
     # #213, en vivo: como mensaje `user`, el modelo creía que el lead lo había corregido y contestaba
     # "You're right, I apologize… Let me search", sin buscar.
     client = ScriptedBedrock(classification("busqueda_propiedad"), tool_use("search_properties", {"zone": "Prov."}),
-                             text("I have one at $9,999,999."), text("I have one at $2,350,000."))
+                             text("I have one at $9,999,999."), text("I have one at {p1.price}."))
     catalog = FakeCatalog(properties=[{"id": "p1", "title": "Casa", "price": 2350000, "status": "disponible"}])
     run(agent_for(client).run(turn(), catalog))
     first, correction = client.calls_to(CHAT)[0], client.calls_to(CHAT)[-1]
@@ -295,8 +296,8 @@ def test_the_correction_goes_in_the_system_so_the_model_answers_the_lead_and_not
     instruction = correction["system"][0]["text"]
     assert instruction.startswith(first["system"][0]["text"]) and "the lead never sees this" in instruction
     assert "Do not apologize" in instruction and "Never tell the lead you will look something up later" in instruction
-    # Y no repite lo de un turno anterior: el número va normalizado, pero vale en cualquier formato.
-    assert "earlier messages does not count as verified" in instruction and "in any format" in instruction
+    # Y le pide los datos como marcadores (DT-60), no como números que escriba.
+    assert "Write every property fact as a marker" in instruction
 
 
 # --- A-6: dirección reservada en prosa ----------------------------------------------------------------------------
@@ -463,3 +464,125 @@ def test_a_long_message_that_starts_with_yes_is_not_taken_as_accepting_the_offer
     message = "Yes, but first tell me whether the apartment in Laureles has parking and a gym"
     result = run(agent_for(client).run(turn(message, history=[("assistant", OFFER)]), FakeCatalog()))
     assert result.intent == "otro"
+
+
+# --- DT-60: los datos de la propiedad los pone el código ------------------------------------------------------
+
+P1 = [{"id": "p1", "title": "Casa", "price": 2350000, "bedrooms": 3, "status": "disponible"}]
+
+
+def test_the_lead_reads_the_values_the_code_put_in_the_markers():
+    client = ScriptedBedrock(classification("consulta_precio"), tool_use("search_properties", {"zone": "Prov."}),
+                             text("It's {p1.price}, with {p1.bedrooms} bedrooms, and it's {p1.status}."))
+    result = run(agent_for(client).run(turn(), FakeCatalog(properties=P1)))
+    assert result.text == "It's $2,350,000, with 3 bedrooms, and it's available." and result.guard_audits == []
+
+
+def test_a_figure_typed_by_hand_passes_if_it_is_a_fact_of_only_one_property():
+    client = ScriptedBedrock(classification("consulta_precio"), tool_use("search_properties", {"zone": "Prov."}),
+                             text("It's $2,350,000."))
+    result = run(agent_for(client).run(turn(), FakeCatalog(properties=P1)))
+    assert result.text == "It's $2,350,000." and result.guard_audits == []
+
+
+def test_a_figure_two_properties_share_is_regenerated_with_the_markers_to_choose_from():
+    """Escrito a mano, podría ser el de la otra: se pide el marcador de la que corresponde."""
+    both = [*P1, {**P1[0], "id": "p2", "title": "Otra casa"}]
+    client = ScriptedBedrock(classification("consulta_precio"), tool_use("search_properties", {"zone": "Prov."}),
+                             text("It's $2,350,000."), text("It's {p1.price}."))
+    result = run(agent_for(client).run(turn(), FakeCatalog(properties=both)))
+    assert result.text == "It's $2,350,000." and [a for a, _ in result.guard_audits] == ["output.factuality_regenerated"]
+    assert "write {p1.price} or {p2.price} instead" in client.calls_to(CHAT)[-1]["system"][0]["text"]
+
+
+def test_a_marker_for_a_property_no_tool_returned_is_regenerated():
+    client = ScriptedBedrock(classification("consulta_precio"), tool_use("search_properties", {"zone": "Prov."}),
+                             text("It's {p9.price}."), text("It's {p1.price}."))
+    result = run(agent_for(client).run(turn(), FakeCatalog(properties=P1)))
+    assert result.text == "It's $2,350,000."
+    assert "marker '{p9.price}'" in client.calls_to(CHAT)[-1]["system"][0]["text"]
+
+
+def test_a_marker_that_cannot_be_filled_is_never_sent_to_the_lead():
+    client = ScriptedBedrock(classification("consulta_precio"), text("It's {p9.price}."), text("It's {p9.price}."))
+    result = run(agent_for(client).run(turn(), FakeCatalog()))
+    assert result.text == FACTUALITY_DEGRADE_REPLY and "{" not in result.text
+
+
+def test_remembered_facts_fill_the_markers_but_never_the_status():
+    remembered = {"p1": {"price": 2350000}}
+    client = ScriptedBedrock(classification("consulta_precio"), text("It's {p1.price}."))
+    message = TurnInput(event=EVENT, text="How much was it?", remembered=remembered)
+    assert run(agent_for(client).run(message, FakeCatalog())).text == "It's $2,350,000."
+    # El estado de la memoria no vale (A-4): lo consulta el código, sin otra llamada al modelo.
+    client = ScriptedBedrock(classification("consulta_precio"), text("It's {p1.status}."))
+    catalog = FakeCatalog()
+    assert run(agent_for(client).run(message, catalog)).text == "It's available."
+    assert catalog.calls == [("get_availability", {"property_id": "p1"})]
+
+
+def test_a_status_the_catalog_cannot_confirm_is_never_filled_in():
+    remembered = {"p1": {"price": 2350000}}
+    client = ScriptedBedrock(classification("consulta_precio"), text("It's {p1.status}."), text("It's {p1.status}."))
+    message = TurnInput(event=EVENT, text="Is it still available?", remembered=remembered)
+    catalog = FakeCatalog(error={"code": "UPSTREAM_UNAVAILABLE", "message": "caído"})
+    assert run(agent_for(client).run(message, catalog)).text == FACTUALITY_DEGRADE_REPLY
+
+
+def test_a_status_written_without_a_marker_is_checked_against_the_catalog():
+    """En vivo: "this house is reserved" un turno después de haberlo consultado. El código lo vuelve a consultar."""
+    client = ScriptedBedrock(classification("otro"), text("Since this house is reserved, want to see others?"))
+    message = TurnInput(event=EVENT, text="Can I see it today?", listing=LISTING)
+
+    class Reserved(FakeCatalog):
+        async def call(self, tool, arguments=None):
+            self.calls.append((tool, dict(arguments or {})))
+            return {"property_id": arguments["property_id"], "status": "apartado", "checked_at": "2026-01-01"}
+
+    catalog = Reserved()
+    result = run(agent_for(client).run(message, catalog))
+    assert result.text.startswith("Since this house is reserved") and result.guard_audits == []
+    assert catalog.calls == [("get_availability", {"property_id": "prop_00231"})]
+
+
+def test_the_leads_own_numbers_from_earlier_messages_can_be_repeated():
+    history = [("user", "My budget is $200,000"), ("assistant", "Got it.")]
+    client = ScriptedBedrock(classification("otro"), text("With your $200,000 budget, I can help you search."))
+    result = run(agent_for(client).run(turn("What can I get?", history=history), FakeCatalog()))
+    assert result.text.startswith("With your $200,000 budget") and result.guard_audits == []
+
+
+def test_a_listing_reference_the_lead_came_from_can_be_named():
+    client = ScriptedBedrock(classification("consulta_precio"), text("Do you mean prop_00231?"))
+    message = TurnInput(event=EVENT, text="Is it still available?", listing=LISTING)
+    assert run(agent_for(client).run(message, FakeCatalog())).text == "Do you mean prop_00231?"
+
+
+def test_a_reference_no_tool_returned_is_regenerated():
+    client = ScriptedBedrock(classification("consulta_precio"), text("Look at prop_99999."), text("Which one?"))
+    result = run(agent_for(client).run(turn(), FakeCatalog()))
+    assert result.text == "Which one?"
+    assert "reference 'prop_99999'" in client.calls_to(CHAT)[-1]["system"][0]["text"]
+
+
+# --- DT-60: el clasificador contesta si pide una persona -------------------------------------------------------
+
+def test_the_classifiers_answer_decides_a_handoff_over_the_rule():
+    """La regla de #228 no lo reconoce como pedido de una persona, pero el clasificador sí."""
+    client = ScriptedBedrock(classification("solicitud_humano", asks_for_person=True))
+    result = run(agent_for(client).run(turn("Can I speak with the office directly?"), FakeCatalog()))
+    assert result.intent == "solicitud_humano" and result.flags == {"asks_for_person": True}
+
+
+def test_the_classifier_saying_no_one_was_asked_for_stops_the_handoff_even_if_the_rule_says_so():
+    """"agent" es una palabra de la regla de #228, pero la pregunta es por la comisión."""
+    client = ScriptedBedrock(classification("solicitud_humano", asks_for_person=False), text("Sure, which area?"))
+    result = run(agent_for(client).run(turn("Is the agent fee included?"), FakeCatalog()))
+    assert result.intent == "otro" and result.guard_audits == [(HUMAN_REQUEST_UNCONFIRMED, {})]
+
+
+def test_the_classifiers_answers_reach_the_turn():
+    client = ScriptedBedrock(classification("busqueda_propiedad", wants_alert=True, wants_visit=False),
+                             text("Sure."))
+    result = run(agent_for(client).run(turn("Let me know when one comes up"), FakeCatalog()))
+    assert result.flags == {"wants_alert": True, "wants_visit": False}

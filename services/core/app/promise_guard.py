@@ -149,8 +149,10 @@ DEFERRED_LOOKUP = "busqueda_diferida"
 _ALWAYS_DEFERRED = re.compile(
     r"\b(?:get back to you|follow up with you|once i (?:check|confirm|hear back)"
     r"|i(?:['’]ll| will) (?:let you know|look into|find out|check (?:with|on|into)|follow up))\b")
+# "I'll check that you meet the requirements", después de pedirle el enganche, revisa lo que el lead conteste: no
+# deja nada pendiente (#243, visto en vivo).
 _DEFERRED_WITHOUT_TOOLS = re.compile(
-    r"\b(?:let me|i(?:['’]ll| will)) (?:check|see|look|find|search|verify|confirm)\b")
+    r"\b(?:let me|i(?:['’]ll| will)) (?:check|see|look|find|search|verify|confirm)\b(?! (?:that|whether|if) you\b)")
 
 
 def check_deferred(text: str, consulted_tools: bool) -> list[Violation]:

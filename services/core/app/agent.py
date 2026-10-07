@@ -6,10 +6,11 @@ texto que dejó pasar el guardrail de entrada: sin PII ni menciones de categorí
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Protocol
+from typing import Any, Mapping, Protocol, Sequence
 
-from app import address_guard, factuality, promise_guard
+from app import address_guard, factuality, markers, promise_guard
 from app.bedrock_llm import BedrockLLM, LLMError, LLMFormatError
 from app.fakes.fake_llm import FakeLLM
 from app.fsm import HUMAN_INTENTS
@@ -18,6 +19,9 @@ from app.input_guard import HANDOFF_OFFER, OMITTED_MESSAGE
 from app.skeleton import respond
 from app.summary import SummaryFacts
 from app.summary import template as summary_template
+from app.tracing import content_hidden
+
+logger = logging.getLogger("core.agent")
 
 HISTORY_LIMIT = 20  # mensajes previos que se le dan al LLM
 
@@ -59,6 +63,9 @@ class AgentResult:
     llm_error: str | None = None
     # (acción, detalle) del guardrail de salida (A-5); nunca lleva el número/estado inventado, solo el conteo.
     guard_audits: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
+    # Lo que el clasificador contestó a las preguntas de sí o no (`CLASSIFIER_FLAGS`, DT-60). Vacío con
+    # `FakeAgent`, o si el clasificador no las contestó: el código usa entonces sus reglas.
+    flags: dict[str, bool] = field(default_factory=dict)
 
 
 class ToolCatalog(Protocol):
@@ -112,21 +119,23 @@ class BedrockAgent:
         last_assistant = next((content for role, content in reversed(turn.history) if role == "assistant"), None)
         try:
             classification = await self._llm.classify(turn.text, last_assistant)
-            intent = classification.intent
+            intent, flags = classification.intent, classification.flags
             guard_audits: list[tuple[str, dict[str, Any]]] = []
-            if intent == "solicitud_humano" and not asks_for_a_person(turn.text, last_assistant):
+            asks = flags.get("asks_for_person")
+            if intent == "solicitud_humano" and not (asks if asks is not None
+                                                     else asks_for_a_person(turn.text, last_assistant)):
                 # #228: un traspaso es terminal; si el mensaje no lo pide, el turno sigue como uno más.
                 intent = "otro"
                 guard_audits.append((HUMAN_REQUEST_UNCONFIRMED, {}))
             if intent in HUMAN_INTENTS:
                 # Un traspaso a una persona lo dice siempre el mismo texto: no se le deja al modelo.
                 return AgentResult(text=FakeLLM().generate_reply(intent), intent=intent,
-                                   raw_signal=classification.signal)
+                                   raw_signal=classification.signal, flags=flags)
             if turn.protected_removed and "?" in turn.text and intent == "otro":
                 # #200: "does that matter?" se contesta siempre igual. En vivo el modelo ignoraba la nota y
                 # seguía con el enganche, o lo degradaba la factualidad.
                 return AgentResult(text=PROTECTED_ANSWER, intent="otro", raw_signal=classification.signal,
-                                   guard_audits=guard_audits)
+                                   guard_audits=guard_audits, flags=flags)
             specs = await catalog.tool_specs()
             hidden = {s["name"]: [a for a in CODE_CONTROLLED_ARGUMENTS if a in s["input_schema"].get("properties", {})]
                       for s in specs}
@@ -142,27 +151,32 @@ class BedrockAgent:
             chat = await self._llm.chat(turn.history, current, visible, run_tool)
             if not chat.text:
                 raise LLMFormatError("respuesta vacía")
-            violations = _output_violations(chat.text, chat.tool_results, turn)
+            violations, reply = await _output_violations(chat.text, chat.tool_results, chat.payloads, turn, catalog)
+            _log_violations("borrador", violations, chat.text)
             if violations:
                 # Una oportunidad de corregirse con lo que ya sabe, antes de degradar la conversación (A-5).
                 retry = await self._llm.regenerate(turn.history, current, chat.text, violations, visible, run_tool,
                                                    chat.messages)
                 chat.tool_results.update(retry.tool_results)
                 chat.tool_calls += retry.tool_calls
+                chat.payloads += retry.payloads
                 guard_audits.append(("output.factuality_regenerated", {"violations": len(violations)}))
-                violations = (_output_violations(retry.text, chat.tool_results, turn)
-                             if retry.text.strip() else violations)
+                if retry.text.strip():
+                    violations, reply = await _output_violations(retry.text, chat.tool_results, chat.payloads, turn,
+                                                                 catalog)
+                    _log_violations("regeneración", violations, retry.text)
                 if violations:
                     guard_audits.append(("output.factuality_degraded", {"violations": len(violations)}))
                     return AgentResult(text=FACTUALITY_DEGRADE_REPLY, intent="otro",
                                        raw_signal=classification.signal, tool_results=chat.tool_results,
-                                       tool_calls=chat.tool_calls, guard_audits=guard_audits)
-                chat.text = retry.text
+                                       tool_calls=chat.tool_calls, guard_audits=guard_audits, flags=flags)
+            chat.text = reply
         except LLMError as exc:
             # Sin LLM no se inventa nada: texto seguro, y el turno cuenta como "sin resolver" (A-13).
             return AgentResult(text=LLM_FALLBACK_REPLY, intent="otro", llm_error=type(exc).__name__)
         return AgentResult(text=chat.text, intent=intent, raw_signal=classification.signal,
-                           tool_results=chat.tool_results, tool_calls=chat.tool_calls, guard_audits=guard_audits)
+                           tool_results=chat.tool_results, tool_calls=chat.tool_calls, guard_audits=guard_audits,
+                           flags=flags)
 
     async def summarize(self, transcript: str, facts: SummaryFacts) -> dict[str, str]:
         """El resumen del traspaso (A-16). Si el LLM falla, lanza `LLMError`: la ficha sale sin resumen."""
@@ -187,15 +201,70 @@ def _with_notes(text: str, listing: Mapping[str, Any] | None, protected_removed:
     return "\n\n".join([text, *notes])
 
 
-def _output_violations(text: str, tool_results: Mapping[str, Any], turn: TurnInput) -> list[factuality.Violation]:
-    """Guardrails de salida combinados: factualidad (A-5), dirección reservada (A-6) y promesas no
-    autorizadas (A-7) — los tres comparten el mismo *pipeline* de regenerar/degradar (DT-23). Los hechos de
-    turnos anteriores (#217) respaldan números y amenidades, nunca estados. Anunciar una búsqueda para después
-    también es una promesa (#234)."""
-    return (factuality.check(text, tool_results, turn.text, turn.remembered)
-            + address_guard.check(text, turn.lead_qualified, turn.text)
-            + promise_guard.check(text, {"remembered": dict(turn.remembered), **tool_results}, turn.text)
-            + promise_guard.check_deferred(text, consulted_tools=bool(tool_results)))
+async def _output_violations(text: str, tool_results: Mapping[str, Any],
+                             payloads: Sequence[tuple[str, Mapping[str, Any]]], turn: TurnInput,
+                             catalog: ToolCatalog) -> tuple[list[factuality.Violation], str]:
+    """Guardrails de salida combinados, y la respuesta como la va a leer el lead.
+
+    El modelo escribe los datos de la propiedad como marcadores, y el código los completa (DT-60): un marcador que
+    no se puede completar, o un número escrito fuera de uno que no dijo el lead ni es de una sola propiedad, es una
+    violación. Lo que el modelo escribió fuera de los marcadores pasa además por los estados de la factualidad (A-5)
+    y por la regla de #230. La dirección reservada (A-6) y las promesas (A-7), sobre el texto ya completado. Todos
+    comparten el mismo *pipeline* de regenerar/degradar (DT-23). Anunciar una búsqueda para después también es una
+    promesa (#234).
+    """
+    sources = markers.build(payloads, turn.remembered)
+    listing_id = (turn.listing or {}).get("id")
+    if isinstance(listing_id, str):
+        sources.records.setdefault(listing_id, {"id": listing_id})
+    bare = markers.outside(text)
+    # El estado de una propiedad que no vino en este turno lo consulta el código (A-4), sin gastar una llamada al
+    # LLM: en vivo, el modelo repetía "it's reserved" o escribía {ref.status} sin volver a llamar la tool (#243).
+    wanted = markers.missing_statuses(text, sources)
+    if factuality.check_statuses(bare, tool_results, turn.text):
+        recent = list(turn.remembered)[-1:]
+        wanted |= {ref for ref in (listing_id, *recent) if isinstance(ref, str) and ref not in sources.statuses}
+    fresh = await _availabilities(catalog, sorted(wanted)[:MAX_STATUS_LOOKUPS])
+    markers.add_statuses(sources, fresh)
+    checked = {**tool_results, "verified_statuses": fresh} if fresh else tool_results
+    lead_texts = [turn.text, *(content for role, content in turn.history if role == "user")]
+    known_refs = [*filter(None, [listing_id]), *(r for t in lead_texts for r in _refs(t))]
+    reply = markers.render(text, sources)
+    violations = (markers.check(text, sources, markers.lead_numbers(lead_texts), known_refs)
+                  + factuality.check_statuses(bare, checked, turn.text)
+                  + factuality.check_lead_claims(bare, tool_results, turn.text, turn.remembered)
+                  + address_guard.check(reply, turn.lead_qualified, turn.text)
+                  + promise_guard.check(reply, {"remembered": dict(turn.remembered), **tool_results}, turn.text)
+                  + promise_guard.check_deferred(reply, consulted_tools=bool(tool_results)))
+    return list(dict.fromkeys(violations)), reply
+
+
+MAX_STATUS_LOOKUPS = 3  # estados que el código consulta por respuesta, como mucho
+
+
+async def _availabilities(catalog: ToolCatalog, refs: Sequence[str]) -> list[dict[str, Any]]:
+    from app.catalog_client import CatalogToolError, UnknownTool
+
+    found = []
+    for ref in refs:
+        try:
+            found.append(await catalog.call("get_availability", {"property_id": ref}))
+        except (CatalogToolError, UnknownTool):
+            continue  # sin el estado, el marcador no se completa y la respuesta se regenera
+    return found
+
+
+def _log_violations(attempt: str, violations: Sequence[factuality.Violation], draft: str) -> None:
+    """Qué marcó el guardrail de salida, para ajustar el prompt con la evaluación en vivo (DT-60). El valor solo con
+    `TRACE_CONTENT=1`: puede ser un fragmento de la respuesta (OBS-7)."""
+    if not violations:
+        return
+    shown = [(v.kind, v.hint) if content_hidden() else (v.kind, v.value, v.hint) for v in violations]
+    logger.info("guardrail de salida (%s): %s%s", attempt, shown, "" if content_hidden() else f" — {draft!r}")
+
+
+def _refs(text: str) -> list[str]:
+    return markers.REFERENCE.findall(text or "")
 
 
 def _visible(spec: Mapping[str, Any]) -> dict[str, Any]:

@@ -89,6 +89,13 @@ GOLD_SETS = (
         nota="75 casos sobre la salida real del catálogo de demo (DT-36).",
     ),
     GoldSet(
+        historia="#243",
+        modulo="test_markers_gold_set",
+        atributo="CASOS",
+        minimo=30,
+        nota="Marcadores sobre la salida real del catálogo de demo (DT-60): qué lee el lead y qué se bloquea.",
+    ),
+    GoldSet(
         historia="#202",
         modulo="test_language_guard_gold_set",
         atributo="CASES",

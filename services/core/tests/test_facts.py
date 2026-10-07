@@ -126,8 +126,9 @@ def _agent(*replies):
 
 
 def test_repeating_a_price_from_an_earlier_turn_is_not_regenerated():
+    """La memoria completa el marcador del precio (DT-60), sin volver a llamar a la tool."""
     turn = TurnInput(event=EVENT, text="how much was it again?", remembered=REMEMBERED)
-    result = asyncio.run(_agent(text("It's $185,000.")).run(turn, NoToolsCatalog()))
+    result = asyncio.run(_agent(text("It's {prop_00231.price}.")).run(turn, NoToolsCatalog()))
     assert result.text == "It's $185,000." and result.guard_audits == []
 
 

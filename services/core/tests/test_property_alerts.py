@@ -162,6 +162,14 @@ def test_other_messages_are_not_an_alert_request(message):
     assert not alerts.is_request(message)
 
 
+def test_the_classifiers_answer_decides_over_the_rule():
+    """DT-60: "yes, please" acepta la oferta, y la regla no lo sabe; "notify me of the price" no pide una alerta."""
+    assert alerts.requested("yes, please", {"wants_alert": True})
+    assert not alerts.requested("notify me of the price", {"wants_alert": False})
+    # Sin la respuesta del clasificador (`FakeAgent`, o un JSON sin el campo), decide la regla.
+    assert alerts.requested("notify me", {}) and not alerts.requested("yes, please", None)
+
+
 # --- ofrecer y guardar --------------------------------------------------------------------------------------
 
 def test_a_search_with_few_results_offers_the_alert(engine, zone):

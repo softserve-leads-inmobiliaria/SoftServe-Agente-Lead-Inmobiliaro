@@ -304,7 +304,7 @@ def _alert_step(context: GuardContext, result: AgentResult, searches: SearchLog 
     solo si no se le ofreció antes en la conversación (#213).
     """
     current = searches.asked_search if searches else None
-    if alerts.is_request(text):
+    if alerts.requested(text, result.flags):
         filters = (current[0] if current and alerts.has_filters(current[0])
                    else context.last_tool_results.get(alerts.ALERT_KEY))
         if alerts.has_filters(filters):
@@ -411,7 +411,7 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
                   and is_frustrated(streak))
     if frustrated:
         outbound["text"] = FRUSTRATION_REPLY  # esta racha dispara el traspaso: se le avisa al lead
-    replaced = frustrated or alerts.is_request(verdict.signal_text)  # la alerta (A-18) cambia la respuesta
+    replaced = frustrated or alerts.requested(verdict.signal_text, result.flags)  # la alerta (A-18) cambia la respuesta
     featured, shown = _first_sight(_featured_property(result, listing, visit, replaced),
                                    evidence.tool_results, context.last_tool_results)
     evidence = replace(evidence, tool_results=shown)
