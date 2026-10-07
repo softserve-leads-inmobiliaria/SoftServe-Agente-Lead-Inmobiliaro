@@ -126,7 +126,8 @@ def test_the_message_has_placements_stagnant_unmet_demand_and_the_link():
         PlacedGroup("El Poblado", 2, Decimal("1020000")), PlacedGroup("Usaquen", 1, Decimal("2000000"))],
         by_type=[], by_advisor=[])
     stuck = [_stuck("Casa A", 95), _stuck("Casa B", 61, inquiries=2)]
-    unmet = [UnmetDemand("El Poblado", "renta", 3, 5), UnmetDemand(None, "venta", None, 1)]
+    unmet = [UnmetDemand("El Poblado", "renta", 3, 5), UnmetDemand(None, "venta", None, 1),
+             UnmetDemand("Laureles", "renta", 2, 2, kind="departamento")]
 
     message = report_text(WEEK_START, WEEK_END, placed, stuck, unmet, "https://panel.example")
 
@@ -144,6 +145,7 @@ def test_the_message_has_placements_stagnant_unmet_demand_and_the_link():
         "Unmet demand:",
         "- for rent in El Poblado, 3 bedrooms: 5 searches",
         "- for sale in any area: 1 search",
+        "- apartment for rent in Laureles, 2 bedrooms: 2 searches",
         "",
         f"Details in the panel: https://panel.example{BUSINESS_PATH}",
     ]

@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from db.models import PROPERTY_TYPES
+from db.models import PROPERTY_KINDS, PROPERTY_TYPES
 
-UnmetSearch = dict[str, Any]  # zone, type, bedrooms, budget_min, budget_max; None si la búsqueda no lo filtró
+UnmetSearch = dict[str, Any]  # zone, type, kind, bedrooms, budget_min, budget_max; None si no lo filtró
 
 
 def _number(value: Any) -> float | None:
@@ -25,12 +25,14 @@ def unmet_filters(arguments: Mapping[str, Any] | None) -> UnmetSearch:
     arguments = arguments or {}
     zone = arguments.get("zone")
     property_type = arguments.get("type")  # la operación (venta/renta/preventa); `kind` es el inmueble
+    kind = arguments.get("kind")
     bedrooms = arguments.get("bedrooms")
     budget = arguments.get("budget_range")
     budget = budget if isinstance(budget, Mapping) else {}
     return {
         "zone": zone.strip() if isinstance(zone, str) and zone.strip() else None,
         "type": property_type if property_type in PROPERTY_TYPES else None,
+        "kind": kind if kind in PROPERTY_KINDS else None,  # #209, DT-54
         "bedrooms": bedrooms if isinstance(bedrooms, int) and not isinstance(bedrooms, bool) and bedrooms >= 0
         else None,
         "budget_min": _number(budget.get("min")),

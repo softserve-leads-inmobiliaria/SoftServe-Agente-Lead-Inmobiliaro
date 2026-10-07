@@ -71,8 +71,10 @@ def is_request(text: str) -> bool:
 
 
 def has_filters(filters: Mapping[str, Any] | None) -> bool:
-    """Una alerta sin ningún filtro avisaría de cualquier propiedad: no se guarda."""
-    return isinstance(filters, Mapping) and any(value is not None for value in filters.values())
+    """Una alerta sin ningún filtro avisaría de cualquier propiedad: no se guarda. El tipo de inmueble solo
+    tampoco alcanza (#209): "cualquier apartment, en cualquier zona" avisaría de casi todo lo que entra. Se
+    guarda junto con otro filtro (zona, operación, recámaras o presupuesto)."""
+    return isinstance(filters, Mapping) and any(value is not None for key, value in filters.items() if key != "kind")
 
 
 def create(session: Session, lead_id: uuid.UUID, conversation_id: uuid.UUID, filters: Mapping[str, Any]) -> None:
@@ -81,7 +83,7 @@ def create(session: Session, lead_id: uuid.UUID, conversation_id: uuid.UUID, fil
     session.add(PropertyAlert(lead_id=lead_id, conversation_id=conversation_id,
                               expires_at=func.now() + timedelta(days=ALERT_DAYS),
                               **{key: filters.get(key) for key in
-                                 ("zone", "type", "bedrooms", "budget_min", "budget_max")}))
+                                 ("zone", "type", "kind", "bedrooms", "budget_min", "budget_max")}))
     jobs.enqueue(session, ALERT_SCAN_KIND, SCAN_KEY, func.now() + scan_every())
 
 
@@ -91,7 +93,7 @@ def deactivate_for_lead(session: Session, lead_id: uuid.UUID) -> None:
 
 
 # Mismos criterios que `search_properties` del catálogo: zona por coincidencia parcial (en el barrio o en la
-# ciudad de `address_approx`, DT-55), recámaras exactas y precio dentro del rango. "Nueva" = entró a
+# ciudad de `address_approx`, DT-55), tipo de inmueble (#209), recámaras exactas y precio dentro del rango. "Nueva" = entró a
 # `disponible` después de crearse la alerta, en el historial real: un evento de la historia sintética (N-9)
 # no es una propiedad nueva para nadie.
 _NEW_MATCHES = text("""
@@ -101,6 +103,7 @@ _NEW_MATCHES = text("""
     JOIN properties p ON p.status = 'disponible'
         AND (a.zone IS NULL OR p.zone ILIKE '%' || a.zone || '%' OR p.address_approx ILIKE '%' || a.zone || '%')
         AND (a.type IS NULL OR p.type = a.type)
+        AND (a.kind IS NULL OR p.kind = a.kind)
         AND (a.bedrooms IS NULL OR p.bedrooms = a.bedrooms)
         AND (a.budget_min IS NULL OR p.price >= a.budget_min)
         AND (a.budget_max IS NULL OR p.price <= a.budget_max)
