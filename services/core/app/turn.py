@@ -292,14 +292,14 @@ async def _visit_step(event: Mapping[str, Any], context: GuardContext, result: A
     """
     state, previous = context.fsm_state, context.last_tool_results
     prop = _visit_property(result.tool_results, previous)
-    if not _schedules(state, result.intent, result.flags, prop, previous.get(OFFER_KEY), text):
+    if not _schedules(state, result.intent, result.flags, prop, previous.get(OFFER_KEY), text, result.visit_when):
         return None
     conversation_id, lead_id = (str(value) for value in _ids(event))
     agenda, today = scheduling_client.get_scheduling(), visits.today_local()
     offer = previous.get(OFFER_KEY) if state == "SCHEDULE" else None
     if isinstance(offer, Mapping):
-        return await visits.follow_up(agenda, conversation_id, lead_id, offer, text, today)
-    return await visits.start(agenda, lead_id, prop, today)
+        return await visits.follow_up(agenda, conversation_id, lead_id, offer, text, today, result.visit_when)
+    return await visits.start(agenda, lead_id, prop, today, result.visit_when)
 
 
 def _visit_property(tool_results: Mapping[str, Any], previous: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -321,10 +321,11 @@ def _visit_property(tool_results: Mapping[str, Any], previous: Mapping[str, Any]
 
 
 def _schedules(state: str, intent: str, flags: Mapping[str, bool], prop: Mapping[str, Any] | None,
-               offer: Any, text: str) -> bool:
+               offer: Any, text: str, when: Mapping[str, Any] | None = None) -> bool:
     """El turno lo contesta la agenda.
 
-    - En `SCHEDULE`: si el mensaje contesta la oferta o vuelve a pedir la visita, o si la oferta se perdió.
+    - En `SCHEDULE`: si el mensaje contesta la oferta (también diciendo cuándo prefiere, `when`) o vuelve a pedir
+      la visita, o si la oferta se perdió.
     - En los demás estados activos: si el lead pidió la visita y hay una propiedad de interés que se puede
       visitar (una apartada o cerrada no: contesta el agente, #247).
 
@@ -334,18 +335,19 @@ def _schedules(state: str, intent: str, flags: Mapping[str, bool], prop: Mapping
     wants = flags.get("wants_visit")
     asks = wants if isinstance(wants, bool) else intent == "agendar_visita"
     if state == "SCHEDULE":
-        return asks or not isinstance(offer, Mapping) or visits.answers(offer, text)
+        return asks or not isinstance(offer, Mapping) or visits.answers(offer, text, when)
     visitable = prop is not None and prop.get("status") in (None, "disponible")
     return state in VISIT_STATES and asks and visitable
 
 
 def _answered_by_code(context: GuardContext, listing: Mapping[str, Any] | None,
-                      text: str) -> Callable[[str, Mapping[str, bool]], bool]:
+                      text: str) -> Callable[[str, Mapping[str, bool], Mapping[str, Any] | None], bool]:
     """Para el agente: si la respuesta de este turno la va a dar la agenda, solo hace falta clasificar (#229).
     Es la misma regla que `_visit_step`, con la propiedad que este tendrá: la del anuncio o la recordada."""
     previous = context.last_tool_results
     prop = _visit_property({"get_property": listing} if listing else {}, previous)
-    return lambda intent, flags: _schedules(context.fsm_state, intent, flags, prop, previous.get(OFFER_KEY), text)
+    return lambda intent, flags, when=None: _schedules(context.fsm_state, intent, flags, prop,
+                                                       previous.get(OFFER_KEY), text, when)
 
 
 def _alert_step(context: GuardContext, result: AgentResult, searches: SearchLog | None,

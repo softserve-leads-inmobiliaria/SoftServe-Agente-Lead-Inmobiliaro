@@ -37,7 +37,9 @@ _DISTANCE_UNITS = (r"min(?:uto)?s?|cuadras?|km|kil[oó]metros?|metros?"
 _ADDRESS = re.compile(
     # `(?!\w)`: el número completo, sin retroceder. Si no, en "a 10 minutos" el patrón se quedaba con "1"
     # y la salvedad de la distancia ya no veía la unidad.
-    rf"\b(?:{_STREET_PREFIX})\.?\s+(?P<name>(?:[^\d\s,.]+\s+){{0,3}})\d+\w*(?!\w)"
+    # `[^\S\n]`: la dirección no cruza de línea. En una ficha, "near Avenida El Poblado" va arriba de
+    # "• 1 bedroom", y el patrón las leía juntas como una dirección exacta (prueba de jurado M5, #247).
+    rf"\b(?:{_STREET_PREFIX})\.?[^\S\n]+(?P<name>(?:[^\d\s,.]+[^\S\n]+){{0,3}})\d+\w*(?!\w)"
     rf"(?!\s*(?:{_DISTANCE_UNITS})\b)",
     re.IGNORECASE,
 )

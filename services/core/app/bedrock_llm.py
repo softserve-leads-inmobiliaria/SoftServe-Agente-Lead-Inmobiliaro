@@ -25,6 +25,7 @@ from app.fakes.fake_llm import INTENTS
 from app.llm_retry import RETRY, Retrier, RetryBudget, RetryPolicy, error_code
 from app.markers import FIELDS
 from app.rate_limit import RateLimited, RateLimits
+from app.visits import visit_when
 
 logger = logging.getLogger("core.bedrock_llm")
 
@@ -66,6 +67,10 @@ CLASSIFIER_SYSTEM = (
     '- "frustrated": true if the current message shows the lead is annoyed with the assistant: complains that it '
     "isn't helping or understanding, repeats a request impatiently, or says so (\"this is useless\", \"you're not "
     'answering me"). A neutral or curious question is not frustration. Otherwise false.\n'
+    '- "visit_when": only if the current message says when the lead would like to visit, an object with '
+    '"days" (a list of "mon", "tue", "wed", "thu", "fri", "sat", "sun"; "this weekend" is ["sat", "sun"]; '
+    'empty if no day is named), "part_of_day" ("morning", "afternoon", "evening" or null) and "other_day" '
+    "(true if they ask for a different day than the times the LAST ASSISTANT MESSAGE offered). Otherwise null.\n"
     "Extract only from the CURRENT MESSAGE. Do not infer anything about the person's origin, religion, "
     "gender, nationality or family situation."
 )
@@ -158,6 +163,7 @@ class Classification:
     intent: str
     signal: dict[str, Any]
     flags: dict[str, bool] = field(default_factory=dict)  # solo los `CLASSIFIER_FLAGS` que vinieron booleanos
+    when: dict[str, Any] | None = None  # cuándo prefiere la visita (`visits.visit_when`), si lo dijo (#247)
 
 
 @dataclass
@@ -277,12 +283,13 @@ class BedrockLLM:
         response = await self._converse(
             self.classifier_model_id, system=[{"text": CLASSIFIER_SYSTEM}],
             messages=[{"role": "user", "content": [{"text": prompt}]}],
-            inferenceConfig={"maxTokens": 200, "temperature": 0.0})
+            inferenceConfig={"maxTokens": 300, "temperature": 0.0})
         data = parse_json_object(_text_of(response))
         intent = data.get("intent")
         signal = {key: data.get(key) for key in ("budget_hint", "decision_maker", "urgency")}
         flags = {key: data[key] for key in CLASSIFIER_FLAGS if isinstance(data.get(key), bool)}
-        return Classification(intent if intent in INTENTS else "otro", signal, flags)
+        when = visit_when(data.get("visit_when"))
+        return Classification(intent if intent in INTENTS else "otro", signal, flags, when)
 
     async def summarize(self, transcript: str, facts: str) -> dict[str, str]:
         """El resumen del traspaso para el asesor (A-16), con el modelo de conversación y sin tools."""

@@ -56,7 +56,7 @@ class TurnInput:
     # Si la respuesta la va a dar el código según la intención y los campos del clasificador (la agenda, #229):
     # entonces solo se clasifica. En vivo, el modelo contestaba igual, copiaba los horarios de la oferta, y la
     # factualidad lo regeneraba para una respuesta que el lead nunca leía.
-    answered_by_code: Callable[[str, Mapping[str, bool]], bool] | None = None
+    answered_by_code: Callable[[str, Mapping[str, bool], Mapping[str, Any] | None], bool] | None = None
 
 
 @dataclass(frozen=True)
@@ -72,6 +72,8 @@ class AgentResult:
     # Lo que el clasificador contestó a las preguntas de sí o no (`CLASSIFIER_FLAGS`, DT-60). Vacío con
     # `FakeAgent`, o si el clasificador no las contestó: el código usa entonces sus reglas.
     flags: dict[str, bool] = field(default_factory=dict)
+    # Cuándo prefiere el lead la visita (`visits.visit_when`, #247), si el clasificador lo leyó en el mensaje.
+    visit_when: dict[str, Any] | None = None
 
 
 class ToolCatalog(Protocol):
@@ -125,7 +127,7 @@ class BedrockAgent:
         last_assistant = next((content for role, content in reversed(turn.history) if role == "assistant"), None)
         try:
             classification = await self._llm.classify(turn.text, last_assistant)
-            intent, flags = classification.intent, classification.flags
+            intent, flags, when = classification.intent, classification.flags, classification.when
             guard_audits: list[tuple[str, dict[str, Any]]] = []
             asks = flags.get("asks_for_person")
             if intent == "solicitud_humano" and not (asks if asks is not None
@@ -136,15 +138,15 @@ class BedrockAgent:
             if intent in HUMAN_INTENTS:
                 # Un traspaso a una persona lo dice siempre el mismo texto: no se le deja al modelo.
                 return AgentResult(text=FakeLLM().generate_reply(intent), intent=intent,
-                                   raw_signal=classification.signal, flags=flags)
-            if turn.answered_by_code is not None and turn.answered_by_code(intent, flags):
+                                   raw_signal=classification.signal, flags=flags, visit_when=when)
+            if turn.answered_by_code is not None and turn.answered_by_code(intent, flags, when):
                 return AgentResult(text="", intent=intent, raw_signal=classification.signal,
-                                   guard_audits=guard_audits, flags=flags)
+                                   guard_audits=guard_audits, flags=flags, visit_when=when)
             if turn.protected_removed and "?" in turn.text and intent == "otro":
                 # #200: "does that matter?" se contesta siempre igual. En vivo el modelo ignoraba la nota y
                 # seguía con el enganche, o lo degradaba la factualidad.
                 return AgentResult(text=PROTECTED_ANSWER, intent="otro", raw_signal=classification.signal,
-                                   guard_audits=guard_audits, flags=flags)
+                                   guard_audits=guard_audits, flags=flags, visit_when=when)
             specs = await catalog.tool_specs()
             hidden = {s["name"]: [a for a in CODE_CONTROLLED_ARGUMENTS if a in s["input_schema"].get("properties", {})]
                       for s in specs}
@@ -178,14 +180,15 @@ class BedrockAgent:
                     guard_audits.append(("output.factuality_degraded", {"violations": len(violations)}))
                     return AgentResult(text=FACTUALITY_DEGRADE_REPLY, intent="otro",
                                        raw_signal=classification.signal, tool_results=chat.tool_results,
-                                       tool_calls=chat.tool_calls, guard_audits=guard_audits, flags=flags)
+                                       tool_calls=chat.tool_calls, guard_audits=guard_audits, flags=flags,
+                                       visit_when=when)
             chat.text = promise_guard.without_urgency(reply)
         except LLMError as exc:
             # Sin LLM no se inventa nada: texto seguro, y el turno cuenta como "sin resolver" (A-13).
             return AgentResult(text=LLM_FALLBACK_REPLY, intent="otro", llm_error=type(exc).__name__)
         return AgentResult(text=chat.text, intent=intent, raw_signal=classification.signal,
                            tool_results=chat.tool_results, tool_calls=chat.tool_calls, guard_audits=guard_audits,
-                           flags=flags)
+                           flags=flags, visit_when=when)
 
     async def summarize(self, transcript: str, facts: SummaryFacts) -> dict[str, str]:
         """El resumen del traspaso (A-16). Si el LLM falla, lanza `LLMError`: la ficha sale sin resumen."""
