@@ -13,6 +13,7 @@ from app import address_guard, factuality, promise_guard
 from app.bedrock_llm import BedrockLLM, LLMError, LLMFormatError
 from app.fakes.fake_llm import FakeLLM
 from app.fsm import HUMAN_INTENTS
+from app.handoff import asks_for_a_person
 from app.input_guard import HANDOFF_OFFER, OMITTED_MESSAGE
 from app.skeleton import respond
 from app.summary import SummaryFacts
@@ -28,6 +29,9 @@ FACTUALITY_DEGRADE_REPLY = "I don't have verified information to answer that rel
 # recibe la nota de `_with_notes` y contesta a su modo.
 PROTECTED_ANSWER = ("That doesn't affect how we help you or the requirements to buy or rent: we treat "
                     "every client the same way. What kind of property are you looking for?")
+
+# #228: el clasificador dijo `solicitud_humano` pero el mensaje no pide una persona; el turno sigue sin traspaso.
+HUMAN_REQUEST_UNCONFIRMED = "intent.human_request_unconfirmed"
 
 # El LLM no decide esto: lo fija el código a partir del estado del lead (A-6, dirección reservada).
 CODE_CONTROLLED_ARGUMENTS = ("lead_qualified",)
@@ -108,14 +112,21 @@ class BedrockAgent:
         last_assistant = next((content for role, content in reversed(turn.history) if role == "assistant"), None)
         try:
             classification = await self._llm.classify(turn.text, last_assistant)
-            if classification.intent in HUMAN_INTENTS:
+            intent = classification.intent
+            guard_audits: list[tuple[str, dict[str, Any]]] = []
+            if intent == "solicitud_humano" and not asks_for_a_person(turn.text, last_assistant):
+                # #228: un traspaso es terminal; si el mensaje no lo pide, el turno sigue como uno más.
+                intent = "otro"
+                guard_audits.append((HUMAN_REQUEST_UNCONFIRMED, {}))
+            if intent in HUMAN_INTENTS:
                 # Un traspaso a una persona lo dice siempre el mismo texto: no se le deja al modelo.
-                return AgentResult(text=FakeLLM().generate_reply(classification.intent),
-                                   intent=classification.intent, raw_signal=classification.signal)
-            if turn.protected_removed and "?" in turn.text and classification.intent == "otro":
+                return AgentResult(text=FakeLLM().generate_reply(intent), intent=intent,
+                                   raw_signal=classification.signal)
+            if turn.protected_removed and "?" in turn.text and intent == "otro":
                 # #200: "does that matter?" se contesta siempre igual. En vivo el modelo ignoraba la nota y
                 # seguía con el enganche, o lo degradaba la factualidad.
-                return AgentResult(text=PROTECTED_ANSWER, intent="otro", raw_signal=classification.signal)
+                return AgentResult(text=PROTECTED_ANSWER, intent="otro", raw_signal=classification.signal,
+                                   guard_audits=guard_audits)
             specs = await catalog.tool_specs()
             hidden = {s["name"]: [a for a in CODE_CONTROLLED_ARGUMENTS if a in s["input_schema"].get("properties", {})]
                       for s in specs}
@@ -131,7 +142,6 @@ class BedrockAgent:
             chat = await self._llm.chat(turn.history, current, visible, run_tool)
             if not chat.text:
                 raise LLMFormatError("respuesta vacía")
-            guard_audits: list[tuple[str, dict[str, Any]]] = []
             violations = _output_violations(chat.text, chat.tool_results, turn)
             if violations:
                 # Una oportunidad de corregirse con lo que ya sabe, antes de degradar la conversación (A-5).
@@ -151,7 +161,7 @@ class BedrockAgent:
         except LLMError as exc:
             # Sin LLM no se inventa nada: texto seguro, y el turno cuenta como "sin resolver" (A-13).
             return AgentResult(text=LLM_FALLBACK_REPLY, intent="otro", llm_error=type(exc).__name__)
-        return AgentResult(text=chat.text, intent=classification.intent, raw_signal=classification.signal,
+        return AgentResult(text=chat.text, intent=intent, raw_signal=classification.signal,
                            tool_results=chat.tool_results, tool_calls=chat.tool_calls, guard_audits=guard_audits)
 
     async def summarize(self, transcript: str, facts: SummaryFacts) -> dict[str, str]:
