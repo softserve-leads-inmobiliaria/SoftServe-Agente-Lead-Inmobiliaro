@@ -322,6 +322,21 @@ CASOS = [
     ("en_promocion_inventada", "It has a 15% discount promotion.", "promociones_sin_promociones", "", False),
     ("en_enganche_inventado", "You need a down payment of at least 25% of the price.",
      "requisitos_venta_no_cumple", "", False),
+    # Un número que solo dijo el lead (#230): vale para repetir lo suyo, no para confirmarlo como dato de la
+    # propiedad cuando la ficha dice otra cosa (prop_00231 cuesta $185,000, tiene 2 dormitorios y 78.5 m²).
+    ("en_confirma_el_precio_del_lead", "Yes, it's $150,000.", "ficha_venta", "Is it $150,000?", False),
+    ("en_confirma_el_precio_del_lead_en_palabras", "It costs 150,000 dollars.", "ficha_venta",
+     "Is it 150,000?", False),
+    ("en_confirma_los_dormitorios_del_lead", "Yes, it has 3 bedrooms.", "ficha_venta",
+     "Does it have 3 bedrooms?", False),
+    ("en_confirma_el_area_del_lead", "It has 120 m² of space.", "ficha_venta", "Is it 120 m2?", False),
+    ("en_niega_el_precio_del_lead", "It's not $150,000: it's $185,000.", "ficha_venta", "Is it $150,000?", True),
+    ("en_repite_el_presupuesto_del_lead", "With your $200,000 budget, this one at $185,000 fits.", "ficha_venta",
+     "My budget is $200,000", True),
+    ("en_repite_lo_que_pidio_el_lead", "You're looking for 3 bedrooms; this one has 2 bedrooms.", "ficha_venta",
+     "I need 3 bedrooms", True),
+    ("en_numero_del_lead_sin_campo", "Got it, you want to move in 2 months.", "ficha_venta",
+     "We want to move in 2 months", True),
 ]
 
 assert len(CASOS) >= 30, "el gold set de C-7 tiene que tener al menos 30 casos (criterio de aceptación)"
