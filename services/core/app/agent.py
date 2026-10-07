@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from app import address_guard, factuality, markers, promise_guard
 from app.bedrock_llm import BedrockLLM, LLMError, LLMFormatError
@@ -27,7 +27,9 @@ HISTORY_LIMIT = 20  # mensajes previos que se le dan al LLM
 
 LLM_FALLBACK_REPLY = "Sorry, I had a problem processing your message. Could you send it again?"
 # A-5: ni el primer intento ni la regeneración pasaron la factualidad. Nunca se manda el dato dudoso.
-FACTUALITY_DEGRADE_REPLY = "I don't have verified information to answer that reliably." + HANDOFF_OFFER
+# Que no suene a error (#247): en una demo, "I don't have verified information" se leía como una falla.
+FACTUALITY_DEGRADE_REPLY = ("That's a detail I'd rather have one of our agents confirm, so you get it right."
+                            + HANDOFF_OFFER)
 # #200: el guardrail quitó una mención de categoría protegida y lo que queda es una pregunta ("does that
 # matter?"). Los dos agentes contestan esto con el mismo texto; si el mensaje pregunta otra cosa, el LLM
 # recibe la nota de `_with_notes` y contesta a su modo.
@@ -51,6 +53,10 @@ class TurnInput:
     protected_removed: bool = False  # el guardrail quitó una mención de categoría protegida (#200)
     # Lo que las tools dijeron de cada propiedad en turnos anteriores (#217): respalda números y amenidades.
     remembered: Mapping[str, Any] = field(default_factory=dict)
+    # Si la respuesta la va a dar el código según la intención y los campos del clasificador (la agenda, #229):
+    # entonces solo se clasifica. En vivo, el modelo contestaba igual, copiaba los horarios de la oferta, y la
+    # factualidad lo regeneraba para una respuesta que el lead nunca leía.
+    answered_by_code: Callable[[str, Mapping[str, bool]], bool] | None = None
 
 
 @dataclass(frozen=True)
@@ -131,6 +137,9 @@ class BedrockAgent:
                 # Un traspaso a una persona lo dice siempre el mismo texto: no se le deja al modelo.
                 return AgentResult(text=FakeLLM().generate_reply(intent), intent=intent,
                                    raw_signal=classification.signal, flags=flags)
+            if turn.answered_by_code is not None and turn.answered_by_code(intent, flags):
+                return AgentResult(text="", intent=intent, raw_signal=classification.signal,
+                                   guard_audits=guard_audits, flags=flags)
             if turn.protected_removed and "?" in turn.text and intent == "otro":
                 # #200: "does that matter?" se contesta siempre igual. En vivo el modelo ignoraba la nota y
                 # seguía con el enganche, o lo degradaba la factualidad.
@@ -147,7 +156,7 @@ class BedrockAgent:
                 return await catalog.call(name, arguments)
 
             visible = [_visible(s) for s in specs]
-            current = _with_notes(turn.text, turn.listing, turn.protected_removed)
+            current = _with_notes(turn.text, turn.listing, turn.protected_removed, turn.remembered)
             chat = await self._llm.chat(turn.history, current, visible, run_tool)
             if not chat.text:
                 raise LLMFormatError("respuesta vacía")
@@ -189,13 +198,21 @@ PROTECTED_NOTE = ("(Part of the lead's message was removed because it mentioned 
                   "matters, tell them it doesn't affect how we help them or the requirements.)")
 
 
-def _with_notes(text: str, listing: Mapping[str, Any] | None, protected_removed: bool = False) -> str:
+def _with_notes(text: str, listing: Mapping[str, Any] | None, protected_removed: bool = False,
+                remembered: Mapping[str, Any] | None = None) -> str:
     """El mensaje del lead más lo que el LLM tiene que saber del turno: la referencia del anuncio por el que
-    llegó (#122) y que el guardrail quitó una mención de categoría protegida (#200), sin el dato quitado.
+    llegó (#122), las de las propiedades que ya vio la conversación (#247) y que el guardrail quitó una mención de
+    categoría protegida (#200), sin el dato quitado.
     Solo lo ve el LLM: no se guarda en el historial ni cuenta como algo que dijo el lead para la factualidad."""
     notes = []
     if listing:
         notes.append(f"(The lead came from the listing for {listing.get('title')}, ref. {listing.get('id')}.)")
+    # El historial lleva el texto ya completado, sin las referencias: en la prueba de jurado el modelo las
+    # adivinaba ({prop_00455.price}) para escribir los marcadores, y la respuesta se degradaba.
+    seen = [f"{ref} ({fact.get('title')})" for ref, fact in (remembered or {}).items()
+            if isinstance(fact, Mapping) and fact.get("title") and ref != (listing or {}).get("id")]
+    if seen:
+        notes.append(f"(Properties already shown in this conversation: {'; '.join(seen)}.)")
     if protected_removed:
         notes.append(PROTECTED_NOTE)
     return "\n\n".join([text, *notes])
@@ -220,11 +237,14 @@ async def _output_violations(text: str, tool_results: Mapping[str, Any],
     bare = markers.outside(text)
     # El estado de una propiedad que no vino en este turno lo consulta el código (A-4), sin gastar una llamada al
     # LLM: en vivo, el modelo repetía "it's reserved" o escribía {ref.status} sin volver a llamar la tool (#243).
-    wanted = markers.missing_statuses(text, sources)
+    wanted = sorted(markers.missing_statuses(text, sources))
     if factuality.check_statuses(bare, tool_results, turn.text):
+        # Las que nombra la respuesta primero: "the only available house is the 3-bedroom one (ref. prop_00233)"
+        # habla de esa (#247, prueba de jurado); después, la del anuncio y la última recordada.
+        named = markers.REFERENCE.findall(bare)
         recent = list(turn.remembered)[-1:]
-        wanted |= {ref for ref in (listing_id, *recent) if isinstance(ref, str) and ref not in sources.statuses}
-    fresh = await _availabilities(catalog, sorted(wanted)[:MAX_STATUS_LOOKUPS])
+        wanted += [ref for ref in (*named, listing_id, *recent) if isinstance(ref, str) and ref not in sources.statuses]
+    fresh = await _availabilities(catalog, list(dict.fromkeys(wanted))[:MAX_STATUS_LOOKUPS])
     markers.add_statuses(sources, fresh)
     checked = {**tool_results, "verified_statuses": fresh} if fresh else tool_results
     lead_texts = [turn.text, *(content for role, content in turn.history if role == "user")]

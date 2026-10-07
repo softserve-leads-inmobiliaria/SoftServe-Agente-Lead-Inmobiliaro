@@ -125,6 +125,25 @@ def _property(prop: Mapping[str, Any] | None) -> dict[str, Any] | None:
     return {key: prop[key] for key in ("id", "title", "zone") if prop.get(key)}
 
 
+# Lo que se agrega a la respuesta del agente mientras la oferta sigue abierta (#247).
+OFFER_REMINDER = "Whenever you're ready, just reply with the number of the time that works for you."
+PREFERRED_REMINDER = "Whenever you're ready, tell me what day and time work for you for the visit."
+
+
+def answers(offer: Mapping[str, Any], text: str) -> bool:
+    """El mensaje contesta la oferta: elige uno de los horarios, o da un día u hora si se pidió el preferido.
+
+    Si no, es otra pregunta ("When will it be available again?") y la contesta el agente (#247): en la prueba de
+    jurado, la agenda contestaba a todo "I didn't quite get which time you prefer" y el lead no podía salir."""
+    if offer.get("preferred_time"):
+        return bool(_WHEN.search(_normalize(text)))
+    return choose_slot(text, list(offer.get("slots") or [])) is not None
+
+
+def reminder(offer: Mapping[str, Any]) -> str:
+    return PREFERRED_REMINDER if offer.get("preferred_time") else OFFER_REMINDER
+
+
 def ask_preferred(prop: Mapping[str, Any] | None) -> VisitStep:
     return VisitStep(PREFERRED_ASK, {OFFER_KEY: {"property": prop, "preferred_time": True}})
 

@@ -39,12 +39,32 @@ _HEDGE_BEFORE = re.compile(
 )
 
 
+# Una oración que dice que el dato no está o que lo confirma un asesor tampoco lo afirma, aunque la amenidad
+# quede lejos de la duda: "An agent can confirm the floor, building age, parking, and pet policy" (#247, visto
+# en la prueba de jurado). Salvo que la amenidad venga con un verbo que la afirme ("it has parking").
+_UNCERTAIN_SENTENCE = re.compile(
+    r"\b(?:confirm|check|verify|whether|not (?:listed|mentioned|included|specified|in the)|"
+    r"isn['\u2019]?t (?:listed|mentioned|included|specified|in the)|don['\u2019]?t have|do not have|no information"
+    r"|not sure|questions?|this information|these details|that information|those details"
+    # "An agent can give you that information along with the parking" (#247): lo que confirma un asesor.
+    r"|agent can (?:give|tell|confirm|answer|help))\b")
+_ASSERTED_BEFORE = re.compile(r"\b(?:has|have|includes?|comes with|features|offers|with)\b(?:\s+[\w'\u2019]+){0,2}\s*$")
+_SENTENCE_END = re.compile(r"[.!?\n]")
+
+
 def _unhedged(pattern: re.Pattern[str], normalized: str) -> bool:
-    """True si `pattern` aparece en `normalized` sin una negación/duda justo antes."""
+    """True si `pattern` aparece en `normalized` sin una negación/duda justo antes, ni en una oración que dice
+    que el dato no está o que hay que confirmarlo."""
     for match in pattern.finditer(normalized):
         before = normalized[max(0, match.start() - 40):match.start()]
-        if not _HEDGE_BEFORE.search(before):
-            return True
+        if _HEDGE_BEFORE.search(before):
+            continue
+        start = max((m.end() for m in _SENTENCE_END.finditer(normalized, 0, match.start())), default=0)
+        end = next((m.start() for m in _SENTENCE_END.finditer(normalized, match.end())), len(normalized))
+        sentence = normalized[start:end]
+        if _UNCERTAIN_SENTENCE.search(sentence) and not _ASSERTED_BEFORE.search(normalized[start:match.start()]):
+            continue
+        return True
     return False
 
 
@@ -90,6 +110,15 @@ _ALWAYS_PROHIBITED: dict[str, tuple[str, ...]] = {
         r"\bit(?:['\u2019]s| is) a done deal\b", r"\bit(?:['\u2019]s| is) a sure thing\b",
         r"\bi guarantee (?:that )?(?:it(?:['\u2019]ll| will)? close|you(?:['\u2019]ll| will) (?:get|buy))\w*\b",
         r"\b(?:the|this|your) (?:sale|purchase|deal) is guaranteed\b",
+    ),
+    # La visita la reserva la agenda (B-8) y su texto no pasa por este guardrail: si lo dice el modelo, es falso.
+    # En la prueba de jurado, después de un traspaso, contestó "Your visit is being scheduled for Sunday" (#247).
+    "visita_sin_agenda": (
+        r"\b(?:your|the) (?:visit|viewing|tour|appointment) (?:is|has been|was) (?:being )?"
+        r"(?:scheduled|booked|confirmed|set)\b",
+        r"\bi(?:['’]ve| have| just)? (?:scheduled|booked|confirmed) (?:your|the|a) (?:visit|viewing|tour)\b",
+        r"\byou(?:['’]re| are) (?:all )?(?:booked|scheduled) for\b",
+        r"\b(?:tu|la) visita (?:ya )?(?:esta|quedo) (?:agendada|reservada|confirmada)\b",
     ),
 }
 _PROHIBITED = {kind: re.compile("|".join(patterns)) for kind, patterns in _ALWAYS_PROHIBITED.items()}

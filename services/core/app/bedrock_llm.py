@@ -56,11 +56,13 @@ CLASSIFIER_SYSTEM = (
     'their own or with other people), or "no_declarado". Do not distinguish who they decide with.\n'
     '- "urgency": "inmediata", "3_meses", "explorando" or "no_declarada", ONLY if the current message says so.\n'
     '- "asks_for_person": true if the current message asks to talk to a person (an agent, an advisor, someone '
-    "who calls them), or accepts the offer to put them in touch with one that the LAST ASSISTANT MESSAGE "
-    'made; otherwise false.\n'
+    "who calls them), or clearly says yes to the offer to put them in touch with one that the LAST ASSISTANT "
+    "MESSAGE made (\"yes\", \"please do\", \"ok, connect me\"); giving information or answering another "
+    'question is not saying yes. Otherwise false.\n'
     '- "wants_alert": true if the current message asks to be notified when a property like the one they want '
     "comes up, or accepts the offer to notify them that the LAST ASSISTANT MESSAGE made; otherwise false.\n"
-    '- "wants_visit": true if the current message asks to visit or see a property in person; otherwise false.\n'
+    '- "wants_visit": true if the current message asks to visit or see a property in person; otherwise false. '
+    'Reserving, holding or buying a property is not a visit.\n'
     "Extract only from the CURRENT MESSAGE. Do not infer anything about the person's origin, religion, "
     "gender, nationality or family situation."
 )
@@ -107,9 +109,14 @@ CHAT_SYSTEM = (
     "- The exact address ({ref.address_exact}) is shared only once the lead is qualified (budget, who decides "
     "and when); until then, give {ref.address_approx} and don't give any other reason.\n"
     "- Do not promise discounts, holds, credit approval or the closing of a deal.\n"
+    "- Don't calculate differences, totals or other figures: give each property's own values. Don't give "
+    "opinions about a property or an area, or legal advice.\n"
     "- Do not ask about or comment on origin, religion, gender, nationality or family situation. If the "
     "lead asks whether any of that matters, say clearly that it doesn't affect how we help them or the "
     "requirements, and go on with the conversation.\n"
+    "- Visits are booked by the system, never by you: don't say a visit is booked or scheduled, and don't say "
+    "you can't arrange one. If the lead wants to visit and it isn't clear which property, ask which one.\n"
+    "- Before saying we don't have something (a property, a kind, an area), search for it.\n"
     "- If you can't help with something, offer to put the lead in touch with an agent.\n"
     "- Ask at most one question per message."
 )
@@ -402,7 +409,8 @@ def _described(violation: Any) -> str:
         hint = getattr(violation, "hint", None)
         return f"number '{violation.value}'" + (f" (write {hint} instead)" if hint else " (no marker gives it)")
     if violation.kind == "marker":
-        return f"marker '{violation.value}' (no tool returned that property or field)"
+        hint = getattr(violation, "hint", None)
+        return f"marker '{violation.value}' (" + (f"write {hint}" if hint else "no tool returned that property or field") + ")"
     if violation.kind == "reference":
         return f"reference '{violation.value}' (no tool returned it)"
     return f"{violation.kind} '{violation.value}'"

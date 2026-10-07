@@ -49,13 +49,18 @@ _STATUS = re.compile(_NOT_BEFORE + r"\b(" + "|".join(sorted(_STATUS_WORDS, key=l
 # Ni el de las promociones ("any promotions available") ni el que va antes de un tipo con su tamaño ("available
 # 4-bedroom houses"): los dos se vieron con los marcadores (#243).
 _INVENTORY = (r"(?:houses|homes|properties|options|apartments|studios|rentals|listings|units|lots|spaces|places|ones"
-              r"|promotions|deals|offers|discounts)")
+              r"|promotions|deals|offers|discounts"
+              # "land available for sale", "that information available" (#247, prueba de jurado).
+              r"|land|information|info|details|data)")
 _INVENTORY_NEXT = re.compile(r"(?:\s+[\w-]+)?\s+" + _INVENTORY + r"\b", re.IGNORECASE)
 _INVENTORY_BEFORE = re.compile(r"\b" + _INVENTORY + r"\s+(?:\w+\s+)?$", re.IGNORECASE)
 # Ni el de una oración de relativo sobre ellas: "other 4-bedroom houses for sale in Usaquen that are currently
 # available" (#243, visto en vivo).
 _INVENTORY_THAT = re.compile(r"\b" + _INVENTORY + r"\b[^.!?\n]{0,60}\b(?:that|which) (?:are|is)(?: \w+)? $",
                              re.IGNORECASE)
+# Ni el de lo que se va a buscar: "let me help you find an available property" (#243, visto en vivo).
+_SEARCHING_FOR = re.compile(r"\b(?:find|look for|looking for|search for|searching for)\s+(?:an?|some|another)\s+$",
+                            re.IGNORECASE)
 _OTHER_INVENTORY_BEFORE = re.compile(r"\b(?:other|more|any|no)(?:\s+[\w-]+){0,3}?\s+" + _INVENTORY + r"\s+$",
                                      re.IGNORECASE)
 
@@ -64,7 +69,7 @@ def _not_the_property(text: str, match: re.Match[str]) -> bool:
     """Un "available" que no afirma el estado de la propiedad de la que se habla."""
     before = text[:match.start()]
     return bool(_NOT_THE_PROPERTY.search(before) or _OTHER_INVENTORY_BEFORE.search(before)
-                or _INVENTORY_BEFORE.search(before) or _INVENTORY_THAT.search(before)
+                or _INVENTORY_BEFORE.search(before) or _INVENTORY_THAT.search(before) or _SEARCHING_FOR.search(before)
                 or _INVENTORY_NEXT.match(text, match.end()))
 
 
@@ -151,9 +156,16 @@ _FIELDS: dict[str, tuple[frozenset[str], re.Pattern[str] | None, re.Pattern[str]
     "area": (frozenset({"m2"}), None, re.compile(r"^\s*(?:m²|m2|sq\.?\s?m|square met)", re.IGNORECASE)),
 }
 # Lo que, en la misma frase, dice que el número es del lead (su presupuesto, lo que pidió) y no de la propiedad.
-_ABOUT_THE_LEAD = re.compile(r"\b(?:your|budget|afford|up to|you(?:'ve| have| can| could| mentioned| need|"
-                             r"'re looking for| are looking for| asked for))\b", re.IGNORECASE)
+# "With a monthly income of $3,000, you don't meet…" también es del lead (#247, prueba de jurado).
+_ABOUT_THE_LEAD = re.compile(r"\b(?:your|budget|afford|up to|you(?:'ve| have| can| could| mentioned| need| earn|"
+                             r"'re looking for| are looking for| asked for)"
+                             r"|with (?:a |an )?(?:monthly )?(?:income|salary|down payment|savings) of)\b",
+                             re.IGNORECASE)
 _NEGATED = re.compile(r"(?:\bnot|n't|\bno)\s+(?:[\w$]+\s+){0,2}\$?\s*$", re.IGNORECASE)
+# El número del lead como límite de lo que se buscó: "I found 1 property under $150,000" no le pone ese precio a
+# la propiedad (#247, prueba de jurado).
+_RANGE_BEFORE = re.compile(r"\b(?:under|below|less than|up to|within|over|above|more than|at most|at least"
+                           r"|no more than|cheaper than)\s+\$?\s*$", re.IGNORECASE)
 _SENTENCE = re.compile(r"[^.!?\n]*(?:[.!?\n]|$)")
 
 
@@ -179,8 +191,8 @@ def _claimed_as_property_data(text: str, lead_only: set[str], sources: Mapping[s
             if number not in lead_only:
                 continue
             before, after = sentence.group()[:match.start()], sentence.group()[match.end():]
-            if _NEGATED.search(before):
-                continue  # "it's not $150,000": no lo afirma
+            if _NEGATED.search(before) or _RANGE_BEFORE.search(before):
+                continue  # "it's not $150,000" o "under $150,000": no lo afirma
             for keys, prefix, suffix in _FIELDS.values():
                 if (prefix and prefix.search(before)) or (suffix and suffix.search(after)):
                     actual: set[str] = set()
