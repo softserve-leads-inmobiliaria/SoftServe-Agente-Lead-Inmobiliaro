@@ -7,11 +7,11 @@ texto que dejó pasar el guardrail de entrada: sin PII ni menciones de categorí
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
-from app import address_guard, factuality, markers, promise_guard
-from app.bedrock_llm import BedrockLLM, LLMError, LLMFormatError
+from app import address_guard, factuality, interest, markers, promise_guard
+from app.bedrock_llm import BedrockLLM, Classification, LLMError, LLMFormatError
 from app.fakes.fake_llm import FakeLLM
 from app.fsm import HUMAN_INTENTS
 from app.handoff import asks_for_a_person
@@ -56,7 +56,7 @@ class TurnInput:
     # Si la respuesta la va a dar el código según la intención y los campos del clasificador (la agenda, #229):
     # entonces solo se clasifica. En vivo, el modelo contestaba igual, copiaba los horarios de la oferta, y la
     # factualidad lo regeneraba para una respuesta que el lead nunca leía.
-    answered_by_code: Callable[[str, Mapping[str, bool], Mapping[str, Any] | None], bool] | None = None
+    answered_by_code: Callable[[Classification], bool] | None = None
 
 
 @dataclass(frozen=True)
@@ -74,6 +74,8 @@ class AgentResult:
     flags: dict[str, bool] = field(default_factory=dict)
     # Cuándo prefiere el lead la visita (`visits.visit_when`, #247), si el clasificador lo leyó en el mensaje.
     visit_when: dict[str, Any] | None = None
+    # De qué propiedad mostrada habla el mensaje (`interest.refers_to`, #247): un id validado, `UNCLEAR` o None.
+    refers_to: str | None = None
 
 
 class ToolCatalog(Protocol):
@@ -126,8 +128,10 @@ class BedrockAgent:
             return AgentResult(text=FakeLLM().generate_reply("otro"), intent="otro")
         last_assistant = next((content for role, content in reversed(turn.history) if role == "assistant"), None)
         try:
-            classification = await self._llm.classify(turn.text, last_assistant)
+            shown = interest.shown_properties(turn.remembered, turn.listing)
+            classification = await self._llm.classify(turn.text, last_assistant, shown)
             intent, flags, when = classification.intent, classification.flags, classification.when
+            about = classification.refers_to
             guard_audits: list[tuple[str, dict[str, Any]]] = []
             asks = flags.get("asks_for_person")
             if intent == "solicitud_humano" and not (asks if asks is not None
@@ -138,15 +142,15 @@ class BedrockAgent:
             if intent in HUMAN_INTENTS:
                 # Un traspaso a una persona lo dice siempre el mismo texto: no se le deja al modelo.
                 return AgentResult(text=FakeLLM().generate_reply(intent), intent=intent,
-                                   raw_signal=classification.signal, flags=flags, visit_when=when)
-            if turn.answered_by_code is not None and turn.answered_by_code(intent, flags, when):
+                                   raw_signal=classification.signal, flags=flags, visit_when=when, refers_to=about)
+            if turn.answered_by_code is not None and turn.answered_by_code(replace(classification, intent=intent)):
                 return AgentResult(text="", intent=intent, raw_signal=classification.signal,
-                                   guard_audits=guard_audits, flags=flags, visit_when=when)
+                                   guard_audits=guard_audits, flags=flags, visit_when=when, refers_to=about)
             if turn.protected_removed and "?" in turn.text and intent == "otro":
                 # #200: "does that matter?" se contesta siempre igual. En vivo el modelo ignoraba la nota y
                 # seguía con el enganche, o lo degradaba la factualidad.
                 return AgentResult(text=PROTECTED_ANSWER, intent="otro", raw_signal=classification.signal,
-                                   guard_audits=guard_audits, flags=flags, visit_when=when)
+                                   guard_audits=guard_audits, flags=flags, visit_when=when, refers_to=about)
             specs = await catalog.tool_specs()
             hidden = {s["name"]: [a for a in CODE_CONTROLLED_ARGUMENTS if a in s["input_schema"].get("properties", {})]
                       for s in specs}
@@ -158,7 +162,7 @@ class BedrockAgent:
                 return await catalog.call(name, arguments)
 
             visible = [_visible(s) for s in specs]
-            current = _with_notes(turn.text, turn.listing, turn.protected_removed, turn.remembered)
+            current = _with_notes(turn.text, turn.listing, turn.protected_removed, turn.remembered, about)
             chat = await self._llm.chat(turn.history, current, visible, run_tool)
             if not chat.text:
                 raise LLMFormatError("respuesta vacía")
@@ -181,14 +185,14 @@ class BedrockAgent:
                     return AgentResult(text=FACTUALITY_DEGRADE_REPLY, intent="otro",
                                        raw_signal=classification.signal, tool_results=chat.tool_results,
                                        tool_calls=chat.tool_calls, guard_audits=guard_audits, flags=flags,
-                                       visit_when=when)
+                                       visit_when=when, refers_to=about)
             chat.text = promise_guard.without_urgency(reply)
         except LLMError as exc:
             # Sin LLM no se inventa nada: texto seguro, y el turno cuenta como "sin resolver" (A-13).
             return AgentResult(text=LLM_FALLBACK_REPLY, intent="otro", llm_error=type(exc).__name__)
         return AgentResult(text=chat.text, intent=intent, raw_signal=classification.signal,
                            tool_results=chat.tool_results, tool_calls=chat.tool_calls, guard_audits=guard_audits,
-                           flags=flags, visit_when=when)
+                           flags=flags, visit_when=when, refers_to=about)
 
     async def summarize(self, transcript: str, facts: SummaryFacts) -> dict[str, str]:
         """El resumen del traspaso (A-16). Si el LLM falla, lanza `LLMError`: la ficha sale sin resumen."""
@@ -199,13 +203,16 @@ class BedrockAgent:
 PROTECTED_NOTE = ("(Part of the lead's message was removed because it mentioned a personal characteristic "
                   "such as origin, religion, gender, nationality or family situation. If they ask whether it "
                   "matters, tell them it doesn't affect how we help them or the requirements.)")
+UNCLEAR_NOTE = ("(It's not clear which of the properties already shown the lead means: ask them which one, "
+                "naming the options. Don't guess.)")
 
 
 def _with_notes(text: str, listing: Mapping[str, Any] | None, protected_removed: bool = False,
-                remembered: Mapping[str, Any] | None = None) -> str:
+                remembered: Mapping[str, Any] | None = None, about: str | None = None) -> str:
     """El mensaje del lead más lo que el LLM tiene que saber del turno: la referencia del anuncio por el que
-    llegó (#122), las de las propiedades que ya vio la conversación (#247) y que el guardrail quitó una mención de
-    categoría protegida (#200), sin el dato quitado.
+    llegó (#122), las de las propiedades que ya vio la conversación (#247), de cuál de ellas habla el mensaje según
+    el clasificador (`about`, #247) y que el guardrail quitó una mención de categoría protegida (#200), sin el dato
+    quitado.
     Solo lo ve el LLM: no se guarda en el historial ni cuenta como algo que dijo el lead para la factualidad."""
     notes = []
     if listing:
@@ -216,6 +223,12 @@ def _with_notes(text: str, listing: Mapping[str, Any] | None, protected_removed:
             if isinstance(fact, Mapping) and fact.get("title") and ref != (listing or {}).get("id")]
     if seen:
         notes.append(f"(Properties already shown in this conversation: {'; '.join(seen)}.)")
+    # En la prueba de jurado, "the price of the reserved apartment" se contestó con una referencia inventada (M4).
+    focused = interest.focused_property(about, interest.shown_properties(remembered or {}, listing))
+    if focused:
+        notes.append(f"(The lead's message is about {focused['id']} ({focused['title']}).)")
+    elif about == interest.UNCLEAR:
+        notes.append(UNCLEAR_NOTE)
     if protected_removed:
         notes.append(PROTECTED_NOTE)
     return "\n\n".join([text, *notes])

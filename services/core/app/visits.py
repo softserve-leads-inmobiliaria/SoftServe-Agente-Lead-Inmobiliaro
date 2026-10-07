@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Mapping
 
+from app.markers import STATUS
 from app.scheduling_client import SchedulingClient, SchedulingError
 
 LOCAL_TZ = timezone(timedelta(hours=-5))  # hora de Colombia, la misma de la agenda (DT-32, DT-55)
@@ -196,6 +197,13 @@ def answers(offer: Mapping[str, Any], text: str, when: Mapping[str, Any] | None 
 
 def reminder(offer: Mapping[str, Any]) -> str:
     return PREFERRED_REMINDER if offer.get("preferred_time") else OFFER_REMINDER
+
+
+def not_visitable(prop: Mapping[str, Any], status: str) -> str:
+    """La propiedad que pidió visitar está apartada o cerrada (#247): lo dice el código, con el estado del catálogo."""
+    label = STATUS.get(status, "not available")
+    return (f"{prop['title']} is {label} right now, so I can't book a visit to it. "
+            "Would you like me to show you similar options that are available?")
 
 
 def ask_preferred(prop: Mapping[str, Any] | None) -> VisitStep:

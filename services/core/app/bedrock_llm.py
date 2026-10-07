@@ -22,6 +22,7 @@ from opentelemetry import trace
 from starlette.concurrency import run_in_threadpool
 
 from app.fakes.fake_llm import INTENTS
+from app.interest import UNCLEAR, refers_to, shown_lines
 from app.llm_retry import RETRY, Retrier, RetryBudget, RetryPolicy, error_code
 from app.markers import FIELDS
 from app.rate_limit import RateLimited, RateLimits
@@ -71,6 +72,11 @@ CLASSIFIER_SYSTEM = (
     '"days" (a list of "mon", "tue", "wed", "thu", "fri", "sat", "sun"; "this weekend" is ["sat", "sun"]; '
     'empty if no day is named), "part_of_day" ("morning", "afternoon", "evening" or null) and "other_day" '
     "(true if they ask for a different day than the times the LAST ASSISTANT MESSAGE offered). Otherwise null.\n"
+    '- "refers_to": only if PROPERTIES SHOWN is given and the current message is about one of them: its id, '
+    'whether the message names it or describes it ("the cheaper one", "the house", "the one in Laureles", "it" '
+    'when the LAST ASSISTANT MESSAGE talked about only one). "' + UNCLEAR + '" if it is about one of them but '
+    "you can't tell which. null if it is about none of them or about a new search. Never an id that is not in "
+    "the list.\n"
     "Extract only from the CURRENT MESSAGE. Do not infer anything about the person's origin, religion, "
     "gender, nationality or family situation."
 )
@@ -164,6 +170,8 @@ class Classification:
     signal: dict[str, Any]
     flags: dict[str, bool] = field(default_factory=dict)  # solo los `CLASSIFIER_FLAGS` que vinieron booleanos
     when: dict[str, Any] | None = None  # cuándo prefiere la visita (`visits.visit_when`), si lo dijo (#247)
+    # De qué propiedad mostrada habla el mensaje (`interest.refers_to`, #247): un id de la lista, `UNCLEAR` o None.
+    refers_to: str | None = None
 
 
 @dataclass
@@ -275,11 +283,15 @@ class BedrockLLM:
                 _report_retry(code, attempt, decision.delay or 0.0, decision.provider_delay)
                 await self._retrier.sleep(decision.delay or 0.0)
 
-    async def classify(self, text: str, last_assistant: str | None = None) -> Classification:
-        """Intención y señal cruda del mensaje actual. El contexto es solo la última respuesta del asistente."""
+    async def classify(self, text: str, last_assistant: str | None = None,
+                       shown: Sequence[Mapping[str, Any]] = ()) -> Classification:
+        """Intención y señal cruda del mensaje actual. El contexto es la última respuesta del asistente y las
+        propiedades que ya mostró la conversación (`shown`, `interest.shown_properties`), para `refers_to`."""
         prompt = f"CURRENT MESSAGE:\n{text}"
         if last_assistant:
             prompt = f"LAST ASSISTANT MESSAGE (context only):\n{last_assistant}\n\n{prompt}"
+        if shown:
+            prompt = f"PROPERTIES SHOWN (oldest first):\n{shown_lines(list(shown))}\n\n{prompt}"
         response = await self._converse(
             self.classifier_model_id, system=[{"text": CLASSIFIER_SYSTEM}],
             messages=[{"role": "user", "content": [{"text": prompt}]}],
@@ -289,7 +301,8 @@ class BedrockLLM:
         signal = {key: data.get(key) for key in ("budget_hint", "decision_maker", "urgency")}
         flags = {key: data[key] for key in CLASSIFIER_FLAGS if isinstance(data.get(key), bool)}
         when = visit_when(data.get("visit_when"))
-        return Classification(intent if intent in INTENTS else "otro", signal, flags, when)
+        about = refers_to(data.get("refers_to"), list(shown))
+        return Classification(intent if intent in INTENTS else "otro", signal, flags, when, about)
 
     async def summarize(self, transcript: str, facts: str) -> dict[str, str]:
         """El resumen del traspaso para el asesor (A-16), con el modelo de conversación y sin tools."""

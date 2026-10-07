@@ -20,6 +20,7 @@ from app import alerts, facts, reminders, scheduling_client, summary, visits
 from app.agent import Agent, AgentResult, FakeAgent, TurnInput
 from app.alternatives import Alternatives
 from app.availability import AvailabilityGuard
+from app.bedrock_llm import Classification
 from app.demand import SearchLog, UnmetSearch
 from app.fakes.fake_core import FakeCore
 from app.fakes.fake_llm import FakeLLM
@@ -45,10 +46,13 @@ from app.input_guard import (
     inspect_input,
 )
 from app.interest import (
+    UNCLEAR,
+    focused_property,
     interactions,
     listing_greeting,
     property_of_interest,
     remember_property,
+    shown_properties,
     zone_of_interest,
 )
 from app.language_guard import NOT_ENGLISH_REPLY
@@ -282,32 +286,61 @@ def _first_sight(featured: Mapping[str, Any] | None, tool_results: Mapping[str, 
 
 
 async def _visit_step(event: Mapping[str, Any], context: GuardContext, result: AgentResult,
-                      text: str) -> VisitStep | None:
+                      text: str, catalog: Catalog, shown: list[dict[str, Any]]) -> VisitStep | None:
     """El paso de agenda de este turno (B-8), o None si el turno no tiene que ver con la visita.
 
     Pedir la visita la arranca desde cualquier estado activo (#229, DT-61): se ofrecen horarios de la propiedad
     de interés. Si no hay una, contesta el agente, que pregunta cuál. En `SCHEDULE` se lee la respuesta del lead:
     si no contesta la oferta, contesta el agente y la oferta sigue abierta (#247). Si la oferta se perdió (p. ej.
-    un turno forzado por el guardrail no la arrastró), se vuelve a ofrecer.
+    un turno forzado por el guardrail no la arrastró), se vuelve a ofrecer. Si el lead nombra otra de las
+    propiedades mostradas (`refers_to`), la oferta es de esa.
+
+    La propiedad elegida por `refers_to` viene de la memoria, sin estado: se consulta antes de ofrecer horarios,
+    y una apartada o cerrada se contesta con texto fijo.
     """
     state, previous = context.fsm_state, context.last_tool_results
-    prop = _visit_property(result.tool_results, previous)
+    focus = focused_property(result.refers_to, shown)
+    prop = _visit_property(result.tool_results, previous, result.refers_to, shown)
     if not _schedules(state, result.intent, result.flags, prop, previous.get(OFFER_KEY), text, result.visit_when):
         return None
     conversation_id, lead_id = (str(value) for value in _ids(event))
     agenda, today = scheduling_client.get_scheduling(), visits.today_local()
     offer = previous.get(OFFER_KEY) if state == "SCHEDULE" else None
-    if isinstance(offer, Mapping):
+    offered_id = ((offer or {}).get("property") or {}).get("id") if isinstance(offer, Mapping) else None
+    if isinstance(offer, Mapping) and (focus is None or focus["id"] == offered_id):
         return await visits.follow_up(agenda, conversation_id, lead_id, offer, text, today, result.visit_when)
+    if focus is not None and prop is not None and prop.get("id") == focus["id"] and not prop.get("status"):
+        status = await _current_status(catalog, focus["id"])
+        if status not in (None, "disponible"):
+            return VisitStep(visits.not_visitable(focus, status), {})
     return await visits.start(agenda, lead_id, prop, today, result.visit_when)
 
 
-def _visit_property(tool_results: Mapping[str, Any], previous: Mapping[str, Any]) -> dict[str, Any] | None:
-    """La propiedad que se agenda: la que se miró en el turno (o la del anuncio), la de interés de los turnos
-    anteriores o, si el turno solo buscó, el único resultado. Con varios resultados no se adivina cuál (#247: "the
-    cheapest one" agendaba el primero de la búsqueda), tampoco turnos después ("ok i wan to see it"); contesta
-    el agente, que puede mirar la propiedad y agendarla en el mismo turno."""
+async def _current_status(catalog: Catalog, prop_id: str) -> str | None:
+    """El estado de la propiedad según el catálogo, o None si no se pudo consultar (se sigue como hasta ahora)."""
+    try:
+        found = await catalog.call("get_availability", {"property_id": prop_id})
+    except Exception:
+        logger.warning("no se pudo consultar el estado de la propiedad antes de ofrecer la visita")
+        return None
+    status = found.get("status") if isinstance(found, Mapping) else None
+    return status if isinstance(status, str) else None
+
+
+def _visit_property(tool_results: Mapping[str, Any], previous: Mapping[str, Any], about: str | None = None,
+                    shown: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
+    """La propiedad que se agenda: la mostrada de la que habla el mensaje según el clasificador (`about`), la que
+    se miró en el turno (o la del anuncio), la de interés de los turnos anteriores o, si el turno solo buscó, el
+    único resultado. Con varios resultados no se adivina cuál (#247: "the cheapest one" agendaba el primero de la
+    búsqueda), tampoco turnos después ("ok i wan to see it"); contesta el agente, que puede mirar la propiedad y
+    agendarla en el mismo turno. Si el clasificador no sabe cuál (`UNCLEAR`), tampoco: el agente pregunta."""
+    if about == UNCLEAR:
+        return None
     looked = tool_results.get("get_property")
+    focus = focused_property(about, shown or [])
+    if focus is not None:
+        same = isinstance(looked, Mapping) and looked.get("id") == focus["id"]
+        return dict(looked) if same else focus
     if isinstance(looked, Mapping) and looked.get("id"):
         return dict(looked)
     remembered = property_of_interest(previous, sure=True)
@@ -340,14 +373,19 @@ def _schedules(state: str, intent: str, flags: Mapping[str, bool], prop: Mapping
     return state in VISIT_STATES and asks and visitable
 
 
-def _answered_by_code(context: GuardContext, listing: Mapping[str, Any] | None,
-                      text: str) -> Callable[[str, Mapping[str, bool], Mapping[str, Any] | None], bool]:
+def _answered_by_code(context: GuardContext, listing: Mapping[str, Any] | None, text: str,
+                      shown: list[dict[str, Any]]) -> Callable[[Classification], bool]:
     """Para el agente: si la respuesta de este turno la va a dar la agenda, solo hace falta clasificar (#229).
-    Es la misma regla que `_visit_step`, con la propiedad que este tendrá: la del anuncio o la recordada."""
+    Es la misma regla que `_visit_step`, con la propiedad que este tendrá: la mostrada de la que habla el mensaje,
+    la del anuncio o la recordada."""
     previous = context.last_tool_results
-    prop = _visit_property({"get_property": listing} if listing else {}, previous)
-    return lambda intent, flags, when=None: _schedules(context.fsm_state, intent, flags, prop,
-                                                       previous.get(OFFER_KEY), text, when)
+    looked = {"get_property": listing} if listing else {}
+
+    def answered(classification: Classification) -> bool:
+        prop = _visit_property(looked, previous, classification.refers_to, shown)
+        return _schedules(context.fsm_state, classification.intent, classification.flags, prop,
+                          previous.get(OFFER_KEY), text, classification.when)
+    return answered
 
 
 def _alert_step(context: GuardContext, result: AgentResult, searches: SearchLog | None,
@@ -411,7 +449,7 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     span.set_attribute("turn.outcome", "not_english" if verdict.not_english
                        else "out_of_domain" if verdict.out_of_domain
                        else "jailbreak" if verdict.jailbreak else "normal")
-    listing, searches = None, None
+    listing, searches, shown = None, None, []
     if verdict.not_english:
         # Se pide repetirlo en inglés; como fuera de dominio, no mueve la FSM ni cuenta como frustración.
         result = AgentResult(text=NOT_ENGLISH_REPLY, intent="otro")
@@ -429,19 +467,21 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
         searches = SearchLog(Alternatives(catalog))
         guarded = AvailabilityGuard(searches)
         listing = await _listing(event, guarded, context.lead_qualified)
+        shown = shown_properties(facts.evidence(context.last_tool_results, now), listing)
         result = await agent.run(TurnInput(event=event, text=text, history=context.history,
                                            lead_qualified=context.lead_qualified, listing=listing,
                                            protected_removed=verdict.protected_category,
                                            remembered=facts.evidence(context.last_tool_results, now),
                                            answered_by_code=_answered_by_code(context, listing,
-                                                                              verdict.signal_text)), guarded)
+                                                                              verdict.signal_text, shown)),
+                                 guarded)
         if listing:
             result = _with_listing(result, listing, greet=not event["text"].strip())
     counts = not (verdict.jailbreak or verdict.out_of_domain or verdict.not_english)
     visit = None
     if counts and result.intent not in HUMAN_INTENTS:
         try:
-            visit = await _visit_step(event, context, result, verdict.signal_text)
+            visit = await _visit_step(event, context, result, verdict.signal_text, catalog, shown)
         except Exception:
             logger.exception("fallo el paso de agenda; se pide el horario preferido")
             visit = visits.ask_preferred(property_of_interest(context.last_tool_results))
@@ -465,7 +505,8 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     outbound = FakeCore().handle_event(event, intent=result.intent, text=result.text)
     if verdict.pii:
         outbound["text"] += " " + PII_REMINDER
-    remembered = facts.carry(remember_property(result.tool_results, context.last_tool_results),
+    remembered = facts.carry(remember_property(result.tool_results, context.last_tool_results,
+                                                focused_property(result.refers_to, shown)),
                              result.tool_results, context.last_tool_results, now)
     evidence = TurnEvidence(raw_signal=_raw_signal(verdict, result.raw_signal), listing=listing,
                             tool_results=alerts.carry_offered(remembered, context.last_tool_results))
