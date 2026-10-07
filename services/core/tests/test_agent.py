@@ -586,3 +586,20 @@ def test_the_classifiers_answers_reach_the_turn():
                              text("Sure."))
     result = run(agent_for(client).run(turn("Let me know when one comes up"), FakeCatalog()))
     assert result.flags == {"wants_alert": True, "wants_visit": False}
+
+
+def test_when_the_agenda_answers_only_the_classifier_is_called():
+    """#229: en vivo el modelo contestaba igual a "1", copiaba los horarios, y se regeneraba para nada."""
+    client = ScriptedBedrock(classification("otro", wants_visit=True))
+    asked = []
+    message = TurnInput(event=EVENT, text="Can I go see it?",
+                        answered_by_code=lambda intent, flags: asked.append((intent, flags)) or True)
+    result = run(agent_for(client).run(message, FakeCatalog()))
+    assert (result.text, result.flags) == ("", {"wants_visit": True}) and client.calls_to(CHAT) == []
+    assert asked == [("otro", {"wants_visit": True})]
+
+
+def test_a_human_request_is_answered_even_if_the_agenda_would_take_the_turn():
+    client = ScriptedBedrock(classification("solicitud_humano", asks_for_person=True))
+    message = TurnInput(event=EVENT, text="I want to talk to an agent", answered_by_code=lambda intent, flags: True)
+    assert run(agent_for(client).run(message, FakeCatalog())).intent == "solicitud_humano"

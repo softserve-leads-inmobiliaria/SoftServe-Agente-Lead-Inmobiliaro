@@ -56,6 +56,10 @@ CASOS = [
      "With your $200,000 budget, 2-bedroom apartment in El Poblado at $185,000 fits."),
     ("lista_numerada", "1. {prop_00231.title}\n2. {prop_00232.title}", ("busqueda_venta_poblado",), "",
      "1. 2-bedroom apartment in El Poblado\n2. 1-bedroom apartment in El Poblado"),
+    # En negrita, como la escribió el modelo en vivo (#229): sigue siendo la numeración.
+    ("lista_numerada_en_negrita", "**1. Ref. prop_00231** - 2-bedroom apartment\n**2. Ref. prop_00232** - "
+     "1-bedroom apartment", ("busqueda_venta_poblado",), "",
+     "**1. Ref. prop_00231** - 2-bedroom apartment\n**2. Ref. prop_00232** - 1-bedroom apartment"),
     # El número del lead se puede repetir: que no se afirme como dato de la propiedad lo revisa #230 (factuality).
     ("recamaras_que_pidio_el_lead", "You asked for 2 bedrooms: {prop_00231.title}.", ("busqueda_venta_poblado",),
      "I need 2 bedrooms", "You asked for 2 bedrooms: 2-bedroom apartment in El Poblado."),
