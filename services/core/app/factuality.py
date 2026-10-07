@@ -52,6 +52,10 @@ _INVENTORY = (r"(?:houses|homes|properties|options|apartments|studios|rentals|li
               r"|promotions|deals|offers|discounts)")
 _INVENTORY_NEXT = re.compile(r"(?:\s+[\w-]+)?\s+" + _INVENTORY + r"\b", re.IGNORECASE)
 _INVENTORY_BEFORE = re.compile(r"\b" + _INVENTORY + r"\s+(?:\w+\s+)?$", re.IGNORECASE)
+# Ni el de una oración de relativo sobre ellas: "other 4-bedroom houses for sale in Usaquen that are currently
+# available" (#243, visto en vivo).
+_INVENTORY_THAT = re.compile(r"\b" + _INVENTORY + r"\b[^.!?\n]{0,60}\b(?:that|which) (?:are|is)(?: \w+)? $",
+                             re.IGNORECASE)
 _OTHER_INVENTORY_BEFORE = re.compile(r"\b(?:other|more|any|no)(?:\s+[\w-]+){0,3}?\s+" + _INVENTORY + r"\s+$",
                                      re.IGNORECASE)
 
@@ -60,7 +64,8 @@ def _not_the_property(text: str, match: re.Match[str]) -> bool:
     """Un "available" que no afirma el estado de la propiedad de la que se habla."""
     before = text[:match.start()]
     return bool(_NOT_THE_PROPERTY.search(before) or _OTHER_INVENTORY_BEFORE.search(before)
-                or _INVENTORY_BEFORE.search(before) or _INVENTORY_NEXT.match(text, match.end()))
+                or _INVENTORY_BEFORE.search(before) or _INVENTORY_THAT.search(before)
+                or _INVENTORY_NEXT.match(text, match.end()))
 
 
 @dataclass(frozen=True)

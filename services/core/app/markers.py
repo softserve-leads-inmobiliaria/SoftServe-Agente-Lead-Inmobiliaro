@@ -7,9 +7,11 @@ otra propiedad, no se puede escribir: el marcador nombra la propiedad y el campo
 - **De dónde salen los valores.** De las tools del turno y de la memoria de hechos (`app/facts.py`, DT-59). El
   estado, solo de las tools del turno (A-4), igual que en la factualidad.
 - **Qué se bloquea** (`check`). Un marcador que no se puede completar, una referencia `prop_…` que ninguna tool
-  dio, y un número escrito fuera de un marcador que no dijo el lead ni es un dato de una sola propiedad: si dos
-  propiedades lo tienen, podría ser el de la otra (en la evaluación en vivo, el modelo seguía escribiendo a mano
-  los datos de la única propiedad de la que hablaba, y cada regeneración costaba una llamada). La numeración de una
+  dio, y un número escrito fuera de un marcador que no dijo el lead ni es un dato de la propiedad a la que se
+  refiere. Cuál es esa propiedad lo dice la línea: la que nombra con un marcador o con su referencia ("• Studio in
+  El Poblado, 35 m², {prop_00240.price} (ref. prop_00240)"). Si la línea no nombra ninguna, el número tiene que
+  ser de una sola propiedad: si dos lo tienen, podría ser el de la otra. En la evaluación en vivo el modelo seguía
+  escribiendo a mano los datos que tiene a la vista, y cada regeneración costaba una llamada. La numeración de una
   lista ("1.", "2)") no es un dato.
 - **El formato** lo arma el código: el dinero con `$` y separador de miles, los valores internos en inglés
   (`apartado` → "reserved"), las listas con "and".
@@ -192,12 +194,16 @@ def _owners(number: str, sources: Sources) -> list[tuple[str, str]]:
     return sorted(found, key=lambda owner: owner[0] not in sources.current and owner[0] != "search")
 
 
-def _backed(owners: list[tuple[str, str]], sources: Sources) -> bool:
-    """El número es un dato de una sola propiedad (o la cantidad de la búsqueda): de las del turno, si alguna lo
-    tiene; si no, de las recordadas."""
-    refs = {ref for ref, _ in owners}
-    in_turn = refs & (sources.current | {"search"})
-    return len(in_turn or refs) == 1
+def _backed(owners: list[tuple[str, str]], sources: Sources, named: set[str]) -> bool:
+    """El número es un dato de la propiedad de la que habla la línea (`named`, las que nombra) o, si no nombra
+    ninguna, de una sola propiedad: de las del turno, si alguna lo tiene; si no, de las recordadas. Si ninguna
+    propiedad lo tiene, puede ser la cantidad de la búsqueda."""
+    refs = {ref for ref, _ in owners if ref != "search"}
+    if named:
+        candidates = refs & named
+    else:
+        candidates = (refs & sources.current) or refs
+    return len(candidates) == 1 or (not candidates and ("search", "count") in owners)
 
 
 def _suggest(owners: list[tuple[str, str]]) -> str | None:
@@ -240,15 +246,20 @@ def check(text: str, sources: Sources, lead_said: set[str], known_refs: Iterable
     """
     violations = [Violation("marker", m.group()) for m in MARKER.finditer(text)
                   if _value(sources, m.group(1), m.group(2)) is None]
+    for line in text.split("\n"):
+        bare_line = outside(line)
+        named = ({m.group(1) for m in MARKER.finditer(line)} | set(REFERENCE.findall(bare_line))) & set(sources.records)
+        listed = {m.start(1) for m in _LIST_NUMBER.finditer(bare_line)}
+        for match in _NUMBER.finditer(bare_line):
+            number = _normalize_number(match.group())
+            if number is None or number in lead_said or match.start() in listed:
+                continue
+            owners = _owners(number, sources)
+            if not _backed(owners, sources, named):
+                # Primero los de la propiedad que nombra la línea: es la que el modelo quería citar.
+                owners.sort(key=lambda owner: owner[0] not in named)
+                violations.append(Violation("number", number, hint=_suggest(owners)))
     bare = outside(text)
-    listed = {m.start(1) for m in _LIST_NUMBER.finditer(bare)}
-    for match in _NUMBER.finditer(bare):
-        number = _normalize_number(match.group())
-        if number is None or number in lead_said or match.start() in listed:
-            continue
-        owners = _owners(number, sources)
-        if not _backed(owners, sources):
-            violations.append(Violation("number", number, hint=_suggest(owners)))
     allowed = set(sources.records) | set(known_refs)
     violations += [Violation("reference", ref) for ref in dict.fromkeys(REFERENCE.findall(bare))
                    if ref not in allowed]
