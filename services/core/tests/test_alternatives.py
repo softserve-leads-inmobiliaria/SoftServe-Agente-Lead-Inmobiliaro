@@ -77,6 +77,22 @@ def test_without_zone_the_kind_is_the_filter_dropped():
     assert {p["id"] for p in result["alternatives"]} == {"prop_1", "prop_3"} and result["alternatives_without"] == "kind"
 
 
+def test_last_the_operation_is_dropped_keeping_area_and_kind():
+    # Prueba de jurado M4 (#247): después de buscar rentas, "the house in Usaquen" buscó casas en renta en
+    # Usaquen y el agente dijo que no había; había una en venta.
+    catalog = Catalog()
+    result = search(catalog, zone="Usaquen", kind="casa", type="renta")
+    assert [p["id"] for p in result["alternatives"]] == ["prop_2"] and result["alternatives_without"] == "type"
+    assert searches(catalog)[-1] == {"zone": "Usaquen", "kind": "casa"}
+
+
+def test_without_a_kind_the_operation_is_kept():
+    # "presale in Laureles": una renta cualquiera de Laureles no es una alternativa.
+    catalog = Catalog()
+    assert search(catalog, zone="Laureles", type="preventa") == {"properties": []}
+    assert {"zone": "Laureles"} not in searches(catalog)
+
+
 def test_when_nothing_comes_up_there_are_no_alternatives():
     result = search(Catalog(), zone="Laureles", type="preventa")
     assert result == {"properties": []}

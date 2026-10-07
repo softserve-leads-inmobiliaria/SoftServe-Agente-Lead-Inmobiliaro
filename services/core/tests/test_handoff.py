@@ -50,6 +50,13 @@ def test_frustration_starts_exactly_at_the_threshold():
     assert [is_frustrated(n) for n in range(5)] == [False, False, False, True, True]
 
 
+def test_a_streak_of_a_calm_lead_is_not_frustration():
+    # Prueba de jurado M3 (#247): "are you a bot?", "who owns this agency?", "what are your office hours?".
+    assert not is_frustrated(FRUSTRATION_STREAK, annoyed=False)
+    assert is_frustrated(FRUSTRATION_STREAK, annoyed=True)
+    assert not is_frustrated(FRUSTRATION_STREAK - 1, annoyed=True)  # una queja suelta no alcanza
+
+
 QUALIFYING_SIGNALS = [
     {"budget_hint": "2.5 millones", "decision_maker": None, "urgency": None},
     {"budget_hint": None, "decision_maker": "declarado", "urgency": None},
