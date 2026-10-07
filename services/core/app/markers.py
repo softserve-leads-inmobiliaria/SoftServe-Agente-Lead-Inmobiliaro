@@ -6,9 +6,11 @@ otra propiedad, no se puede escribir: el marcador nombra la propiedad y el campo
 
 - **De dónde salen los valores.** De las tools del turno y de la memoria de hechos (`app/facts.py`, DT-59). El
   estado, solo de las tools del turno (A-4), igual que en la factualidad.
-- **Qué se bloquea** (`check`). Un marcador que no se puede completar, un número escrito fuera de un marcador
-  que no dijo el lead, y una referencia `prop_…` que ninguna tool dio. La numeración de una lista ("1.", "2)") no
-  es un dato.
+- **Qué se bloquea** (`check`). Un marcador que no se puede completar, una referencia `prop_…` que ninguna tool
+  dio, y un número escrito fuera de un marcador que no dijo el lead ni es un dato de una sola propiedad: si dos
+  propiedades lo tienen, podría ser el de la otra (en la evaluación en vivo, el modelo seguía escribiendo a mano
+  los datos de la única propiedad de la que hablaba, y cada regeneración costaba una llamada). La numeración de una
+  lista ("1.", "2)") no es un dato.
 - **El formato** lo arma el código: el dinero con `$` y separador de miles, los valores internos en inglés
   (`apartado` → "reserved"), las listas con "and".
 
@@ -57,13 +59,16 @@ class Sources:
 
     records: dict[str, dict[str, Any]] = field(default_factory=dict)
     statuses: dict[str, str] = field(default_factory=dict)  # solo de las tools del turno
+    current: set[str] = field(default_factory=set)  # las que trajo una tool de este turno, no la memoria
     search_count: int | None = None
     zones: list[Mapping[str, Any]] | None = None
 
 
-def _add(sources: Sources, item: Any) -> None:
+def _add(sources: Sources, item: Any, current: bool = True) -> None:
     if not isinstance(item, Mapping) or not isinstance(item.get("id"), str):
         return
+    if current:
+        sources.current.add(item["id"])
     record = sources.records.setdefault(item["id"], {})
     record.update({k: v for k, v in item.items() if k != "status" and v is not None})
     if isinstance(item.get("status"), str):
@@ -76,7 +81,7 @@ def build(payloads: Iterable[tuple[str, Mapping[str, Any]]], remembered: Mapping
     sources = Sources()
     for prop_id, fact in (remembered or {}).items():
         if isinstance(fact, Mapping):
-            _add(sources, {**fact, "id": prop_id, "status": None})
+            _add(sources, {**fact, "id": prop_id, "status": None}, current=False)
     for name, payload in payloads:
         if not isinstance(payload, Mapping):
             continue
@@ -178,13 +183,40 @@ def outside(text: str) -> str:
     return MARKER.sub(" ", _tidy(text))
 
 
-def _suggest(number: str, sources: Sources) -> str | None:
-    """El marcador que el modelo tendría que haber usado, si el número es un único campo de una única propiedad."""
-    found = [f"{{{ref}.{path.removeprefix('requirements.')}}}" for ref, record in sources.records.items()
+def _owners(number: str, sources: Sources) -> list[tuple[str, str]]:
+    """Los (referencia, campo) que tienen ese valor, primero los de las propiedades de este turno."""
+    found = [(ref, path) for ref, record in sources.records.items()
              for path in sorted(MONEY | PERCENT | NUMBERS) if _same(number, record, path)]
     if sources.search_count is not None and str(sources.search_count) == number:
-        found.append("{search.count}")
-    return found[0] if len(found) == 1 else None
+        found.append(("search", "count"))
+    return sorted(found, key=lambda owner: owner[0] not in sources.current and owner[0] != "search")
+
+
+def _backed(owners: list[tuple[str, str]], sources: Sources) -> bool:
+    """El número es un dato de una sola propiedad (o la cantidad de la búsqueda): de las del turno, si alguna lo
+    tiene; si no, de las recordadas."""
+    refs = {ref for ref, _ in owners}
+    in_turn = refs & (sources.current | {"search"})
+    return len(in_turn or refs) == 1
+
+
+def _suggest(owners: list[tuple[str, str]]) -> str | None:
+    """Los marcadores que el modelo tendría que haber usado, como mucho tres."""
+    names = [f"{{{ref}.{path.removeprefix('requirements.')}}}" for ref, path in owners[:3]]
+    return " or ".join(names) or None
+
+
+def missing_statuses(text: str, sources: Sources) -> set[str]:
+    """Las propiedades conocidas cuyo `{ref.status}` pide el texto y ninguna tool del turno dio: el agente las
+    consulta con `get_availability` (una llamada al catálogo, no al LLM) antes de completar el marcador."""
+    return {m.group(1) for m in MARKER.finditer(text)
+            if m.group(2) == "status" and m.group(1) in sources.records and m.group(1) not in sources.statuses}
+
+
+def add_statuses(sources: Sources, availabilities: Iterable[Mapping[str, Any]]) -> None:
+    for payload in availabilities:
+        if isinstance(payload.get("property_id"), str) and isinstance(payload.get("status"), str):
+            sources.statuses[payload["property_id"]] = payload["status"]
 
 
 def _same(number: str, record: Mapping[str, Any], path: str) -> bool:
@@ -214,7 +246,9 @@ def check(text: str, sources: Sources, lead_said: set[str], known_refs: Iterable
         number = _normalize_number(match.group())
         if number is None or number in lead_said or match.start() in listed:
             continue
-        violations.append(Violation("number", number, hint=_suggest(number, sources)))
+        owners = _owners(number, sources)
+        if not _backed(owners, sources):
+            violations.append(Violation("number", number, hint=_suggest(owners)))
     allowed = set(sources.records) | set(known_refs)
     violations += [Violation("reference", ref) for ref in dict.fromkeys(REFERENCE.findall(bare))
                    if ref not in allowed]

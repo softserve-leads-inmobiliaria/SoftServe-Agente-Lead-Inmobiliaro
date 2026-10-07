@@ -151,7 +151,7 @@ class BedrockAgent:
             chat = await self._llm.chat(turn.history, current, visible, run_tool)
             if not chat.text:
                 raise LLMFormatError("respuesta vacía")
-            violations, reply = _output_violations(chat.text, chat.tool_results, chat.payloads, turn)
+            violations, reply = await _output_violations(chat.text, chat.tool_results, chat.payloads, turn, catalog)
             _log_violations("borrador", violations, chat.text)
             if violations:
                 # Una oportunidad de corregirse con lo que ya sabe, antes de degradar la conversación (A-5).
@@ -162,7 +162,8 @@ class BedrockAgent:
                 chat.payloads += retry.payloads
                 guard_audits.append(("output.factuality_regenerated", {"violations": len(violations)}))
                 if retry.text.strip():
-                    violations, reply = _output_violations(retry.text, chat.tool_results, chat.payloads, turn)
+                    violations, reply = await _output_violations(retry.text, chat.tool_results, chat.payloads, turn,
+                                                                 catalog)
                     _log_violations("regeneración", violations, retry.text)
                 if violations:
                     guard_audits.append(("output.factuality_degraded", {"violations": len(violations)}))
@@ -200,28 +201,57 @@ def _with_notes(text: str, listing: Mapping[str, Any] | None, protected_removed:
     return "\n\n".join([text, *notes])
 
 
-def _output_violations(text: str, tool_results: Mapping[str, Any], payloads: Sequence[tuple[str, Mapping[str, Any]]],
-                       turn: TurnInput) -> tuple[list[factuality.Violation], str]:
+async def _output_violations(text: str, tool_results: Mapping[str, Any],
+                             payloads: Sequence[tuple[str, Mapping[str, Any]]], turn: TurnInput,
+                             catalog: ToolCatalog) -> tuple[list[factuality.Violation], str]:
     """Guardrails de salida combinados, y la respuesta como la va a leer el lead.
 
     El modelo escribe los datos de la propiedad como marcadores, y el código los completa (DT-60): un marcador que
-    no se puede completar, o un número escrito fuera de uno que no dijo el lead, es una violación. Lo que el
-    modelo escribió fuera de los marcadores pasa además por los estados de la factualidad (A-5) y por la regla de
-    #230. La dirección reservada (A-6) y las promesas (A-7), sobre el texto ya completado. Todos comparten el mismo
-    *pipeline* de regenerar/degradar (DT-23). Anunciar una búsqueda para después también es una promesa (#234).
+    no se puede completar, o un número escrito fuera de uno que no dijo el lead ni es de una sola propiedad, es una
+    violación. Lo que el modelo escribió fuera de los marcadores pasa además por los estados de la factualidad (A-5)
+    y por la regla de #230. La dirección reservada (A-6) y las promesas (A-7), sobre el texto ya completado. Todos
+    comparten el mismo *pipeline* de regenerar/degradar (DT-23). Anunciar una búsqueda para después también es una
+    promesa (#234).
     """
     sources = markers.build(payloads, turn.remembered)
-    lead_texts = [turn.text, *(content for role, content in turn.history if role == "user")]
-    known_refs = [*filter(None, [(turn.listing or {}).get("id")]), *(r for t in lead_texts for r in _refs(t))]
-    reply = markers.render(text, sources)
+    listing_id = (turn.listing or {}).get("id")
+    if isinstance(listing_id, str):
+        sources.records.setdefault(listing_id, {"id": listing_id})
     bare = markers.outside(text)
+    # El estado de una propiedad que no vino en este turno lo consulta el código (A-4), sin gastar una llamada al
+    # LLM: en vivo, el modelo repetía "it's reserved" o escribía {ref.status} sin volver a llamar la tool (#243).
+    wanted = markers.missing_statuses(text, sources)
+    if factuality.check_statuses(bare, tool_results, turn.text):
+        recent = list(turn.remembered)[-1:]
+        wanted |= {ref for ref in (listing_id, *recent) if isinstance(ref, str) and ref not in sources.statuses}
+    fresh = await _availabilities(catalog, sorted(wanted)[:MAX_STATUS_LOOKUPS])
+    markers.add_statuses(sources, fresh)
+    checked = {**tool_results, "verified_statuses": fresh} if fresh else tool_results
+    lead_texts = [turn.text, *(content for role, content in turn.history if role == "user")]
+    known_refs = [*filter(None, [listing_id]), *(r for t in lead_texts for r in _refs(t))]
+    reply = markers.render(text, sources)
     violations = (markers.check(text, sources, markers.lead_numbers(lead_texts), known_refs)
-                  + factuality.check_statuses(bare, tool_results, turn.text)
+                  + factuality.check_statuses(bare, checked, turn.text)
                   + factuality.check_lead_claims(bare, tool_results, turn.text, turn.remembered)
                   + address_guard.check(reply, turn.lead_qualified, turn.text)
                   + promise_guard.check(reply, {"remembered": dict(turn.remembered), **tool_results}, turn.text)
                   + promise_guard.check_deferred(reply, consulted_tools=bool(tool_results)))
     return list(dict.fromkeys(violations)), reply
+
+
+MAX_STATUS_LOOKUPS = 3  # estados que el código consulta por respuesta, como mucho
+
+
+async def _availabilities(catalog: ToolCatalog, refs: Sequence[str]) -> list[dict[str, Any]]:
+    from app.catalog_client import CatalogToolError, UnknownTool
+
+    found = []
+    for ref in refs:
+        try:
+            found.append(await catalog.call("get_availability", {"property_id": ref}))
+        except (CatalogToolError, UnknownTool):
+            continue  # sin el estado, el marcador no se completa y la respuesta se regenera
+    return found
 
 
 def _log_violations(attempt: str, violations: Sequence[factuality.Violation], draft: str) -> None:
