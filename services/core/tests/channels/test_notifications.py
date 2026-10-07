@@ -10,7 +10,7 @@ from sqlalchemy import select, text
 
 from app.channels import advisor_registration, canonical
 from app.channels.notifications import LeadCard, pick_advisor, render
-from app.channels.telegram import reply_to
+from app.channels.telegram import ChannelReply, reply_to, reply_turn, run_after_reply
 from db.models import Advisor, AdvisorNotification, Lead
 from db.session import session_scope
 
@@ -221,3 +221,35 @@ def test_sin_telegram_el_turno_sigue_y_el_aviso_queda_en_el_panel(engine):
         kinds = session.execute(select(AdvisorNotification.kind)
                                 .where(AdvisorNotification.lead_id == row.id)).scalars().all()
     assert kinds == ["calificado"]
+
+
+# --- #231: la respuesta al lead no espera los avisos ----------------------------------------------------
+
+def test_la_respuesta_sale_antes_del_aviso_al_asesor(engine):
+    _limpiar_asesores(engine)
+    _advisor(engine, zone="El Poblado", chat_id="chat-valeria")
+    bot = AsyncMock()
+    lead = f"tg-{uuid.uuid4().hex[:8]}"
+    asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id=lead, text="I'm looking for an apartment", bot=bot))
+
+    reply = asyncio.run(reply_turn(engine, StubCatalog(), telegram_user_id=lead, text=CALIFICA, bot=bot))
+
+    assert reply.text and reply.after_reply is not None
+    bot.send_message.assert_not_awaited()  # el turno ya respondió y el aviso sigue pendiente
+    asyncio.run(run_after_reply(reply))
+    bot.send_message.assert_awaited_once()
+    assert bot.send_message.await_args.kwargs["chat_id"] == "chat-valeria"
+
+
+def test_un_fallo_en_lo_pendiente_no_llega_al_lead(engine, caplog):
+    async def falla() -> None:
+        raise RuntimeError("Telegram caído")
+
+    asyncio.run(run_after_reply(ChannelReply("hola", after_reply=falla)))  # no lanza
+    assert "fallo lo pendiente del turno" in caplog.text
+
+
+def test_un_turno_sin_avisos_no_deja_nada_pendiente(engine):
+    reply = asyncio.run(reply_turn(engine, StubCatalog(), telegram_user_id=f"tg-{uuid.uuid4().hex[:8]}",
+                                   text="Hi, I'm looking for a house"))
+    assert reply.after_reply is None

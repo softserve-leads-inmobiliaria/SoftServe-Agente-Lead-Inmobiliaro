@@ -87,10 +87,14 @@ class TurnReply:
 
     `property` es la propiedad de la que trata el turno cuando es una sola (para la foto); `fsm_state`,
     el estado en que quedó la conversación. El `POST /events` solo devuelve `outbound`: CT-1 no cambia.
+
+    `after_reply` es lo que queda por hacer después de responderle al lead (#231): el aviso de calificación
+    (B-7), el resumen del traspaso (A-16) y su ficha (A-12). Quien envía la respuesta lo espera después.
     """
     outbound: dict[str, Any]
     property: Mapping[str, Any] | None = None
     fsm_state: str | None = None
+    after_reply: Callable[[], Awaitable[None]] | None = None
 
 
 PHOTO_KEY = "photo_shown"  # en `last_tool_results`: id de la última propiedad cuya foto vio el lead (#210)
@@ -420,36 +424,59 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     transition = await run_in_threadpool(advance, engine, event, result.intent, evidence, audits, counts, saved,
                                          visit, searches.unmet if searches else (), alert)
     _describe(span, transition)
-    span.set_attribute("lead.qualified_now", transition.qualified)
-    if transition.qualified and on_qualified is not None:
-        # Ya está commiteado (advance cerró su transacción). Lo que pase acá no puede tocar el turno.
-        try:
-            await on_qualified(event, transition)
-        except Exception:
-            logger.exception("fallo al notificar la calificación del lead")
-    span.set_attribute("lead.handoff_now", transition.handoff_reason is not None)
-    if transition.handoff_reason:
-        # A-16: el resumen para el asesor, antes de la ficha del traspaso que lo lleva.
-        try:
-            conversation_id, lead_id = _ids(event)
-            written = await summary.generate(engine, lead_id, conversation_id, transition.handoff_reason, agent)
-            span.set_attribute("handoff.summary", written is not None)
-        except Exception:
-            logger.exception("fallo al generar el resumen del traspaso")
-    if transition.handoff_reason and on_handoff is not None:
-        try:
-            await on_handoff(event, transition)
-        except Exception:
-            logger.exception("fallo al enviar la ficha del traspaso")
+    span.set_attributes({"lead.qualified_now": transition.qualified,
+                         "lead.handoff_now": transition.handoff_reason is not None})
     featured = None if transition.after in TERMINAL_STATES else featured
-    return TurnReply(outbound, featured, transition.after)
+    pending = (transition.qualified and on_qualified is not None) or transition.handoff_reason is not None
+
+    async def after_reply() -> None:
+        await _after_reply(engine, event, transition, agent, on_qualified, on_handoff)
+
+    return TurnReply(outbound, featured, transition.after, after_reply if pending else None)
+
+
+async def _after_reply(engine: Engine, event: Mapping[str, Any], transition: Transition, agent: Agent,
+                       on_qualified: OnQualified | None, on_handoff: OnHandoff | None) -> None:
+    """Lo que el turno deja para después de responder (#231). El resumen es una llamada más al LLM, que puede
+    esperar cupo y reintentos: antes, el lead esperaba todo esto justo en el turno del traspaso.
+
+    El turno ya está commiteado (`advance` cerró su transacción): lo que falle acá no lo toca.
+    """
+    with get_tracer().start_as_current_span("turn.after_reply") as span:
+        span.set_attributes({SPAN_KIND: "CHAIN", "conversation.id": str(event["conversation_id"]),
+                             "lead.qualified_now": transition.qualified,
+                             "lead.handoff_now": transition.handoff_reason is not None})
+        if transition.qualified and on_qualified is not None:
+            try:
+                await on_qualified(event, transition)
+            except Exception:
+                logger.exception("fallo al notificar la calificación del lead")
+        if transition.handoff_reason:
+            # A-16: el resumen para el asesor, antes de la ficha del traspaso que lo lleva.
+            try:
+                conversation_id, lead_id = _ids(event)
+                written = await summary.generate(engine, lead_id, conversation_id, transition.handoff_reason, agent)
+                span.set_attribute("handoff.summary", written is not None)
+            except Exception:
+                logger.exception("fallo al generar el resumen del traspaso")
+        if transition.handoff_reason and on_handoff is not None:
+            try:
+                await on_handoff(event, transition)
+            except Exception:
+                logger.exception("fallo al enviar la ficha del traspaso")
 
 
 async def process_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog,
                        agent: Agent | None = None, on_qualified: OnQualified | None = None,
                        on_handoff: OnHandoff | None = None) -> dict[str, Any]:
-    """Un turno completo; devuelve el evento CT-1 de salida. Ver `process_turn_reply`."""
-    return (await process_turn_reply(engine, event, catalog, agent, on_qualified, on_handoff)).outbound
+    """Un turno completo; devuelve el evento CT-1 de salida. Ver `process_turn_reply`.
+
+    Sin canal que envíe la respuesta antes (el `POST /events` del arnés), lo de después se hace acá mismo.
+    """
+    turn = await process_turn_reply(engine, event, catalog, agent, on_qualified, on_handoff)
+    if turn.after_reply is not None:
+        await turn.after_reply()
+    return turn.outbound
 
 
 async def process_turn_reply(engine: Engine, event: Mapping[str, Any], catalog: Catalog,
@@ -459,7 +486,8 @@ async def process_turn_reply(engine: Engine, event: Mapping[str, Any], catalog: 
 
     `on_qualified` se invoca, después del commit, solo en el turno en que el lead pasa a calificado
     (B-7); `on_handoff`, solo en el turno en que la FSM llega a `HANDOFF`/`HUMAN_HANDOFF` (A-12).
-    Los pasa el canal; el `POST /events` del arnés no, así los E2E nunca notifican a nadie.
+    Los pasa el canal; el `POST /events` del arnés no, así los E2E nunca notifican a nadie. No se invocan
+    acá: van en `TurnReply.after_reply`, que el canal espera después de enviar la respuesta (#231).
     """
     with get_tracer().start_as_current_span("turn") as span:
         span.set_attributes({
