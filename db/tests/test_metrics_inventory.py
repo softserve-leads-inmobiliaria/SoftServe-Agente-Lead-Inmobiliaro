@@ -259,9 +259,9 @@ def test_the_ranking_has_a_limit(session):
 
 # --- demanda insatisfecha --------------------------------------------------------------------------------
 
-def _unmet(session, zone, type_, bedrooms, times=1, *, at=START + timedelta(days=2), synthetic=False):
-    session.add_all([UnmetSearch(zone=zone, type=type_, bedrooms=bedrooms, created_at=at, synthetic=synthetic)
-                     for _ in range(times)])
+def _unmet(session, zone, type_, bedrooms, times=1, *, at=START + timedelta(days=2), synthetic=False, kind=None):
+    session.add_all([UnmetSearch(zone=zone, type=type_, bedrooms=bedrooms, created_at=at, synthetic=synthetic,
+                                 kind=kind) for _ in range(times)])
     session.flush()
 
 
@@ -276,6 +276,16 @@ def test_unmet_demand_groups_the_most_repeated_combinations(session):
 
     assert [(u.zone, u.type, u.bedrooms, u.searches) for u in result] == [
         ("El Poblado", "renta", 3, 3), ("Usaquen", "venta", None, 2), (None, None, 1, 1)]
+
+
+def test_unmet_demand_tells_an_apartment_from_a_house(session):
+    """#209: "apartment en Laureles" y "casa en Laureles" son dos demandas distintas."""
+    _unmet(session, "Laureles", "renta", 2, times=2, kind="departamento")
+    _unmet(session, "Laureles", "renta", 2, kind="casa")
+
+    result = unmet_demand(session, START, END)
+
+    assert [(u.zone, u.kind, u.searches) for u in result] == [("Laureles", "departamento", 2), ("Laureles", "casa", 1)]
 
 
 # --- datos sintéticos ------------------------------------------------------------------------------------

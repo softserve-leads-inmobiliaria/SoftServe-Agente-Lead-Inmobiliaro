@@ -121,11 +121,11 @@ _RANKING = text("""
 # La zona la escribe el LLM o el lead: "poblado" y "El Poblado" son la misma, y se muestra la forma
 # más repetida.
 _UNMET = text("""
-    SELECT mode() WITHIN GROUP (ORDER BY trim(u.zone)) AS zone, u.type, u.bedrooms, count(*) AS searches
+    SELECT mode() WITHIN GROUP (ORDER BY trim(u.zone)) AS zone, u.type, u.kind, u.bedrooms, count(*) AS searches
     FROM unmet_searches u
     WHERE u.created_at >= :start AND u.created_at < :end AND (:synthetic OR NOT u.synthetic)
-    GROUP BY lower(trim(u.zone)), u.type, u.bedrooms
-    ORDER BY searches DESC, zone NULLS LAST, u.type NULLS LAST, u.bedrooms NULLS LAST
+    GROUP BY lower(trim(u.zone)), u.type, u.kind, u.bedrooms
+    ORDER BY searches DESC, zone NULLS LAST, u.type NULLS LAST, u.kind NULLS LAST, u.bedrooms NULLS LAST
     LIMIT :limit
 """)
 
@@ -191,6 +191,7 @@ class UnmetDemand:
     type: str | None
     bedrooms: int | None
     searches: int
+    kind: str | None = None  # el inmueble (#209); al final y opcional, para no romper a quien lo construye
 
 
 @dataclass(frozen=True)
@@ -290,9 +291,9 @@ def ranking(session: Session, start: datetime, end: datetime, *, limit: int = RA
 
 def unmet_demand(session: Session, start: datetime, end: datetime, *, limit: int = UNMET_LIMIT,
                  include_synthetic: bool = False) -> list[UnmetDemand]:
-    """Las combinaciones de zona, tipo y recámaras más buscadas sin resultado en el periodo (N-5)."""
+    """Las combinaciones de zona, operación, inmueble y recámaras más buscadas sin resultado en el periodo (N-5)."""
     params = _params(start, end, include_synthetic) | {"limit": limit}
-    return [UnmetDemand(zone=row.zone, type=row.type, bedrooms=row.bedrooms, searches=row.searches)
+    return [UnmetDemand(zone=row.zone, type=row.type, bedrooms=row.bedrooms, searches=row.searches, kind=row.kind)
             for row in session.execute(_UNMET, params)]
 
 

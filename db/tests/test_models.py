@@ -79,7 +79,8 @@ def test_commercial_intelligence_rows_can_be_marked_synthetic():
 def test_unmet_searches_never_store_the_lead():
     """Una búsqueda sin resultados guarda los filtros, nunca quién buscó ni qué escribió (N-5)."""
     columns = set(models.Base.metadata.tables["unmet_searches"].columns.keys())
-    assert columns == {"id", "zone", "type", "bedrooms", "budget_min", "budget_max", "created_at", "synthetic"}
+    assert columns == {"id", "zone", "type", "kind", "bedrooms", "budget_min", "budget_max", "created_at",
+                       "synthetic"}
 
 
 def test_property_statuses_do_not_grow_with_deals():
