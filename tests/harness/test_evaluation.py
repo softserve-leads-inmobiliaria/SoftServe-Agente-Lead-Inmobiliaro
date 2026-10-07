@@ -85,6 +85,14 @@ def test_any_of_the_expected_tools_is_enough(tools, ok):
     assert (turn_failures(turn, _obs(tools=tools)) == []) is ok
 
 
+def test_a_fact_answered_from_memory_passes_without_counting_as_a_tool_hit():
+    """#217: los requisitos que ya trajo la ficha se pueden contestar sin volver a llamarla (#233)."""
+    turn = Turn("What are the requirements?", tools=("get_property", "check_requirements"), remembered_ok=True)
+    assert turn_failures(turn, _obs()) == [] and evaluation.tool_hit(turn, _obs()) is None
+    # Si llama una tool, tiene que ser una de las esperadas.
+    assert turn_failures(turn, _obs(tools=["search_properties"])) != []
+
+
 def test_expect_any_and_forbid_ignore_case():
     turn = Turn("areas?", expect_any=("El Poblado", "Laureles"), forbid=("Chicó",))
     assert turn_failures(turn, _obs(reply="We have LAURELES.")) == []

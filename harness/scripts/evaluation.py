@@ -63,8 +63,9 @@ def is_regenerated(obs: TurnObservation) -> bool:
 
 
 def tool_hit(turn: Turn, obs: TurnObservation) -> bool | None:
-    """Si llamó alguna de las tools esperadas; `None` si el turno no espera ninguna."""
-    if not turn.tools:
+    """Si llamó alguna de las tools esperadas; `None` si el turno no espera ninguna, o si contestó sin tools un
+    dato que ya tenía de un turno anterior (`remembered_ok`, #217)."""
+    if not turn.tools or (turn.remembered_ok and not obs.tools):
         return None
     return any(tool in obs.tools for tool in turn.tools)
 
