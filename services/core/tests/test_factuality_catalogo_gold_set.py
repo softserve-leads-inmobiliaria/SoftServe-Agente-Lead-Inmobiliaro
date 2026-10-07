@@ -313,6 +313,8 @@ CASOS = [
      "disponibilidad_apartada", "", True),
     ("en_otras_de_4_recamaras_no_es_estado", "Would you like me to find other available 4-bedroom houses in Usaquen?",
      "disponibilidad_apartada", "I need 4 bedrooms", True),
+    ("en_una_oracion_de_relativo_no_es_estado", "Would you like me to find other houses for sale in Usaquen that "
+     "are currently available?", "disponibilidad_apartada", "", True),
     ("en_una_disponible_si_es_estado", "It's an available house in Usaquen.", "disponibilidad_apartada", "", False),
     ("en_otras_y_esta_disponible_si_es_estado", "There are other houses available, and this one is available too.",
      "disponibilidad_apartada", "", False),

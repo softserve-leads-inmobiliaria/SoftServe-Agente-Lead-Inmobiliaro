@@ -110,6 +110,15 @@ def test_a_typed_figure_two_properties_share_is_blocked_with_the_markers_to_choo
     assert (violation.kind, violation.value, violation.hint) == ("number", "3", "{p1.bedrooms} or {p2.bedrooms}")
 
 
+def test_the_line_says_which_property_a_typed_figure_belongs_to():
+    s = sources(("get_property", CASA), ("get_property", {**CASA, "id": "p2", "bedrooms": 2, "m2": 70.0}))
+    # Las dos tienen 2.5 baños, pero cada línea nombra la suya.
+    assert check("- {p1.title}: 180 m², 2.5 baths\n- {p2.title}: 70 m², 2.5 baths (ref. p2)", s, set()) == []
+    # La línea nombra p1, y 70 es de p2: se sugiere primero lo de la propiedad que nombra, si tiene ese campo.
+    (violation,) = check("{p1.title} has 70 m².", s, set())
+    assert (violation.value, violation.hint) == ("70", "{p2.m2}")
+
+
 def test_an_invented_figure_is_blocked_without_a_suggestion():
     (violation,) = check("It's $150,000.", sources(("get_property", CASA)), set())
     assert (violation.value, violation.hint) == ("150000", None)

@@ -69,12 +69,22 @@ CASOS = [
     # La misma propiedad en dos búsquedas del turno sigue siendo una sola.
     ("misma_propiedad_en_dos_busquedas", "It's $600 a month.", ("busqueda_venta_poblado", "busqueda_renta"), "",
      "It's $600 a month."),
+    # La línea dice de qué propiedad es cada número, con su marcador o su referencia (#243, visto en vivo).
+    ("lista_con_referencias", "• 2-bedroom apartment in Laureles, 70 m², {prop_00235.price}, 1 bathroom (ref. prop_00235)\n"
+     "• Studio in El Poblado, 35 m², {prop_00240.price}, 1 bathroom (ref. prop_00240)", ("busqueda_renta",), "",
+     "• 2-bedroom apartment in Laureles, 70 m², $1,150, 1 bathroom (ref. prop_00235)\n"
+     "• Studio in El Poblado, 35 m², $600, 1 bathroom (ref. prop_00240)"),
+    ("una_linea_con_su_referencia", "The 2-bedroom apartment (ref. prop_00231) is {prop_00231.price}.",
+     ("busqueda_venta_poblado",), "", "The 2-bedroom apartment (ref. prop_00231) is $185,000."),
     # Límite conocido (DT-60): el valor es de una sola propiedad, pero la frase habla de otra. Con el marcador no pasa.
     ("precio_de_otra_propiedad", "The 2-bedroom one costs $129,000.", ("busqueda_venta_poblado",), "",
      "The 2-bedroom one costs $129,000."),
 
     # --- se bloquea --------------------------------------------------------------------------------------------
     ("precio_inventado", "It's $150,000.", ("busqueda_venta_poblado",), "", None),
+    # La línea nombra una propiedad, y el número es de otra.
+    ("dato_de_otra_propiedad_en_la_linea", "• Studio in El Poblado, 70 m² (ref. prop_00240)", ("busqueda_renta",), "",
+     None),
     # Escrito a mano, un valor que tienen dos propiedades del turno podría ser el de la otra.
     ("banos_de_dos_propiedades", "It has 1 bathroom.", ("busqueda_venta_poblado",), "", None),
     ("dormitorios_y_banos_de_dos_propiedades", "It has 0 bedrooms and 1 bathroom.", ("busqueda_renta",), "", None),
