@@ -148,6 +148,39 @@ guardrails de salida de factualidad (A-5), dirección reservada (A-6) y promesas
 estado de cada uno está en `docs/DESIGN/guardrails.md` §3. Sigue pendiente fair housing (A-11), así que no
 usarlo con leads reales sin revisar ese punto.
 
+#### Capacidad con la cuota de Bedrock: 10 llamadas por minuto
+
+La cuenta de AWS tiene 10 RPM por modelo y no hay más cuota. Por eso `LLM_RATE_LIMIT_PER_MINUTE=10` es
+también el techo real, y el límite **lo comparten todas las conversaciones a la vez**.
+
+- **Cuánto aguanta.** Un turno hace en promedio unas 2,5 llamadas al modelo de conversación: una para
+  llamar a la tool, otra para responder y, a veces, una regeneración (A-5). En total, sumando todos los
+  usuarios, entran **unos 4 turnos por minuto**. El clasificador (Haiku) tiene su propio cupo y no es el
+  cuello de botella.
+- **Qué pasa al pasarse.** Pueden ser 3 o 4 personas probando a la vez y escribiendo rápido, o un script
+  sin pausa. El limitador local deja esperar cada turno hasta `LLM_MAX_QUEUE_WAIT_SECONDS` (15 s por
+  defecto) y después responde con el texto de respaldo ("Sorry, I had a problem processing your
+  message…"). No es un error del agente: es la cuota.
+- **El backoff no lo evita.** El backoff exponencial (A-14, DT-30) reintenta cuando **Bedrock** rechaza
+  la llamada. Con el límite local igual a la cuota, el que corta antes es el limitador, y su espera no se
+  reintenta. Además, una ventana llena tarda hasta 60 s en liberarse y el reintento tiene un tope de 20 s
+  por turno.
+- **Para una sesión de pruebas con personas:**
+  1. Que prueben una o dos personas a la vez, o por turnos.
+  2. Si van a probar varias a la vez, subir la espera de la cola. El lead espera más, pero no recibe el
+     texto de respaldo:
+
+     ```
+     LLM_MAX_QUEUE_WAIT_SECONDS=60 docker compose up -d --wait core
+     ```
+
+  3. Medirlo: cada turno que se quedó sin cupo deja un `warning` `LocalRateLimit` en el log de `core`.
+     Si se usa el respaldo, la causa es la cuota y no el agente.
+- **En los scripts** (`conversar.py`, `evaluate.py`), los 20 s de pausa entre turnos imitan el ritmo de
+  una persona y mantienen la cola por debajo de los 15 s. No tienen relación con el backoff. Una corrida
+  completa de la evaluación (`--reps 5`) no puede bajar de unos 48 minutos con esta cuota: son unas 475
+  llamadas a 10 por minuto. Con la pausa fija tarda unos 80.
+
 El historial de cada conversación se guarda en `messages` (solo el texto ya filtrado, sin PII ni
 categorías protegidas):
 
@@ -318,12 +351,46 @@ python harness/scripts/evaluate.py --reps 3 07_busqueda_vacia_y_alternativas 08_
 - **CI:** no corre la evaluación, porque necesita Bedrock. Sí corre `tests/harness/test_evaluation.py`, que
   prueba las expectativas y las métricas, y que los escenarios sigan alineados con los contratos de las
   tools, el inventario y los textos fijos del core.
-- **Cuándo correrla:** antes y después de cambiar el prompt, el modelo o un guardrail de salida. Un cambio
-  no puede empeorar los totales.
+- **Cuándo correrla:** antes y después de cambiar el prompt, el modelo, una tool o un guardrail de salida.
+  Un cambio no puede empeorar los totales.
+  - En un PR que cambia el comportamiento del agente: solo los escenarios afectados, con `--reps 3`
+    (10–15 min).
+  - Antes de un cambio grande, de cambiar de modelo y antes del cierre (Z-1, Z-2): todos, con `--reps 5`.
+  - Los cambios del panel, de la base o del canal no la necesitan: alcanza con CI.
+
+  Con 10 RPM no se puede correr en paralelo (ver "Capacidad con la cuota de Bedrock").
 
 **Línea base** (Sonnet 4.5 para la conversación, Haiku 4.5 para la intención, 5 corridas):
 
-<!-- línea base: se completa con la primera corrida de referencia -->
+Corrida del 6-oct: 40 conversaciones, 180 turnos con LLM, 78 minutos. Quedó dentro de los umbrales.
+
+| Escenario | Turnos OK | Tool esperada | Regeneradas | Degradadas | Estado final |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| `01_deep_link_hasta_asesor` | 100% | 100% | 17% | 0% | 100% |
+| `02_busqueda_y_recomendacion` | 95% | 100% | 45% | 5% | 100% |
+| `03_guardrails` | 60% | 100% | 40% | 20% | — |
+| `04_deep_link_hasta_hot` | 100% | 100% | 20% | 0% | 100% |
+| `05_lead_en_espanol` | 100% | 100% | 7% | 0% | — |
+| `06_requisitos_y_fair_housing` | 100% | 100% | 32% | 0% | — |
+| `07_busqueda_vacia_y_alternativas` | 90% | 93% | 20% | 5% | — |
+| `08_cobertura_de_zonas` | 100% | 100% | 0% | 0% | — |
+| **Total** | **93%** | **99%** | **24%** | **4%** | **100%** |
+
+- **Respaldo y errores:** 0. **Latencia:** p50 5,9 s, p95 11,6 s.
+- **Dos expectativas estaban mal y se corrigieron después de la corrida:**
+  - el turno de PII del 03 mandaba teléfono y correo, que por diseño no son PII no solicitada (A-8): 5 fallas;
+  - el turno 3 del 07 no aceptaba `list_zones`, que también contesta bien: 1 falla.
+
+  Sin esas 6 fallas, los turnos OK quedan en 96%.
+- **Por qué se degrada:**
+  - **Falso positivo de "available":** 5 de las 7 degradaciones, todas en el 03. En "other available houses"
+    o "no other houses available", "available" describe otras propiedades, pero la factualidad lo lee como
+    el estado de la propiedad apartada. Al reproducir esos turnos aparece en 8 de 12 borradores (#220).
+  - **Las otras 2** son preguntas de seguimiento de una búsqueda, en el 02 y en el 07. Por el patrón, lo más
+    probable es que el modelo repitiera un dato de un turno anterior sin volver a consultarlo (#217). No se
+    reprodujeron.
+- **Por qué se regenera:** por el mismo patrón. El modelo cita lo que ya dijo antes, o usa "available" para
+  otras propiedades, aunque la segunda respuesta salga bien.
 
 ## Pruebas automáticas
 
