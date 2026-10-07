@@ -201,3 +201,25 @@ def check(text: str, tool_results: Mapping[str, Any], lead_text: str = "") -> li
     allowed = _known_amenities(tool_results)
     violations += [Violation("amenity", a) for a in extract_amenity_claims(text) - exempt if a not in allowed]
     return violations
+
+
+# Apurar al lead ("I'd recommend moving forward soon") presiona sin un dato que lo respalde: la frase se quita sin
+# regenerar, porque el resto de la respuesta es correcto y degradarla sería peor (#247, prueba de jurado).
+_URGENCY = re.compile(
+    r"\b(?:i(?:['’]d| would) (?:recommend|suggest|advise) (?:moving forward|acting|deciding|booking|reserving)"
+    r"(?: (?:soon|quickly|fast|now))?|(?:act|move|decide) (?:fast|quickly|soon)|before (?:it(?:['’]s| is) gone"
+    r"|someone else)|won['’]t last|(?:don['’]t|do not) wait|(?:in )?high demand|going fast)\b")
+_SENTENCE = re.compile(r"[^\n]*?(?:[.!?](?=\s|$)|$)")
+
+
+def without_urgency(text: str) -> str:
+    """`text` sin las frases que apuran al lead; si no queda nada, `text` tal cual."""
+    kept_lines = []
+    for line in text.split("\n"):
+        sentences = [s for s in _SENTENCE.findall(line) if s.strip()]
+        kept = [s for s in sentences if not _URGENCY.search(normalize(s))]
+        if sentences and not kept:
+            continue
+        kept_lines.append(" ".join(s.strip() for s in kept) if len(kept) < len(sentences) else line)
+    cleaned = re.sub(r"\n{3,}", "\n\n", "\n".join(kept_lines)).strip()
+    return cleaned or text

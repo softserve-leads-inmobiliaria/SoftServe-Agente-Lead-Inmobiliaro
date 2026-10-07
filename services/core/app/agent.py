@@ -179,7 +179,7 @@ class BedrockAgent:
                     return AgentResult(text=FACTUALITY_DEGRADE_REPLY, intent="otro",
                                        raw_signal=classification.signal, tool_results=chat.tool_results,
                                        tool_calls=chat.tool_calls, guard_audits=guard_audits, flags=flags)
-            chat.text = reply
+            chat.text = promise_guard.without_urgency(reply)
         except LLMError as exc:
             # Sin LLM no se inventa nada: texto seguro, y el turno cuenta como "sin resolver" (A-13).
             return AgentResult(text=LLM_FALLBACK_REPLY, intent="otro", llm_error=type(exc).__name__)
