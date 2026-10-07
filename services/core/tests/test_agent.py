@@ -478,13 +478,21 @@ def test_the_lead_reads_the_values_the_code_put_in_the_markers():
     assert result.text == "It's $2,350,000, with 3 bedrooms, and it's available." and result.guard_audits == []
 
 
-def test_a_figure_typed_from_the_tool_result_is_regenerated_with_the_marker_to_use():
-    """Escrito a mano, el precio real de una propiedad podría ser el de otra: se pide el marcador."""
+def test_a_figure_typed_by_hand_passes_if_it_is_a_fact_of_only_one_property():
+    client = ScriptedBedrock(classification("consulta_precio"), tool_use("search_properties", {"zone": "Prov."}),
+                             text("It's $2,350,000."))
+    result = run(agent_for(client).run(turn(), FakeCatalog(properties=P1)))
+    assert result.text == "It's $2,350,000." and result.guard_audits == []
+
+
+def test_a_figure_two_properties_share_is_regenerated_with_the_markers_to_choose_from():
+    """Escrito a mano, podría ser el de la otra: se pide el marcador de la que corresponde."""
+    both = [*P1, {**P1[0], "id": "p2", "title": "Otra casa"}]
     client = ScriptedBedrock(classification("consulta_precio"), tool_use("search_properties", {"zone": "Prov."}),
                              text("It's $2,350,000."), text("It's {p1.price}."))
-    result = run(agent_for(client).run(turn(), FakeCatalog(properties=P1)))
+    result = run(agent_for(client).run(turn(), FakeCatalog(properties=both)))
     assert result.text == "It's $2,350,000." and [a for a, _ in result.guard_audits] == ["output.factuality_regenerated"]
-    assert "write {p1.price} instead" in client.calls_to(CHAT)[-1]["system"][0]["text"]
+    assert "write {p1.price} or {p2.price} instead" in client.calls_to(CHAT)[-1]["system"][0]["text"]
 
 
 def test_a_marker_for_a_property_no_tool_returned_is_regenerated():
@@ -506,9 +514,35 @@ def test_remembered_facts_fill_the_markers_but_never_the_status():
     client = ScriptedBedrock(classification("consulta_precio"), text("It's {p1.price}."))
     message = TurnInput(event=EVENT, text="How much was it?", remembered=remembered)
     assert run(agent_for(client).run(message, FakeCatalog())).text == "It's $2,350,000."
-    # El estado de la memoria no vale (A-4): el marcador no se puede completar.
+    # El estado de la memoria no vale (A-4): lo consulta el código, sin otra llamada al modelo.
+    client = ScriptedBedrock(classification("consulta_precio"), text("It's {p1.status}."))
+    catalog = FakeCatalog()
+    assert run(agent_for(client).run(message, catalog)).text == "It's available."
+    assert catalog.calls == [("get_availability", {"property_id": "p1"})]
+
+
+def test_a_status_the_catalog_cannot_confirm_is_never_filled_in():
+    remembered = {"p1": {"price": 2350000}}
     client = ScriptedBedrock(classification("consulta_precio"), text("It's {p1.status}."), text("It's {p1.status}."))
-    assert run(agent_for(client).run(message, FakeCatalog())).text == FACTUALITY_DEGRADE_REPLY
+    message = TurnInput(event=EVENT, text="Is it still available?", remembered=remembered)
+    catalog = FakeCatalog(error={"code": "UPSTREAM_UNAVAILABLE", "message": "caído"})
+    assert run(agent_for(client).run(message, catalog)).text == FACTUALITY_DEGRADE_REPLY
+
+
+def test_a_status_written_without_a_marker_is_checked_against_the_catalog():
+    """En vivo: "this house is reserved" un turno después de haberlo consultado. El código lo vuelve a consultar."""
+    client = ScriptedBedrock(classification("otro"), text("Since this house is reserved, want to see others?"))
+    message = TurnInput(event=EVENT, text="Can I see it today?", listing=LISTING)
+
+    class Reserved(FakeCatalog):
+        async def call(self, tool, arguments=None):
+            self.calls.append((tool, dict(arguments or {})))
+            return {"property_id": arguments["property_id"], "status": "apartado", "checked_at": "2026-01-01"}
+
+    catalog = Reserved()
+    result = run(agent_for(client).run(message, catalog))
+    assert result.text.startswith("Since this house is reserved") and result.guard_audits == []
+    assert catalog.calls == [("get_availability", {"property_id": "prop_00231"})]
 
 
 def test_the_leads_own_numbers_from_earlier_messages_can_be_repeated():

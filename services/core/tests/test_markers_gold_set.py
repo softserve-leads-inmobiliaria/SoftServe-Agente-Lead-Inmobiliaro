@@ -60,14 +60,24 @@ CASOS = [
     ("recamaras_que_pidio_el_lead", "You asked for 2 bedrooms: {prop_00231.title}.", ("busqueda_venta_poblado",),
      "I need 2 bedrooms", "You asked for 2 bedrooms: 2-bedroom apartment in El Poblado."),
 
+    # Escrito a mano, vale si es un dato de una sola propiedad: en vivo el modelo lo seguía escribiendo así, y cada
+    # regeneración costaba una llamada (DT-60).
+    ("precio_escrito", "It's $185,000.", ("busqueda_venta_poblado",), "", "It's $185,000."),
+    ("m2_escritos", "It has 78.5 m².", ("busqueda_venta_poblado",), "", "It has 78.5 m²."),
+    ("cantidad_escrita", "I found 3 rentals.", ("busqueda_renta",), "", "I found 3 rentals."),
+    ("enganche_escrito", "The down payment is 10%.", ("ficha_venta",), "", "The down payment is 10%."),
+    # La misma propiedad en dos búsquedas del turno sigue siendo una sola.
+    ("misma_propiedad_en_dos_busquedas", "It's $600 a month.", ("busqueda_venta_poblado", "busqueda_renta"), "",
+     "It's $600 a month."),
+    # Límite conocido (DT-60): el valor es de una sola propiedad, pero la frase habla de otra. Con el marcador no pasa.
+    ("precio_de_otra_propiedad", "The 2-bedroom one costs $129,000.", ("busqueda_venta_poblado",), "",
+     "The 2-bedroom one costs $129,000."),
+
     # --- se bloquea --------------------------------------------------------------------------------------------
-    # Escrito a mano, aunque sea el valor real: podría ser el de otra propiedad (punto 5 de la revisión).
-    ("precio_escrito", "It's $185,000.", ("busqueda_venta_poblado",), "", None),
-    ("precio_de_otra_propiedad", "The 2-bedroom one costs $129,000.", ("busqueda_venta_poblado",), "", None),
     ("precio_inventado", "It's $150,000.", ("busqueda_venta_poblado",), "", None),
-    ("m2_escritos", "It has 78.5 m².", ("busqueda_venta_poblado",), "", None),
-    ("cantidad_escrita", "I found 3 rentals.", ("busqueda_renta",), "", None),
-    ("enganche_escrito", "The down payment is 10%.", ("ficha_venta",), "", None),
+    # Escrito a mano, un valor que tienen dos propiedades del turno podría ser el de la otra.
+    ("banos_de_dos_propiedades", "It has 1 bathroom.", ("busqueda_venta_poblado",), "", None),
+    ("dormitorios_y_banos_de_dos_propiedades", "It has 0 bedrooms and 1 bathroom.", ("busqueda_renta",), "", None),
     ("propiedad_que_no_vino", "It's {prop_00999.price}.", ("busqueda_venta_poblado",), "", None),
     ("campo_que_no_existe", "The owner is {prop_00231.owner}.", ("ficha_venta",), "", None),
     ("direccion_exacta_sin_calificar", "The address is {prop_00231.address_exact}.", ("ficha_venta",), "", None),

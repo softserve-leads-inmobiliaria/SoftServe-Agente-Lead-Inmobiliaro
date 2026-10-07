@@ -46,7 +46,8 @@ def test_the_requirements_can_be_named_without_their_prefix():
     """Así los enumera el prompt; la sugerencia de la corrección usa el mismo nombre corto."""
     s = sources(("get_property", CASA))
     assert render("{p1.down_payment_min}, {p1.down_payment_percent}%", s) == "$73,000, 20%"
-    assert check("It's $73,000 down.", s, set())[0].hint == "{p1.down_payment_min}"
+    s = sources(("get_property", CASA), ("get_property", {**CASA, "id": "p2"}))
+    assert check("It's $73,000 down.", s, set())[0].hint == "{p1.down_payment_min} or {p2.down_payment_min}"
 
 
 def test_every_internal_value_of_the_contracts_has_an_english_name():
@@ -97,22 +98,42 @@ def test_the_zones_are_grouped_by_city():
     assert render("{zones}", sources(("list_zones", zones))) == "Chapinero and Usaquen in Bogota; El Poblado in Medellin"
 
 
-def test_a_typed_figure_is_blocked_and_the_marker_to_use_is_suggested():
-    s = sources(("get_property", CASA))
-    (violation,) = check("It's $365,000.", s, set())
-    assert (violation.kind, violation.value, violation.hint) == ("number", "365000", "{p1.price}")
+def test_a_typed_figure_of_only_one_property_passes():
+    assert check("It's $365,000, 3 bedrooms.", sources(("get_property", CASA)), set()) == []
+    # Dos datos de la misma propiedad con el mismo valor tampoco son ambiguos.
+    assert check("2 bedrooms, 2 baths.", sources(("get_property", {**CASA, "bedrooms": 2, "bathrooms": 2})), set()) == []
 
 
-def test_no_marker_is_suggested_when_the_figure_is_two_different_facts():
-    s = sources(("get_property", {**CASA, "bedrooms": 2, "bathrooms": 2}))
-    assert check("It has 2 bedrooms.", s, set())[0].hint is None
+def test_a_typed_figure_two_properties_share_is_blocked_with_the_markers_to_choose_from():
+    s = sources(("get_property", CASA), ("get_property", {**CASA, "id": "p2", "price": 99000.0}))
+    (violation,) = check("It has 3 bedrooms.", s, set())
+    assert (violation.kind, violation.value, violation.hint) == ("number", "3", "{p1.bedrooms} or {p2.bedrooms}")
+
+
+def test_an_invented_figure_is_blocked_without_a_suggestion():
+    (violation,) = check("It's $150,000.", sources(("get_property", CASA)), set())
+    assert (violation.value, violation.hint) == ("150000", None)
+
+
+def test_a_property_of_this_turn_wins_over_a_remembered_one_with_the_same_value():
+    s = sources(("get_property", CASA), remembered={"p2": {"bedrooms": 3}})
+    assert check("It has 3 bedrooms.", s, set()) == []
+    s = sources(remembered={"p1": {"bedrooms": 3}, "p2": {"bedrooms": 3}})
+    assert check("It has 3 bedrooms.", s, set())[0].hint == "{p1.bedrooms} or {p2.bedrooms}"
+
+
+def test_the_statuses_to_look_up_are_the_known_properties_without_one():
+    s = sources(("get_property", CASA), remembered={"p2": {"price": 1}})
+    assert markers.missing_statuses("{p1.status} {p2.status} {p9.status}", s) == {"p2"}
+    markers.add_statuses(s, [{"property_id": "p2", "status": "cerrado"}])
+    assert render("{p2.status}", s) == "off the market"
 
 
 def test_the_leads_own_numbers_and_the_numbers_of_a_list_can_be_typed():
     s = sources(("get_property", CASA))
     said = lead_numbers(["My budget is $400,000", "I need 3 bedrooms"])
     assert check("With $400,000 and 3 bedrooms:\n1. {p1.title}\n2) {p1.title}\n- 3. {p1.zone}", s, said) == []
-    assert check("I found 3 options.", s, set()) == [markers.Violation("number", "3")]
+    assert check("I found 7 options.", s, set()) == [markers.Violation("number", "7")]
 
 
 def test_a_reference_no_tool_gave_is_blocked_unless_it_is_known():
