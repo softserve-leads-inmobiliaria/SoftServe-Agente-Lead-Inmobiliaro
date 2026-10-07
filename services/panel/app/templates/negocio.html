@@ -211,11 +211,12 @@
   {% if inv.unmet_demand %}
   <div class="table-wrap">
     <table>
-      <thead><tr><th scope="col">Area</th><th scope="col">Type</th><th scope="col">Bedrooms</th><th scope="col">Searches</th></tr></thead>
+      <thead><tr><th scope="col">Area</th><th scope="col">Property</th><th scope="col">Type</th><th scope="col">Bedrooms</th><th scope="col">Searches</th></tr></thead>
       <tbody>
         {% for row in inv.unmet_demand %}
         <tr>
-          <td>{{ row.zone or "any" }}</td><td>{{ label("property_type", row.type) if row.type else "any" }}</td>
+          <td>{{ row.zone or "any" }}</td><td>{{ label("property_kind", row.kind) if row.kind else "any" }}</td>
+          <td>{{ label("property_type", row.type) if row.type else "any" }}</td>
           <td>{{ row.bedrooms if row.bedrooms is not none else "any" }}</td><td>{{ row.searches }}</td>
         </tr>
         {% endfor %}
