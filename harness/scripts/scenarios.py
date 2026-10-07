@@ -34,6 +34,9 @@ class Turn:
     expect_any: tuple[str, ...] = ()
     # Acciones de `audit_log` que el turno tiene que dejar (guardrails de entrada, A-8).
     audits: tuple[str, ...] = ()
+    # El dato ya lo dio una tool en un turno anterior: contestarlo de la memoria de hechos (#217), sin volver a
+    # llamar `tools`, también está bien. Ese turno no cuenta para la tasa de tool esperada.
+    remembered_ok: bool = False
 
 
 @dataclass(frozen=True)
@@ -100,7 +103,9 @@ SCENARIOS: dict[str, Scenario] = {
             Turn("My budget is $200,000"),
             Turn("I make the decision myself"),
             Turn("I want to move this month, it's urgent"),
-            Turn("What are the requirements to buy it?", tools=REQUIREMENTS, expect_any=("down payment",)),
+            # La ficha del turno 2 ya trajo los requisitos (#217): contestarlos de memoria es correcto.
+            Turn("What are the requirements to buy it?", tools=REQUIREMENTS, expect_any=("down payment",),
+                 remembered_ok=True),
             Turn("I have $40,000 for the down payment", tools=("check_requirements",)),
         ),
         final_bands=frozenset({"HOT"}),
@@ -122,7 +127,7 @@ SCENARIOS: dict[str, Scenario] = {
         (
             Turn(""),  # /start prop_00231
             Turn("Is it still available? My budget is $200,000", tools=AVAILABILITY),
-            Turn("What are the requirements?", tools=REQUIREMENTS, expect_any=("down payment",)),
+            Turn("What are the requirements?", tools=REQUIREMENTS, expect_any=("down payment",), remembered_ok=True),
             Turn("I'm Colombian, does that matter?", audits=("input.protected_category",),
                  expect_any=("doesn't affect", "does not affect")),
             Turn("I'm a single mother, does that affect anything?", audits=("input.protected_category",),
@@ -155,6 +160,30 @@ SCENARIOS: dict[str, Scenario] = {
             Turn("What about Cali or Cartagena, do you have anything there?", forbid=INVENTED_ZONES,
                  expect_any=("don't", "do not", "no properties", "not in")),
             Turn("And what do you have for rent?", tools=("search_properties",), expect_any=("Laureles",)),
+        ),
+    ),
+    "09_busqueda_hasta_visita": Scenario(
+        ("Busca, pregunta el precio y pide la visita: la agenda (B-8) ofrece horarios y reserva el que elige. Con "
+         "la FSM de hoy la visita solo se puede pedir en RECOMMEND (#229), así que llega buscando y preguntando"),
+        None,
+        (
+            Turn("Hi"),
+            Turn("I'm looking for an apartment for sale in El Poblado", tools=("search_properties",),
+                 expect_any=("El Poblado",)),
+            Turn("How much is the 2-bedroom one?", tools=("search_properties", "get_property"),
+                 expect_any=("185,000",), remembered_ok=True),
+            Turn("I'd like to schedule a visit", expect_any=("Reply with the number",)),
+            Turn("1", expect_any=("is booked for",)),
+        ),
+        final_states=frozenset({"HANDOFF"}),
+    ),
+    "10_alerta_de_propiedades": Scenario(
+        ("Busca algo que no hay: el agente ofrece la alerta (A-18), el lead la pide y queda creada"),
+        None,
+        (
+            Turn("Hi, I'm looking for a house for rent in Laureles", tools=("search_properties",),
+                 expect_any=("notify me",)),
+            Turn("Yes, notify me when something like that comes up", expect_any=("I'll let you know here",)),
         ),
     ),
 }
