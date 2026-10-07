@@ -6,6 +6,7 @@ texto que dejó pasar el guardrail de entrada: sin PII ni menciones de categorí
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol, Sequence
 
@@ -18,6 +19,9 @@ from app.input_guard import HANDOFF_OFFER, OMITTED_MESSAGE
 from app.skeleton import respond
 from app.summary import SummaryFacts
 from app.summary import template as summary_template
+from app.tracing import content_hidden
+
+logger = logging.getLogger("core.agent")
 
 HISTORY_LIMIT = 20  # mensajes previos que se le dan al LLM
 
@@ -148,6 +152,7 @@ class BedrockAgent:
             if not chat.text:
                 raise LLMFormatError("respuesta vacía")
             violations, reply = _output_violations(chat.text, chat.tool_results, chat.payloads, turn)
+            _log_violations("borrador", violations, chat.text)
             if violations:
                 # Una oportunidad de corregirse con lo que ya sabe, antes de degradar la conversación (A-5).
                 retry = await self._llm.regenerate(turn.history, current, chat.text, violations, visible, run_tool,
@@ -158,6 +163,7 @@ class BedrockAgent:
                 guard_audits.append(("output.factuality_regenerated", {"violations": len(violations)}))
                 if retry.text.strip():
                     violations, reply = _output_violations(retry.text, chat.tool_results, chat.payloads, turn)
+                    _log_violations("regeneración", violations, retry.text)
                 if violations:
                     guard_audits.append(("output.factuality_degraded", {"violations": len(violations)}))
                     return AgentResult(text=FACTUALITY_DEGRADE_REPLY, intent="otro",
@@ -216,6 +222,15 @@ def _output_violations(text: str, tool_results: Mapping[str, Any], payloads: Seq
                   + promise_guard.check(reply, {"remembered": dict(turn.remembered), **tool_results}, turn.text)
                   + promise_guard.check_deferred(reply, consulted_tools=bool(tool_results)))
     return list(dict.fromkeys(violations)), reply
+
+
+def _log_violations(attempt: str, violations: Sequence[factuality.Violation], draft: str) -> None:
+    """Qué marcó el guardrail de salida, para ajustar el prompt con la evaluación en vivo (DT-60). El valor solo con
+    `TRACE_CONTENT=1`: puede ser un fragmento de la respuesta (OBS-7)."""
+    if not violations:
+        return
+    shown = [(v.kind, v.hint) if content_hidden() else (v.kind, v.value, v.hint) for v in violations]
+    logger.info("guardrail de salida (%s): %s%s", attempt, shown, "" if content_hidden() else f" — {draft!r}")
 
 
 def _refs(text: str) -> list[str]:
