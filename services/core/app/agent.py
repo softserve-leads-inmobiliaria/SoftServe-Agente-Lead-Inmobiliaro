@@ -135,7 +135,8 @@ class BedrockAgent:
             violations = _output_violations(chat.text, chat.tool_results, turn)
             if violations:
                 # Una oportunidad de corregirse con lo que ya sabe, antes de degradar la conversación (A-5).
-                retry = await self._llm.regenerate(turn.history, current, chat.text, violations, visible, run_tool)
+                retry = await self._llm.regenerate(turn.history, current, chat.text, violations, visible, run_tool,
+                                                   chat.messages)
                 chat.tool_results.update(retry.tool_results)
                 chat.tool_calls += retry.tool_calls
                 guard_audits.append(("output.factuality_regenerated", {"violations": len(violations)}))
