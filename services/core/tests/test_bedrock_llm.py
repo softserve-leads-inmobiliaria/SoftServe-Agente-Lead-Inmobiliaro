@@ -217,6 +217,34 @@ def test_a_plain_reply_uses_the_chat_model_and_returns_the_text():
     assert "toolConfig" not in request  # sin tools disponibles no se manda la configuración
 
 
+def _cut_off(value):
+    return {"output": {"message": {"role": "assistant", "content": [{"text": value}]}}, "stopReason": "max_tokens",
+            "usage": {"inputTokens": 1, "outputTokens": 400, "totalTokens": 401}, "metrics": {"latencyMs": 1}}
+
+
+def test_a_reply_cut_off_by_the_token_limit_ends_at_its_last_complete_sentence(caplog):
+    """#235: con `stopReason` `max_tokens` el texto llegaba al lead cortado a mitad de frase, sin dejar rastro."""
+    client = ScriptedBedrock(_cut_off("It costs $185,000. It has 2 bedrooms and a big terr"))
+    result = run(llm(client).chat([], "Tell me about it", [], no_tools))
+    assert result.text == "It costs $185,000."
+    assert "tope de 400 tokens" in caplog.text
+
+
+def test_a_cut_off_list_keeps_its_complete_lines():
+    client = ScriptedBedrock(_cut_off("Here are two options:\n- Studio in Laureles\n- Apartment in El Pob"))
+    assert run(llm(client).chat([], "What do you have?", [], no_tools)).text == (
+        "Here are two options:\n- Studio in Laureles")
+
+
+def test_a_cut_off_reply_without_a_complete_sentence_is_left_empty():
+    """Vacía, el agente la trata como inválida y contesta el texto seguro: nunca media frase."""
+    assert run(llm(ScriptedBedrock(_cut_off("It costs about"))).chat([], "Price?", [], no_tools)).text == ""
+
+
+def test_a_complete_reply_is_never_cut():
+    assert run(llm(ScriptedBedrock(text("Hi! Which area"))).chat([], "Hi", [], no_tools)).text == "Hi! Which area"
+
+
 def test_the_model_can_call_a_tool_and_use_its_result():
     client = ScriptedBedrock(tool_use("search_properties", {"zone": "El Poblado"}), text("I found a house."))
     seen = []

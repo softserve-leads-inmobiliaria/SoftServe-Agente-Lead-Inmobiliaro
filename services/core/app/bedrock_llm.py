@@ -295,6 +295,8 @@ class BedrockLLM:
             uses = [block["toolUse"] for block in message["content"] if "toolUse" in block]
             if not uses or response.get("stopReason") != "tool_use":
                 result.text = _text_of(response).strip()
+                if response.get("stopReason") == "max_tokens":
+                    result.text = _cut_to_last_sentence(result.text)
                 return result
             messages.append(message)
             messages.append({"role": "user", "content": [await self._run(use, run_tool, result) for use in uses]})
@@ -313,6 +315,23 @@ class BedrockLLM:
         result.tool_results[name] = payload
         result.tool_calls.append({"name": name, "is_error": False})
         return {"toolResult": {"toolUseId": use["toolUseId"], "status": "success", "content": [{"json": payload}]}}
+
+
+# Sin ":": "Here are the options:" sin la lista que anuncia no es una respuesta completa.
+_SENTENCE_END = re.compile(r"[.!?](?=\s|$)|\n")
+
+
+def _cut_to_last_sentence(text: str) -> str:
+    """Una respuesta que llegó al tope de `MAX_REPLY_TOKENS` (#235), recortada a la última frase o línea completa.
+
+    Sin esto se enviaba cortada a mitad de frase, y sin dejar rastro. Si no hay ninguna frase completa, se
+    devuelve vacía: el agente la trata como una respuesta inválida y contesta el texto seguro.
+    """
+    logger.warning("Bedrock: la respuesta llegó al tope de %d tokens y se recorta", MAX_REPLY_TOKENS,
+                   extra={"llm_stop_reason": "max_tokens"})
+    trace.get_current_span().add_event("llm.reply_truncated", {"llm.max_tokens": MAX_REPLY_TOKENS})
+    ends = [match.end() for match in _SENTENCE_END.finditer(text)]
+    return text[:ends[-1]].strip() if ends else ""
 
 
 def _report_retry(code: str, attempt: int, delay: float, provider_delay: bool) -> None:
