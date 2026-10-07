@@ -399,6 +399,10 @@ sastre del clasificador) es segura para disparar esa transición.
 
 **Decisión.**
 - **Petición explícita:** intención `solicitud_humano` (incluye "supervisor", "gerente", "hablar con una persona").
+  Con el LLM real, el código la confirma (#228, `handoff.asks_for_a_person`): el mensaje tiene que pedir una
+  persona ("agent", "someone", "call me"…) o aceptar con un sí corto la oferta de un asesor del turno anterior.
+  Si no, el turno sigue como `otro` y se audita `intent.human_request_unconfirmed`. En vivo, el clasificador
+  traspasó un mensaje con datos sensibles ya quitados que llegaba después de una oferta de asesor.
 - **Fuera de alcance:** intención nueva `fuera_de_alcance` (quejas, reclamos, contratos o depósitos ya
   existentes): lo atiende una persona. Es distinta del fuera de dominio del guardrail de entrada
   (`A-8`, DT-15), que declina con una respuesta acotada y solo ofrece un asesor.
