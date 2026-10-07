@@ -123,16 +123,77 @@ def literal_values(tool_results: Mapping[str, Any]) -> tuple[set[str], set[str]]
     return numbers, statuses
 
 
+# #230: un número que solo dijo el lead vale para repetir lo suyo ("with your $200,000 budget"), no para
+# confirmarlo como dato de la propiedad: a "Is it $150,000?", "Yes, it's $150,000" pasaba aunque costara
+# $185,000. Si la frase lo afirma como precio, dormitorios, baños o m², y las tools dan ese campo con otro
+# valor, se bloquea. Qué campos de las tools dan cada tipo de dato, y cómo se reconoce en la respuesta:
+_FIELDS: dict[str, tuple[frozenset[str], re.Pattern[str] | None, re.Pattern[str] | None]] = {
+    # tipo: (claves en los tool_results, lo que va justo antes del número, lo que va justo después)
+    "money": (frozenset({"price", "down_payment_min", "monthly_income_min"}),
+              re.compile(r"(?:\$|\b(?:costs?|priced at|price is|price of|listed (?:at|for)|sells for|rents for))\s*$",
+                         re.IGNORECASE),
+              re.compile(r"^\s*(?:usd|dollars)\b", re.IGNORECASE)),
+    "bedrooms": (frozenset({"bedrooms"}), None, re.compile(r"^[\s-]*(?:bedrooms?|beds?)\b", re.IGNORECASE)),
+    "bathrooms": (frozenset({"bathrooms"}), None, re.compile(r"^[\s-]*(?:bathrooms?|baths?)\b", re.IGNORECASE)),
+    "area": (frozenset({"m2"}), None, re.compile(r"^\s*(?:m²|m2|sq\.?\s?m|square met)", re.IGNORECASE)),
+}
+# Lo que, en la misma frase, dice que el número es del lead (su presupuesto, lo que pidió) y no de la propiedad.
+_ABOUT_THE_LEAD = re.compile(r"\b(?:your|budget|afford|up to|you(?:'ve| have| can| could| mentioned| need|"
+                             r"'re looking for| are looking for| asked for))\b", re.IGNORECASE)
+_NEGATED = re.compile(r"(?:\bnot|n't|\bno)\s+(?:[\w$]+\s+){0,2}\$?\s*$", re.IGNORECASE)
+_SENTENCE = re.compile(r"[^.!?\n]*(?:[.!?\n]|$)")
+
+
+def _field_values(value: Any, keys: frozenset[str], found: set[str]) -> None:
+    if isinstance(value, Mapping):
+        for k, v in value.items():
+            if k in keys and isinstance(v, (int, float)) and not isinstance(v, bool):
+                found.add(_normalize_number(str(v)))
+            _field_values(v, keys, found)
+    elif isinstance(value, list):
+        for v in value:
+            _field_values(v, keys, found)
+
+
+def _claimed_as_property_data(text: str, lead_only: set[str], sources: Mapping[str, Any]) -> list[Violation]:
+    """Los números que solo dijo el lead y que la respuesta afirma como otro valor de un campo de la propiedad."""
+    violations = []
+    for sentence in _SENTENCE.finditer(text):
+        if _ABOUT_THE_LEAD.search(sentence.group()):
+            continue
+        for match in _NUMBER.finditer(sentence.group()):
+            number = _normalize_number(match.group())
+            if number not in lead_only:
+                continue
+            before, after = sentence.group()[:match.start()], sentence.group()[match.end():]
+            if _NEGATED.search(before):
+                continue  # "it's not $150,000": no lo afirma
+            for keys, prefix, suffix in _FIELDS.values():
+                if (prefix and prefix.search(before)) or (suffix and suffix.search(after)):
+                    actual: set[str] = set()
+                    _field_values(sources, keys, actual)
+                    if actual and number not in actual:
+                        violations.append(Violation("number", number))
+                    break
+    return violations
+
+
 def check(text: str, tool_results: Mapping[str, Any], lead_text: str = "",
           remembered: Mapping[str, Any] | None = None) -> list[Violation]:
     """Números/estados de `text` que no están respaldados por `tool_results` ni por lo que dijo el lead.
 
     `remembered` son los hechos que las tools dieron en turnos anteriores (`app/facts.py`, #217): respaldan
     números, nunca estados. El estado de una propiedad se exige siempre de las tools de este turno.
+    Un número que solo dijo el lead no vale como otro valor de un dato de la propiedad (#230).
     """
     tool_numbers, tool_statuses = literal_values(tool_results)
-    allowed_numbers = tool_numbers | literal_values(remembered or {})[0] | extract_numbers(lead_text)
+    known_numbers = tool_numbers | literal_values(remembered or {})[0]
+    lead_only = extract_numbers(lead_text) - known_numbers
+    allowed_numbers = known_numbers | lead_only
     allowed_statuses = tool_statuses | extract_statuses(lead_text)
     violations = [Violation("number", n) for n in extract_numbers(text) if n not in allowed_numbers]
+    if lead_only:
+        claimed = _claimed_as_property_data(text, lead_only, {"tools": dict(tool_results), "remembered": remembered})
+        violations += list(dict.fromkeys(claimed))
     violations += [Violation("status", s) for s in extract_statuses(text) if s not in allowed_statuses]
     return violations

@@ -64,7 +64,10 @@ degrada a una respuesta segura o a `HUMAN_HANDOFF`.
 ### 2.1 Factualidad (`A-5`)
 
 Todo número/estado de la respuesta candidata se compara literalmente contra `last_tool_results`
-del turno (`app/factuality.py`, DT-23) — también se admite lo que el propio lead dijo. Un número también
+del turno (`app/factuality.py`, DT-23) — también se admite lo que el propio lead dijo, para repetir lo suyo
+(su presupuesto, lo que pidió). No para confirmarlo como dato de la propiedad (#230): si la frase lo
+afirma como precio, dormitorios, baños o m² y las tools dan ese campo con otro valor, se bloquea ("Is it
+$150,000?" → "Yes, it's $150,000" cuando cuesta $185,000). Un número también
 vale si una tool lo dio en un turno anterior de la conversación: la memoria de hechos verificados
 (`app/facts.py`, DT-59, #217) guarda los campos citables de cada propiedad durante 24 horas, nunca su
 estado. 1er fallo:
