@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Mapping
 
@@ -65,10 +65,12 @@ _application: Application | None = None
 @dataclass(frozen=True)
 class ChannelReply:
     """Lo que el canal le manda al lead: el texto que ya pasó los guardrails, la foto de la propiedad del
-    turno si la tiene (B-10) y los botones que van debajo (B-11)."""
+    turno si la tiene (B-10) y los botones que van debajo (B-11). `after_reply` es lo que el turno dejó para
+    después de enviarla: los avisos al asesor y el resumen del traspaso (#231)."""
     text: str
     photo_url: str | None = None
     buttons: tuple[str, ...] = ()
+    after_reply: Callable[[], Awaitable[None]] | None = field(default=None, compare=False, repr=False)
 
 
 def _quiet_http_logs() -> None:
@@ -172,6 +174,17 @@ async def _answer(context: ContextTypes.DEFAULT_TYPE, target: Any, telegram_user
         await send_reply(target, reply)
     except Exception:
         logger.exception("no se pudo enviar la respuesta por Telegram")
+    await run_after_reply(reply)
+
+
+async def run_after_reply(reply: ChannelReply) -> None:
+    """Lo que el turno dejó para después de responder (#231). Cada paso ya registra sus propios fallos."""
+    if reply.after_reply is None:
+        return
+    try:
+        await reply.after_reply()
+    except Exception:
+        logger.exception("fallo lo pendiente del turno después de responder")
 
 
 class _ChatReplier:
@@ -276,9 +289,11 @@ def _seconds(retry_after: Any) -> float:
 async def reply_to(engine: Engine, catalog: Catalog, *, telegram_user_id: str, text: str,
                    deep_link: str | None = None, timestamp: datetime | None = None,
                    agent: Agent | None = None, bot: Sender | None = None) -> str:
-    """Un turno completo del canal, sin tipos de Telegram: es el punto de prueba del bot."""
+    """Un turno completo del canal, sin tipos de Telegram: es el punto de prueba del bot. Como `_answer`,
+    termina lo que el turno dejó para después de responder (avisos y resumen del traspaso)."""
     reply = await reply_turn(engine, catalog, telegram_user_id=telegram_user_id, text=text,
                              deep_link=deep_link, timestamp=timestamp, agent=agent, bot=bot)
+    await run_after_reply(reply)
     return reply.text
 
 
@@ -335,4 +350,4 @@ async def reply_turn(engine: Engine, catalog: Catalog, *, telegram_user_id: str,
     reply = canonical.from_canonical(turn.outbound)
     photo = turn.property.get("photo_url") if turn.property else None
     return ChannelReply(consent.with_privacy_notice(reply) if first_turn else reply,
-                        photo if isinstance(photo, str) and photo else None, buttons_for(turn))
+                        photo if isinstance(photo, str) and photo else None, buttons_for(turn), turn.after_reply)
