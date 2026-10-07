@@ -8,6 +8,7 @@ from botocore.exceptions import ClientError
 
 from app.agent import (
     FACTUALITY_DEGRADE_REPLY,
+    HUMAN_REQUEST_UNCONFIRMED,
     LLM_FALLBACK_REPLY,
     PROTECTED_ANSWER,
     PROTECTED_NOTE,
@@ -410,3 +411,45 @@ def test_the_listing_note_never_counts_as_something_the_lead_said():
     message = TurnInput(event=EVENT, text="How much is it?", listing=LISTING)
     result = run(agent_for(client).run(message, FakeCatalog()))
     assert result.text == FACTUALITY_DEGRADE_REPLY
+
+
+# --- #228: un traspaso solo si el mensaje lo pide ------------------------------------------------------------
+
+OFFER = ("I can't promise discounts. However, I can put you in touch with an agent who can discuss payment options.")
+
+
+def test_a_message_that_does_not_ask_for_a_person_is_not_handed_off_even_if_the_classifier_says_so():
+    """En vivo (#217, `03_guardrails`): con los datos sensibles quitados, el clasificador leyó como pedido de
+    una persona un mensaje que llegaba después de la oferta de un asesor."""
+    client = ScriptedBedrock(classification("solicitud_humano"), text("I don't need that information."))
+    message = "My ID number is [redacted] and my card is [redacted]"
+    result = run(agent_for(client).run(turn(message, history=[("user", "Discount?"), ("assistant", OFFER)]),
+                                       FakeCatalog()))
+    assert result.intent == "otro" and result.text == "I don't need that information."
+    assert result.guard_audits == [(HUMAN_REQUEST_UNCONFIRMED, {})]
+
+
+@pytest.mark.parametrize("message", ["I want to talk to an agent", "Can someone call me?", "Is there a real person?"])
+def test_asking_for_a_person_still_hands_off(message):
+    result = run(agent_for(ScriptedBedrock(classification("solicitud_humano"))).run(turn(message), FakeCatalog()))
+    assert result.intent == "solicitud_humano" and result.text == REPLIES["solicitud_humano"]
+
+
+@pytest.mark.parametrize("message", ["yes please", "Sure, go ahead", "ok"])
+def test_agreeing_to_the_advisor_offer_hands_off(message):
+    result = run(agent_for(ScriptedBedrock(classification("solicitud_humano")))
+                 .run(turn(message, history=[("user", "Discount?"), ("assistant", OFFER)]), FakeCatalog()))
+    assert result.intent == "solicitud_humano"
+
+
+def test_a_yes_without_an_advisor_offer_is_not_a_handoff():
+    client = ScriptedBedrock(classification("solicitud_humano"), text("Great! Which area?"))
+    history = [("user", "Hi"), ("assistant", "Would you like to see apartments in Laureles?")]
+    assert run(agent_for(client).run(turn("yes please", history=history), FakeCatalog())).intent == "otro"
+
+
+def test_a_long_message_that_starts_with_yes_is_not_taken_as_accepting_the_offer():
+    client = ScriptedBedrock(classification("solicitud_humano"), text("Got it."))
+    message = "Yes, but first tell me whether the apartment in Laureles has parking and a gym"
+    result = run(agent_for(client).run(turn(message, history=[("assistant", OFFER)]), FakeCatalog()))
+    assert result.intent == "otro"
