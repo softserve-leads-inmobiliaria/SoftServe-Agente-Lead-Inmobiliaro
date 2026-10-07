@@ -53,6 +53,17 @@ Cada corrida deriva los ids de un `run_id` propio, así que se puede repetir sob
 informe en `tmp/harness/`. `--sin-frases` no exige `expect_reply_contains`, pero sí el contrato y que
 la respuesta tenga texto. Cómo levantar el stack: `docs/TESTING.md`, "Corrida real".
 
+## Evaluación en vivo repetible (#216)
+
+    python harness/scripts/evaluate.py --reps 5      # con LLM_PROVIDER=bedrock
+
+Los guiones de `fixtures/` fijan las frases del agente *fake*. La evaluación usa otros escenarios
+(`scripts/scenarios.py`, los mismos de `scripts/demo/conversar.py`) que esperan lo que tiene que pasar con
+cualquier modelo: qué tool consulta cada turno, qué texto aparece o no puede aparecer, qué auditoría deja y
+en qué estado termina. Los corre N veces y calcula, con lo que quedó en Postgres, las tasas de turnos OK,
+de tool esperada, de regeneraciones, de respuestas degradadas y de respaldo, y la latencia
+(`scripts/evaluation.py`, con sus umbrales). Detalle en `docs/TESTING.md`, "Evaluación en vivo repetible".
+
 ## Agregar un guion nuevo
 
 Crea `harness/fixtures/<nombre>.jsonl` y declara su estado final en `harness/scripts/expectations.py`

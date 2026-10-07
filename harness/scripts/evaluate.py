@@ -1,0 +1,193 @@
+"""Evaluación en vivo repetible (#216): los escenarios de `scenarios.py` N veces contra el stack con el LLM real.
+
+Cada turno va por `POST /events`, igual que Telegram. Después de cada turno se lee en Postgres qué tools
+llamó el modelo (`messages.tool_calls`) y qué dejó en `audit_log` (regeneraciones y degradaciones de la
+factualidad, guardrails de entrada); al final, el estado de la FSM y la banda del score. Las métricas y
+los umbrales están en `evaluation.py`.
+
+Uso (con el stack arriba y LLM_PROVIDER=bedrock: `bash scripts/demo/up.sh`):
+    python harness/scripts/evaluate.py                      # todos los escenarios, una vez
+    python harness/scripts/evaluate.py --reps 5             # la corrida de referencia
+    python harness/scripts/evaluate.py --reps 3 08_cobertura_de_zonas
+
+Deja tmp/eval/<fecha>_evaluacion.md y .json (tmp/ no se versiona). Sale con 0 si los totales quedan dentro
+de los umbrales.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import time
+import urllib.request
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from evaluation import (  # noqa: E402
+    ScenarioRun,
+    TurnObservation,
+    as_json,
+    breaches,
+    render_report,
+    summarize,
+)
+from scenarios import SCENARIOS, Scenario  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+
+REPORTS = ROOT / "tmp" / "eval"
+# El core limita a 10 llamadas por minuto y por modelo (DT-6) y un turno con tools hace 3 o 4: con esta
+# pausa (la misma de conversar.py) la cola del limitador no llega a vencer.
+DEFAULT_PAUSE_S = 20.0
+
+
+def send(core_url: str, conversation_id: str, lead_id: str, text: str, property_id: str | None,
+         timeout: float) -> tuple[str, float, str | None]:
+    event: dict[str, Any] = {
+        "schema_version": 1, "event_id": str(uuid.uuid4()), "conversation_id": conversation_id,
+        "lead_id": lead_id, "channel": "telegram", "direction": "inbound", "text": text,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    if property_id:
+        event["property_id"] = property_id
+    request = urllib.request.Request(core_url.rstrip("/") + "/events", data=json.dumps(event).encode(),
+                                     method="POST", headers={"Content-Type": "application/json"})
+    started = time.monotonic()
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            body = json.loads(response.read())
+        return body.get("text", ""), time.monotonic() - started, None
+    except Exception as exc:  # noqa: BLE001 — la corrida sigue y el turno cuenta como fallido
+        return "", time.monotonic() - started, f"{type(exc).__name__}: {exc}"
+
+
+def _audits(connection: Any, conversation_id: str) -> list[str]:
+    from sqlalchemy import text
+
+    return list(connection.execute(text("SELECT action FROM audit_log WHERE payload->>'conversation_id' = :c "
+                                        "ORDER BY id"), {"c": conversation_id}).scalars())
+
+
+def _assistant_tool_calls(connection: Any, conversation_id: str) -> list[list[dict[str, Any]] | None]:
+    from sqlalchemy import text
+
+    return list(connection.execute(text("SELECT tool_calls FROM messages WHERE conversation_id = :c "
+                                        "AND role = 'assistant' ORDER BY created_at, id"),
+                                   {"c": conversation_id}).scalars())
+
+
+def run_scenario(name: str, scenario: Scenario, rep: int, *, core_url: str, engine: Any, pause_s: float,
+                 timeout: float) -> ScenarioRun:
+    from sqlalchemy import text
+
+    conversation_id, lead_id = str(uuid.uuid4()), str(uuid.uuid4())
+    run = ScenarioRun(name, rep, conversation_id=conversation_id)
+    seen_audits = 0
+    seen_replies = 0
+    for i, turn in enumerate(scenario.turns):
+        reply, latency, error = send(core_url, conversation_id, lead_id, turn.text,
+                                     scenario.property_id if i == 0 else None, timeout)
+        with engine.connect() as connection:
+            audits = _audits(connection, conversation_id)
+            replies = _assistant_tool_calls(connection, conversation_id)
+        tools = [call["name"] for call in (replies[-1] or [])] if len(replies) > seen_replies else []
+        new_audits = audits[seen_audits:]
+        run.turns.append(TurnObservation(turn.text, reply, tools, new_audits, round(latency, 2), error))
+        seen_audits, seen_replies = len(audits), len(replies)
+        print(f"  turno {i + 1}: {latency:.1f}s tools={tools} audits={new_audits}"
+              + (f" ERROR {error}" if error else ""), flush=True)
+        if turn.text:  # el deep-link sin texto no llama al LLM
+            time.sleep(pause_s)
+    with engine.connect() as connection:
+        run.final_state = connection.execute(text("SELECT fsm_state FROM conversations WHERE id = :c"),
+                                             {"c": conversation_id}).scalar()
+        run.band = connection.execute(text("SELECT band FROM lead_scores WHERE lead_id = :l"),
+                                      {"l": lead_id}).scalar()
+    return run
+
+
+def core_settings() -> dict[str, str]:
+    """Proveedor y modelos con que corre el core, para el encabezado del informe."""
+    names = ("LLM_PROVIDER", "BEDROCK_MODEL_ID_CHAT", "BEDROCK_MODEL_ID_CLASSIFIER")
+    try:
+        out = subprocess.run(["docker", "compose", "exec", "-T", "core", "sh", "-c",
+                              "; ".join(f'echo "{n}=${n}"' for n in names)],
+                             capture_output=True, text=True, encoding="utf-8", cwd=ROOT, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    return dict(line.split("=", 1) for line in out.stdout.splitlines() if "=" in line)
+
+
+def main(argv: list[str] | None = None) -> int:
+    from sqlalchemy import create_engine
+
+    from db.settings import database_url
+
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("escenarios", nargs="*", help="por defecto, todos")
+    parser.add_argument("--reps", type=int, default=1, help="corridas de cada escenario")
+    parser.add_argument("--pausa", type=float, default=DEFAULT_PAUSE_S, help="segundos entre turnos")
+    parser.add_argument("--timeout", type=float, default=120.0, help="segundos de espera por turno")
+    parser.add_argument("--core-url", default=os.environ.get("CORE_URL", "http://127.0.0.1:8000"))
+    parser.add_argument("--database-url", default=None, help="por defecto, la de db/settings.py")
+    args = parser.parse_args(argv)
+
+    unknown = [name for name in args.escenarios if name not in SCENARIOS]
+    if unknown:
+        parser.error(f"escenarios desconocidos: {unknown}; hay {list(SCENARIOS)}")
+    names = args.escenarios or list(SCENARIOS)
+    try:
+        urllib.request.urlopen(args.core_url.rstrip("/") + "/health", timeout=5).close()
+    except OSError as exc:
+        print(f"core no responde en {args.core_url}/health ({exc}): levanta el stack con bash scripts/demo/up.sh")
+        return 2
+    settings = core_settings()
+    if settings.get("LLM_PROVIDER") not in (None, "bedrock"):
+        print(f"AVISO: el core corre con LLM_PROVIDER={settings['LLM_PROVIDER']}, no con bedrock")
+
+    started = datetime.now()
+    engine = create_engine(args.database_url or database_url())
+    runs: list[ScenarioRun] = []
+    try:
+        for rep in range(1, args.reps + 1):
+            for name in names:
+                print(f"{name} #{rep}", flush=True)
+                runs.append(run_scenario(name, SCENARIOS[name], rep, core_url=args.core_url, engine=engine,
+                                         pause_s=args.pausa, timeout=args.timeout))
+    finally:
+        engine.dispose()
+
+    minutes = (datetime.now() - started).total_seconds() / 60
+    header = [
+        f"# Evaluación en vivo — {started:%Y-%m-%d %H:%M}",
+        "",
+        f"- Proveedor: `{settings.get('LLM_PROVIDER', '?')}` · conversación: `{settings.get('BEDROCK_MODEL_ID_CHAT', '?')}`"
+        f" · intención: `{settings.get('BEDROCK_MODEL_ID_CLASSIFIER', '?')}`",
+        f"- {args.reps} corrida(s) de {len(names)} escenario(s), {minutes:.0f} min · pausa entre turnos {args.pausa:.0f}s",
+    ]
+    REPORTS.mkdir(parents=True, exist_ok=True)
+    base = REPORTS / f"{started:%Y-%m-%d_%H%M%S}_evaluacion"
+    base.with_suffix(".md").write_text(render_report(runs, SCENARIOS, header), encoding="utf-8")
+    payload = {"started": started.isoformat(), "settings": settings, "reps": args.reps, **as_json(runs, SCENARIOS)}
+    base.with_suffix(".json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    total = summarize(runs, SCENARIOS)
+    problems = breaches(total)
+    print(f"\nTurnos OK {total['turns_passed']}/{total['turns']} · regeneradas {total['regenerated']} · "
+          f"degradadas {total['degraded']} · respaldo {total['fallback']} · "
+          f"estado final {total['finals_passed']}/{total['finals']}")
+    for problem in problems:
+        print(f"FUERA DE UMBRAL {problem}")
+    print(f"Informe: {base.with_suffix('.md')}")
+    return 1 if problems else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
