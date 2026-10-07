@@ -2489,3 +2489,44 @@ agente busque sin filtros y resuma las zonas.
 - Los *contract tests*, el servidor MCP y el gold set de factualidad sobre el catálogo suman la tool y
   un turno `zonas`.
 
+## DT-59 — La factualidad recuerda lo que las tools ya dijeron de cada propiedad, salvo el estado
+
+**Estado:** aceptada (#217).
+
+**Contexto.** La factualidad (A-5) revisaba cada número y cada estado de la respuesta contra las tools del
+turno en curso. Pero el modelo ve toda la conversación. Si dos turnos antes dio bien el precio de una
+propiedad y ahora lo repite sin volver a llamar la tool, la respuesta se bloqueaba. Después se regeneraba,
+y si el modelo no volvía a buscar, el lead recibía la respuesta degradada. En la línea base de la
+evaluación en vivo (#216) era el patrón de la mayoría de las regeneraciones: 24% de los turnos.
+
+**Decisión.**
+- **Qué se guarda.** De cada propiedad que devuelve una tool (la ficha de `get_property`, los resultados de
+  `search_properties` y sus alternativas) se guardan los campos que se pueden citar: precio, m²,
+  recámaras, baños, amenidades, requisitos, zona, título y dirección aproximada. También la hora en que se
+  vio.
+- **Dónde.** En `last_tool_results` (`verified_facts`), que ya viaja de turno en turno (B-8). No hace falta
+  migración.
+- **Cómo se usa.** La factualidad acepta un número si está en las tools del turno, en lo que escribió el
+  lead o en esa memoria. El guardrail de promesas (A-7) acepta las amenidades recordadas.
+- **El estado nunca se toma de la memoria.** Ni siquiera se guarda: una propiedad disponible hace una hora
+  puede estar apartada ahora. Se sigue exigiendo de las tools del turno, que el `AvailabilityGuard`
+  revalida (A-4).
+- **Tampoco se guardan** la dirección exacta (A-6) ni la foto: una URL trae dígitos que no son de la
+  propiedad.
+- **Vencimiento y tope.** Un hecho vale 24 horas desde la última vez que una tool lo devolvió. Se guardan
+  como mucho las 20 propiedades vistas más recientemente.
+
+**Alternativas.**
+- **Exigir siempre la tool del turno y endurecer el prompt de corrección:** es lo que había. El modelo no
+  siempre vuelve a buscar, y cada regeneración cuesta una llamada más con una cuota de 10 por minuto.
+- **Revisar contra el texto de las respuestas anteriores del agente:** descartado. Esas respuestas ya
+  pasaron la factualidad, pero también llevan lo que dijo el lead y los textos fijos. Lo recordado tiene
+  que salir de una tool, no de lo que el modelo escribió.
+- **Recordar también el estado:** descartado. Es justo lo que cambia entre turnos (A-4).
+
+**Consecuencias.**
+- Un precio que cambió en el catálogo dentro de las 24 horas se aceptaría hasta que una tool lo vuelva a
+  devolver. Lo acota el vencimiento, y la ficha de la propiedad lo corrige en cuanto se consulta.
+- `tool_results` guarda el último resultado de cada tool del turno: si el modelo llama dos veces a
+  `get_property` en el mismo turno, solo se recuerda la segunda.
+- La evaluación en vivo (#216) mide el efecto con la tasa de regeneraciones, contra la línea base.
