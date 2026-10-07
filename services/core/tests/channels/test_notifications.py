@@ -83,6 +83,48 @@ def test_un_chat_pertenece_a_un_solo_asesor(engine):
         assert session.get(Advisor, segundo.id).telegram_chat_id == "chat-779"
 
 
+# --- el chat registrado del asesor no es un lead (#211) -----------------------------------------
+
+def _leads_del_chat(engine, chat_id: str) -> list[Lead]:
+    with session_scope(engine) as session:
+        return list(session.execute(select(Lead).where(Lead.telegram_user_id == chat_id)).scalars())
+
+
+def test_lo_que_escribe_el_asesor_en_su_chat_no_abre_un_turno_de_lead(engine, monkeypatch):
+    monkeypatch.setenv("PANEL_PUBLIC_URL", "https://panel.example.com/")
+    advisor = _advisor(engine, zone="Laureles", chat_id="chat-790")
+
+    for texto, deep_link in (("Hi, any new leads?", None), ("", "prop_00231")):
+        reply = asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="chat-790", text=texto,
+                                     deep_link=deep_link))
+        assert reply == advisor_registration.advisor_chat_reply(advisor)
+        assert f"https://panel.example.com/panel/{advisor.access_token}" in reply and "/stop" in reply
+
+    # Ni lead ni conversación (y sin lead tampoco hay funnel), y el chat sigue recibiendo los avisos.
+    assert _leads_del_chat(engine, "chat-790") == []
+    with session_scope(engine) as session:
+        assert session.get(Advisor, advisor.id).telegram_chat_id == "chat-790"
+
+
+def test_con_stop_el_asesor_desliga_su_chat_y_despues_puede_escribir_como_lead(engine):
+    advisor = _advisor(engine, zone="Chapinero", chat_id="chat-791")
+
+    reply = asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="chat-791", text="/stop"))
+
+    assert reply == advisor_registration.unregistered_reply(advisor) and advisor.access_token in reply
+    with session_scope(engine) as session:
+        assert session.get(Advisor, advisor.id).telegram_chat_id is None
+    assert _leads_del_chat(engine, "chat-791") == []  # la baja del asesor no es la de un lead
+
+    asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="chat-791", text="Hi, I'm looking for a house"))
+    assert len(_leads_del_chat(engine, "chat-791")) == 1
+
+
+def test_el_chat_de_un_lead_sigue_como_siempre(engine):
+    asyncio.run(reply_to(engine, StubCatalog(), telegram_user_id="chat-792", text="Hi, I'm looking for a house"))
+    assert len(_leads_del_chat(engine, "chat-792")) == 1
+
+
 # --- elección del asesor y tarjeta -------------------------------------------------------------
 
 def test_se_prefiere_el_asesor_de_la_zona_y_si_no_hay_cualquiera(engine):

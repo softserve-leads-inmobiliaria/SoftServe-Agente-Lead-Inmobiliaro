@@ -100,6 +100,13 @@ enlace `https://t.me/<bot>?start=adv_<token>` (el `<token>` es el de su URL del 
 `advisors.telegram_chat_id`; un enlace inválido no registra a nadie y no dice por qué. Registrado, recibe
 además cada aviso en el chat.
 
+Ese chat queda para los avisos (#211). Si el asesor escribe ahí, el bot no lo trata como un lead: no crea
+lead, conversación ni eventos del funnel. Le contesta con un texto fijo que explica para qué es el chat y le
+da el enlace a su panel. Con `/stop` el asesor desliga el chat: deja de recibir los avisos por Telegram,
+que siguen en el panel. Telegram le da a un bot un solo chat por cuenta, así que **para ver la tarjeta en
+Telegram y escribir como lead hacen falta dos cuentas**: una registrada como asesor y otra como lead. Con
+una sola cuenta, primero `/stop` desde el chat del asesor, y los avisos se ven en el panel.
+
 - **Lead calificado (B-7, DT-24):** la banda del score cruza a WARM/HOT. Tarjeta con score, zona, propiedad
   de interés y visita. El lead queda asignado al asesor que elige la agenda: el de su zona, o cualquiera
   si no hay (A-10, DT-42).

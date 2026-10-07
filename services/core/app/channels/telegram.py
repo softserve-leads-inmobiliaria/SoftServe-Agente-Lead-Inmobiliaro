@@ -293,6 +293,15 @@ async def reply_turn(engine: Engine, catalog: Catalog, *, telegram_user_id: str,
                                           access_token=token, chat_id=telegram_user_id)
         return ChannelReply(advisor_registration.reply_for(advisor))
 
+    # #211: el chat que un asesor registró es para sus avisos. Lo que escriba ahí no abre un turno de lead
+    # (ni lead, ni conversación, ni funnel); con /stop desliga el chat.
+    advisor = await run_in_threadpool(advisor_registration.registered_advisor, engine, telegram_user_id)
+    if advisor is not None:
+        if consent.is_opt_out(text):
+            await run_in_threadpool(advisor_registration.unregister, engine, telegram_user_id)
+            return ChannelReply(advisor_registration.unregistered_reply(advisor))
+        return ChannelReply(advisor_registration.advisor_chat_reply(advisor))
+
     identity = await run_in_threadpool(resolve_identity, engine, telegram_user_id)
 
     # B-2: la baja es determinista y corta antes del LLM.
