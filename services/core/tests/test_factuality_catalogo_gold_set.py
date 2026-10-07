@@ -300,6 +300,17 @@ CASOS = [
      "disponibilidad_apartada", "", True),
     ("en_lo_que_hay_disponible_no_es_estado", "Tell me your budget and I'll tell you what is available.",
      "disponibilidad_apartada", "", True),
+    # Al ofrecer alternativas de una apartada, "available" califica a otras propiedades en plural (#220, visto
+    # en la evaluación en vivo). En singular, o dicho de esta, sigue siendo el estado.
+    ("en_otras_disponibles_no_es_estado", "Would you like me to find other available houses in Usaquen?",
+     "disponibilidad_apartada", "", True),
+    ("en_no_hay_otras_disponibles_no_es_estado", "There are no other big houses available in Usaquen right now.",
+     "disponibilidad_apartada", "", True),
+    ("en_opciones_disponibles_no_es_estado", "I can show you available options in other areas.",
+     "disponibilidad_apartada", "", True),
+    ("en_una_disponible_si_es_estado", "It's an available house in Usaquen.", "disponibilidad_apartada", "", False),
+    ("en_otras_y_esta_disponible_si_es_estado", "There are other houses available, and this one is available too.",
+     "disponibilidad_apartada", "", False),
     # Cobertura (#194): las zonas y las cantidades salen de `list_zones`.
     ("en_zonas_con_cantidad", "In El Poblado I have 3 available properties, and 2 in Usaquen.", "zonas", "", True),
     ("en_zona_cantidad_inventada", "In Laureles I have 4 properties for rent.", "zonas", "", False),
