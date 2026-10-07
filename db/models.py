@@ -366,6 +366,7 @@ class UnmetSearch(Base):
     __tablename__ = "unmet_searches"
     __table_args__ = (
         _null_or_one_of("type", PROPERTY_TYPES, "ck_unmet_searches_type"),
+        _null_or_one_of("kind", PROPERTY_KINDS, "ck_unmet_searches_kind"),
         CheckConstraint("bedrooms IS NULL OR bedrooms >= 0", name="ck_unmet_searches_bedrooms"),
         CheckConstraint("budget_min IS NULL OR budget_min >= 0", name="ck_unmet_searches_budget_min"),
         CheckConstraint("budget_max IS NULL OR budget_max >= 0", name="ck_unmet_searches_budget_max"),
@@ -375,6 +376,7 @@ class UnmetSearch(Base):
     # Cada filtro es opcional, como en search_properties.
     zone: Mapped[str | None] = mapped_column(String)
     type: Mapped[str | None] = mapped_column(String)
+    kind: Mapped[str | None] = mapped_column(String)  # el tipo de inmueble que se pidió (#209, DT-54)
     bedrooms: Mapped[int | None] = mapped_column(Integer)
     budget_min: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
     budget_max: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
@@ -392,6 +394,7 @@ class PropertyAlert(Base):
     __tablename__ = "property_alerts"
     __table_args__ = (
         _null_or_one_of("type", PROPERTY_TYPES, "ck_property_alerts_type"),
+        _null_or_one_of("kind", PROPERTY_KINDS, "ck_property_alerts_kind"),
         CheckConstraint("bedrooms IS NULL OR bedrooms >= 0", name="ck_property_alerts_bedrooms"),
         CheckConstraint("budget_min IS NULL OR budget_min >= 0", name="ck_property_alerts_budget_min"),
         CheckConstraint("budget_max IS NULL OR budget_max >= 0", name="ck_property_alerts_budget_max"),
@@ -406,6 +409,7 @@ class PropertyAlert(Base):
     # Los mismos filtros que `unmet_searches`, y como en search_properties cada uno es opcional.
     zone: Mapped[str | None] = mapped_column(String)
     type: Mapped[str | None] = mapped_column(String)
+    kind: Mapped[str | None] = mapped_column(String)  # #209: sin él, una alerta de apartment avisaba de casas
     bedrooms: Mapped[int | None] = mapped_column(Integer)
     budget_min: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
     budget_max: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))

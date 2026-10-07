@@ -95,7 +95,7 @@ def mundo(session_factory):
                          price=Decimal("2400000"), closed_at=IN_WEEK))
         _property(session, "prop_quieta", zone="Usaquen", title="Depto Olvidado",
                   listed=IN_WEEK - timedelta(days=75))
-        session.add(UnmetSearch(zone="Laureles", type="renta", bedrooms=3, created_at=IN_WEEK))
+        session.add(UnmetSearch(zone="Laureles", type="renta", kind="departamento", bedrooms=3, created_at=IN_WEEK))
 
         demo = _lead(session, synthetic=True, band="WARM")
         _property(session, "prop_demo", zone="Envigado", title="Casa Demo", listed=IN_WEEK - timedelta(days=20),
@@ -172,6 +172,7 @@ def test_the_page_shows_the_inventory_and_attribution_of_the_period(client, mund
     assert "Depto Olvidado" in page.text and "no inquiries" in page.text  # estancada, +60
     assert "+60" in page.text
     assert "Laureles" in page.text  # búsqueda sin resultado
+    assert "<td>apartment</td>" in page.text  # con su tipo de inmueble (#209)
     assert "100%" in page.text  # el único cierre es del bot
     assert "feria-sep" in page.text
 

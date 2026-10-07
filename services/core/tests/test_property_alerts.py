@@ -88,9 +88,9 @@ class Lead:
                            "event_id": str(uuid.uuid4()), "text": message}
         return asyncio.run(process_turn(self.engine, event, Catalog(found), agent=agent))["text"]
 
-    def search(self, zone, found=(), message="I'm looking for a house"):
-        return self.say(message, Searches({"zone": zone, "type": "renta", "budget_range": {"min": 0, "max": 20000}}),
-                        found)
+    def search(self, zone, found=(), message="I'm looking for a house", **extra):
+        return self.say(message, Searches({"zone": zone, "type": "renta", "budget_range": {"min": 0, "max": 20000},
+                                           **extra}), found)
 
     def _rows(self, sql):
         with self.engine.connect() as connection:
@@ -111,15 +111,17 @@ class Lead:
             "SELECT content FROM messages WHERE conversation_id = :c AND content LIKE 'Something like%'")]
 
 
-def _list(engine, zone, *, price=15000, bedrooms=2, type_="renta", status="disponible", at=None):
+def _list(engine, zone, *, price=15000, bedrooms=2, type_="renta", status="disponible", at=None,
+          kind="departamento"):
     """Publica una propiedad nueva por `db/property_history.py`, como lo hará quien dé de alta inventario."""
     property_id = f"prop_{uuid.uuid4().hex[:8]}"
     with session_scope(engine) as session:
         session.execute(text(
             "INSERT INTO properties (id, title, price, type, kind, zone, m2, bedrooms, bathrooms, address_approx,"
-            " address_exact, status) VALUES (:id, 'Depto nuevo', :price, :type, 'departamento', :zone, 80, :bedrooms, 1,"
+            " address_exact, status) VALUES (:id, 'Depto nuevo', :price, :type, :kind, :zone, 80, :bedrooms, 1,"
             " 'Col. Centro', 'Calle Falsa 123', :status)"),
-            {"id": property_id, "price": price, "type": type_, "zone": zone, "bedrooms": bedrooms, "status": status})
+            {"id": property_id, "price": price, "type": type_, "kind": kind, "zone": zone, "bedrooms": bedrooms,
+             "status": status})
         record_listing(session, property_id, "test", at=at)
     return property_id
 
@@ -166,7 +168,7 @@ def test_a_search_with_few_results_offers_the_alert(engine, zone):
     lead = Lead(engine)
     reply = lead.search(zone, found=[{"id": "prop_test", "title": "Casa", "status": "disponible"}])
     assert reply.endswith(alerts.OFFER_TEXT)
-    assert lead.last_tool_results()[alerts.ALERT_KEY] == {"zone": zone, "type": "renta", "bedrooms": None,
+    assert lead.last_tool_results()[alerts.ALERT_KEY] == {"zone": zone, "type": "renta", "kind": None, "bedrooms": None,
                                                           "budget_min": 0, "budget_max": 20000}
 
 
@@ -426,3 +428,26 @@ def test_the_lead_answering_from_nurture_goes_back_to_discovery(engine, zone):
 ])
 def test_the_alert_text_uses_only_catalog_data(prop, expected):
     assert expected in alerts.alert_text(prop)
+
+
+# --- tipo de inmueble (#209) -------------------------------------------------------------------------------
+
+def test_an_alert_for_an_apartment_announces_apartments_and_not_houses(engine, zone):
+    lead = Lead(engine)
+    lead.search(zone, kind="departamento")
+    lead.say("notify me")
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT kind FROM property_alerts WHERE lead_id = :l AND active"),
+                                  {"l": lead.lead_id}).scalar_one() == "departamento"
+    house = _list(engine, zone, kind="casa")
+    land = _list(engine, zone, kind="terreno")
+    apartment = _list(engine, zone, kind="departamento")
+    channel = Channel()
+    _run(engine, channel)
+    assert len(channel.sent) == 1 and apartment in channel.sent[0]
+    assert house not in channel.sent[0] and land not in channel.sent[0]
+
+
+def test_an_alert_without_a_kind_announces_any_kind(engine, zone):
+    _, house, channel = _alerted(engine, zone, kind="casa")
+    assert len(channel.sent) == 1 and house in channel.sent[0]

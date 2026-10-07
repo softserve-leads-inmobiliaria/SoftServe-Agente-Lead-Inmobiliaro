@@ -126,7 +126,10 @@ def _count(count: int, one: str, many: str) -> str:
 
 
 def _unmet_line(item: UnmetDemand) -> str:
-    what = label("property_type", item.type) if item.type else "any type"
+    """Una línea de la demanda no atendida: "- apartment for rent in Laureles, 2 bedrooms: 3 searches"."""
+    operation = label("property_type", item.type) if item.type else None
+    what = " ".join(part for part in (label("property_kind", item.kind) if item.kind else None, operation) if part)
+    what = what or "any type"
     where = f"in {item.zone}" if item.zone else "in any area"
     rooms = f", {_count(item.bedrooms, 'bedroom', 'bedrooms')}" if item.bedrooms is not None else ""
     return f"- {what} {where}{rooms}: {_count(item.searches, 'search', 'searches')}"

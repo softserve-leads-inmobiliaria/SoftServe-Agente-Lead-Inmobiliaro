@@ -221,6 +221,14 @@ def test_an_unmet_search_takes_any_subset_of_filters(session):
         session.flush()
 
 
+def test_the_unmet_search_kind_is_one_of_the_property_kinds(session):
+    session.add(UnmetSearch(zone="Laureles", kind="departamento"))
+    session.flush()
+    with pytest.raises(IntegrityError), session.begin_nested():
+        session.add(UnmetSearch(kind="castillo"))
+        session.flush()
+
+
 def test_deleting_a_lead_removes_its_interest_and_deals(session):
     """N-9 borra su historia sintética borrando los leads: lo que cuelga de ellos se va también."""
     _property(session)

@@ -24,16 +24,18 @@ FILTROS = {"zone": "Laureles", "type": "renta", "bedrooms": 3, "budget_range": {
 # --- unmet_filters y SearchLog: sin base -------------------------------------------------------------
 
 def test_the_filters_are_kept_as_columns():
-    assert unmet_filters(FILTROS) == {"zone": "Laureles", "type": "renta", "bedrooms": 3,
+    assert unmet_filters(FILTROS) == {"zone": "Laureles", "type": "renta", "kind": None, "bedrooms": 3,
                                       "budget_min": 0, "budget_max": 15000}
+    assert unmet_filters({**FILTROS, "kind": "departamento"})["kind"] == "departamento"  # #209
 
 
 @pytest.mark.parametrize("arguments", [
-    None, {}, {"zone": " ", "type": "traspaso", "bedrooms": -1, "budget_range": {"min": -5, "max": "mucho"}},
+    None, {}, {"zone": " ", "type": "traspaso", "kind": "castillo", "bedrooms": -1,
+               "budget_range": {"min": -5, "max": "mucho"}},
     {"bedrooms": True, "budget_range": "barato"}, {"bedrooms": 2.5},
 ])
 def test_what_the_table_would_reject_is_left_empty(arguments):
-    assert unmet_filters(arguments) == {"zone": None, "type": None, "bedrooms": None,
+    assert unmet_filters(arguments) == {"zone": None, "type": None, "kind": None, "bedrooms": None,
                                         "budget_min": None, "budget_max": None}
 
 
