@@ -2534,3 +2534,107 @@ evaluación en vivo (#216) era el patrón de la mayoría de las regeneraciones: 
 - `tool_results` guarda el último resultado de cada tool del turno: si el modelo llama dos veces a
   `get_property` en el mismo turno, solo se recuerda la segunda.
 - La evaluación en vivo (#216) mide el efecto con la tasa de regeneraciones, contra la línea base.
+
+## DT-60 — Los datos de la propiedad los escribe el código: el modelo pone marcadores
+
+**Estado:** propuesta (#243, con #219 y #218).
+
+**Contexto.** La factualidad (A-5, DT-23) lee la prosa del modelo para adivinar si cada número y cada estado
+salió de una tool. Es una comparación literal, y cada redacción nueva que apareció en vivo trajo su
+excepción:
+
+- un "available" que hablaba del dinero del lead o de otras propiedades (#202, #220);
+- el número del lead confirmado como precio (#230);
+- un número que el modelo no reconocía en otro formato (#213).
+
+Hay además dos fallas que la comparación literal no puede ver:
+
+- **El dato real de otra propiedad.** Si el modelo le pone a una propiedad el precio de otra, el número
+  existe en las tools y pasa (punto 5 de la revisión, #218).
+- **Los valores internos en español** (`apartado`, `departamento`): el prompt le pide al modelo que los
+  traduzca, y nada lo comprueba (#219).
+
+**Decisión.**
+
+- **Marcadores.** El modelo no escribe los datos de una propiedad, escribe un marcador con su referencia y
+  el campo: "It's `{prop_00231.price}`, with `{prop_00231.bedrooms}` bedrooms". El código lo completa antes
+  de mandar la respuesta, y el lead lee "It's $185,000, with 2 bedrooms".
+- **Campos de una propiedad:**
+  - `price`, `m2`, `bedrooms`, `bathrooms`;
+  - `title`, `zone`, `address_approx`, `amenities`;
+  - `type` y `kind`, que se escriben en inglés (for sale, apartment…);
+  - `status`, también en inglés (available, reserved, off the market…);
+  - `requirements.down_payment_percent`, `requirements.down_payment_min` y `requirements.monthly_income_min`;
+  - `address_exact`, que solo se completa con `lead_qualified` (A-6). Sin calificar, el catálogo la devuelve
+    `null` y el marcador no se puede completar.
+- **Otros marcadores:**
+  - `{search.count}`: cuántas propiedades trajo la búsqueda del turno;
+  - `{zones}`: la cobertura de `list_zones`, armada por el código ("El Poblado and Laureles in Medellin…");
+  - de una promoción, `{promo_<id>.title}`, `{promo_<id>.description}` y `{promo_<id>.valid_until}`.
+- **De dónde sale cada valor.** De las tools del turno y de la memoria de hechos (DT-59). El estado sale
+  solo de las tools del turno, igual que hoy.
+- **Formato.**
+  - El dinero va con `$` y separador de miles, y un `$` que el modelo haya escrito antes del marcador no se
+    duplica. Lo mismo con el `%` del porcentaje.
+  - Las listas van separadas por comas, con "and" antes del último elemento.
+  - Lo arma un renderer chico, con tests.
+- **Qué se bloquea** (mismo pipeline de regenerar o degradar, DT-23):
+  - **un marcador que no se puede completar:** una propiedad o un campo que ninguna tool dio, o un valor
+    `null`;
+  - **un número escrito fuera de un marcador,** salvo:
+    - los que dijo el lead en la conversación;
+    - la numeración de una lista al principio de la línea ("1.", "2)");
+  - **una referencia `prop_…` fuera de un marcador** que ninguna tool dio.
+- **La corrección le dice al modelo qué marcador usar.** Si un número suelto coincide con un único campo de
+  una única propiedad, `_correction_prompt` lo nombra ("write `{prop_00231.price}` instead of 185000").
+  Así, la regeneración no depende de que el modelo lo adivine.
+- **Lo que se sigue revisando como hoy:**
+  - **los estados escritos fuera de un marcador,** con las excepciones de #202 y #220;
+  - **la regla de #230,** sobre los números del lead que se afirman como dato de la propiedad: "Is it
+    $150,000?" → "Yes, it's $150,000" no usa ningún marcador;
+  - **la dirección exacta en prosa (A-6)** y **las promesas (A-7),** sobre el texto ya completado.
+- **El historial.** El modelo ve en el historial el texto completado, el mismo que leyó el lead. Necesita los
+  valores para razonar ("is it within my budget?"), y no hace falta guardar dos versiones de cada
+  mensaje.
+- **El prompt** (#219). Las reglas de "mention a price only if you got it from a tool in this same reply"
+  y de cómo traducir los valores internos se reemplazan por la regla de los marcadores. Cuando no hay
+  `address_exact`, el prompt da el motivo real: la dirección exacta se comparte cuando el lead está calificado
+  (B-7: presupuesto, decisión y plazo), y hasta entonces va la aproximada. Así, el modelo deja de inventar
+  uno.
+- **Decisiones del flujo con salida estructurada.** El clasificador (Haiku) ya devuelve JSON, y se le suman
+  tres campos booleanos:
+  - `asks_for_person`: el mensaje pide hablar con una persona, o acepta la oferta de un asesor que le
+    acaban de hacer. Reemplaza a `handoff.asks_for_a_person` (#228);
+  - `wants_alert`: el lead pide que le avisen cuando entre algo así. Reemplaza a `alerts.is_request`;
+  - `wants_visit`: el lead quiere visitar una propiedad. Lo usa #229.
+
+  Si el campo falta, o no es booleano, se usa la regla de hoy como respaldo. `FakeAgent` no tiene
+  clasificador y sigue con las reglas.
+- **Llamadas.** La cantidad de llamadas por turno no cambia: el renderer es código, y los campos nuevos van en
+  la misma llamada al clasificador.
+
+**Alternativas.**
+- **Seguir con la comparación literal y sumar excepciones:** es lo que había. Cada redacción nueva necesita
+  una regla, y las reglas chocan entre sí (#234).
+- **Un segundo LLM que juzgue cada respuesta:** descartado. Suma una llamada por turno contra una cuota de 10
+  por minuto que no se puede subir (DT-19), y su criterio tampoco es determinista.
+- **Aceptar fuera de un marcador los números que existen en las tools,** como hace hoy la factualidad:
+  descartado como regla de base. Es lo que deja pasar el precio de otra propiedad. Si en la evaluación en
+  vivo las regeneraciones suben sobre la línea base de DT-59 (11%), es el primer paso atrás.
+- **Guardar en el historial la versión con marcadores:** descartado. El modelo dejaría de ver los valores con
+  los que razona, y hace falta una columna nueva en `messages`.
+- **Detectar en prosa los barrios que no están en el catálogo** (#218): sin una lista de todos los barrios
+  posibles no se puede hacer de forma determinista. Se cubre lo que sí se puede: las zonas de una propiedad y
+  la cobertura salen de marcadores (`{prop_….zone}`, `{zones}`), y las referencias tienen que existir.
+
+**Consecuencias.**
+- Un precio inventado ya no se detecta: no se puede escribir. Tampoco el precio real de otra propiedad,
+  salvo que el modelo nombre mal la referencia del marcador.
+- Un número escrito en palabras ("two bedrooms") no pasa por la regla de los números, igual que hoy.
+- `factuality.py` queda para los estados y para la regla de #230, y los gold sets de DT-23 siguen igual. Los
+  marcadores tienen su propio gold set, con salidas reales del catálogo.
+- `address_guard` queda como respaldo: un número de calle fuera de un marcador ya es un número suelto.
+- #218 se cierra con lo que cubre esta decisión. Un barrio inventado que el modelo nombre en prosa sigue sin
+  bloquearse, y lo mide la evaluación en vivo (`INVENTED_ZONES`).
+- La evaluación en vivo (#216) mide el efecto en las regeneraciones, las respuestas degradadas y la tool
+  esperada. Mientras se itera, con una repetición de los escenarios 01, 03, 04 y 07.
