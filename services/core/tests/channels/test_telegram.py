@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import select
 from telegram.ext import CallbackQueryHandler, MessageHandler
 
+from app.agent import AgentResult
 from app.channels import telegram
 from app.channels.consent import PRIVACY_NOTICE
 from app.channels.telegram import build_application, reply_to, start_bot
@@ -67,3 +68,60 @@ def test_la_aplicacion_registra_los_handlers(engine):
     application = build_application("123:fake-token", engine=engine, catalog=StubCatalog())
     # Un solo manejador para todo texto, comandos incluidos, y otro para los botones de B-11.
     assert [type(h) for h in application.handlers[0]] == [MessageHandler, CallbackQueryHandler]
+
+
+# --- #227: los mensajes de un mismo chat se atienden de a uno ------------------------------------------
+
+class RecordingAgent:
+    """Anota el historial que ve cada turno y tarda un poco, para que dos turnos se solapen si pueden."""
+
+    name = "recording"
+
+    def __init__(self) -> None:
+        self.seen: list[tuple[str, tuple[tuple[str, str], ...]]] = []
+
+    async def run(self, turn, catalog):
+        self.seen.append((turn.text, turn.history))
+        await asyncio.sleep(0.05)
+        return AgentResult(text=f"reply to {turn.text}", intent="otro")
+
+
+def test_dos_mensajes_seguidos_del_mismo_chat_se_atienden_en_orden(engine):
+    agent = RecordingAgent()
+
+    async def rafaga():
+        return await asyncio.gather(*(reply_to(engine, StubCatalog(), telegram_user_id="tg-serie-1", text=text,
+                                               agent=agent) for text in ("Hi", "I'm looking for an apartment")))
+
+    asyncio.run(rafaga())
+
+    (_, first_history), (second_text, second_history) = agent.seen
+    assert first_history == () and second_text == "I'm looking for an apartment"
+    assert ("user", "Hi") in second_history  # el segundo turno ve el primero
+    with session_scope(engine) as session:  # y los dos primeros mensajes no crean dos leads
+        assert len(session.execute(select(Lead).where(Lead.telegram_user_id == "tg-serie-1")).all()) == 1
+
+
+class WaitsForTheOther:
+    """Cada chat espera a que el otro empiece: si los chats distintos fueran en serie, no terminaría nunca."""
+
+    name = "espera"
+
+    def __init__(self) -> None:
+        self.started = {"tg-paralelo-a": asyncio.Event(), "tg-paralelo-b": asyncio.Event()}
+
+    async def run(self, turn, catalog):
+        me = turn.text
+        self.started[me].set()
+        other = next(chat for chat in self.started if chat != me)
+        await asyncio.wait_for(self.started[other].wait(), timeout=5)
+        return AgentResult(text="ok", intent="otro")
+
+
+def test_los_mensajes_de_chats_distintos_siguen_en_paralelo(engine):
+    async def dos_chats():
+        agent = WaitsForTheOther()
+        return await asyncio.gather(*(reply_to(engine, StubCatalog(), telegram_user_id=chat, text=chat, agent=agent)
+                                      for chat in ("tg-paralelo-a", "tg-paralelo-b")))
+
+    assert all(reply.endswith("ok") for reply in asyncio.run(dos_chats()))
