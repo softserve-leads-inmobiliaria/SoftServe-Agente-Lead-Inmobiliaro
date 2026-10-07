@@ -190,10 +190,12 @@ def _with_notes(text: str, listing: Mapping[str, Any] | None, protected_removed:
 def _output_violations(text: str, tool_results: Mapping[str, Any], turn: TurnInput) -> list[factuality.Violation]:
     """Guardrails de salida combinados: factualidad (A-5), dirección reservada (A-6) y promesas no
     autorizadas (A-7) — los tres comparten el mismo *pipeline* de regenerar/degradar (DT-23). Los hechos de
-    turnos anteriores (#217) respaldan números y amenidades, nunca estados."""
+    turnos anteriores (#217) respaldan números y amenidades, nunca estados. Anunciar una búsqueda para después
+    también es una promesa (#234)."""
     return (factuality.check(text, tool_results, turn.text, turn.remembered)
             + address_guard.check(text, turn.lead_qualified, turn.text)
-            + promise_guard.check(text, {"remembered": dict(turn.remembered), **tool_results}, turn.text))
+            + promise_guard.check(text, {"remembered": dict(turn.remembered), **tool_results}, turn.text)
+            + promise_guard.check_deferred(text, consulted_tools=bool(tool_results)))
 
 
 def _visible(spec: Mapping[str, Any]) -> dict[str, Any]:
