@@ -305,11 +305,12 @@ async def _visit_step(event: Mapping[str, Any], context: GuardContext, result: A
 def _visit_property(tool_results: Mapping[str, Any], previous: Mapping[str, Any]) -> dict[str, Any] | None:
     """La propiedad que se agenda: la que se miró en el turno (o la del anuncio), la de interés de los turnos
     anteriores o, si el turno solo buscó, el único resultado. Con varios resultados no se adivina cuál (#247: "the
-    cheapest one" agendaba el primero de la búsqueda); contesta el agente."""
+    cheapest one" agendaba el primero de la búsqueda), tampoco turnos después ("ok i wan to see it"); contesta
+    el agente, que puede mirar la propiedad y agendarla en el mismo turno."""
     looked = tool_results.get("get_property")
     if isinstance(looked, Mapping) and looked.get("id"):
         return dict(looked)
-    remembered = property_of_interest(previous)
+    remembered = property_of_interest(previous, sure=True)
     if remembered:
         return remembered
     search = tool_results.get("search_properties")

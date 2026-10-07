@@ -33,6 +33,27 @@ def test_la_propiedad_del_turno_manda_sobre_la_recordada():
     assert property_of_interest(remember_property(BUSQUEDA, recordada))["id"] == "prop_00231"
 
 
+def test_la_recordada_de_una_busqueda_con_varios_resultados_no_es_segura():
+    """#247: el lead eligió el estudio (el segundo) sin que se mirara su ficha, y se agendaba el primero."""
+    turno = remember_property(BUSQUEDA, {})
+    siguiente = remember_property({}, turno)
+    assert property_of_interest(siguiente) == {"id": "prop_00231", "title": "Depa en El Poblado", "zone": "El Poblado"}
+    assert property_of_interest(siguiente, sure=True) is None
+    assert property_of_interest(BUSQUEDA, sure=True) is None
+
+
+def test_la_recordada_de_una_ficha_o_de_un_unico_resultado_es_segura():
+    unico = {"search_properties": {"properties": BUSQUEDA["search_properties"]["properties"][:1]}}
+    for turno in (FICHA, unico):
+        siguiente = remember_property({}, remember_property(turno, {}))
+        assert property_of_interest(siguiente, sure=True) == property_of_interest(siguiente)
+
+
+def test_mirar_la_ficha_despues_de_la_busqueda_la_vuelve_segura():
+    despues = remember_property(FICHA, remember_property(BUSQUEDA, {}))
+    assert property_of_interest(remember_property({}, despues), sure=True)["id"] == "prop_00240"
+
+
 def test_sin_ninguna_propiedad_no_se_recuerda_nada():
     assert remember_property({"get_promotions": {"promotions": []}}, {}) == {"get_promotions": {"promotions": []}}
 

@@ -15,14 +15,19 @@ from app.visits import OFFER_KEY, VISIT_KEY
 # guardrail de factualidad (A-5) no lo mira: usa las tools del turno en curso y la memoria de hechos
 # verificados (`app/facts.py`, #217), que guarda más campos y vence.
 REMEMBERED_KEY = "property_of_interest"
+# Marca de la recordada que salió de una búsqueda con varios resultados: el primero no es necesariamente el que
+# mira el lead. Para la zona sirve; para agendar no (#247: "ok i wan to see it" agendaba otra propiedad).
+GUESSED_KEY = "from_several"
 
 
-def property_of_interest(tool_results: Mapping[str, Any]) -> dict[str, Any] | None:
+def property_of_interest(tool_results: Mapping[str, Any], *, sure: bool = False) -> dict[str, Any] | None:
     """La propiedad que el lead está mirando en este turno, o None.
 
     `get_property` manda sobre `search_properties`: pedir una propiedad concreta es una señal de
     interés más fuerte que un listado de resultados. La de una visita (B-8) va entre las dos, y la
     recordada de turnos anteriores (`REMEMBERED_KEY`) solo cuenta si el turno no trae ninguna.
+
+    Con `sure`, una búsqueda con varios resultados no dice cuál es (ni la recordada que salió de una): None.
     """
     looked_up = tool_results.get("get_property")
     if isinstance(looked_up, Mapping) and looked_up.get("id"):
@@ -37,9 +42,11 @@ def property_of_interest(tool_results: Mapping[str, Any]) -> dict[str, Any] | No
     if isinstance(search, Mapping):
         found = search.get("properties")
         if isinstance(found, list) and found and isinstance(found[0], Mapping):
-            return dict(found[0])
+            return None if sure and len(found) > 1 else dict(found[0])
     remembered = tool_results.get(REMEMBERED_KEY)
-    return dict(remembered) if isinstance(remembered, Mapping) and remembered.get("id") else None
+    if not isinstance(remembered, Mapping) or not remembered.get("id") or (sure and remembered.get(GUESSED_KEY)):
+        return None
+    return {key: value for key, value in remembered.items() if key != GUESSED_KEY}
 
 
 def remember_property(tool_results: Mapping[str, Any], previous: Mapping[str, Any]) -> dict[str, Any]:
@@ -47,10 +54,14 @@ def remember_property(tool_results: Mapping[str, Any], previous: Mapping[str, An
 
     Se guarda sin `status`: en un turno posterior ya puede estar viejo.
     """
-    found = property_of_interest(tool_results) or property_of_interest(previous)
+    source = tool_results if property_of_interest(tool_results) else previous
+    found = property_of_interest(source)
     if not found or not found.get("title"):
         return dict(tool_results)
-    return {**tool_results, REMEMBERED_KEY: {key: found[key] for key in ("id", "title", "zone") if found.get(key)}}
+    entry: dict[str, Any] = {key: found[key] for key in ("id", "title", "zone") if found.get(key)}
+    if not property_of_interest(source, sure=True):
+        entry[GUESSED_KEY] = True
+    return {**tool_results, REMEMBERED_KEY: entry}
 
 
 def listing_greeting(listing: Mapping[str, Any]) -> str:
