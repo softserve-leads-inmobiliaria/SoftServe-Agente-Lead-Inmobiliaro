@@ -2684,6 +2684,11 @@ agenda y lo contestaba el LLM, que no tiene tool de agenda.
   La intención sigue valiendo: es lo único que da el fake LLM (CT-7).
 - **El botón "Schedule a visit"** aparece bajo la respuesta sobre una propiedad en cualquier estado de
   `VISIT_STATES`.
+- **Si la respuesta la da la agenda, el agente solo clasifica.** En `SCHEDULE`, y cuando el pedido de visita
+  arranca la agenda, no se llama al modelo de conversación. En vivo, el modelo contestaba igual a "1", copiaba
+  los horarios de la oferta, y la factualidad lo regeneraba (y lo degradaba) para una respuesta que el lead
+  nunca leía: dos o tres llamadas perdidas por turno contra el cupo de 10 RPM. El clasificador sigue haciendo
+  falta: "I want to talk to an agent" mientras se agenda pasa a una persona.
 
 **Alternativas descartadas.**
 
