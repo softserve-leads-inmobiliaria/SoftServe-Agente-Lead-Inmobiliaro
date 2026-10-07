@@ -2652,3 +2652,56 @@ Hay además dos fallas que la comparación literal no puede ver:
   bloquearse, y lo mide la evaluación en vivo (`INVENTED_ZONES`).
 - La evaluación en vivo (#216) mide el efecto en las regeneraciones, las respuestas degradadas y la tool
   esperada. Mientras se itera, con una repetición de los escenarios 01, 03, 04 y 07.
+
+## DT-61 — La visita se pide desde cualquier estado, y el embudo avanza por señales
+
+**Estado:** aceptada (#229).
+
+**Contexto.** La agenda de visitas (B-8, DT-32) y el botón "Schedule a visit" (B-11) solo existían en
+`RECOMMEND`. Para llegar ahí, la FSM pedía dos etiquetas exactas del clasificador: `busqueda_propiedad` en
+`DISCOVERY` y `consulta_precio` en `QUALIFY`. `fsm.py` lo dejaba como una política mínima a reemplazar.
+
+En la evaluación en vivo de #217, `06_requisitos_y_fair_housing` terminó las 5 veces en `DISCOVERY`, con
+presupuesto, requisitos y `check_requirements` pasados. Un lead de un anuncio pregunta por la disponibilidad,
+no busca: ningún mensaje se clasificaba `busqueda_propiedad`. Si pedía la visita, el pedido no llegaba a la
+agenda y lo contestaba el LLM, que no tiene tool de agenda.
+
+**Decisión.**
+
+- **La visita se pide desde cualquier estado activo** (`VISIT_STATES`: todos menos `SCHEDULE` y los
+  terminales). La pide la intención `agendar_visita` o el campo `wants_visit` del clasificador (DT-60).
+  - Si hay una propiedad de interés (la del turno o la recordada), el código ofrece los horarios y la FSM pasa
+    a `SCHEDULE`.
+  - Si no la hay, contesta el agente, que pregunta cuál. Con varios resultados de búsqueda no se adivina: en la
+    prueba de jurado (#247), "the cheapest one" agendaba el primero, y en `RECOMMEND` sin propiedad se pedía un
+    horario que el lead ya había dado.
+- **En `SCHEDULE`, un mensaje que no contesta la oferta lo contesta el agente** (#247): la oferta sigue abierta y
+  se le recuerda al lead cómo elegir. Antes, la agenda contestaba a cualquier pregunta "I didn't quite get which
+  time you prefer", y el lead no podía salir ni corregir la propiedad.
+- **A `SCHEDULE` se llega cuando el código arrancó la agenda** (`visit_started`), no por una intención. Así la
+  FSM y la agenda no pueden quedar desfasadas.
+- **El embudo avanza por señales:**
+  - buscar o mirar una propiedad (`search_properties`, `get_property` o el anuncio) cierra `DISCOVERY`;
+  - el primer dato de calificación en la señal acumulada (presupuesto, cómo se decide, cuándo, o el resultado
+    de `check_requirements`) cierra `QUALIFY`.
+
+  La intención sigue valiendo: es lo único que da el fake LLM (CT-7).
+- **El botón "Schedule a visit"** aparece bajo la respuesta sobre una propiedad en cualquier estado de
+  `VISIT_STATES`.
+- **Si la respuesta la da la agenda, el agente solo clasifica.** En `SCHEDULE`, y cuando el pedido de visita
+  arranca la agenda, no se llama al modelo de conversación. En vivo, el modelo contestaba igual a "1", copiaba
+  los horarios de la oferta, y la factualidad lo regeneraba (y lo degradaba) para una respuesta que el lead
+  nunca leía: dos o tres llamadas perdidas por turno contra el cupo de 10 RPM. El clasificador sigue haciendo
+  falta: "I want to talk to an agent" mientras se agenda pasa a una persona.
+
+**Alternativas descartadas.**
+
+- **Saltar el embudo directo a `RECOMMEND` con el puntaje:** descartado. Los estados intermedios son los que
+  mide el embudo (`funnel_events`), y un salto los dejaría vacíos.
+- **Dejar que el LLM agende con una tool:** descartado por DT-32. La agenda la maneja el código.
+
+**Consecuencias.**
+
+- Un turno avanza un solo estado: un lead que en un mensaje busca y da su presupuesto pasa a `QUALIFY`, y a
+  `RECOMMEND` en el turno siguiente.
+- Los tests de racha y de embudo usan un evento sin el anuncio: en Telegram solo lo trae el `/start`.
