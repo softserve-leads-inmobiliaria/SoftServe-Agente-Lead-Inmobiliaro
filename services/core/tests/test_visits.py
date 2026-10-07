@@ -11,10 +11,12 @@ from app.visits import (
     PREFERRED_ASK,
     PREFERRED_THANKS,
     VISIT_KEY,
+    answers,
     choose_slot,
     follow_up,
     slot_label,
     start,
+    visit_when,
 )
 
 SLOTS = ["2026-10-06T10:00:00-05:00", "2026-10-06T11:00:00-05:00", "2026-10-07T16:00:00-05:00"]
@@ -180,3 +182,64 @@ def test_an_answer_without_a_day_or_time_is_not_a_preferred_time(text):
     offer = {"property": None, "preferred_time": True}
     step = run(follow_up(FakeAgenda(), "conv-1", "lead-1", offer, text, TODAY))
     assert step.reply == PREFERRED_AGAIN and not step.settled and offer_of(step) == offer
+
+
+# --- cuándo prefiere la visita (`visit_when`, #247) -------------------------------------------------------
+
+SATURDAY = "2026-10-10T10:00:00-05:00"
+NEXT_TUESDAY_AFTERNOON = "2026-10-13T15:00:00-05:00"
+WEEKEND, OTHER_DAY = {"days": [5, 6], "part": None, "other_day": False}, {"days": [], "part": None, "other_day": True}
+
+
+def test_the_classifier_preference_is_validated():
+    assert visit_when({"days": ["sat", "sun"], "part_of_day": None, "other_day": False}) == WEEKEND
+    assert visit_when({"days": ["Tuesday"], "part_of_day": "afternoon"}) == {"days": [1], "part": "afternoon",
+                                                                            "other_day": False}
+    assert visit_when({"days": [], "part_of_day": None, "other_day": False}) is None
+    assert visit_when({"days": ["someday"], "part_of_day": "brunch"}) is None
+    assert visit_when(None) is None and visit_when("this weekend") is None
+
+
+def test_this_weekend_offers_only_weekend_slots_looking_two_weeks_ahead():
+    # Prueba de jurado (set N): "this weekend" ofrecía horarios del jueves.
+    agenda = FakeAgenda(slots=SLOTS + [SATURDAY])
+    step = run(start(agenda, "lead-1", PROP, TODAY, WEEKEND))
+    assert agenda.calls[1] == ("get_slots", "adv_poblado", "2026-10-05", 14)
+    assert offer_of(step)["slots"] == [SATURDAY]
+    assert step.reply.startswith("Here are the available times on the weekend") and "Sat Oct 10, 10:00" in step.reply
+
+
+def test_without_a_slot_that_fits_it_says_so_and_offers_the_closest():
+    step = run(start(FakeAgenda(), "lead-1", PROP, TODAY, WEEKEND))
+    assert step.reply.startswith("I don't have available times on the weekend. These are the closest ones")
+    assert offer_of(step)["slots"] == SLOTS
+
+
+def test_another_day_offers_slots_on_days_not_offered_yet():
+    # Prueba de jurado M5 t7: "another day" contestaba "I didn't quite get which time you prefer".
+    agenda = FakeAgenda(slots=SLOTS + ["2026-10-08T09:00:00-05:00"])
+    step = run(follow_up(agenda, "conv-1", "lead-1", _offer(), "Can we do another day?", TODAY, OTHER_DAY))
+    assert offer_of(step)["slots"] == ["2026-10-08T09:00:00-05:00"] and not step.settled
+    assert "on another day" in step.reply and all(call[0] != "book" for call in agenda.calls)
+
+
+def test_a_day_and_part_of_day_in_the_answer_offers_slots_that_fit():
+    # Prueba de jurado M1 t7: "next Tuesday afternoon" ofrecía los mismos horarios del jueves.
+    agenda = FakeAgenda(slots=SLOTS + [NEXT_TUESDAY_AFTERNOON])
+    when = {"days": [1], "part": "afternoon", "other_day": False}
+    step = run(follow_up(agenda, "conv-1", "lead-1", _offer(), "Next Tuesday afternoon?", TODAY, when))
+    assert offer_of(step)["slots"] == [NEXT_TUESDAY_AFTERNOON] and "on Tuesday afternoon" in step.reply
+
+
+def test_an_hour_on_another_day_than_the_one_named_is_not_booked():
+    # "Thursday at 4 pm": la oferta tiene el miércoles a las 16:00, que no es el día que pidió.
+    agenda = FakeAgenda()
+    when = {"days": [3], "part": None, "other_day": False}
+    step = run(follow_up(agenda, "conv-1", "lead-1", _offer(), "Thursday at 4 pm", TODAY, when))
+    assert not step.booked and all(call[0] != "book" for call in agenda.calls)
+    assert step.reply.startswith("I don't have available times on Thursday")
+
+
+def test_saying_when_answers_the_offer():
+    assert answers(_offer(), "Can we do another day?", OTHER_DAY)
+    assert not answers(_offer(), "Is it close to the metro?")

@@ -593,7 +593,7 @@ def test_when_the_agenda_answers_only_the_classifier_is_called():
     client = ScriptedBedrock(classification("otro", wants_visit=True))
     asked = []
     message = TurnInput(event=EVENT, text="Can I go see it?",
-                        answered_by_code=lambda intent, flags: asked.append((intent, flags)) or True)
+                        answered_by_code=lambda intent, flags, when: asked.append((intent, flags)) or True)
     result = run(agent_for(client).run(message, FakeCatalog()))
     assert (result.text, result.flags) == ("", {"wants_visit": True}) and client.calls_to(CHAT) == []
     assert asked == [("otro", {"wants_visit": True})]
@@ -601,7 +601,7 @@ def test_when_the_agenda_answers_only_the_classifier_is_called():
 
 def test_a_human_request_is_answered_even_if_the_agenda_would_take_the_turn():
     client = ScriptedBedrock(classification("solicitud_humano", asks_for_person=True))
-    message = TurnInput(event=EVENT, text="I want to talk to an agent", answered_by_code=lambda intent, flags: True)
+    message = TurnInput(event=EVENT, text="I want to talk to an agent", answered_by_code=lambda intent, flags, when: True)
     assert run(agent_for(client).run(message, FakeCatalog())).intent == "solicitud_humano"
 
 
@@ -614,6 +614,24 @@ def test_the_visit_flag_decides_over_the_intent():
     assert not _schedules("QUALIFY", "agendar_visita", {"wants_visit": False}, prop, None, "")
     assert _schedules("QUALIFY", "otro", {"wants_visit": True}, prop, None, "")
     assert _schedules("QUALIFY", "agendar_visita", {}, prop, None, "")  # sin el campo, la intención
+
+
+def test_saying_when_in_schedule_is_answered_by_the_agenda():
+    """#247 (M5 t7): "another day" en `SCHEDULE` lo contesta la agenda, con otros horarios; no el agente."""
+    from app.turn import _schedules
+
+    offer = {"property": {"id": "p1", "title": "Casa"}, "advisor_id": "a1", "slots": ["2026-10-06T10:00:00-05:00"]}
+    another_day = {"days": [], "part": None, "other_day": True}
+    assert _schedules("SCHEDULE", "otro", {"wants_visit": False}, None, offer, "another day?", another_day)
+    assert not _schedules("SCHEDULE", "otro", {"wants_visit": False}, None, offer, "another day?")
+
+
+def test_the_classifier_says_when_the_lead_wants_to_visit():
+    client = ScriptedBedrock(classification("agendar_visita", visit_when={"days": ["sat", "sun"],
+                                                                          "part_of_day": "morning"}))
+    result = run(agent_for(client).run(TurnInput(event=EVENT, text="This weekend in the morning",
+                                                 answered_by_code=lambda intent, flags, when: True), FakeCatalog()))
+    assert result.visit_when == {"days": [5, 6], "part": "morning", "other_day": False}
 
 
 
