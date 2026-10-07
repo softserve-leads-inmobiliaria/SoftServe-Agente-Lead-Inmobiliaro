@@ -16,7 +16,7 @@ from typing import Any, Awaitable, Callable, Mapping, Sequence
 from sqlalchemy import Engine
 from starlette.concurrency import run_in_threadpool
 
-from app import alerts, reminders, scheduling_client, summary, visits
+from app import alerts, facts, reminders, scheduling_client, summary, visits
 from app.agent import Agent, AgentResult, FakeAgent, TurnInput
 from app.alternatives import Alternatives
 from app.availability import AvailabilityGuard
@@ -338,6 +338,7 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
         })
     context = await run_in_threadpool(read_guard_context, engine, event)
     audits = verdict.audit_kinds()
+    now = datetime.now(UTC)  # la hora con que vencen los hechos verificados (#217)
 
     # /stop: determinista, sin LLM. Un lead ya dado de baja tampoco recibe más flujo.
     if verdict.opt_out:
@@ -371,7 +372,8 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
         listing = await _listing(event, guarded, context.lead_qualified)
         result = await agent.run(TurnInput(event=event, text=text, history=context.history,
                                            lead_qualified=context.lead_qualified, listing=listing,
-                                           protected_removed=verdict.protected_category), guarded)
+                                           protected_removed=verdict.protected_category,
+                                           remembered=facts.evidence(context.last_tool_results, now)), guarded)
         if listing:
             result = _with_listing(result, listing, greet=not event["text"].strip())
     counts = not (verdict.jailbreak or verdict.out_of_domain or verdict.not_english)
@@ -395,7 +397,8 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     outbound = FakeCore().handle_event(event, intent=result.intent, text=result.text)
     if verdict.pii:
         outbound["text"] += " " + PII_REMINDER
-    remembered = remember_property(result.tool_results, context.last_tool_results)
+    remembered = facts.carry(remember_property(result.tool_results, context.last_tool_results),
+                             result.tool_results, context.last_tool_results, now)
     evidence = TurnEvidence(raw_signal=_raw_signal(verdict, result.raw_signal), listing=listing,
                             tool_results=alerts.carry_offered(remembered, context.last_tool_results))
     streak = next_streak(context.unresolved_streak, result.intent, raw_signal=evidence.raw_signal,

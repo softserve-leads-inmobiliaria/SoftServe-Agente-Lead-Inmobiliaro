@@ -41,6 +41,8 @@ class TurnInput:
     lead_qualified: bool = False
     listing: Mapping[str, Any] | None = None  # la propiedad del anuncio por el que llegó el lead (#122)
     protected_removed: bool = False  # el guardrail quitó una mención de categoría protegida (#200)
+    # Lo que las tools dijeron de cada propiedad en turnos anteriores (#217): respalda números y amenidades.
+    remembered: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -130,14 +132,14 @@ class BedrockAgent:
             if not chat.text:
                 raise LLMFormatError("respuesta vacía")
             guard_audits: list[tuple[str, dict[str, Any]]] = []
-            violations = _output_violations(chat.text, chat.tool_results, turn.text, turn.lead_qualified)
+            violations = _output_violations(chat.text, chat.tool_results, turn)
             if violations:
                 # Una oportunidad de corregirse con lo que ya sabe, antes de degradar la conversación (A-5).
                 retry = await self._llm.regenerate(turn.history, current, chat.text, violations, visible, run_tool)
                 chat.tool_results.update(retry.tool_results)
                 chat.tool_calls += retry.tool_calls
                 guard_audits.append(("output.factuality_regenerated", {"violations": len(violations)}))
-                violations = (_output_violations(retry.text, chat.tool_results, turn.text, turn.lead_qualified)
+                violations = (_output_violations(retry.text, chat.tool_results, turn)
                              if retry.text.strip() else violations)
                 if violations:
                     guard_audits.append(("output.factuality_degraded", {"violations": len(violations)}))
@@ -174,13 +176,13 @@ def _with_notes(text: str, listing: Mapping[str, Any] | None, protected_removed:
     return "\n\n".join([text, *notes])
 
 
-def _output_violations(text: str, tool_results: Mapping[str, Any], lead_text: str,
-                       lead_qualified: bool) -> list[factuality.Violation]:
+def _output_violations(text: str, tool_results: Mapping[str, Any], turn: TurnInput) -> list[factuality.Violation]:
     """Guardrails de salida combinados: factualidad (A-5), dirección reservada (A-6) y promesas no
-    autorizadas (A-7) — los tres comparten el mismo *pipeline* de regenerar/degradar (DT-23)."""
-    return (factuality.check(text, tool_results, lead_text)
-            + address_guard.check(text, lead_qualified, lead_text)
-            + promise_guard.check(text, tool_results, lead_text))
+    autorizadas (A-7) — los tres comparten el mismo *pipeline* de regenerar/degradar (DT-23). Los hechos de
+    turnos anteriores (#217) respaldan números y amenidades, nunca estados."""
+    return (factuality.check(text, tool_results, turn.text, turn.remembered)
+            + address_guard.check(text, turn.lead_qualified, turn.text)
+            + promise_guard.check(text, {"remembered": dict(turn.remembered), **tool_results}, turn.text))
 
 
 def _visible(spec: Mapping[str, Any]) -> dict[str, Any]:

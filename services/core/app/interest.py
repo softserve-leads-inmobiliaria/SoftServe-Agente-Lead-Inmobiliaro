@@ -12,7 +12,8 @@ from app.visits import OFFER_KEY, VISIT_KEY
 
 # La propiedad de interés más reciente, arrastrada de turno en turno en `last_tool_results` (B-8): ese
 # campo se sobrescribe cada turno, y la visita se pide varios turnos después de ver la propiedad. El
-# guardrail de factualidad (A-5) no lo mira: usa solo las tools del turno en curso.
+# guardrail de factualidad (A-5) no lo mira: usa las tools del turno en curso y la memoria de hechos
+# verificados (`app/facts.py`, #217), que guarda más campos y vence.
 REMEMBERED_KEY = "property_of_interest"
 
 

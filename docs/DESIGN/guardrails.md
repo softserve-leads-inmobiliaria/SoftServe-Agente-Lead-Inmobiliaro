@@ -64,7 +64,10 @@ degrada a una respuesta segura o a `HUMAN_HANDOFF`.
 ### 2.1 Factualidad (`A-5`)
 
 Todo número/estado de la respuesta candidata se compara literalmente contra `last_tool_results`
-del turno (`app/factuality.py`, DT-23) — también se admite lo que el propio lead dijo. 1er fallo:
+del turno (`app/factuality.py`, DT-23) — también se admite lo que el propio lead dijo. Un número también
+vale si una tool lo dio en un turno anterior de la conversación: la memoria de hechos verificados
+(`app/facts.py`, DT-59, #217) guarda los campos citables de cada propiedad durante 24 horas, nunca su
+estado. 1er fallo:
 se regenera con una instrucción explícita de qué no se pudo verificar, con las tools todavía
 disponibles. La instrucción va en el *system* y dice que el lead no la ve, para que el modelo no se
 disculpe ni prometa buscar después (#213). 2do fallo: se degrada a un texto fijo que ofrece un asesor (`intent="otro"`, sin forzar

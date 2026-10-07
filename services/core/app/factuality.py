@@ -2,7 +2,9 @@
 
 Todo número (precio, m², recámaras, porcentaje de enganche...) y todo estado de propiedad que
 mencione la respuesta candidata tiene que existir literalmente en `last_tool_results` de este mismo
-turno, o en lo que el propio lead escribió (repetir su presupuesto o lo que pidió no es inventar).
+turno, o en lo que el propio lead escribió (repetir su presupuesto o lo que pidió no es inventar). Un
+número también vale si una tool lo dio en un turno anterior de la conversación (`app/facts.py`, #217);
+un estado, no.
 No hay comprensión semántica: es una comparación literal de texto, deliberadamente estricta.
 
 `BedrockAgent` (`app/agent.py`) es quien decide qué hacer con las violaciones que reporta `check()`
@@ -121,10 +123,15 @@ def literal_values(tool_results: Mapping[str, Any]) -> tuple[set[str], set[str]]
     return numbers, statuses
 
 
-def check(text: str, tool_results: Mapping[str, Any], lead_text: str = "") -> list[Violation]:
-    """Números/estados de `text` que no están respaldados por `tool_results` ni por lo que dijo el lead."""
+def check(text: str, tool_results: Mapping[str, Any], lead_text: str = "",
+          remembered: Mapping[str, Any] | None = None) -> list[Violation]:
+    """Números/estados de `text` que no están respaldados por `tool_results` ni por lo que dijo el lead.
+
+    `remembered` son los hechos que las tools dieron en turnos anteriores (`app/facts.py`, #217): respaldan
+    números, nunca estados. El estado de una propiedad se exige siempre de las tools de este turno.
+    """
     tool_numbers, tool_statuses = literal_values(tool_results)
-    allowed_numbers = tool_numbers | extract_numbers(lead_text)
+    allowed_numbers = tool_numbers | literal_values(remembered or {})[0] | extract_numbers(lead_text)
     allowed_statuses = tool_statuses | extract_statuses(lead_text)
     violations = [Violation("number", n) for n in extract_numbers(text) if n not in allowed_numbers]
     violations += [Violation("status", s) for s in extract_statuses(text) if s not in allowed_statuses]
