@@ -1,7 +1,7 @@
 """Alternativas para una búsqueda sin resultados (#213, DT-57).
 
-Si `search_properties` no trae ninguna propiedad, se repite una vez sin la zona y, si tampoco trae nada,
-sin el tipo de inmueble (con la zona). Lo que salga va en `alternatives`, con el filtro que se quitó en
+Si `search_properties` no trae ninguna propiedad, se repite una vez sin la zona; si tampoco trae nada, sin el
+tipo de inmueble (con la zona), y por último sin la operación (`type`: venta, renta), con zona y tipo. Lo que salga va en `alternatives`, con el filtro que se quitó en
 `alternatives_without`. `properties` sigue vacía: la búsqueda cuenta como demanda no atendida (N-5), puede
 volverse alerta (A-18) y no suma al ajuste de la necesidad (A-15).
 
@@ -12,7 +12,13 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-RELAXED = ("zone", "kind")  # en este orden: primero se suelta la zona, después el tipo de inmueble
+# En este orden: la zona, el tipo de inmueble y al final la operación, porque quien renta no compra. Sin la
+# operación, "the house in Usaquen" después de buscar rentas contestaba que no había casas en Usaquén, y había
+# una en venta (prueba de jurado M4, #247).
+RELAXED = ("zone", "kind", "type")
+# La operación solo se suelta si el lead nombró el tipo de inmueble: "la casa en Usaquén" en venta es la misma
+# casa; "algo en preventa en Laureles" no se contesta con una renta cualquiera de Laureles.
+_NEEDS = {"type": "kind"}
 
 
 class Alternatives:
@@ -29,7 +35,8 @@ class Alternatives:
         if tool != "search_properties" or not isinstance(result, Mapping) or result.get("properties"):
             return result
         for dropped in RELAXED:
-            if not (arguments or {}).get(dropped):
+            needed = _NEEDS.get(dropped, dropped)
+            if not (arguments or {}).get(dropped) or not (arguments or {}).get(needed):
                 continue
             relaxed = await self._catalog.call(tool, {k: v for k, v in arguments.items() if k != dropped})
             found = relaxed.get("properties") if isinstance(relaxed, Mapping) else None

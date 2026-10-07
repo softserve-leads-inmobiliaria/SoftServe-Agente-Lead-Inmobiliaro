@@ -40,7 +40,7 @@ _TURN_BUDGET: ContextVar[RetryBudget | None] = ContextVar("llm_turn_retry_budget
 MARKER_FIELDS = sorted((f.removeprefix("requirements.") for f in FIELDS - {"description", "valid_until", "title"}),
                        key=lambda f: (f.startswith(("down_", "income_", "monthly_")), f))
 # Los campos booleanos del clasificador con los que decide el código (DT-60). Si falta uno, se usa la regla.
-CLASSIFIER_FLAGS = ("asks_for_person", "wants_alert", "wants_visit")
+CLASSIFIER_FLAGS = ("asks_for_person", "wants_alert", "wants_visit", "frustrated")
 
 # Lo que lee el LLM va en inglés (#202, DT-55); los valores de las claves son los del contrato y no cambian.
 CLASSIFIER_SYSTEM = (
@@ -63,6 +63,9 @@ CLASSIFIER_SYSTEM = (
     "comes up, or accepts the offer to notify them that the LAST ASSISTANT MESSAGE made; otherwise false.\n"
     '- "wants_visit": true if the current message asks to visit or see a property in person; otherwise false. '
     'Reserving, holding or buying a property is not a visit.\n'
+    '- "frustrated": true if the current message shows the lead is annoyed with the assistant: complains that it '
+    "isn't helping or understanding, repeats a request impatiently, or says so (\"this is useless\", \"you're not "
+    'answering me"). A neutral or curious question is not frustration. Otherwise false.\n'
     "Extract only from the CURRENT MESSAGE. Do not infer anything about the person's origin, religion, "
     "gender, nationality or family situation."
 )
@@ -86,7 +89,8 @@ CHAT_SYSTEM = (
     "in this same reply.\n"
     "- If a search has no `properties` but has `alternatives`, there is nothing exactly like what the lead "
     "asked for: say so, and offer the alternatives, making clear they don't match the filter named in "
-    "`alternatives_without` (`zone`: in another area; `kind`: another kind of property). Don't ask the lead "
+    "`alternatives_without` (`zone`: in another area; `kind`: another kind of property; `type`: for sale "
+    "instead of for rent, or the other way round). Don't ask the lead "
     "for their area again.\n"
     "- Never write the tools' internal Spanish values (`venta`, `apartado`…): {ref.type}, {ref.kind} and "
     "{ref.status} say them in English.\n"
@@ -320,7 +324,7 @@ class BedrockLLM:
         result = ChatResult(text="")
         for _ in range(MAX_TOOL_ROUNDS + 1):
             request: dict[str, Any] = {"system": [{"text": system}], "messages": messages,
-                                       "inferenceConfig": {"maxTokens": MAX_REPLY_TOKENS, "temperature": 0.3}}
+                                       "inferenceConfig": {"maxTokens": MAX_REPLY_TOKENS, "temperature": 0.0}}
             if specs:
                 request["toolConfig"] = tool_config(specs)
             response = await self._converse(self.chat_model_id, **request)

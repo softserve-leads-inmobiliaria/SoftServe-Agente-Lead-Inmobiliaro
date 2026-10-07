@@ -133,7 +133,7 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
             evidence: TurnEvidence | None = None, audits: Sequence[Audit] = (),
             counts_as_unresolved: bool = True, messages: Sequence[SavedMessage] = (),
             visit: VisitStep | None = None, unmet_searches: Sequence[UnmetSearch] = (),
-            alert: Mapping[str, Any] | None = None) -> Transition:
+            alert: Mapping[str, Any] | None = None, annoyed: bool | None = None) -> Transition:
     """Carga y bloquea el estado, aplica el trigger, puntúa, audita y guarda, en una transacción.
 
     `messages` son los mensajes del turno (lead y asistente): van en la misma transacción, así el
@@ -142,7 +142,7 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
     `counts_as_unresolved=False` para los turnos que fuerza el guardrail de entrada: no suman a la
     racha de frustración. `visit` es el paso de agenda del turno (B-8), si lo hubo. `unmet_searches` son
     las búsquedas del turno que no encontraron nada (N-5). `alert`, los filtros de la alerta que pidió el
-    lead (A-18).
+    lead (A-18). `annoyed` es el campo `frustrated` del clasificador: si dice que no, la racha sola no traspasa (#247).
     """
     conversation_id, lead_id = _ids(event)
     with get_tracer().start_as_current_span("fsm.advance") as span, session_scope(engine) as session:
@@ -159,8 +159,8 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         # propiedad, o la señal ya tiene datos de calificación.
         explored = evidence.listing is not None or any(
             tool in evidence.tool_results for tool in ("search_properties", "get_property"))
-        trigger = trigger_for(state.fsm_state, intent, frustrated=is_frustrated(streak), visit_settled=settled,
-                              visit_started=visit is not None and state.fsm_state in VISIT_STATES,
+        trigger = trigger_for(state.fsm_state, intent, frustrated=is_frustrated(streak, annoyed),
+                              visit_settled=settled, visit_started=visit is not None and state.fsm_state in VISIT_STATES,
                               explored=explored, qualifying=qualification_known(signal))
         after = next_state(state.fsm_state, trigger) if trigger else state.fsm_state
         if after != state.fsm_state:
@@ -470,7 +470,7 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     streak = next_streak(context.unresolved_streak, result.intent, raw_signal=evidence.raw_signal,
                          resolved=visit is not None and visit.settled)
     frustrated = (counts and context.fsm_state not in TERMINAL_STATES and result.intent not in HUMAN_INTENTS
-                  and is_frustrated(streak))
+                  and is_frustrated(streak, result.flags.get("frustrated")))
     if frustrated:
         outbound["text"] = FRUSTRATION_REPLY  # esta racha dispara el traspaso: se le avisa al lead
     replaced = frustrated or alerts.requested(verdict.signal_text, result.flags)  # la alerta (A-18) cambia la respuesta
@@ -484,7 +484,8 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     saved = [*_lead_message(verdict, event["text"]), ("assistant", outbound["text"], result.tool_calls or None)]
     audits = [*audits, *result.guard_audits]  # A-5: la factualidad de salida se audita igual que la entrada
     transition = await run_in_threadpool(advance, engine, event, result.intent, evidence, audits, counts, saved,
-                                         visit, searches.unmet if searches else (), alert)
+                                         visit, searches.unmet if searches else (), alert,
+                                         result.flags.get("frustrated"))
     _describe(span, transition)
     span.set_attributes({"lead.qualified_now": transition.qualified,
                          "lead.handoff_now": transition.handoff_reason is not None})
