@@ -292,9 +292,7 @@ async def _visit_step(event: Mapping[str, Any], context: GuardContext, result: A
     """
     state, previous = context.fsm_state, context.last_tool_results
     prop = property_of_interest(result.tool_results) or property_of_interest(previous)
-    asking = (state in VISIT_STATES and wants_visit(result)
-              and (prop is not None or state == "RECOMMEND"))
-    if not asking and state != "SCHEDULE":
+    if not _schedules(state, result.intent, result.flags, prop):
         return None
     conversation_id, lead_id = (str(value) for value in _ids(event))
     agenda, today = scheduling_client.get_scheduling(), visits.today_local()
@@ -304,9 +302,20 @@ async def _visit_step(event: Mapping[str, Any], context: GuardContext, result: A
     return await visits.start(agenda, lead_id, prop, today)
 
 
-def wants_visit(result: AgentResult) -> bool:
-    """El lead pidió la visita: lo dice la intención o el campo `wants_visit` del clasificador (#243)."""
-    return result.intent == "agendar_visita" or result.flags.get("wants_visit") is True
+def _schedules(state: str, intent: str, flags: Mapping[str, bool], prop: Mapping[str, Any] | None) -> bool:
+    """El turno lo contesta la agenda: se está agendando, o el lead pidió la visita (la intención o el campo
+    `wants_visit` del clasificador, #243) y hay una propiedad de interés (en RECOMMEND, aunque no la haya)."""
+    if state == "SCHEDULE":
+        return True
+    asks = intent == "agendar_visita" or flags.get("wants_visit") is True
+    return state in VISIT_STATES and asks and (prop is not None or state == "RECOMMEND")
+
+
+def _answered_by_code(context: GuardContext, listing: Mapping[str, Any] | None) -> Callable[[str, Mapping[str, bool]], bool]:
+    """Para el agente: si la respuesta de este turno la va a dar la agenda, solo hace falta clasificar (#229).
+    Es la misma regla que `_visit_step`, con la propiedad que este tendrá: la del anuncio o la recordada."""
+    prop = (dict(listing) if listing else None) or property_of_interest(context.last_tool_results)
+    return lambda intent, flags: _schedules(context.fsm_state, intent, flags, prop)
 
 
 def _alert_step(context: GuardContext, result: AgentResult, searches: SearchLog | None,
@@ -391,7 +400,8 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
         result = await agent.run(TurnInput(event=event, text=text, history=context.history,
                                            lead_qualified=context.lead_qualified, listing=listing,
                                            protected_removed=verdict.protected_category,
-                                           remembered=facts.evidence(context.last_tool_results, now)), guarded)
+                                           remembered=facts.evidence(context.last_tool_results, now),
+                                           answered_by_code=_answered_by_code(context, listing)), guarded)
         if listing:
             result = _with_listing(result, listing, greet=not event["text"].strip())
     counts = not (verdict.jailbreak or verdict.out_of_domain or verdict.not_english)
@@ -401,6 +411,9 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
             visit = await _visit_step(event, context, result, verdict.signal_text)
         except Exception:
             logger.exception("fallo el paso de agenda; se pide el horario preferido")
+            visit = visits.ask_preferred(property_of_interest(context.last_tool_results))
+        if visit is None and not result.text:
+            # El agente dejó la respuesta a la agenda (#229) y la agenda no contestó: no se manda un mensaje vacío.
             visit = visits.ask_preferred(property_of_interest(context.last_tool_results))
         if visit is not None:
             # La agenda la maneja el código (DT-32): su respuesta reemplaza la del agente.

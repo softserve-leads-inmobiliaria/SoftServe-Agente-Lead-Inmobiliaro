@@ -31,8 +31,10 @@ from app.factuality import _NUMBER, Violation, _normalize_number, extract_number
 # `{prop_00231.price}`, `{prop_00231.requirements.down_payment_min}`, `{search.count}`, `{zones}`.
 MARKER = re.compile(r"\{([A-Za-z][\w-]*)(?:\.([A-Za-z_][\w.]*))?\}")
 REFERENCE = re.compile(r"\bprop_\w+")
-# "1. Apartment in El Poblado": la numeración de una lista no es un dato.
-_LIST_NUMBER = re.compile(r"^[ \t]*(?:[-*][ \t]+)?(\d+)[.)](?=\s)", re.MULTILINE)
+# "1. Apartment in El Poblado": la numeración de una lista no es un dato. Tampoco en negrita o en un título
+# ("**1. Ref. prop_00231**", "### 2) Studio"), como la escribe el modelo en vivo (#229).
+_LIST_NUMBER = re.compile(r"^[ \t]*(?:[-*•][ \t]+)?(?:#+[ \t]+)?(?:\*{1,2}|_{1,2})?(\d+)[.)](?=[\s*_]|$)",
+                          re.MULTILINE)
 
 STATUS = {"disponible": "available", "apartado": "reserved", "cerrado": "off the market",
           "sin_verificar": "unverified"}

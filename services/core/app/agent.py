@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from app import address_guard, factuality, markers, promise_guard
 from app.bedrock_llm import BedrockLLM, LLMError, LLMFormatError
@@ -51,6 +51,10 @@ class TurnInput:
     protected_removed: bool = False  # el guardrail quitó una mención de categoría protegida (#200)
     # Lo que las tools dijeron de cada propiedad en turnos anteriores (#217): respalda números y amenidades.
     remembered: Mapping[str, Any] = field(default_factory=dict)
+    # Si la respuesta la va a dar el código según la intención y los campos del clasificador (la agenda, #229):
+    # entonces solo se clasifica. En vivo, el modelo contestaba igual, copiaba los horarios de la oferta, y la
+    # factualidad lo regeneraba para una respuesta que el lead nunca leía.
+    answered_by_code: Callable[[str, Mapping[str, bool]], bool] | None = None
 
 
 @dataclass(frozen=True)
@@ -131,6 +135,9 @@ class BedrockAgent:
                 # Un traspaso a una persona lo dice siempre el mismo texto: no se le deja al modelo.
                 return AgentResult(text=FakeLLM().generate_reply(intent), intent=intent,
                                    raw_signal=classification.signal, flags=flags)
+            if turn.answered_by_code is not None and turn.answered_by_code(intent, flags):
+                return AgentResult(text="", intent=intent, raw_signal=classification.signal,
+                                   guard_audits=guard_audits, flags=flags)
             if turn.protected_removed and "?" in turn.text and intent == "otro":
                 # #200: "does that matter?" se contesta siempre igual. En vivo el modelo ignoraba la nota y
                 # seguía con el enganche, o lo degradaba la factualidad.
