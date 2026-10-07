@@ -23,6 +23,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.fakes.fake_llm import INTENTS
 from app.llm_retry import RETRY, Retrier, RetryBudget, RetryPolicy, error_code
+from app.markers import FIELDS
 from app.rate_limit import RateLimited, RateLimits
 
 logger = logging.getLogger("core.bedrock_llm")
@@ -33,6 +34,13 @@ MAX_REPLY_TOKENS = 400
 # Tiempo de reintentos del turno en curso (A-14): lo abre `BedrockLLM.turn()` y lo comparten todas las
 # llamadas del turno. Sin turno abierto, cada llamada tiene el suyo.
 _TURN_BUDGET: ContextVar[RetryBudget | None] = ContextVar("llm_turn_retry_budget", default=None)
+
+# Los campos que el modelo puede pedir en un marcador (DT-60), en el orden en que se le enumeran: los requisitos
+# sin su prefijo (`markers.ALIASES`), y sin `title`, que el modelo ya escribe bien.
+MARKER_FIELDS = sorted((f.removeprefix("requirements.") for f in FIELDS - {"description", "valid_until", "title"}),
+                       key=lambda f: (f.startswith(("down_", "income_", "monthly_")), f))
+# Los campos booleanos del clasificador con los que decide el código (DT-60). Si falta uno, se usa la regla.
+CLASSIFIER_FLAGS = ("asks_for_person", "wants_alert", "wants_visit")
 
 # Lo que lee el LLM va en inglés (#202, DT-55); los valores de las claves son los del contrato y no cambian.
 CLASSIFIER_SYSTEM = (
@@ -47,6 +55,12 @@ CLASSIFIER_SYSTEM = (
     '- "decision_maker": "declarado" if the current message says how the purchase decision is made (on '
     'their own or with other people), or "no_declarado". Do not distinguish who they decide with.\n'
     '- "urgency": "inmediata", "3_meses", "explorando" or "no_declarada", ONLY if the current message says so.\n'
+    '- "asks_for_person": true if the current message asks to talk to a person (an agent, an advisor, someone '
+    "who calls them), or accepts the offer to put them in touch with one that the LAST ASSISTANT MESSAGE "
+    'made; otherwise false.\n'
+    '- "wants_alert": true if the current message asks to be notified when a property like the one they want '
+    "comes up, or accepts the offer to notify them that the LAST ASSISTANT MESSAGE made; otherwise false.\n"
+    '- "wants_visit": true if the current message asks to visit or see a property in person; otherwise false.\n'
     "Extract only from the CURRENT MESSAGE. Do not infer anything about the person's origin, religion, "
     "gender, nationality or family situation."
 )
@@ -56,10 +70,13 @@ CHAT_SYSTEM = (
     "Colombia. You chat in short messages, in English, in a friendly and straightforward way. Prices are "
     "in US dollars (USD).\n"
     "Rules:\n"
-    "- Every property fact (price, area, size, availability, promotions, requirements) must come from a "
-    "catalog tool. If you don't have it, look it up; if there is no result, say so. Do not make up facts.\n"
-    "- If the lead asks where you have properties, or about a city or area, call list_zones and name only "
-    "the areas it returns: never name an area from memory. A city that isn't there is one we don't cover; "
+    "- Every property fact (price, area, availability, promotions, requirements) comes from a catalog tool: if "
+    "you don't have it, look it up; if there is no result, say so. Never type one yourself: write a marker, the "
+    "property's reference and the field in braces, and the system fills in the tool's value: \"It's {prop_00231.price}, with {prop_00231.bedrooms} bedrooms "
+    "and {prop_00231.m2} m²\". Fields: " + ", ".join(MARKER_FIELDS) + "; also {search.count}, {zones} and "
+    "{promo_001.title}, .description or .valid_until. Type only the lead's own numbers and list numbers.\n"
+    "- If the lead asks where you have properties, or about a city or area, call list_zones and give the "
+    "areas with {zones}: never name an area from memory. A city that isn't there is one we don't cover; "
     "say so and offer the ones we do.\n"
     "- If the lead asks what you have (for rent, for sale, a kind of property), search right away with what "
     "they gave you; don't ask for more filters first.\n"
@@ -69,17 +86,11 @@ CHAT_SYSTEM = (
     "asked for: say so, and offer the alternatives, making clear they don't match the filter named in "
     "`alternatives_without` (`zone`: in another area; `kind`: another kind of property). Don't ask the lead "
     "for their area again.\n"
-    "- Mention a price, amount or percentage only if you got it from a tool in this same reply. The lead "
-    "already has what you told them before: don't repeat it, and if you need it again, look it up again (with get_property if you have its "
-    "reference, or by repeating the search).\n"
-    "- The tools use internal values in Spanish (`venta`, `renta`, `preventa`, `disponible`, `apartado`, "
-    "`cerrado`, `sin_verificar`, `departamento`, `casa`, `terreno`, `local`, `estudio`). Never show them to "
-    "the lead as they are: say them in English (for sale, for rent, pre-sale, available, reserved, off the "
-    "market, unverified, apartment, house, land, commercial space, studio).\n"
+    "- Never write the tools' internal Spanish values (`venta`, `apartado`…): {ref.type}, {ref.kind} and "
+    "{ref.status} say them in English.\n"
     "- In a search, `properties` (or `alternatives`, when there are no `properties`) are the only ones you "
     "can offer. The ones in `unavailable` are not "
-    "available: if the lead asks about one, tell them its status (reserved, off the market or unverified) "
-    "and do not offer it.\n"
+    "available: if the lead asks about one, tell them its status ({ref.status}) and do not offer it.\n"
     "- If the lead came from a property's listing (you will see its reference, `ref. prop_…`, in the "
     "conversation), when they say \"this one\", \"this apartment\" or something similar they mean that "
     "one: look it up with get_property and do not ask them for the reference. If they ask about a price or "
@@ -93,6 +104,8 @@ CHAT_SYSTEM = (
     "or pre-sale) or how much they earn per month (rent), and whether they can provide references (rent). "
     "Then check with check_requirements. Never tell the lead they meet or don't meet a requirement without "
     "that tool: their budget is not their down payment.\n"
+    "- The exact address ({ref.address_exact}) is shared only once the lead is qualified (budget, who decides "
+    "and when); until then, give {ref.address_approx} and don't give any other reason.\n"
     "- Do not promise discounts, holds, credit approval or the closing of a deal.\n"
     "- Do not ask about or comment on origin, religion, gender, nationality or family situation. If the "
     "lead asks whether any of that matters, say clearly that it doesn't affect how we help them or the "
@@ -132,6 +145,7 @@ class LLMFormatError(LLMError):
 class Classification:
     intent: str
     signal: dict[str, Any]
+    flags: dict[str, bool] = field(default_factory=dict)  # solo los `CLASSIFIER_FLAGS` que vinieron booleanos
 
 
 @dataclass
@@ -142,6 +156,9 @@ class ChatResult:
     # La conversación tal como la vio el modelo antes de su respuesta final: el historial, el mensaje del lead
     # y las rondas de tools (`toolUse`/`toolResult`). La regeneración parte de acá (#232).
     messages: list[dict[str, Any]] = field(default_factory=list)
+    # Cada respuesta de una tool, en orden: `tool_results` guarda solo la última de cada tool, y los marcadores
+    # (DT-60) pueden nombrar las dos propiedades que trajeron dos llamadas a `get_property`.
+    payloads: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
 
 
 ToolRunner = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
@@ -252,7 +269,8 @@ class BedrockLLM:
         data = parse_json_object(_text_of(response))
         intent = data.get("intent")
         signal = {key: data.get(key) for key in ("budget_hint", "decision_maker", "urgency")}
-        return Classification(intent if intent in INTENTS else "otro", signal)
+        flags = {key: data[key] for key in CLASSIFIER_FLAGS if isinstance(data.get(key), bool)}
+        return Classification(intent if intent in INTENTS else "otro", signal, flags)
 
     async def summarize(self, transcript: str, facts: str) -> dict[str, str]:
         """El resumen del traspaso para el asesor (A-16), con el modelo de conversación y sin tools."""
@@ -321,6 +339,7 @@ class BedrockLLM:
             result.tool_calls.append({"name": name, "is_error": True})
             return {"toolResult": {"toolUseId": use["toolUseId"], "status": "error", "content": [{"json": error}]}}
         result.tool_results[name] = payload
+        result.payloads.append((name, payload))
         result.tool_calls.append({"name": name, "is_error": False})
         return {"toolResult": {"toolUseId": use["toolUseId"], "status": "success", "content": [{"json": payload}]}}
 
@@ -362,22 +381,31 @@ def _report_failure(code: str, attempt: int, reason: str) -> None:
 def _correction_prompt(previous_reply: str, violations: Sequence[Any]) -> str:
     """La instrucción interna de la regeneración (A-5). El lead nunca la ve, y el modelo tiene que saberlo.
 
-    Los números van normalizados ("1150"): en vivo, el modelo no los reconocía en su "$1,150" y repetía
-    los precios de un turno anterior (#213). Por eso se le dice que valen en cualquier formato y que lo
-    dicho antes no cuenta como verificado.
+    Los números van normalizados ("1150"). Si un número suelto es un único dato de una única propiedad, se le dice
+    qué marcador usar (DT-60): así la corrección no depende de que el modelo lo adivine.
     """
-    detected = "; ".join(f"{v.kind} '{v.value}'" for v in violations)
+    detected = "; ".join(_described(v) for v in violations)
     return (
         "INTERNAL CHECK (the lead never sees this): your draft reply to the lead's last message was:\n"
         f"<draft>{previous_reply}</draft>\n"
-        f"It mentioned this without it coming from any tool you called in this reply: {detected}. Write your "
-        "reply to the lead again without those figures or statuses, in any format (\"1150\" is also \"$1,150\"): "
-        "what you said in earlier messages does not count as verified. Use the tool results you already have in "
-        "this reply; if the lead needs a fact that isn't there, call the right tool now (get_property, or the same "
-        "search again for a property you mentioned before). "
+        f"This could not be verified: {detected}. Write your reply to the lead again. Write every property fact "
+        "as a marker ({prop_00231.price}), never as a number or a status you type yourself. A marker can only "
+        "name a property and a field that a tool returned; if the lead needs a fact you don't have, call the "
+        "right tool now (get_property, or the same search again for a property you mentioned before). "
         "Do not apologize and do not mention the draft or this check: the lead did not correct you. Never tell "
         "the lead you will look something up later."
     )
+
+
+def _described(violation: Any) -> str:
+    if violation.kind == "number":
+        hint = getattr(violation, "hint", None)
+        return f"number '{violation.value}'" + (f" (write {hint} instead)" if hint else " (no marker gives it)")
+    if violation.kind == "marker":
+        return f"marker '{violation.value}' (no tool returned that property or field)"
+    if violation.kind == "reference":
+        return f"reference '{violation.value}' (no tool returned it)"
+    return f"{violation.kind} '{violation.value}'"
 
 
 def _text_of(response: Mapping[str, Any]) -> str:

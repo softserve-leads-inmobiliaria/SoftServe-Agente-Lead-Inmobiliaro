@@ -13,7 +13,7 @@ No hay comprensión semántica: es una comparación literal de texto, deliberada
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any, Mapping
 
@@ -61,8 +61,12 @@ def _not_the_property(text: str, match: re.Match[str]) -> bool:
 
 @dataclass(frozen=True)
 class Violation:
-    kind: str  # "number" | "status" | "address" (app/address_guard.py, A-6) | "promise" | "amenity" (app/promise_guard.py, A-7)
+    # "number" | "status" | "address" (app/address_guard.py, A-6) | "promise" | "amenity" (app/promise_guard.py, A-7)
+    # | "marker" | "reference" (app/markers.py, DT-60)
+    kind: str
     value: str  # tal como se detectó, normalizado — nunca el mensaje completo
+    # El marcador que tendría que haber usado el modelo (DT-60). No distingue una violación de otra.
+    hint: str | None = field(default=None, compare=False)
 
 
 def _normalize_number(raw: str) -> str | None:
@@ -186,14 +190,27 @@ def check(text: str, tool_results: Mapping[str, Any], lead_text: str = "",
     números, nunca estados. El estado de una propiedad se exige siempre de las tools de este turno.
     Un número que solo dijo el lead no vale como otro valor de un dato de la propiedad (#230).
     """
-    tool_numbers, tool_statuses = literal_values(tool_results)
-    known_numbers = tool_numbers | literal_values(remembered or {})[0]
-    lead_only = extract_numbers(lead_text) - known_numbers
-    allowed_numbers = known_numbers | lead_only
-    allowed_statuses = tool_statuses | extract_statuses(lead_text)
+    known_numbers = literal_values(tool_results)[0] | literal_values(remembered or {})[0]
+    allowed_numbers = known_numbers | extract_numbers(lead_text)
     violations = [Violation("number", n) for n in extract_numbers(text) if n not in allowed_numbers]
-    if lead_only:
-        claimed = _claimed_as_property_data(text, lead_only, {"tools": dict(tool_results), "remembered": remembered})
-        violations += list(dict.fromkeys(claimed))
-    violations += [Violation("status", s) for s in extract_statuses(text) if s not in allowed_statuses]
-    return violations
+    return (violations + check_lead_claims(text, tool_results, lead_text, remembered)
+            + check_statuses(text, tool_results, lead_text))
+
+
+def check_statuses(text: str, tool_results: Mapping[str, Any], lead_text: str = "") -> list[Violation]:
+    """Los estados de `text` que no dio ninguna tool de este turno ni dijo el lead. Con los marcadores (DT-60),
+    el agente lo aplica a lo que el modelo escribió fuera de ellos."""
+    allowed = literal_values(tool_results)[1] | extract_statuses(lead_text)
+    return [Violation("status", s) for s in extract_statuses(text) if s not in allowed]
+
+
+def check_lead_claims(text: str, tool_results: Mapping[str, Any], lead_text: str = "",
+                      remembered: Mapping[str, Any] | None = None) -> list[Violation]:
+    """Los números que solo dijo el lead y que `text` afirma como otro valor de un dato de la propiedad (#230).
+    Ningún marcador lo evita: "Is it $150,000?" → "Yes, it's $150,000" repite el número del lead (DT-60)."""
+    known_numbers = literal_values(tool_results)[0] | literal_values(remembered or {})[0]
+    lead_only = extract_numbers(lead_text) - known_numbers
+    if not lead_only:
+        return []
+    claimed = _claimed_as_property_data(text, lead_only, {"tools": dict(tool_results), "remembered": remembered})
+    return list(dict.fromkeys(claimed))
