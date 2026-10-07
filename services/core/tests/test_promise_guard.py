@@ -4,7 +4,7 @@ Cubre los 6 *claims* con código (1 crédito, 2 mascotas, 3 negociación, 4 apar
 garantía de cierre). El 8 (urgencia falsa) ya lo cubre A-5 sin cambios; el 6 (promoción no vigente)
 solo cuando lleva número — ver `services/core/app/promise_guard.py` y DT-26. No llama a ningún LLM.
 """
-from app.promise_guard import check
+from app.promise_guard import check, check_deferred
 
 PROPERTY_WITH_AMENITIES = {"get_property": {"id": "p1", "amenities": ["alberca", "gimnasio"]}}
 NO_AMENITIES = {"search_properties": {"properties": [{"id": "p1", "amenities": []}]}}
@@ -98,3 +98,33 @@ def test_ninguna_promesa_no_autorizada_se_escapa():
             failures.append(f"{case_id}: se esperaba {'sin violaciones' if should_pass else 'con violaciones'}, "
                             f"violaciones detectadas = {violations}")
     assert not failures, "\n".join(failures)
+
+
+# --- #234: anunciar una búsqueda para después --------------------------------------------------------------
+
+# (id, respuesta candidata, ¿el turno consultó tools?, ¿debe pasar?)
+DEFERRED_CASES = [
+    # En vivo (#217, `03_guardrails`): sin ninguna tool en el turno.
+    ("let_me_check_sin_tools", "I can't guarantee discounts. Let me check if there are any current promotions.",
+     False, False),
+    ("ill_look_sin_tools", "I'll look for houses in Usaquen for you.", False, False),
+    ("get_back_to_you", "I'll check with the team and get back to you.", True, False),
+    ("let_you_know", "I'll let you know as soon as I hear from the owner.", True, False),
+    ("look_into", "I will look into it.", False, False),
+    ("let_me_check_con_tools", "Let me check: it costs $185,000 and it's available.", True, True),
+    ("oferta_de_buscar", "Would you like me to look for other houses in Usaquen?", False, True),
+    ("respuesta_directa", "It has 2 bedrooms. What's your budget?", False, True),
+]
+
+
+def test_announcing_a_lookup_for_later_is_a_promise():
+    failures = []
+    for case_id, reply, consulted, should_pass in DEFERRED_CASES:
+        violations = check_deferred(reply, consulted)
+        if (not violations) != should_pass:
+            failures.append(f"{case_id}: se esperaba {'sin violaciones' if should_pass else 'con violaciones'}")
+    assert not failures, "\n".join(failures)
+
+
+def test_deferred_case_ids_are_unique():
+    assert len({case[0] for case in DEFERRED_CASES}) == len(DEFERRED_CASES)

@@ -133,7 +133,7 @@ def test_repeating_a_price_from_an_earlier_turn_is_not_regenerated():
 
 def test_without_the_memory_the_same_reply_is_regenerated():
     turn = TurnInput(event=EVENT, text="how much was it again?")
-    result = asyncio.run(_agent(text("It's $185,000."), text("Let me check: which property do you mean?"))
+    result = asyncio.run(_agent(text("It's $185,000."), text("Which property do you mean?"))
                          .run(turn, NoToolsCatalog()))
     assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1})]
 

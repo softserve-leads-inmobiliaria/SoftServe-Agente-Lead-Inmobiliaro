@@ -140,6 +140,27 @@ def _known_amenities(tool_results: Mapping[str, Any]) -> set[str]:
     return found
 
 
+# --- #234: anunciar que se va a buscar algo después ------------------------------------------------
+# El prompt lo prohíbe ("never tell the lead you will look something up"), pero nada lo revisaba, y en vivo
+# pasó "Let me check if there are any current promotions…" sin ninguna tool en el turno: el lead queda
+# esperando algo que nunca llega. "Get back to you" y similares siempre lo son; "let me check" solo si el
+# turno no consultó nada, porque "Let me check: it costs $185,000" con una tool del turno sí responde.
+DEFERRED_LOOKUP = "busqueda_diferida"
+_ALWAYS_DEFERRED = re.compile(
+    r"\b(?:get back to you|follow up with you|once i (?:check|confirm|hear back)"
+    r"|i(?:['’]ll| will) (?:let you know|look into|find out|check (?:with|on|into)|follow up))\b")
+_DEFERRED_WITHOUT_TOOLS = re.compile(
+    r"\b(?:let me|i(?:['’]ll| will)) (?:check|see|look|find|search|verify|confirm)\b")
+
+
+def check_deferred(text: str, consulted_tools: bool) -> list[Violation]:
+    """Anunciar una búsqueda para después en vez de hacerla ahora (#234)."""
+    normalized = normalize(text)
+    if _ALWAYS_DEFERRED.search(normalized) or (not consulted_tools and _DEFERRED_WITHOUT_TOOLS.search(normalized)):
+        return [Violation("promise", DEFERRED_LOOKUP)]
+    return []
+
+
 def check(text: str, tool_results: Mapping[str, Any], lead_text: str = "") -> list[Violation]:
     """Promesas no autorizadas en `text`: frases siempre prohibidas + amenidad sin respaldo."""
     normalized = normalize(text)

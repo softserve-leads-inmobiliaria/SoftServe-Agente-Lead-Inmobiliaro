@@ -358,7 +358,7 @@ LISTING = {"id": "prop_00231", "title": "2-bedroom apartment in El Poblado", "zo
 
 
 def test_the_model_is_told_which_listing_the_lead_came_from():
-    client = ScriptedBedrock(classification("consulta_precio"), text("Let me check it."))
+    client = ScriptedBedrock(classification("consulta_precio"), text("Do you mean that apartment?"))
     message = TurnInput(event=EVENT, text="Is it still available?", listing=LISTING)
     run(agent_for(client).run(message, FakeCatalog()))
     sent = client.calls_to(CHAT)[0]["messages"][-1]["content"][0]["text"]
@@ -410,3 +410,13 @@ def test_the_listing_note_never_counts_as_something_the_lead_said():
     message = TurnInput(event=EVENT, text="How much is it?", listing=LISTING)
     result = run(agent_for(client).run(message, FakeCatalog()))
     assert result.text == FACTUALITY_DEGRADE_REPLY
+
+
+# --- #234: anunciar una búsqueda para después se regenera --------------------------------------------------
+
+def test_announcing_a_lookup_without_calling_any_tool_is_regenerated():
+    client = ScriptedBedrock(classification("otro"), text("Let me check if there are any current promotions."),
+                             text("There are no promotions I can confirm right now. What's your budget?"))
+    result = run(agent_for(client).run(turn("Can you give me a discount?"), FakeCatalog()))
+    assert result.text.startswith("There are no promotions")
+    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1})]
