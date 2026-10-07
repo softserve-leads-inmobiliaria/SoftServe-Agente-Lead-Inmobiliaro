@@ -185,8 +185,9 @@ también el techo real, y el límite **lo comparten todas las conversaciones a l
      Si se usa el respaldo, la causa es la cuota y no el agente.
 - **En los scripts** (`conversar.py`, `evaluate.py`), los 20 s de pausa entre turnos imitan el ritmo de
   una persona y mantienen la cola por debajo de los 15 s. No tienen relación con el backoff. Una corrida
-  completa de la evaluación (`--reps 5`) no puede bajar de unos 48 minutos con esta cuota: son unas 475
-  llamadas a 10 por minuto. Con la pausa fija tarda unos 80.
+  completa de la evaluación (`--reps 5`) con los 8 escenarios originales no bajaba de unos 48 minutos con
+  esta cuota: son unas 475 llamadas a 10 por minuto. Con la pausa fija tardaba unos 80. Con los 10
+  escenarios de #233 son unos 215 turnos: unos 95 minutos.
 
 El historial de cada conversación se guarda en `messages` (solo el texto ya filtrado, sin PII ni
 categorías protegidas):
@@ -320,7 +321,7 @@ lo que quedó en Postgres:
 
 ```
 bash scripts/demo/up.sh                                   # con LLM_PROVIDER=bedrock
-python harness/scripts/evaluate.py --reps 5               # la corrida de referencia, ~80 min
+python harness/scripts/evaluate.py --reps 5               # la corrida de referencia, ~95 min
 python harness/scripts/evaluate.py --reps 3 07_busqueda_vacia_y_alternativas 08_cobertura_de_zonas
 ```
 
@@ -331,8 +332,15 @@ python harness/scripts/evaluate.py --reps 3 07_busqueda_vacia_y_alternativas 08_
     de la corrección);
   - las auditorías esperadas (`audits`), por ejemplo `input.pii`.
 
+  Con `remembered_ok`, un turno también pasa si contesta sin tools un dato que una tool ya dio en un turno
+  anterior (la memoria de hechos, #217): pasa con los requisitos que ya trajo la ficha. Ese turno no cuenta
+  para la tasa de tool esperada.
+
   Las expectativas no fijan frases: valen con cualquier modelo que haga lo correcto. Cada escenario
   declara además el estado final o la banda que espera.
+- **Lo que cubren** (#233, además de los 8 originales): `09_busqueda_hasta_visita` pide la visita y reserva
+  un horario de la agenda (B-8), y termina en `HANDOFF`; `10_alerta_de_propiedades` busca algo que no hay,
+  pide la alerta (A-18) y la recibe. La visita desde el deep-link, sin búsqueda, espera a #229.
 - **Métricas**, por escenario y en total:
   - turnos OK;
   - turnos con la tool esperada;
