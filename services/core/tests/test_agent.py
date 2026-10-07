@@ -256,6 +256,18 @@ def test_the_regeneration_can_call_a_tool_again_and_the_calls_are_all_kept():
     assert catalog.calls == [("search_properties", {"zone": "Prov."})] * 2
 
 
+def test_the_regeneration_already_has_the_tool_results_and_does_not_ask_for_them_again():
+    """#232: antes, la regeneración partía del historial sin las rondas de tools y el modelo volvía a buscar."""
+    client = ScriptedBedrock(classification("busqueda_propiedad"), tool_use("search_properties", {"zone": "Prov."}),
+                             text("I have one at $9,999,999."), text("I have one at $2,350,000."))
+    catalog = FakeCatalog(properties=[{"id": "p1", "title": "Casa", "price": 2350000, "status": "disponible"}])
+    result = run(agent_for(client).run(turn(), catalog))
+    assert result.text == "I have one at $2,350,000."
+    assert len(client.calls_to(CHAT)) == 3  # búsqueda, borrador y una sola llamada para corregir
+    assert '"price": 2350000' in json.dumps(client.calls_to(CHAT)[-1]["messages"])  # el resultado ya está
+    assert catalog.calls == [("search_properties", {"zone": "Prov."})]
+
+
 def test_the_correction_prompt_shows_the_model_its_own_reply_and_what_was_wrong():
     client = ScriptedBedrock(classification("busqueda_propiedad"), tool_use("search_properties", {"zone": "Prov."}),
                              text("I have one at $9,999,999."), text("I have one at $2,350,000."))
@@ -275,8 +287,10 @@ def test_the_correction_goes_in_the_system_so_the_model_answers_the_lead_and_not
     run(agent_for(client).run(turn(), catalog))
     first, correction = client.calls_to(CHAT)[0], client.calls_to(CHAT)[-1]
     assert correction["messages"] == first["messages"][:len(correction["messages"])]
-    assert correction["messages"][-1]["role"] == "user"
-    assert correction["messages"][-1]["content"] == [{"text": "I'm looking for a house in El Poblado"}]
+    # Lo último que dijo alguien es el lead; después solo vienen los resultados de sus tools (#232), nunca el borrador.
+    said = [(m["role"], block["text"]) for m in correction["messages"] for block in m["content"] if "text" in block]
+    assert said[-1] == ("user", "I'm looking for a house in El Poblado")
+    assert correction["messages"][-1]["role"] == "user" and "9,999,999" not in json.dumps(correction["messages"])
     instruction = correction["system"][0]["text"]
     assert instruction.startswith(first["system"][0]["text"]) and "the lead never sees this" in instruction
     assert "Do not apologize" in instruction and "Never tell the lead you will look something up later" in instruction

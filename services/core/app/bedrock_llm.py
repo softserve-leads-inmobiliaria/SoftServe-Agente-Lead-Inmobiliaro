@@ -139,6 +139,9 @@ class ChatResult:
     text: str
     tool_results: dict[str, Any] = field(default_factory=dict)
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    # La conversación tal como la vio el modelo antes de su respuesta final: el historial, el mensaje del lead
+    # y las rondas de tools (`toolUse`/`toolResult`). La regeneración parte de acá (#232).
+    messages: list[dict[str, Any]] = field(default_factory=list)
 
 
 ToolRunner = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
@@ -271,16 +274,20 @@ class BedrockLLM:
 
     async def regenerate(self, history: Sequence[tuple[str, str]], current: str, previous_reply: str,
                          violations: Sequence[Any], specs: Sequence[Mapping[str, Any]],
-                         run_tool: ToolRunner) -> ChatResult:
+                         run_tool: ToolRunner, messages: Sequence[Mapping[str, Any]] = ()) -> ChatResult:
         """Rehace la respuesta al lead sabiendo qué de la candidata no se pudo verificar (A-5).
 
         Se le muestra al modelo su propia respuesta y qué de ella no se pudo verificar, para que la
         rehaga con datos reales antes de degradar la conversación. Va en el *system*, no como mensaje
         `user`: el modelo creía que el lead lo había corregido, se disculpaba y prometía buscar (#213).
-        El último mensaje sigue siendo el del lead.
+        La conversación termina en el mensaje del lead o en los resultados de las tools que ya consultó.
+
+        `messages` es la conversación del primer intento (`ChatResult.messages`), con sus rondas de tools: así
+        el modelo ya tiene los datos y no vuelve a pedirlos (#232). Sin ella, se arma desde el historial.
         """
         system = f"{CHAT_SYSTEM}\n\n{_correction_prompt(previous_reply, violations)}"
-        return await self._converse_loop(to_messages(history, current), specs, run_tool, system=system)
+        conversation = [dict(message) for message in messages] or to_messages(history, current)
+        return await self._converse_loop(conversation, specs, run_tool, system=system)
 
     async def _converse_loop(self, messages: list[dict[str, Any]], specs: Sequence[Mapping[str, Any]],
                              run_tool: ToolRunner, system: str = CHAT_SYSTEM) -> ChatResult:
@@ -295,6 +302,7 @@ class BedrockLLM:
             uses = [block["toolUse"] for block in message["content"] if "toolUse" in block]
             if not uses or response.get("stopReason") != "tool_use":
                 result.text = _text_of(response).strip()
+                result.messages = list(messages)
                 return result
             messages.append(message)
             messages.append({"role": "user", "content": [await self._run(use, run_tool, result) for use in uses]})
@@ -345,8 +353,9 @@ def _correction_prompt(previous_reply: str, violations: Sequence[Any]) -> str:
         f"<draft>{previous_reply}</draft>\n"
         f"It mentioned this without it coming from any tool you called in this reply: {detected}. Write your "
         "reply to the lead again without those figures or statuses, in any format (\"1150\" is also \"$1,150\"): "
-        "what you said in earlier messages does not count as verified. If the lead needs them, call the right "
-        "tool now, in this reply (get_property, or the same search again for a property you mentioned before). "
+        "what you said in earlier messages does not count as verified. Use the tool results you already have in "
+        "this reply; if the lead needs a fact that isn't there, call the right tool now (get_property, or the same "
+        "search again for a property you mentioned before). "
         "Do not apologize and do not mention the draft or this check: the lead did not correct you. Never tell "
         "the lead you will look something up later."
     )
