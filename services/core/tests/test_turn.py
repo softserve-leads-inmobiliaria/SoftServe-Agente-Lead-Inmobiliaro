@@ -7,6 +7,7 @@ import pytest
 from catalog_stub import CHECKED_AT, PROPERTY, stub_call
 from sqlalchemy import create_engine, text
 
+from app import facts
 from app.fsm import next_state
 from app.state_store import ConversationMismatch
 from app.turn import advance, process_turn
@@ -232,13 +233,18 @@ def test_tool_results_are_kept_only_for_the_last_turn(engine):
             return connection.execute(text("SELECT last_tool_results FROM fsm_context WHERE conversation_id = :c"),
                                       {"c": chat.conversation_id}).scalar()
 
+    def without_facts(results):
+        return {key: value for key, value in results.items() if key != facts.FACTS_KEY}
+
     remembered = {"property_of_interest": {"id": PROPERTY["id"], "title": PROPERTY["title"]}}
     chat.say("busqueda_propiedad")
-    assert last_results() == {"search_properties": {"properties": [PROPERTY | {"availability_checked_at": CHECKED_AT}],
-                                                    "unavailable": []}} | remembered
+    assert without_facts(last_results()) == {"search_properties": {
+        "properties": [PROPERTY | {"availability_checked_at": CHECKED_AT}], "unavailable": []}} | remembered
     chat.say("saludo")
-    # B-8: de un turno a otro solo se arrastra la propiedad de interés, sin su `status`.
-    assert last_results() == remembered
+    # B-8: de un turno a otro solo se arrastra la propiedad de interés y los hechos verificados (#217), sin `status`.
+    assert without_facts(last_results()) == remembered
+    assert set(last_results()[facts.FACTS_KEY]) == {PROPERTY["id"]}
+    assert "status" not in last_results()[facts.FACTS_KEY][PROPERTY["id"]]
 
 
 def test_a_turn_without_a_search_keeps_the_matches_counted_before(engine):
