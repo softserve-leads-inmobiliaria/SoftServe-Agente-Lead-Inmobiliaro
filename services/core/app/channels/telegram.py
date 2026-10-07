@@ -32,6 +32,7 @@ from app.agent import Agent
 from app.channels import advisor_registration, canonical, consent, formatting, notifications
 from app.channels.identity import resolve_identity
 from app.channels.notifications import Sender
+from app.fsm import VISIT_STATES
 from app.skeleton import Catalog
 from app.turn import Transition, TurnReply, process_turn_reply
 
@@ -251,12 +252,12 @@ def keyboard(buttons: tuple[str, ...]) -> InlineKeyboardMarkup:
 def buttons_for(turn: TurnReply) -> tuple[str, ...]:
     """Los botones bajo la respuesta (B-11, DT-51): solo si el turno trata de una propiedad.
 
-    "Schedule a visit" solo cuando la FSM queda en `RECOMMEND`, el único estado en que pedir la visita
-    arranca la reserva (B-8): en otro, el botón contestaría algo genérico sin agendar nada.
+    "Schedule a visit" cuando pedir la visita arranca la reserva (B-8): en cualquier estado activo menos
+    `SCHEDULE`, que ya la está agendando (#229). La propiedad del turno es la de interés.
     """
     if turn.property is None:
         return ()
-    return (VISIT_BUTTON, ADVISOR_BUTTON) if turn.fsm_state == "RECOMMEND" else (ADVISOR_BUTTON,)
+    return (VISIT_BUTTON, ADVISOR_BUTTON) if turn.fsm_state in VISIT_STATES else (ADVISOR_BUTTON,)
 
 
 def _utf16_len(text: str) -> int:

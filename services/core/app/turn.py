@@ -27,7 +27,7 @@ from app.fsm import (
     HUMAN_INTENTS,
     HUMAN_REQUESTED,
     TERMINAL_STATES,
-    VISIT_REQUESTED,
+    VISIT_STATES,
     next_state,
     trigger_for,
 )
@@ -52,7 +52,7 @@ from app.interest import (
     zone_of_interest,
 )
 from app.language_guard import NOT_ENGLISH_REPLY
-from app.lead_scoring import TurnEvidence, score_turn
+from app.lead_scoring import TurnEvidence, qualification_known, score_turn
 from app.qualification import just_qualified
 from app.scheduler import restart_silence
 from app.scoring import Score
@@ -154,7 +154,14 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         booked = visit is not None and visit.booked
         streak = next_streak(state.unresolved_streak, intent, counts_as_unresolved, evidence.raw_signal,
                              resolved=settled)
-        trigger = trigger_for(state.fsm_state, intent, frustrated=is_frustrated(streak), visit_settled=settled)
+        signal, score = score_turn(state.score_signal, evidence)
+        # La FSM avanza por lo que pasó en el turno (#229, DT-61): la agenda arrancó, se buscó o se miró una
+        # propiedad, o la señal ya tiene datos de calificación.
+        explored = evidence.listing is not None or any(
+            tool in evidence.tool_results for tool in ("search_properties", "get_property"))
+        trigger = trigger_for(state.fsm_state, intent, frustrated=is_frustrated(streak), visit_settled=settled,
+                              visit_started=visit is not None and state.fsm_state in VISIT_STATES,
+                              explored=explored, qualifying=qualification_known(signal))
         after = next_state(state.fsm_state, trigger) if trigger else state.fsm_state
         if after != state.fsm_state:
             store.save_state(conversation_id, after)
@@ -164,7 +171,6 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         if booked:
             store.mark_visit_scheduled(lead_id)
             reminders.schedule(session, lead_id, conversation_id, visit.tool_results[VISIT_KEY], datetime.now(UTC))
-        signal, score = score_turn(state.score_signal, evidence)
         store.save_scoring(conversation_id, lead_id, signal, dict(evidence.tool_results), score)
         zone = zone_of_interest(evidence.tool_results)
         if zone:
@@ -279,11 +285,15 @@ async def _visit_step(event: Mapping[str, Any], context: GuardContext, result: A
                       text: str) -> VisitStep | None:
     """El paso de agenda de este turno (B-8), o None si el turno no tiene que ver con la visita.
 
-    Al pedir la visita en `RECOMMEND` se ofrecen horarios; en `SCHEDULE` se lee la respuesta del lead.
-    Si la oferta se perdió (p. ej. un turno forzado por el guardrail no la arrastró), se vuelve a ofrecer.
+    Pedir la visita la arranca desde cualquier estado activo (#229, DT-61): se ofrecen horarios de la propiedad
+    de interés. Antes de `RECOMMEND` hace falta que haya una: si no, contesta el agente, que pregunta cuál. En
+    `SCHEDULE` se lee la respuesta del lead. Si la oferta se perdió (p. ej. un turno forzado por el guardrail no
+    la arrastró), se vuelve a ofrecer.
     """
     state, previous = context.fsm_state, context.last_tool_results
-    asking = state == "RECOMMEND" and trigger_for(state, result.intent) == VISIT_REQUESTED
+    prop = property_of_interest(result.tool_results) or property_of_interest(previous)
+    asking = (state in VISIT_STATES and wants_visit(result)
+              and (prop is not None or state == "RECOMMEND"))
     if not asking and state != "SCHEDULE":
         return None
     conversation_id, lead_id = (str(value) for value in _ids(event))
@@ -291,8 +301,12 @@ async def _visit_step(event: Mapping[str, Any], context: GuardContext, result: A
     offer = previous.get(OFFER_KEY) if state == "SCHEDULE" else None
     if isinstance(offer, Mapping):
         return await visits.follow_up(agenda, conversation_id, lead_id, offer, text, today)
-    prop = property_of_interest(result.tool_results) or property_of_interest(previous)
     return await visits.start(agenda, lead_id, prop, today)
+
+
+def wants_visit(result: AgentResult) -> bool:
+    """El lead pidió la visita: lo dice la intención o el campo `wants_visit` del clasificador (#243)."""
+    return result.intent == "agendar_visita" or result.flags.get("wants_visit") is True
 
 
 def _alert_step(context: GuardContext, result: AgentResult, searches: SearchLog | None,
