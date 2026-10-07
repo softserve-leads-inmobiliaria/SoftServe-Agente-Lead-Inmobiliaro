@@ -201,3 +201,33 @@ def test_without_the_agenda_the_preferred_time_reaches_the_advisor(engine):
     chat.say("Saturday morning")
     assert chat.state == "HANDOFF" and chat.lead_status != "visit_scheduled"
     assert chat.handoffs == ["visit_requested"]
+
+
+def test_a_lead_from_a_listing_gets_slots_without_having_searched(engine, agenda):
+    """#229: llega por el anuncio, pregunta y pide la visita; nunca buscó ni pasó por RECOMMEND."""
+    chat = Chat(engine)
+    listing = {"id": "prop_00231", "title": "Depto 2 rec. en El Poblado", "zone": "El Poblado",
+               "status": "disponible"}
+
+    class ListingCatalog:
+        async def call(self, tool, arguments=None):
+            return dict(listing) if tool == "get_property" else stub_call(tool, arguments)
+
+    event = INBOUND | {"conversation_id": chat.conversation_id, "lead_id": chat.lead_id,
+                       "event_id": str(uuid.uuid4()), "text": "", "property_id": "prop_00231"}
+    asyncio.run(process_turn(engine, event, ListingCatalog()))
+    chat.say("thanks")
+    assert chat.state in ("DISCOVERY", "QUALIFY")
+    reply = chat.say("I'd like to schedule a visit")
+    assert "Depto 2 rec. en El Poblado" in reply and "1) Tue Oct 6, 10:00" in reply
+    assert chat.state == "SCHEDULE"
+    chat.say("1")
+    assert chat.state == "HANDOFF" and agenda.booked()[0]["property_id"] == "prop_00231"
+
+
+def test_a_visit_without_a_property_of_interest_is_left_to_the_agent(engine, agenda):
+    """Antes de RECOMMEND, sin una propiedad no hay qué agendar: contesta el agente, que pregunta cuál."""
+    chat = Chat(engine)
+    chat.say("Hi")
+    chat.say("I'd like to schedule a visit")
+    assert chat.state == "DISCOVERY" and agenda.calls == []

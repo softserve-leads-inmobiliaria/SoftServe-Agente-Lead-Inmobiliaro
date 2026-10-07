@@ -27,6 +27,11 @@ DIAGRAM_EDGES = [
     ("DISCOVERY", DISCOVERY_COMPLETE, "QUALIFY"),
     ("QUALIFY", QUALIFIED, "RECOMMEND"),
     ("RECOMMEND", VISIT_REQUESTED, "SCHEDULE"),
+    # #229: la visita se puede pedir desde cualquier estado activo.
+    ("GREETING", VISIT_REQUESTED, "SCHEDULE"),
+    ("DISCOVERY", VISIT_REQUESTED, "SCHEDULE"),
+    ("QUALIFY", VISIT_REQUESTED, "SCHEDULE"),
+    ("NURTURE", VISIT_REQUESTED, "SCHEDULE"),
     ("SCHEDULE", VISIT_SCHEDULED, "HANDOFF"),
     ("DISCOVERY", NO_RESPONSE, "NURTURE"),
     ("NURTURE", LEAD_RETURNED, "DISCOVERY"),
@@ -91,7 +96,7 @@ def test_all_states_are_known_and_reachable_from_greeting():
     ("DISCOVERY", "saludo", None),
     ("QUALIFY", "consulta_precio", QUALIFIED),
     ("QUALIFY", "otro", None),
-    ("RECOMMEND", "agendar_visita", VISIT_REQUESTED),
+    ("RECOMMEND", "agendar_visita", None),  # #229: la visita la arranca el código (`visit_started`)
     ("RECOMMEND", "consulta_precio", None),
     ("SCHEDULE", "agendar_visita", None),  # B-8: la agenda la resuelve el código, no una intención
     ("SCHEDULE", "saludo", None),
@@ -100,6 +105,26 @@ def test_all_states_are_known_and_reachable_from_greeting():
 ])
 def test_trigger_for(state, intent, expected):
     assert trigger_for(state, intent) == expected
+
+
+@pytest.mark.parametrize("state", ["GREETING", "DISCOVERY", "QUALIFY", "RECOMMEND", "NURTURE"])
+def test_a_visit_the_code_started_goes_to_schedule_from_every_active_state(state):
+    assert fsm.VISIT_STATES == {"GREETING", "DISCOVERY", "QUALIFY", "RECOMMEND", "NURTURE"}
+    assert trigger_for(state, "otro", visit_started=True) == VISIT_REQUESTED
+
+
+def test_a_human_request_wins_over_a_started_visit():
+    assert trigger_for("QUALIFY", "solicitud_humano", visit_started=True) == HUMAN_REQUESTED
+
+
+def test_the_funnel_advances_on_what_happened_and_not_only_on_the_label():
+    """#229: el lead de un anuncio que pregunta la disponibilidad no tiene por qué decir `busqueda_propiedad`."""
+    assert trigger_for("DISCOVERY", "otro", explored=True) == DISCOVERY_COMPLETE
+    assert trigger_for("QUALIFY", "otro", qualifying=True) == QUALIFIED
+    # Cada señal cierra solo su estado.
+    assert trigger_for("DISCOVERY", "otro", qualifying=True) is None
+    assert trigger_for("QUALIFY", "otro", explored=True) is None
+    assert trigger_for("RECOMMEND", "otro", explored=True, qualifying=True) is None
 
 
 @pytest.mark.parametrize("intent", ["agendar_visita", "otro", "saludo"])
