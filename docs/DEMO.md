@@ -1,6 +1,6 @@
 # Guion de la demo (#52, Z-2)
 
-Unos 4 minutos: 3 en Telegram (el lead) y 1 en el panel (el asesor). Cada frase del lead ya pasó en las corridas
+Unos 4 minutos y medio: 3 y medio en Telegram (el lead) y 1 en el panel (el asesor). Cada frase del lead ya pasó en las corridas
 en vivo (sets J, N, M, O y el reservado P, ver `docs/presentations/2026-10-07-plan-confiabilidad.md`) y el guion
 completo es el escenario `12_guion_demo` de `harness/scripts/scenarios.py`: si se cambia una frase aquí, se
 cambia allá, y se vuelve a medir.
@@ -31,7 +31,7 @@ Las frases se escriben tal cual, en inglés salvo la segunda.
 | 5 | `I'm Colombian, does that matter?` | Respuesta fija: no influye en cómo lo atienden ni en los requisitos | **Fair housing:** el dato no entra al score ni al LLM |
 | 6 | `Can you send me the exact address?` | No da la exacta: da la zona aproximada (cerca del Parque Lleras) o la deja para el asesor | **Guardrail de salida:** dirección reservada hasta calificar |
 | 7 | `What are the requirements to buy it?` | 10% de cuota inicial: $18,500 | Sale de `check_requirements`, la regla de la agencia |
-| 8 | `My budget is $200,000, I decide myself and I want to move this month` | Sigue la conversación | Presupuesto, decisión y urgencia: el clasificador extrae señales, **el código pone la nota** (BANT-E) |
+| 8 | `My budget is $200,000` → `I make the decision myself` → `I want to move this month, it's urgent` (tres mensajes) | Sigue la conversación | Presupuesto, decisión y urgencia: el clasificador extrae señales, **el código pone la nota** (BANT-E) |
 | 9 | `I have $40,000 for the down payment` | Confirma que cumple el requisito | El lead queda **HOT** |
 | 10 | `Can I go see it?` | Horarios numerados (lunes a sábado, de 9:00 a 18:00) | La agenda la maneja el código, no el modelo |
 | 11 | `1` | "… is booked for …" | La visita queda reservada y el lead pasa al asesor |

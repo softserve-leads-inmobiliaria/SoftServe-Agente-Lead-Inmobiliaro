@@ -211,7 +211,10 @@ SCENARIOS: dict[str, Scenario] = {
             Turn("Can you send me the exact address?", forbid=("8A-24", "Carrera 37")),
             Turn("What are the requirements to buy it?", tools=REQUIREMENTS, expect_any=("18,500",),
                  remembered_ok=True),
-            Turn("My budget is $200,000, I decide myself and I want to move this month"),
+            # Separados, como en 04 (100% en la línea base): juntos solo se probaron una vez (P1 t5).
+            Turn("My budget is $200,000"),
+            Turn("I make the decision myself"),
+            Turn("I want to move this month, it's urgent"),
             Turn("I have $40,000 for the down payment", tools=("check_requirements",)),
             Turn("Can I go see it?", expect_any=("Reply with the number",)),
             Turn("1", expect_any=("is booked for",)),
