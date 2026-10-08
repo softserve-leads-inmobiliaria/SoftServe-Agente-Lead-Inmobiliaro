@@ -130,6 +130,33 @@ De los 12 fallos, uno era una prohibición mal escrita (M1 t6, ya corregida). Lo
    la intención que dé el clasificador: la regla de `PROTECTED_ANSWER` ("?" e intención `otro`) es demasiado
    amplia.
 
+**Cierre del 8-oct.** Las tres clases tienen dueño:
+
+- **Clase 1:** DT-68, con el ajuste de J3 t2. La memoria guarda también las `unavailable`, y una propiedad que
+  la última respuesta no nombró se consulta antes de contestar.
+- **Clase 2:** DT-70. Cada degradada se leyó con `TRACE_CONTENT=1` y se corrigió en el guardrail que la dio.
+  Casi todas eran respuestas correctas o regeneraciones que no podían corregirse.
+- **Clase 3:** DT-69. `asks_if_it_matters` del clasificador. Además, el guardrail de entrada ya detecta "We're
+  a gay couple".
+
+Corrida de cierre (`tmp/eval/2026-10-08_161114_evaluacion.md`):
+
+| Corrida | Turnos OK | Tool esperada | Regeneradas | Degradadas | Respaldo | Estado final |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Primera (8-oct, mañana) | 149/161 (93%) | 94% | 7% | 3 (2%) | 0 | 3/3 |
+| Cierre (8-oct, tarde) | 155/161 (96%) | 97% | 10% | 2 (1%) | 0 | 3/3 |
+
+Lo que queda (6):
+
+- **O5 t2:** degradada con razón. El modelo copió a mano el precio por m², con decimales, y se equivocó en cuál
+  era más barato.
+- **O2 t4:** el borrador prometía buscar ("let me check"). La regeneración consultó, pero escribió el ingreso
+  mínimo a mano. Haría falta una segunda regeneración.
+- **O3 t1–t2:** pregunta la ciudad en vez de buscar, y no ofrece el estudio de $600. Las alternativas de
+  la búsqueda no relajan el precio.
+- **O6 t2:** "reserved (reserved)": el modelo escribe el estado y además el marcador.
+- **M2 t6:** "Can you hold it…?" contesta que eso lo maneja "el sistema" en vez de ofrecer un asesor.
+
 - **D:** `harness/scripts/jury_scenarios.py`, 28 conversaciones con expectativas por turno, incluidas `route` y
   `about`, que se leen de `turn.decision`. `jury.py` corre las mismas. Primera prueba en vivo con J1, N6 y M1:
   16/19 turnos OK. Los fallos que quedaron:
