@@ -265,9 +265,10 @@ class StateStore:
         jobs.cancel_for_lead(self._session, lead_id)
         alerts.deactivate_for_lead(self._session, lead_id)
 
-    def audit(self, action: str, payload: Mapping[str, Any]) -> None:
-        """Registra una detección del guardrail. El `payload` no debe llevar el contenido del mensaje."""
-        self._session.add(AuditLog(actor="input_guard", action=action, payload=dict(payload)))
+    def audit(self, action: str, payload: Mapping[str, Any], actor: str = "input_guard") -> None:
+        """Registra una detección del guardrail (o, con `actor="turn"`, por qué contestó así el turno). El
+        `payload` no debe llevar el contenido del mensaje."""
+        self._session.add(AuditLog(actor=actor, action=action, payload=dict(payload)))
 
     def touch(self, conversation_id: uuid.UUID) -> None:
         """Marca actividad: `last_message_at` en la conversación y `updated_at` en su contexto."""

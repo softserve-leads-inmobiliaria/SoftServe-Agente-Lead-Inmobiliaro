@@ -76,6 +76,12 @@ class AgentResult:
     visit_when: dict[str, Any] | None = None
     # De qué propiedad mostrada habla el mensaje (`interest.refers_to`, #247): un id validado, `UNCLEAR` o None.
     refers_to: str | None = None
+    # Quién escribió la respuesta, para el registro del turno (`turn.decision`, paso 0 del plan de confiabilidad):
+    # "agent" (el modelo), "agenda" (la deja al código), "handoff", "protected", "degraded", "llm_error", "fixed"
+    # (texto fijo sin LLM) o "input_guard".
+    route: str = "agent"
+    # La intención que dio el clasificador, antes de que el código la cambie (p. ej. a "otro" al degradar).
+    classified: str | None = None
 
 
 class ToolCatalog(Protocol):
@@ -123,9 +129,9 @@ class BedrockAgent:
 
     async def _run(self, turn: TurnInput, catalog: ToolCatalog) -> AgentResult:
         if not turn.text.strip():  # p. ej. un deep-link sin texto: el lead acaba de llegar
-            return AgentResult(text=FakeLLM().generate_reply("saludo"), intent="saludo")
+            return AgentResult(text=FakeLLM().generate_reply("saludo"), intent="saludo", route="fixed")
         if turn.text == OMITTED_MESSAGE:  # no quedó nada utilizable: no se gasta una llamada
-            return AgentResult(text=FakeLLM().generate_reply("otro"), intent="otro")
+            return AgentResult(text=FakeLLM().generate_reply("otro"), intent="otro", route="fixed")
         last_assistant = next((content for role, content in reversed(turn.history) if role == "assistant"), None)
         try:
             shown = interest.shown_properties(turn.remembered, turn.listing)
@@ -139,18 +145,19 @@ class BedrockAgent:
                 # #228: un traspaso es terminal; si el mensaje no lo pide, el turno sigue como uno más.
                 intent = "otro"
                 guard_audits.append((HUMAN_REQUEST_UNCONFIRMED, {}))
+            # Lo que entendió el clasificador, igual en cualquier ruta (`turn.decision`).
+            read: dict[str, Any] = {"raw_signal": classification.signal, "classified": classification.intent,
+                                    "flags": flags, "visit_when": when, "refers_to": about}
             if intent in HUMAN_INTENTS:
                 # Un traspaso a una persona lo dice siempre el mismo texto: no se le deja al modelo.
-                return AgentResult(text=FakeLLM().generate_reply(intent), intent=intent,
-                                   raw_signal=classification.signal, flags=flags, visit_when=when, refers_to=about)
+                return AgentResult(text=FakeLLM().generate_reply(intent), intent=intent, route="handoff", **read)
             if turn.answered_by_code is not None and turn.answered_by_code(replace(classification, intent=intent)):
-                return AgentResult(text="", intent=intent, raw_signal=classification.signal,
-                                   guard_audits=guard_audits, flags=flags, visit_when=when, refers_to=about)
+                return AgentResult(text="", intent=intent, guard_audits=guard_audits, route="agenda", **read)
             if turn.protected_removed and "?" in turn.text and intent == "otro":
                 # #200: "does that matter?" se contesta siempre igual. En vivo el modelo ignoraba la nota y
                 # seguía con el enganche, o lo degradaba la factualidad.
-                return AgentResult(text=PROTECTED_ANSWER, intent="otro", raw_signal=classification.signal,
-                                   guard_audits=guard_audits, flags=flags, visit_when=when, refers_to=about)
+                return AgentResult(text=PROTECTED_ANSWER, intent="otro", guard_audits=guard_audits, route="protected",
+                                   **read)
             specs = await catalog.tool_specs()
             hidden = {s["name"]: [a for a in CODE_CONTROLLED_ARGUMENTS if a in s["input_schema"].get("properties", {})]
                       for s in specs}
@@ -176,24 +183,22 @@ class BedrockAgent:
                 chat.tool_results.update(retry.tool_results)
                 chat.tool_calls += retry.tool_calls
                 chat.payloads += retry.payloads
-                guard_audits.append(("output.factuality_regenerated", {"violations": len(violations)}))
+                guard_audits.append(("output.factuality_regenerated", _violation_detail(violations)))
                 if retry.text.strip():
                     violations, reply = await _output_violations(retry.text, chat.tool_results, chat.payloads, turn,
                                                                  catalog)
                     _log_violations("regeneración", violations, retry.text)
                 if violations:
-                    guard_audits.append(("output.factuality_degraded", {"violations": len(violations)}))
-                    return AgentResult(text=FACTUALITY_DEGRADE_REPLY, intent="otro",
-                                       raw_signal=classification.signal, tool_results=chat.tool_results,
-                                       tool_calls=chat.tool_calls, guard_audits=guard_audits, flags=flags,
-                                       visit_when=when, refers_to=about)
+                    guard_audits.append(("output.factuality_degraded", _violation_detail(violations)))
+                    return AgentResult(text=FACTUALITY_DEGRADE_REPLY, intent="otro", tool_results=chat.tool_results,
+                                       tool_calls=chat.tool_calls, guard_audits=guard_audits, route="degraded", **read)
             chat.text = promise_guard.without_urgency(reply)
         except LLMError as exc:
             # Sin LLM no se inventa nada: texto seguro, y el turno cuenta como "sin resolver" (A-13).
-            return AgentResult(text=LLM_FALLBACK_REPLY, intent="otro", llm_error=type(exc).__name__)
-        return AgentResult(text=chat.text, intent=intent, raw_signal=classification.signal,
-                           tool_results=chat.tool_results, tool_calls=chat.tool_calls, guard_audits=guard_audits,
-                           flags=flags, visit_when=when, refers_to=about)
+            return AgentResult(text=LLM_FALLBACK_REPLY, intent="otro", llm_error=type(exc).__name__,
+                               route="llm_error")
+        return AgentResult(text=chat.text, intent=intent, tool_results=chat.tool_results, tool_calls=chat.tool_calls,
+                           guard_audits=guard_audits, **read)
 
     async def summarize(self, transcript: str, facts: SummaryFacts) -> dict[str, str]:
         """El resumen del traspaso (A-16). Si el LLM falla, lanza `LLMError`: la ficha sale sin resumen."""
@@ -298,6 +303,11 @@ async def _availabilities(catalog: ToolCatalog, refs: Sequence[str]) -> list[dic
         except (CatalogToolError, UnknownTool):
             continue  # sin el estado, el marcador no se completa y la respuesta se regenera
     return found
+
+
+def _violation_detail(violations: Sequence[factuality.Violation]) -> dict[str, Any]:
+    """Lo que se audita de las violaciones: cuántas y de qué tipo, nunca el valor (OBS-7)."""
+    return {"violations": len(violations), "kinds": sorted({v.kind for v in violations})}
 
 
 def _log_violations(attempt: str, violations: Sequence[factuality.Violation], draft: str) -> None:

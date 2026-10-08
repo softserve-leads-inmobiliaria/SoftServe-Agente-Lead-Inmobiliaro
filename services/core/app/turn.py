@@ -124,7 +124,23 @@ def _ids(event: Mapping[str, Any]) -> tuple[uuid.UUID, uuid.UUID]:
 def _write_audits(store: StateStore, event: Mapping[str, Any], audits: Sequence[Audit]) -> None:
     for action, detail in audits:
         store.audit(action, {"conversation_id": str(event["conversation_id"]),
-                             "lead_id": str(event["lead_id"]), "event_id": str(event["event_id"]), **detail})
+                             "lead_id": str(event["lead_id"]), "event_id": str(event["event_id"]), **detail},
+                    actor="turn" if action == DECISION else "input_guard")
+
+
+# Por qué contestó así el turno (paso 0 del plan de confiabilidad): lo que entendió el clasificador y quién escribió
+# la respuesta. No es una detección del guardrail: va con otro `actor`, y sin nada que haya escrito el lead.
+DECISION = "turn.decision"
+
+
+def _decision(result: AgentResult, visit: VisitStep | None, frustrated: bool, alerted: bool) -> dict[str, Any]:
+    """`route`: quién escribió lo que leyó el lead. `agent_route`: qué hizo el agente antes; si difieren, el código
+    reemplazó su respuesta (p. ej. `agent` -> `agenda:offer`)."""
+    route = ("frustration" if frustrated else f"agenda:{visit.kind or '?'}" if visit is not None
+             else "alert" if alerted else result.route)
+    return {"route": route, "agent_route": result.route, "intent": result.intent, "classified": result.classified,
+            "flags": dict(result.flags),
+            "refers_to": result.refers_to, "visit_when": result.visit_when}
 
 
 def read_guard_context(engine: Engine, event: Mapping[str, Any]) -> GuardContext:
@@ -198,7 +214,7 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         _describe(span, transition)
         if reason:
             span.set_attribute("fsm.handoff_reason", reason)
-        span.set_attribute("guardrail.audits", [action for action, _ in audits])
+        span.set_attribute("guardrail.audits", [action for action, _ in audits if action != DECISION])
         return transition
 
 
@@ -314,7 +330,7 @@ async def _visit_step(event: Mapping[str, Any], context: GuardContext, result: A
     if prop is not None and prop.get("id") and prop.get("title") and not prop.get("status"):
         status = await _current_status(catalog, prop["id"])
         if status not in (None, "disponible"):
-            return VisitStep(visits.not_visitable(prop, status), {})
+            return VisitStep(visits.not_visitable(prop, status), {}, kind="not_visitable")
     return await visits.start(agenda, lead_id, prop, today, result.visit_when)
 
 
@@ -454,13 +470,13 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     listing, searches, shown = None, None, []
     if verdict.not_english:
         # Se pide repetirlo en inglés; como fuera de dominio, no mueve la FSM ni cuenta como frustración.
-        result = AgentResult(text=NOT_ENGLISH_REPLY, intent="otro")
+        result = AgentResult(text=NOT_ENGLISH_REPLY, intent="otro", route="input_guard")
     elif verdict.out_of_domain:
-        result = AgentResult(text=_out_of_domain_reply(context), intent="otro")
+        result = AgentResult(text=_out_of_domain_reply(context), intent="otro", route="input_guard")
     elif verdict.jailbreak:
         # Se contesta como una pregunta de dominio cualquiera: no se refleja la instrucción, no se
         # llama al LLM y no dispara efectos (traspaso a humano, búsquedas).
-        result = AgentResult(text=FakeLLM().generate_reply("otro"), intent="otro")
+        result = AgentResult(text=FakeLLM().generate_reply("otro"), intent="otro", route="input_guard")
     else:
         # El agente solo ve el texto filtrado y el historial que guardó este mismo servicio.
         text = verdict.signal_text if verdict.signal_text.strip() or not event["text"].strip() else OMITTED_MESSAGE
@@ -486,10 +502,10 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
             visit = await _visit_step(event, context, result, verdict.signal_text, catalog, shown)
         except Exception:
             logger.exception("fallo el paso de agenda; se pide el horario preferido")
-            visit = visits.ask_preferred(property_of_interest(context.last_tool_results))
+            visit = visits.ask_preferred(property_of_interest(context.last_tool_results), "fallback_error")
         if visit is None and not result.text:
             # El agente dejó la respuesta a la agenda (#229) y la agenda no contestó: no se manda un mensaje vacío.
-            visit = visits.ask_preferred(property_of_interest(context.last_tool_results))
+            visit = visits.ask_preferred(property_of_interest(context.last_tool_results), "fallback_empty")
         if visit is not None:
             # La agenda la maneja el código (DT-32): su respuesta reemplaza la del agente.
             result = replace(result, text=visit.reply, tool_results={**result.tool_results, **visit.tool_results})
@@ -501,9 +517,10 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
         if counts and context.fsm_state == "SCHEDULE" and result.intent not in HUMAN_INTENTS:
             text = f"{text}\n\n{visits.reminder(offer)}"
         result = replace(result, text=text, tool_results={**result.tool_results, OFFER_KEY: offer})
-    alert = None
+    alert, before_alert = None, result.text
     if visit is None and counts and result.intent not in HUMAN_INTENTS:
         result, alert = _alert_step(context, result, searches, verdict.signal_text)
+    alerted = result.text != before_alert and result.text in (alerts.CREATED_TEXT, alerts.NO_SEARCH_TEXT)
     outbound = FakeCore().handle_event(event, intent=result.intent, text=result.text)
     if verdict.pii:
         outbound["text"] += " " + PII_REMINDER
@@ -523,11 +540,16 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
                                    evidence.tool_results, context.last_tool_results)
     evidence = replace(evidence, tool_results=shown)
 
+    decision = _decision(result, visit, frustrated, alerted)
     span.set_attributes({"turn.intent": result.intent, "turn.tools": sorted(result.tool_results),
                          "turn.agent": agent.name, "turn.llm_error": result.llm_error or "",
-                         "turn.output_guard": [action for action, _ in result.guard_audits]})
+                         "turn.output_guard": [action for action, _ in result.guard_audits],
+                         "turn.route": decision["route"], "turn.agent_route": decision["agent_route"],
+                         "turn.refers_to": result.refers_to or "",
+                         "turn.flags": sorted(name for name, value in result.flags.items() if value)})
     saved = [*_lead_message(verdict, event["text"]), ("assistant", outbound["text"], result.tool_calls or None)]
-    audits = [*audits, *result.guard_audits]  # A-5: la factualidad de salida se audita igual que la entrada
+    # A-5: la factualidad de salida se audita igual que la entrada; después, por qué contestó así el turno.
+    audits = [*audits, *result.guard_audits, (DECISION, decision)]
     transition = await run_in_threadpool(advance, engine, event, result.intent, evidence, audits, counts, saved,
                                          visit, searches.unmet if searches else (), alert,
                                          result.flags.get("frustrated"))
