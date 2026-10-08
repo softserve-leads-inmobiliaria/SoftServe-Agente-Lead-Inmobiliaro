@@ -3031,6 +3031,12 @@ conversación ("search right away"), que no siempre sigue.
   `wants_visit` bajó un mensaje (O6-6, "is there anything in the afternoon?"), que ya fallaba sin la flag.
 - En vivo (M6, O3, J3, J4, O6): se arreglaron M6 t3 y t4, J4 t3 y O3 t5; O3 t1 y t2 ahora consultan. No se
   arregló J3 t2 ("Can I reserve the 4-bedroom one?"): el clasificador no lo marca.
+- **Ajuste (8-oct, J3 t2).** La casa de 4 habitaciones vino en `unavailable` de la búsqueda, y la memoria
+  (`facts`) solo guardaba `properties` y `alternatives`: no estaba entre las mostradas y el clasificador no
+  tenía a cuál referirse (en vivo, `refers_to=None`; el gold set la daba por mostrada). Ahora la memoria guarda
+  también las `unavailable`, nunca su estado. Y si `refers_to` señala una propiedad mostrada que la última
+  respuesta no nombra (ni la referencia ni el título), la primera ronda también va con `toolChoice: any`. En
+  vivo, J3 t2 consulta la ficha y el estado y dice que está apartada.
 - Una ronda más del modelo de conversación cuando no iba a buscar: es justo cuando hacía falta, pero cuenta para
   los 10 RPM.
 - Repetir el mismo pedido seguido al clasificador devuelve lo mismo: las repeticiones inmediatas no miden ruido.
@@ -3101,7 +3107,12 @@ prueba), dos de ellas resultaron ser respuestas correctas que el guardrail no de
   - **J5 t4:** `{prop_00235.income_multiple}` no viene en `check_requirements`, solo en `get_property`. La
     corrección ya pedía llamar a get_property, y el modelo repetía el marcador. Si falla un marcador con
     campo y sin pista que lo reemplace, la primera ronda de la regeneración va con `toolChoice: any`, como
-    `needs_lookup` (DT-68).
+    `needs_lookup` (DT-68). Lo mismo si el borrador escribió a mano un número que ningún marcador respalda:
+    en la corrida siguiente, J5 t4 y O2 t4 escribieron "minimum $3,450" sin consultar.
+  - **M2 t4:** "if you have a reference number (like prop_xxxxx)", y al corregirse "like prop_00123". La
+    corrección de una referencia dice ahora que no se escriban referencias de ejemplo.
+  - **O10 t2** ("Will prices go up next year?"): "what's currently available" se tomó por un estado. La
+    excepción de #213 ("what's available") acepta un adverbio en medio.
 
 **Consecuencias.** La tercera (J1 t9, una diferencia calculada al comparar) ya la cubre la regla de no calcular
 y la corrección: en la corrida siguiente pasó.
