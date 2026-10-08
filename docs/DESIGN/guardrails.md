@@ -103,7 +103,10 @@ o "what is" (#213): "show you what's available" es el inventario en general, y d
 aclaración ("which property do you mean?"). Ni el que califica a otras propiedades en plural (#220): "other
 available houses" o "no other houses available" ofrecen alternativas de una propiedad apartada, y degradaban
 5 de cada 25 turnos del escenario de guardrails en la evaluación en vivo (#216). En singular, o dicho de la
-propiedad ("an available house", "this one is available"), sigue contando como estado.
+propiedad ("an available house", "this one is available"), sigue contando como estado. Tampoco cuenta un
+estado futuro o posible (#247, prueba de jurado): "when it will become available again" o "if it becomes
+available" no afirman el estado de ahora, y degradaban "When will it be free again?" (J3, O6). "This one is
+available again" sí cuenta.
 
 La regla se prueba contra el catálogo de demo real en el gold set de `C-7` (103 casos, y además la
 validación de cada turno contra `contracts/mcp/`, DT-36), que corre el `AvailabilityGuard` real de A-4

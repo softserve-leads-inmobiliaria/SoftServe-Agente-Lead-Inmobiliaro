@@ -2660,6 +2660,11 @@ Hay además dos fallas que la comparación literal no puede ver:
 - La evaluación en vivo (#216) mide el efecto en las regeneraciones, las respuestas degradadas y la tool
   esperada. Mientras se itera, con una repetición de los escenarios 01, 03, 04 y 07.
 
+**Actualización (#247).** Hay campos que no están en la ficha y que el código calcula. El primero es
+`price_per_m2`: el precio dividido por los m², en dólares y sin decimales. En la prueba de jurado (O5), "Which one
+has the best price per square meter?" se degradaba, porque el número no venía de ninguna tool y la factualidad no
+puede saber que es una división. Sin precio o sin m², el marcador no se completa.
+
 ## DT-61 — La visita se pide desde cualquier estado, y el embudo avanza por señales
 
 **Estado:** aceptada (#229).
@@ -2738,6 +2743,7 @@ marcadores (DT-60) y la agenda en el código (DT-32).
   - `frustrated` (DT-65).
   - `visit_when` (DT-64).
   - `refers_to` (DT-63).
+  - `asks_unlisted` (DT-66, agregado después del set O).
 - Un arreglo nuevo es estructural o es un test. No se agregan regex ni reglas de prompt por cada incidente.
 - El modelo de conversación corre con `temperature` 0, igual que el clasificador y el resumen. Antes estaba en
   0.3: una misma pregunta salía distinta en cada corrida, y la regresión no se podía repetir.
@@ -2805,6 +2811,11 @@ arrancaba aunque el lead dijera cuál quería.
 - Una propiedad mostrada hace más de 24 h (el vencimiento de la memoria) ya no está en la lista: el lead
   tiene que volver a nombrarla o buscarla.
 
+**Actualización (set O).** El estado se consultaba solo para la propiedad elegida por `refers_to`. La recordada
+también se guarda sin estado, y pasaba como visitable. Desde el anuncio de una casa apartada (O6), "Show me
+something similar that I can visit" ofreció horarios de esa misma casa. Ahora se consulta el estado de toda
+propiedad sin estado antes de ofrecer horarios.
+
 ## DT-64 — Cuándo quiere la visita el lead lo extrae el clasificador, y la agenda filtra los horarios
 
 **Estado:** aceptada (#247).
@@ -2843,6 +2854,14 @@ afternoon" también (M1). "Actually, can we do another day?" recibía "I didn't 
   sábado.
 - Sin el campo, por ejemplo con el agente falso, la agenda se comporta como antes.
 
+**Actualización (set O).** El clasificador completaba `days` u `other_day` con la oferta anterior. "Anything in
+the afternoon?", después de ofrecer la mañana del lunes, saltó al lunes siguiente (O6). "Only after 5pm" ofreció
+el jueves de la semana siguiente (O9). Ahora:
+
+- `days` lleva solo los días que nombra el mensaje actual, y "after 5pm" es la franja `evening`;
+- `other_day` va solo cuando pide otro día sin nombrarlo;
+- los días ya ofrecidos se saltan solo con un "another day" a secas.
+
 ## DT-65 — La racha sin resolver solo traspasa si el lead se muestra molesto
 
 **Estado:** aceptada (#247). Ajusta DT-16.
@@ -2869,3 +2888,51 @@ jurado (M3), la tercera traspasó a un lead tranquilo con "Sorry I'm not being a
 
 - Tres "ok" seguidos ya no traspasan con Bedrock: no hay molestia. Con el agente falso sí, como antes, porque
   no da el campo.
+
+## DT-66 — Lo que el catálogo no tiene no se contesta con sí o no
+
+**Estado:** aceptada (#247).
+
+**Contexto.** La factualidad (A-5) bloquea números, estados, direcciones, promesas y amenidades que no vienen de
+una tool. Un sí o un no sobre algo que el catálogo no registra no es ninguno de esos, y pasaba entero:
+
+- "Are HOA fees included?" → "No, HOA fees are separate…" (M1), y en la frase siguiente "I don't have the HOA
+  fee amount";
+- "can i share it with a roommate?" → "Yes, absolutely!" (O3);
+- "only for 6 months is that ok" → "Yes, 6 months should be fine!" (O3).
+
+La clase se repitió en dos sets. Además, ante una pregunta así con dos propiedades mostradas, el agente preguntaba
+"which property?" tres veces seguidas (O2) en vez de decir que no tiene el dato de ninguna.
+
+**Decisión.**
+
+- **El campo:** el clasificador contesta `asks_unlisted`: true si el mensaje pregunta algo que una ficha no
+  registra. Entran:
+  - reglas y políticas: mascotas, compartir, subarrendar, plazo del contrato, depósitos;
+  - costos aparte del precio: HOA o administración, servicios, impuestos;
+  - detalles del edificio o de la unidad: piso, ascensor, portería, amueblado, vista, antigüedad, luz natural,
+    accesibilidad;
+  - fechas: entrega, o cuándo se libera;
+  - zonificación o qué se puede construir;
+  - qué hay cerca.
+
+  No entran el precio, el tamaño, las habitaciones, los baños, las amenidades, la zona, la disponibilidad ni
+  los requisitos.
+- **La nota:** con el campo, el modelo de conversación recibe una nota del turno (`agent.UNLISTED_NOTE`): no
+  contestar sí ni no, no adivinar ni generalizar, decir que no tiene el dato y que un asesor lo confirma, y
+  ofrecerle uno. Si hay varias propiedades mostradas, contesta por todas a la vez en lugar de preguntar cuál; la
+  nota de `"unclear"` (DT-63) no se agrega.
+
+**Alternativas descartadas.**
+
+- **Una regla más en el prompt de conversación:** ya existía una general, y no alcanzó. La nota va solo en el
+  turno que la necesita, como la de DT-63.
+- **Un guardrail sobre el texto** que bloquee "Yes"/"No" al principio de la respuesta: es la clase de regex que
+  DT-62 deja de hacer, y degradaría respuestas buenas ("Yes, it has a pool").
+- **Una tool con esos datos:** el inventario de demo no los tiene. Si el catálogo los incorpora, salen de esta
+  lista y los cubre la factualidad.
+
+**Consecuencias.**
+
+- Es una nota, no un bloqueo: el modelo todavía puede desobedecerla. La prueba de jurado mide cuánto.
+- Con el agente falso no cambia nada: no da el campo.
