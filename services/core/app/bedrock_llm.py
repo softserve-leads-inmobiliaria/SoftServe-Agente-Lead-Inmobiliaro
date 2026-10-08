@@ -74,7 +74,9 @@ CLASSIFIER_SYSTEM = (
     '- "asks_unlisted": a property listing records its price, size (m²), bedrooms, bathrooms, area, approximate '
     "and exact address, availability, promotions, the requirements to buy or rent (down payment, monthly income, "
     "references) and its amenities (pool, gym, parking, garage, garden, terrace, patio, event room). A question "
-    "about any of those is false, even when the answer is no (\"does it have a pool?\" is false). true only if "
+    "about any of those is false, whether or not this property has it: \"is there a swimming pool?\", \"does it "
+    "come with a parking space?\", \"what's the minimum income?\", \"can I afford it earning $2,000?\", \"where is "
+    "it?\" are all false. true only if "
     "the current message asks about something the listing does not record: rules or policies (pets, roommates, "
     "subletting, lease length, deposits), costs other than the price (HOA or maintenance fees, utilities, taxes), "
     "details of the building or the unit (floor, elevator, doorman, furnished, view, age, natural light, "

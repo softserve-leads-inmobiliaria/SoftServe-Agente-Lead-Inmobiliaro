@@ -235,10 +235,13 @@ PROTECTED_NOTE = ("(Part of the lead's message was removed because it mentioned 
                   "matters, tell them it doesn't affect how we help them or the requirements.)")
 UNCLEAR_NOTE = ("(It's not clear which of the properties already shown the lead means: ask them which one, "
                 "naming the options. Don't guess.)")
-UNLISTED_NOTE = ("(The lead is asking about something the listings don't record. Don't answer yes or no and don't "
-                 "guess or generalize: say you don't have that detail and that an agent can confirm it, and offer to "
-                 "connect them. If several properties were shown, answer for all of them at once instead of asking "
-                 "which one.)")
+# El clasificador también marca a veces lo que sí está en la ficha ("gym?", el pie): eso se contesta con la tool
+# (gold set del clasificador, #247).
+UNLISTED_NOTE = ("(The lead may be asking about something the listings don't record. If it is one of the catalog's "
+                 "fields (price, size, rooms, address, availability, promotions, requirements or amenities), answer "
+                 "it from the tools as usual. If not, don't answer yes or no and don't guess or generalize: say you "
+                 "don't have that detail and that an agent can confirm it, and offer to connect them. If several "
+                 "properties were shown, answer for all of them at once instead of asking which one.)")
 
 
 UNVISITABLE_NOTE = ("(The lead wants to visit {title} (ref. {id}), but it is {status} right now and can't be visited. "
