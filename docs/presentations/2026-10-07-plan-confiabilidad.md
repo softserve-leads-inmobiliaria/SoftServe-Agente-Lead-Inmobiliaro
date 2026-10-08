@@ -106,7 +106,27 @@ Con tests primero; después se reconstruye el core y se repiten solo O6 y O9.
 
 ### Paso 2 — Medir sin leer a mano
 
-**Estado (8-oct): herramientas hechas; falta la primera corrida completa de J, N, M y O.**
+**Estado (8-oct): hecho.** Primera medida de J, N, M y O (`evaluate.py J N M O`,
+`tmp/eval/2026-10-08_114751_evaluacion.md`): dentro de los umbrales.
+
+| Turnos OK | Tool esperada | Regeneradas | Degradadas | Respaldo | Estado final |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 149/161 (93%) | 94% | 7% | 3 (2%) | 0 | 3/3 |
+
+De los 12 fallos, uno era una prohibición mal escrita (M1 t6, ya corregida). Los 11 reales caen en tres clases:
+
+1. **No consulta antes de contestar (7):** pide operación y ciudad en vez de buscar ("lot", "how big", "need
+   something cheap near a university", "whats the cheapest u have then"); dice que no mostró la casa de 4
+   habitaciones (J3 t2); pregunta de cuál propiedad son las promociones en vez de mirar las dos (J4 t3). Hoy la
+   cubre una regla del prompt de conversación ("search right away"), que no alcanza. **Es la clase más grande y no
+   tiene un mecanismo propio.**
+2. **Degradadas (3):** un número al comparar (J1 t9, `number`), el precio por m² (O5 t2, `promise`) y "I'll pay
+   cash… close this month" (O8 t3, `marker`).
+3. **La respuesta fija de categorías protegidas fuera de lugar (1):** O9 t7, "Can I bring my wife to the visit?",
+   ya con la visita reservada, recibe "What kind of property are you looking for?" (ruta `protected`, intención
+   `otro`). Ya había pasado en O r1; en la corrida del 7-oct, con intención `consulta_precio`, salió bien. Depende de
+   la intención que dé el clasificador: la regla de `PROTECTED_ANSWER` ("?" e intención `otro`) es demasiado
+   amplia.
 
 - **D:** `harness/scripts/jury_scenarios.py`, 28 conversaciones con expectativas por turno, incluidas `route` y
   `about`, que se leen de `turn.decision`. `jury.py` corre las mismas. Primera prueba en vivo con J1, N6 y M1:

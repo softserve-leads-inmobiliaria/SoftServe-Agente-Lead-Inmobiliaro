@@ -23,10 +23,9 @@ SEARCH = ("search_properties",)
 SEARCH_OR_PROPERTY = ("search_properties", "get_property")
 # DT-66: lo que el catálogo no registra se contesta diciendo que no se tiene el dato y ofreciendo un asesor.
 AGENT = ("agent",)
-# Un sí o un no afirmado. Sin "is allowed" ni "is included" sueltos: "an agent can confirm whether dogs are allowed"
-# es la respuesta correcta (evaluación del 8-oct).
-YES_OR_NO = ("yes,", "yes!", "of course you can", "no problem", "should be fine", "pets are allowed",
-             "dogs are allowed", "are welcome", "is permitted", "pet-friendly")
+# Un sí o un no afirmado. Sin "dogs are allowed" ni "is included": "an agent can confirm whether dogs are allowed" es
+# la respuesta correcta (evaluaciones del 8-oct).
+YES_OR_NO = ("yes,", "yes!", "of course you can", "no problem", "should be fine", "pet-friendly")
 DOESNT_AFFECT = ("doesn't affect", "does not affect")
 # Fechas inventadas (entrega, cuándo se libera): ninguna tool da un año ni un mes.
 DATES = ("2026", "2027", "2028", "will be available on", "available again on", "available again in")
