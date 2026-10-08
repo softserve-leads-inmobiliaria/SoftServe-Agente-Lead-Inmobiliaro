@@ -35,6 +35,8 @@ PREFERENCE_DAYS = 14  # con un día pedido ("next Tuesday") se mira más adelant
 
 OFFER_KEY = "visit_offer"  # oferta en curso: horarios ofrecidos, o la espera de un horario preferido
 VISIT_KEY = "visit"  # visita resuelta: reservada (`visit_id`, `scheduled_at`) o con `preferred_time`
+# La hora de la visita reservada, que sigue en los turnos siguientes (`VISIT_KEY` dura solo el turno siguiente).
+BOOKED_KEY = "booked_visit"
 
 # Los horarios se muestran en inglés (#202, DT-55); la respuesta del lead se entiende en inglés y en español.
 _WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
@@ -207,6 +209,25 @@ def not_visitable(prop: Mapping[str, Any], status: str) -> str:
     label = STATUS.get(status, "not available")
     return (f"{prop['title']} is {label} right now, so I can't book a visit to it. "
             "Would you like me to show you similar options that are available?")
+
+
+def carry_booked(tool_results: Mapping[str, Any], previous: Mapping[str, Any]) -> dict[str, Any]:
+    """`tool_results` con la hora de la visita reservada: la de este turno o la que ya se recordaba."""
+    visit = tool_results.get(VISIT_KEY)
+    if isinstance(visit, Mapping) and isinstance(visit.get("scheduled_at"), str):
+        return {**tool_results, BOOKED_KEY: {"scheduled_at": visit["scheduled_at"]}}
+    if isinstance(previous.get(BOOKED_KEY), Mapping):
+        return {**tool_results, BOOKED_KEY: dict(previous[BOOKED_KEY])}
+    return dict(tool_results)
+
+
+def booked_at(previous: Mapping[str, Any]) -> str | None:
+    """La hora de la visita reservada en la conversación, si la hay."""
+    for key in (VISIT_KEY, BOOKED_KEY):
+        found = previous.get(key)
+        if isinstance(found, Mapping) and isinstance(found.get("scheduled_at"), str):
+            return found["scheduled_at"]
+    return None
 
 
 def ask_preferred(prop: Mapping[str, Any] | None, kind: str = "ask_preferred") -> VisitStep:

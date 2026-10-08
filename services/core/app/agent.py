@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field, replace
-from typing import Any, Callable, Mapping, Protocol, Sequence
+from typing import Any, Awaitable, Callable, Mapping, Protocol, Sequence
 
 from app import address_guard, factuality, interest, markers, promise_guard
 from app.bedrock_llm import BedrockLLM, Classification, LLMError, LLMFormatError
@@ -20,6 +20,7 @@ from app.skeleton import respond
 from app.summary import SummaryFacts
 from app.summary import template as summary_template
 from app.tracing import content_hidden
+from app.visits import slot_label
 
 logger = logging.getLogger("core.agent")
 
@@ -44,6 +45,19 @@ CODE_CONTROLLED_ARGUMENTS = ("lead_qualified",)
 
 
 @dataclass(frozen=True)
+class VisitRoute:
+    """Quién contesta un pedido de visita, decidido después de clasificar y antes de llamar al modelo de chat.
+
+    `by_code`: la agenda (#229); entonces solo se clasifica. `unvisitable`: la propiedad que pidió visitar está
+    apartada o cerrada (`id`, `title`, `status`). Contesta el modelo, que busca parecidas disponibles. En la prueba
+    de jurado (O6), la agenda decidía antes de saber el estado y contestaba "is reserved" sin buscar nada.
+    """
+
+    by_code: bool = False
+    unvisitable: Mapping[str, Any] | None = None
+
+
+@dataclass(frozen=True)
 class TurnInput:
     event: Mapping[str, Any]
     text: str  # el mensaje ya filtrado por el guardrail de entrada
@@ -55,8 +69,12 @@ class TurnInput:
     remembered: Mapping[str, Any] = field(default_factory=dict)
     # Si la respuesta la va a dar el código según la intención y los campos del clasificador (la agenda, #229):
     # entonces solo se clasifica. En vivo, el modelo contestaba igual, copiaba los horarios de la oferta, y la
-    # factualidad lo regeneraba para una respuesta que el lead nunca leía.
-    answered_by_code: Callable[[Classification], bool] | None = None
+    # factualidad lo regeneraba para una respuesta que el lead nunca leía. Consulta el estado de la propiedad
+    # antes de decidir (`VisitRoute`).
+    visit_route: Callable[[Classification], Awaitable[VisitRoute]] | None = None
+    # La hora de la visita que reservó la agenda (`visits.booked_at`). Sus números los escribió el código: el modelo
+    # puede repetirlos. En la prueba de jurado (O9), "See you both on Monday, October 19th at 10:00!" se degradaba.
+    booked_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -151,7 +169,9 @@ class BedrockAgent:
             if intent in HUMAN_INTENTS:
                 # Un traspaso a una persona lo dice siempre el mismo texto: no se le deja al modelo.
                 return AgentResult(text=FakeLLM().generate_reply(intent), intent=intent, route="handoff", **read)
-            if turn.answered_by_code is not None and turn.answered_by_code(replace(classification, intent=intent)):
+            route = (await turn.visit_route(replace(classification, intent=intent)) if turn.visit_route is not None
+                     else VisitRoute())
+            if route.by_code:
                 return AgentResult(text="", intent=intent, guard_audits=guard_audits, route="agenda", **read)
             if turn.protected_removed and "?" in turn.text and intent == "otro":
                 # #200: "does that matter?" se contesta siempre igual. En vivo el modelo ignoraba la nota y
@@ -170,11 +190,15 @@ class BedrockAgent:
 
             visible = [_visible(s) for s in specs]
             current = _with_notes(turn.text, turn.listing, turn.protected_removed, turn.remembered, about,
-                                  flags.get("asks_unlisted") is True)
+                                  flags.get("asks_unlisted") is True, route.unvisitable)
             chat = await self._llm.chat(turn.history, current, visible, run_tool)
             if not chat.text:
                 raise LLMFormatError("respuesta vacía")
-            violations, reply = await _output_violations(chat.text, chat.tool_results, chat.payloads, turn, catalog)
+            # El estado que consultó `visit_route` es de este turno: respalda "it's reserved" sin otra consulta.
+            known = ([{"property_id": route.unvisitable["id"], "status": route.unvisitable["status"]}]
+                     if route.unvisitable else [])
+            violations, reply = await _output_violations(chat.text, chat.tool_results, chat.payloads, turn, catalog,
+                                                         known)
             _log_violations("borrador", violations, chat.text)
             if violations:
                 # Una oportunidad de corregirse con lo que ya sabe, antes de degradar la conversación (A-5).
@@ -186,7 +210,7 @@ class BedrockAgent:
                 guard_audits.append(("output.factuality_regenerated", _violation_detail(violations)))
                 if retry.text.strip():
                     violations, reply = await _output_violations(retry.text, chat.tool_results, chat.payloads, turn,
-                                                                 catalog)
+                                                                 catalog, known)
                     _log_violations("regeneración", violations, retry.text)
                 if violations:
                     guard_audits.append(("output.factuality_degraded", _violation_detail(violations)))
@@ -217,9 +241,14 @@ UNLISTED_NOTE = ("(The lead is asking about something the listings don't record.
                  "which one.)")
 
 
+UNVISITABLE_NOTE = ("(The lead wants to visit {title} (ref. {id}), but it is {status} right now and can't be visited. "
+                    "Say so in one sentence, then search for similar properties that are available (same area and "
+                    "kind, or the closest) and show them, so the lead can pick one to visit.)")
+
+
 def _with_notes(text: str, listing: Mapping[str, Any] | None, protected_removed: bool = False,
                 remembered: Mapping[str, Any] | None = None, about: str | None = None,
-                unlisted: bool = False) -> str:
+                unlisted: bool = False, unvisitable: Mapping[str, Any] | None = None) -> str:
     """El mensaje del lead más lo que el LLM tiene que saber del turno: la referencia del anuncio por el que
     llegó (#122), las de las propiedades que ya vio la conversación (#247), de cuál de ellas habla el mensaje según
     el clasificador (`about`, #247), si pregunta algo que el catálogo no tiene (`unlisted`, #247) y que el guardrail
@@ -244,6 +273,9 @@ def _with_notes(text: str, listing: Mapping[str, Any] | None, protected_removed:
     # de algo que el catálogo no tiene era un dato inventado, y la factualidad no ve números ni estados en él.
     if unlisted:
         notes.append(UNLISTED_NOTE)
+    if unvisitable:
+        notes.append(UNVISITABLE_NOTE.format(title=unvisitable.get("title"), id=unvisitable.get("id"),
+                                             status=markers.STATUS.get(str(unvisitable.get("status")), "not available")))
     if protected_removed:
         notes.append(PROTECTED_NOTE)
     return "\n\n".join([text, *notes])
@@ -251,7 +283,8 @@ def _with_notes(text: str, listing: Mapping[str, Any] | None, protected_removed:
 
 async def _output_violations(text: str, tool_results: Mapping[str, Any],
                              payloads: Sequence[tuple[str, Mapping[str, Any]]], turn: TurnInput,
-                             catalog: ToolCatalog) -> tuple[list[factuality.Violation], str]:
+                             catalog: ToolCatalog,
+                             known: Sequence[Mapping[str, Any]] = ()) -> tuple[list[factuality.Violation], str]:
     """Guardrails de salida combinados, y la respuesta como la va a leer el lead.
 
     El modelo escribe los datos de la propiedad como marcadores, y el código los completa (DT-60): un marcador que
@@ -259,9 +292,10 @@ async def _output_violations(text: str, tool_results: Mapping[str, Any],
     violación. Lo que el modelo escribió fuera de los marcadores pasa además por los estados de la factualidad (A-5)
     y por la regla de #230. La dirección reservada (A-6) y las promesas (A-7), sobre el texto ya completado. Todos
     comparten el mismo *pipeline* de regenerar/degradar (DT-23). Anunciar una búsqueda para después también es una
-    promesa (#234).
+    promesa (#234). `known`: estados que el código ya consultó en este turno (`get_availability`).
     """
     sources = markers.build(payloads, turn.remembered)
+    markers.add_statuses(sources, known)
     listing_id = (turn.listing or {}).get("id")
     if isinstance(listing_id, str):
         sources.records.setdefault(listing_id, {"id": listing_id})
@@ -275,13 +309,14 @@ async def _output_violations(text: str, tool_results: Mapping[str, Any],
         named = markers.REFERENCE.findall(bare)
         recent = list(turn.remembered)[-1:]
         wanted += [ref for ref in (*named, listing_id, *recent) if isinstance(ref, str) and ref not in sources.statuses]
-    fresh = await _availabilities(catalog, list(dict.fromkeys(wanted))[:MAX_STATUS_LOOKUPS])
+    fresh = [*known, *await _availabilities(catalog, list(dict.fromkeys(wanted))[:MAX_STATUS_LOOKUPS])]
     markers.add_statuses(sources, fresh)
     checked = {**tool_results, "verified_statuses": fresh} if fresh else tool_results
     lead_texts = [turn.text, *(content for role, content in turn.history if role == "user")]
     known_refs = [*filter(None, [listing_id]), *(r for t in lead_texts for r in _refs(t))]
     reply = markers.render(text, sources)
-    violations = (markers.check(text, sources, markers.lead_numbers(lead_texts), known_refs)
+    known_numbers = markers.lead_numbers([*lead_texts, *([slot_label(turn.booked_at)] if turn.booked_at else [])])
+    violations = (markers.check(text, sources, known_numbers, known_refs)
                   + factuality.check_statuses(bare, checked, turn.text)
                   + factuality.check_lead_claims(bare, tool_results, turn.text, turn.remembered)
                   + address_guard.check(reply, turn.lead_qualified, turn.text)
