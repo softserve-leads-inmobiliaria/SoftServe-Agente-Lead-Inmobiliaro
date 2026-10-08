@@ -2937,6 +2937,20 @@ La clase se repitió en dos sets. Además, ante una pregunta así con dos propie
 - Es una nota, no un bloqueo: el modelo todavía puede desobedecerla. La prueba de jurado mide cuánto.
 - Con el agente falso no cambia nada: no da el campo.
 
+**Ajuste (8-oct, gold set del clasificador).** La primera corrida del gold set (`harness/gold/classifier.jsonl`)
+mostró que `asks_unlisted` también se marcaba en lo que la ficha sí tiene: "Does the Usaquen house have a
+garage?", "gym?", "Does it have parking?", el pie, la dirección exacta. Con la nota, el modelo podía contestar
+"no tengo ese dato" sobre un garaje que la casa tiene. Dos cambios:
+
+- **El prompt del clasificador** enumera lo que la ficha registra, con las amenidades por nombre (las del
+  vocabulario de `promise_guard`, un test lo comprueba), y dice que una pregunta sobre eso es false aunque la
+  respuesta sea no. Los ejemplos del prompt son frases distintas de las del gold set. `asks_unlisted` subió de 92%
+  a 95% y ningún campo bajó. Siguen marcándose "gym?" y el pie: para el modelo, el pie es "un costo aparte".
+- **La nota** ya no supone que la marca es exacta: si lo que pregunta es un campo del catálogo (precio, área,
+  habitaciones, dirección, disponibilidad, promociones, requisitos, amenidades), contesta con la tool. Si no, la
+  regla de siempre. Verificado en vivo (`evaluate.py J1… N6… M1…`): "gym?" contesta el gimnasio y el pie $18,500;
+  "parking" y "Can I bring my dog?" siguen en "no tengo el dato, un asesor lo confirma".
+
 ## DT-67 — Quién contesta la visita se decide con el estado ya consultado, y una sola vez
 
 **Estado:** aceptada (#247). Ajusta DT-61 y DT-63.

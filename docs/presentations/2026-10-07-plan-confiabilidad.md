@@ -106,6 +106,24 @@ Con tests primero; después se reconstruye el core y se repiten solo O6 y O9.
 
 ### Paso 2 — Medir sin leer a mano
 
+**Estado (8-oct): herramientas hechas; falta la primera corrida completa de J, N, M y O.**
+
+- **D:** `harness/scripts/jury_scenarios.py`, 28 conversaciones con expectativas por turno, incluidas `route` y
+  `about`, que se leen de `turn.decision`. `jury.py` corre las mismas. Primera prueba en vivo con J1, N6 y M1:
+  16/19 turnos OK. Los fallos que quedaron:
+  - J1 t9 es real: "compare with the 1-bedroom one" no busca;
+  - los otros dos eran prohibiciones demasiado estrictas, ya corregidas.
+- **Gold set:** 80 mensajes en `harness/gold/classifier.jsonl`, más `classifier_gold.py` y la línea base.
+  - La primera corrida dio 100% en `intent`, `refers_to`, `wants_visit`, `wants_alert` y `asks_for_person`;
+    `frustrated` 99%, `asks_unlisted` 92% y `visit_when` 85%.
+  - Encontró que `asks_unlisted` marcaba amenidades y requisitos. Está arreglado en el prompt y en la nota (ajuste
+    de DT-66): `asks_unlisted` quedó en 95%.
+  - Quedan dos errores: "after 5pm" trae el día de los horarios ofrecidos (`visit_when`), y "ok forget it
+    thanks" sale como `frustrated`.
+- **Taxonomía:** en `docs/TESTING.md`, "Clases de error".
+
+Lo que se planeó:
+
 - **D:** J, N, M y O como escenarios de `evaluate.py`, con expectativas por turno (qué propiedad, qué no puede
   decir, qué ruta).
 - **Gold set del clasificador:** unos 60 mensajes etiquetados (de J, N, M, O y de producción sintética), con un
