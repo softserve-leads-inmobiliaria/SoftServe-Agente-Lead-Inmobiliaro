@@ -128,20 +128,21 @@ class Catalog:
 
 
 class Scripted:
-    """Un agente con turnos guionados: busca dos casas, y después pide visitar la que diga `refers_to`."""
+    """Un agente con turnos guionados: busca dos casas (o mira la ficha de `first`), y después pide visitar la que
+    diga `refers_to`."""
 
     name = "guionado"
 
-    def __init__(self, about):
+    def __init__(self, about, first=None):
         self.about, self.turns = about, 0
+        found = {"properties": [{**BIG_HOUSE, "status": "apartado"}, {**HOUSE, "status": "disponible"}]}
+        self.first = first or {"search_properties": found}
 
     async def run(self, turn, catalog):
         self.turns += 1
         if self.turns == 1:
-            found = {"properties": [{**BIG_HOUSE, "status": "apartado"}, {**HOUSE, "status": "disponible"}]}
-            return AgentResult(text="I found two houses in Usaquen.", intent="busqueda_propiedad",
-                               tool_results={"search_properties": found},
-                               tool_calls=[{"name": "search_properties", "is_error": False}])
+            return AgentResult(text="Here it is.", intent="busqueda_propiedad", tool_results=self.first,
+                               tool_calls=[{"name": name, "is_error": False} for name in self.first])
         flags = {"wants_visit": True}
         # Como el agente de Bedrock: si la agenda va a contestar, solo clasifica; si no, pregunta cuál.
         answered = turn.answered_by_code(Classification("agendar_visita", {}, flags, None, self.about))
@@ -149,8 +150,8 @@ class Scripted:
                            intent="agendar_visita", flags=flags, refers_to=self.about)
 
 
-def _conversation(engine, about, statuses):
-    agent, catalog = Scripted(about), Catalog(statuses)
+def _conversation(engine, about, statuses, first=None):
+    agent, catalog = Scripted(about, first), Catalog(statuses)
     ids = {"conversation_id": str(uuid.uuid4()), "lead_id": str(uuid.uuid4())}
 
     def say(message):
@@ -182,3 +183,14 @@ def test_without_knowing_which_one_no_visit_is_offered(engine, agenda, about):  
     say("Houses in Usaquen?")
     assert say("ok i want to see it") == "Which of the two houses would you like to see?"
     assert agenda.calls == []
+
+
+def test_a_remembered_reserved_property_gets_no_slots_either(engine, agenda):  # noqa: F811
+    # Prueba de jurado O6: la recordada se guarda sin estado, y desde el anuncio de la casa apartada "something
+    # similar that I can visit" ofrecía horarios de esa misma casa.
+    say, catalog = _conversation(engine, None, {"prop_00234": "apartado"},
+                                 first={"get_property": BIG_HOUSE})  # sin estado, como la recordada
+    say("Tell me about the 4-bedroom house")
+    reply = say("Show me something similar that I can visit")
+    assert reply.startswith("4-bedroom house in Usaquen is reserved right now")
+    assert catalog.checked == ["prop_00234"] and not any(op == "get_slots" for op, _ in agenda.calls)

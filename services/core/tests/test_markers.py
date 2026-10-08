@@ -42,6 +42,14 @@ def test_a_dollar_or_percent_sign_the_model_added_is_not_doubled():
     assert render("${p1.price}, $ {p1.price}, {p1.requirements.down_payment_percent}%", s) == "$365,000, $365,000, 20%"
 
 
+def test_the_price_per_square_meter_is_computed_by_the_code():
+    # Prueba de jurado O5 (#247): "Which one has the best price per square meter?" se degradaba.
+    s = sources(("get_property", CASA), ("search_properties", {"properties": [{**CASA, "id": "p2", "m2": 0}]}))
+    assert render("{p1.price_per_m2} per m² (${p1.price_per_m2})", s) == "$2,028 per m² ($2,028)"
+    assert check("{p1.price_per_m2} per m²", s, set()) == []
+    assert [v.kind for v in check("{p2.price_per_m2}", s, set())] == ["marker"]  # sin m², no se calcula
+
+
 def test_the_requirements_can_be_named_without_their_prefix():
     """Así los enumera el prompt; la sugerencia de la corrección usa el mismo nombre corto."""
     s = sources(("get_property", CASA))

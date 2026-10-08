@@ -243,3 +243,13 @@ def test_an_hour_on_another_day_than_the_one_named_is_not_booked():
 def test_saying_when_answers_the_offer():
     assert answers(_offer(), "Can we do another day?", OTHER_DAY)
     assert not answers(_offer(), "Is it close to the metro?")
+
+
+def test_a_part_of_day_after_the_offer_can_be_the_same_day():
+    # Prueba de jurado O6: tras la mañana del lunes, "anything in the afternoon?" saltaba al lunes siguiente.
+    monday_morning, monday_afternoon = "2026-10-12T09:00:00-05:00", "2026-10-12T15:00:00-05:00"
+    agenda = FakeAgenda(slots=[monday_morning, monday_afternoon, "2026-10-19T15:00:00-05:00"])
+    offer = {"property": PROP, "advisor_id": "adv_poblado", "slots": [monday_morning]}
+    when = {"days": [0], "part": "afternoon", "other_day": True}
+    step = run(follow_up(agenda, "conv-1", "lead-1", offer, "Anything in the afternoon?", TODAY, when))
+    assert offer_of(step)["slots"][0] == monday_afternoon

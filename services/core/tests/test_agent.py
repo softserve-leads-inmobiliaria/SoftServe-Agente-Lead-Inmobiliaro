@@ -367,6 +367,28 @@ def test_the_model_is_told_which_listing_the_lead_came_from():
     assert sent.startswith("Is it still available?") and "ref. prop_00231" in sent
 
 
+# --- #247: lo que el catálogo no tiene (`asks_unlisted`) --------------------------------------------------------
+
+def test_a_question_about_what_the_listings_do_not_record_is_not_answered_yes_or_no():
+    """Prueba de jurado O3: "Can I share it with a roommate?" -> "Yes, absolutely!", un dato inventado."""
+    from app.agent import UNLISTED_NOTE
+
+    client = ScriptedBedrock(classification("otro", asks_unlisted=True),
+                             text("I don't have that detail; an agent can confirm it."))
+    run(agent_for(client).run(TurnInput(event=EVENT, text="can i share it with a roommate?"), FakeCatalog()))
+    assert client.calls_to(CHAT)[0]["messages"][-1]["content"][0]["text"].endswith(UNLISTED_NOTE)
+
+
+def test_with_nothing_on_record_it_answers_for_every_shown_property_instead_of_asking_which():
+    """Prueba de jurado O2: "Does the building have an elevator?" preguntó tres veces "which property?"."""
+    from app.agent import UNCLEAR_NOTE, UNLISTED_NOTE, _with_notes
+
+    shown = {"p1": {"id": "p1", "title": "Studio"}, "p2": {"id": "p2", "title": "2-bedroom"}}
+    text = _with_notes("Is there an elevator?", None, remembered=shown, about="unclear", unlisted=True)
+    assert UNLISTED_NOTE in text and UNCLEAR_NOTE not in text
+    assert UNCLEAR_NOTE in _with_notes("I want to see it", None, remembered=shown, about="unclear")
+
+
 # --- #200: el guardrail quitó una mención de categoría protegida --------------------------------------------
 
 def test_the_model_is_told_a_protected_mention_was_removed_but_not_what_it_was():

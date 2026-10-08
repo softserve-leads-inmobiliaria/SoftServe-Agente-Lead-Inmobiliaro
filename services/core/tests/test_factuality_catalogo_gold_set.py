@@ -322,6 +322,13 @@ CASOS = [
      "for sale.", "disponibilidad_apartada", "", True),
     ("en_lo_que_se_busca_no_es_estado", "Let me help you find an available property. Are you looking for a "
      "4-bedroom house in Usaquen?", "disponibilidad_apartada", "I need 4 bedrooms", True),
+    # Prueba de jurado (J3 t3, O6 t3): un estado futuro o posible no afirma el de ahora. "Is available again" sí.
+    ("en_cuando_vuelva_a_estar_disponible_no_es_estado", "It's reserved right now, and I don't know when it will "
+     "become available again.", "disponibilidad_apartada", "", True),
+    ("en_si_se_libera_no_es_estado", "If it becomes available, I can let you know.",
+     "disponibilidad_apartada", "", True),
+    ("en_disponible_otra_vez_si_es_estado", "Good news: this one is available again!",
+     "disponibilidad_apartada", "", False),
     ("en_una_disponible_si_es_estado", "It's an available house in Usaquen.", "disponibilidad_apartada", "", False),
     ("en_otras_y_esta_disponible_si_es_estado", "There are other houses available, and this one is available too.",
      "disponibilidad_apartada", "", False),
