@@ -139,6 +139,7 @@ Igual que en §4: cada lote solo depende de los anteriores, y dentro de un lote 
 | **9: integración** | N-8, B-11 | La vista de gerencia sobre N-6 y N-7; los botones sobre B-8 |
 | Backlog | A-16, A-17, A-18, B-12, B-13, N-10 | P2. Todo lo que necesita el *scheduler* (A-17) cuelga de él |
 | Tarea futura | B-14 | Fuera del alcance del capstone: necesita un servicio externo de transcripción, con credenciales y costo propios. La historia queda escrita para retomarla después |
+| Tarea futura | C-5 | Fuera del alcance del capstone: los errores del jurado son sobre datos del inmueble, no de la agencia, y para lo que el catálogo no tiene ya responde DT-66 ("lo confirma un asesor"). Las opciones para retomarla quedan en #31 |
 
 Después del lote 9 siguen `OBS-6` (una corrida real antes de la semana 8) y la semana 8 de §6. `Z-1` no admite alcance nuevo: lo que no esté en `main` antes de `Z-1` queda fuera.
 

@@ -96,7 +96,7 @@ El orden recomendado para avanzar las historias con 3 personas en paralelo, mini
 | [`C-2`](C-02.md) | `assign_advisor`, `get_slots`, `book` | P1 | 3 | 6h | C-1, C-3 |
 | [`C-3`](C-03.md) | Esquema de datos completo con migraciones | P0 | 5 | 10h | CT-3 |
 | [`C-4`](C-04.md) | Reglas BANT-E probadas | P0 | 5 | 10h | — |
-| [`C-5`](C-05.md) | FAQ con embeddings en pgvector | P1 | 3 | 6h | CT-6 |
+| [`C-5`](C-05.md) | FAQ con embeddings en pgvector (tarea futura, fuera del capstone) | P1 | 3 | 6h | CT-6 |
 | [`C-6`](C-06.md) | Gold set de fair housing | P0 | 3 | 6h | C-4 |
 | [`C-7`](C-07.md) | Gold set de factualidad ≥30 preguntas | P0 | 3 | 6h | C-1, C-1a |
 | [`C-8`](C-08.md) | Gold set de dirección reservada | P0 | 2 | 4h | C-1 |
