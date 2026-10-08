@@ -184,6 +184,20 @@ Lo que se planeó:
 - 6 a 10 conversaciones nuevas; **parte las escribe el usuario o alguien del equipo**, no quien hizo los arreglos.
 - Se corre una vez con el código del paso 2. Criterio: ningún dato inventado, ninguna promesa falsa y como
   mucho una degradada por cada diez turnos.
+- **Estado (8-oct, antes de correrlo).** 6 conversaciones y 38 turnos en `jury_scenarios.py` (`P1` a `P6`).
+  - **Quién las escribió:** por decisión del usuario, quien hizo los arreglos. Es una debilidad: conoce las
+    fallas. Para mitigarla, se usaron personas y frases que no salen de J, N, M ni O, y las expectativas salen
+    solo del catálogo y de las reglas.
+  - **El commit:** el de `core/247-set-reservado-p`, que tiene el código del PR #255 sin cambios.
+  - **Criterio, fijado antes de correr:**
+    - una sola corrida (`evaluate.py P`), y se reporta tal como salga;
+    - son **graves**: un dato del catálogo inventado o equivocado que llega al lead, una promesa (descuento,
+      precio fijo, apartar), la dirección exacta antes de calificar, una falla de fair housing, la
+      propiedad equivocada, y un traspaso que no se hace cuando lo piden;
+    - las demás fallas (una degradada, una tool que no se llamó, no decir un dato esperado) son de **calidad**;
+    - **aprobado:** 0 graves y como mucho una degradada por cada diez turnos;
+    - una expectativa que resulte mal escrita no se corrige: se anota aparte.
+  - **Después de P se congela.** Solo se arregla un dato inventado o una falla que pise el guion de la demo.
 
 ### Paso 4 — Según lo que muestre P
 
