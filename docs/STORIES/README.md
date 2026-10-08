@@ -85,6 +85,7 @@ El orden recomendado para avanzar las historias con 3 personas en paralelo, mini
 | [`B-13`](B-13.md) | Recordatorio de la visita el día anterior | P2 | 1 | 2h | B-8, A-17 |
 | [`B-14`](B-14.md) | Notas de voz transcritas (tarea futura, fuera del capstone) | P2 | 3 | 6h | — |
 | [`B-15`](B-15.md) | Avisos al asesor en el panel, con Telegram opcional | P1 | 3 | 6h | — |
+| [`B-16`](B-16.md) | Landing pública con enlace a Telegram por propiedad | P1 | 3 | 6h | B-1, B-10 |
 
 ### E3 — Datos y conocimiento
 
