@@ -419,3 +419,12 @@ def test_a_malformed_request_would_be_rejected_by_botocore():
 
 def test_the_catalog_specs_used_in_these_tests_have_the_shape_of_the_client():
     assert all({"name", "description", "input_schema"} <= set(spec) for spec in FakeCatalog.SPECS)
+
+
+def test_the_classifier_knows_every_amenity_a_listing_records():
+    # Gold set del clasificador (#247): "Does it have a garage?" venía con `asks_unlisted`, y el modelo contestaba
+    # que no tenía el dato aunque la ficha lo trae.
+    from app.promise_guard import _AMENITY_SYNONYMS
+
+    unlisted = CLASSIFIER_SYSTEM[CLASSIFIER_SYSTEM.index('"asks_unlisted"'):CLASSIFIER_SYSTEM.index('"visit_when"')]
+    assert all(amenity in unlisted for amenity in _AMENITY_SYNONYMS)

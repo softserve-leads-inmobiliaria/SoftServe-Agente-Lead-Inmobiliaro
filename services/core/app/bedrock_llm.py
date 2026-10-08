@@ -71,12 +71,15 @@ CLASSIFIER_SYSTEM = (
     '- "frustrated": true if the current message shows the lead is annoyed with the assistant: complains that it '
     "isn't helping or understanding, repeats a request impatiently, or says so (\"this is useless\", \"you're not "
     'answering me"). A neutral or curious question is not frustration. Otherwise false.\n'
-    '- "asks_unlisted": true if the current message asks about something a property listing does not record: '
-    "rules or policies (pets, roommates, subletting, lease length, deposits), costs other than the price (HOA or "
-    "maintenance fees, utilities, taxes), details of the building or the unit (floor, elevator, doorman, "
-    "furnished, view, age, natural light, accessibility), dates (delivery, when it will be free again), zoning or "
-    "what can be built, or what is nearby. Not the price, size, bedrooms, bathrooms, amenities, area, availability "
-    "or the requirements to buy or rent. Otherwise false.\n"
+    '- "asks_unlisted": a property listing records its price, size (m²), bedrooms, bathrooms, area, approximate '
+    "and exact address, availability, promotions, the requirements to buy or rent (down payment, monthly income, "
+    "references) and its amenities (pool, gym, parking, garage, garden, terrace, patio, event room). A question "
+    "about any of those is false, even when the answer is no (\"does it have a pool?\" is false). true only if "
+    "the current message asks about something the listing does not record: rules or policies (pets, roommates, "
+    "subletting, lease length, deposits), costs other than the price (HOA or maintenance fees, utilities, taxes), "
+    "details of the building or the unit (floor, elevator, doorman, furnished, view, age, natural light, "
+    "accessibility), dates (delivery, when it will be free again), zoning or what can be built, or what is "
+    "nearby. Otherwise false.\n"
     '- "visit_when": only if the current message says when the lead would like to visit, an object with '
     '"days" (a list of "mon", "tue", "wed", "thu", "fri", "sat", "sun"; "this weekend" is ["sat", "sun"]; '
     "only the days the CURRENT MESSAGE names, never the days of the times offered before; empty if it names "
