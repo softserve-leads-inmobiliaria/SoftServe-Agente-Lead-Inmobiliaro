@@ -412,8 +412,17 @@ Corrida del 6-oct: 40 conversaciones, 180 turnos con LLM, 78 minutos. Quedó den
 La evaluación en vivo mide escenarios conocidos. Un jurado pregunta lo que quiere: amenidades que el catálogo
 no tiene, la agencia, opiniones, mensajes desordenados, cambios de idea. `harness/scripts/jury.py` corre
 conversaciones así contra el stack, con el LLM del `.env`, y deja la transcripción para leerla a mano. En cada
-turno anota lo que auditó el guardrail (regenerada, degradada) y, si una corrida anterior falló en ese turno,
-qué hay que mirar.
+turno anota lo que auditó el guardrail (regenerada, degradada, con los tipos de violación) y, si una corrida
+anterior falló en ese turno, qué hay que mirar.
+
+Debajo de cada respuesta va **por qué** contestó así. Lo lee de la auditoría `turn.decision`, que el core deja en
+`audit_log` en cada turno con `actor = 'turn'`. Incluye:
+
+- la ruta: `agent`, `agenda:<qué contestó la agenda>`, `handoff`, `protected`, `degraded`, `input_guard`…;
+- la ruta del agente, si el código reemplazó su respuesta;
+- la intención y los campos del clasificador (`refers_to`, `visit_when` y las flags).
+
+No lleva nada de lo que escribió el lead. `evaluate.py` y los tests del guardrail no la cuentan como detección.
 
 ```
 bash scripts/demo/up.sh                      # con LLM_PROVIDER=bedrock

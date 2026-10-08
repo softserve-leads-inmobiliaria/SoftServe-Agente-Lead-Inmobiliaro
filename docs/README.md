@@ -23,6 +23,7 @@ segundo árbol de documentación.
 | [`presentations/2026-10-05-estado-del-proyecto.md`](presentations/2026-10-05-estado-del-proyecto.md) | Guion de la presentación del 5 de octubre: objetivo, próxima semana, backlog, historia típica, arquitectura, demo y preguntas. Sus diapositivas están en [`presentations/slides/`](presentations/slides/README.md) |
 | [`presentations/2026-10-07-estado-del-proyecto.md`](presentations/2026-10-07-estado-del-proyecto.md) | Estado al 7 de octubre: inglés y Colombia, factualidad por construcción, evaluación en vivo y prueba de jurado, demo y objetivo de la semana de cierre |
 | [`presentations/2026-10-07-prueba-de-jurado.md`](presentations/2026-10-07-prueba-de-jurado.md) | Confiabilidad frente a un jurado (#247): resultados de los sets J, N y M, la estrategia de campos del clasificador (DT-62 a DT-65), qué quedó hecho, qué sigue y cómo retomar con la base limpia |
+| [`presentations/2026-10-07-plan-confiabilidad.md`](presentations/2026-10-07-plan-confiabilidad.md) | Plan de trabajo hasta la demo: principios (medir primero, un dueño por clase de error, el código decide), diagnóstico de O6, O9 y O2, pasos 0 a 5 y qué queda fuera |
 
 El estado de cada historia (To Do / In Progress / Done) vive solo en GitHub Issues y en el
 [Project](https://github.com/orgs/softserve-leads-inmobiliaria/projects/1), nunca en estos
