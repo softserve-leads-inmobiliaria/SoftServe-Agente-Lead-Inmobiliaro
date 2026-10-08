@@ -25,6 +25,7 @@ Criterio para la demo: **ningún dato inventado, y a lo sumo 1 o 2 errores visib
 | M r1 | 35 | 2 | 3 | Set nuevo |
 | **M r2** | 35 | **0** (1 regenerada) | **0** | DT-62 a DT-65 y el guard de dirección (ver §5: mide arreglos, no generalización) |
 | **O r1** | 59 | **3** (5,1%) | **6** | Set nuevo de 10 perfiles, con el código de M r2 (ver §5 bis) |
+| **O r2** | 59 | **2** (3,4%) | **3** | Arreglos a–d: estado de la recordada, `visit_when`, DT-66, `price_per_m2` (ver §5 ter) |
 
 Las transcripciones están en `tmp/jury/` (no se versiona; se conserva al borrar la base).
 
@@ -59,6 +60,41 @@ se adivina sobre el texto pasa a un campo del JSON del clasificador**, que ya se
 suma llamadas, y los 10 RPM (DT-19) no lo permitirían.
 
 Descartado: reescribir el servicio (ya es FastAPI), subagentes y un juez en vivo (más llamadas), fine-tuning.
+
+## 3 bis. La causa raíz (revisión del 8-oct, después del set O)
+
+Arreglar caso por caso se sentía desordenado, y no era solo una percepción. Hay una causa común: **el jurado
+conversa sin límite de temas, el sistema sabe poco y verifica detectando sobre el texto ya escrito.** Se ve en
+tres cosas:
+
+1. **Falta el dato.** La ficha tiene unos 12 campos (precio, m², habitaciones, baños, amenidades, estado, zona,
+   dirección, requisitos). El jurado pregunta por HOA, mascotas, compartir, contrato, piso, ascensor, entrega,
+   zonificación, horario, comisión… Sin fuente, el modelo inventa un sí o un no, o la factualidad degrada.
+   Es cerca de la mitad de los errores de J, N, M y O. No es que las tools estén mal definidas: faltan una
+   fuente de detalles del inmueble (con "no consta" explícito) y el FAQ de la agencia (C-5, #195).
+2. **Se verifica detectando.** Los guards suman 56 regex, y solo "available" tiene 13 patrones de excepción.
+   Cada detector bloquea lo bueno y deja pasar lo inventado, y cada redacción nueva es un caso nuevo. Lo que
+   pasó a construcción (marcadores DT-60, agenda en el código) dejó de fallar.
+3. **El proceso es reactivo.** Los errores se encuentran leyendo muestras a mano y se arreglan uno por uno, sin
+   una regresión con expectativas (D). El prompt del clasificador pasó de 1.800 a 3.650 caracteres en un día, con
+   11 campos: si sigue así, repite el problema del prompt único.
+
+Lo que se hizo para #247 se separa en dos:
+
+- **Estructural (el código decide):** `refers_to` validado, el estado antes de ofrecer horarios,
+  `visit_when` con la agenda filtrando, `price_per_m2`.
+- **Contención:** la nota de `asks_unlisted` (el modelo puede desobedecerla), la excepción de "available" en
+  futuro (otra regex) y la nota de `unclear`.
+
+**Reorganización propuesta:** cada clase de error con un solo mecanismo dueño.
+
+| Clase | Mecanismo dueño |
+| :--- | :--- |
+| Sí o no sobre datos que no existen | La ficha con `details` explícitos (`null` = no consta) y marcadores: el código escribe "no consta, lo confirma un asesor". DT-66 pasa de nota a construcción |
+| Preguntas sobre la agencia | El FAQ (C-5, #195) como tool |
+| Decidir antes de saber el estado | El estado se consulta antes de que la agenda decida quién contesta |
+| Estados en prosa | Solo por marcador, sin más excepciones |
+| Medir | D: J, N, M y O con expectativas por turno en `evaluate.py` |
 
 ## 4. Qué quedó hecho
 
@@ -169,6 +205,40 @@ que es el criterio de DT-62 para arreglarlas:
 
 - **sí o no a políticas sin dato** (M1 t5, O3);
 - **degradar una pregunta legítima** sobre disponibilidad futura (J3, O6) o sobre un número calculado (O5).
+
+## 5 ter. Resultado de O r2
+
+Corrida del 8-oct (02:40–03:05 UTC), con los arreglos a–d en el contenedor. La transcripción está en
+`tmp/jury/2026-10-07_O_r2.md`. Mide los arreglos, no la generalización: O ya se había corrido.
+
+**Ningún dato inventado.** O3 ahora contesta "That's something I don't have in the property details… An agent can
+confirm" a compartir y al plazo, y busca cuando le piden "the cheapest" ("$600/month… That's above your $500
+budget").
+
+**Corregidos:**
+
+- O5 t2: el precio por m² sale bien ($2,357 contra $2,481).
+- O6 t3: "When will you know if it's free again?" se contesta sin degradarse.
+- O6 t4: ya no ofrece horarios de la casa apartada.
+- O2: contesta por las dos propiedades en vez de preguntar cuál.
+- O9 t3: "after 5pm" ofrece el jueves 8 a las 17:00.
+- El resumen: el aviso nuevo dio la causa (`stop=max_tokens, tokens=400`, el JSON se cortó). Ahora tiene su
+  propio límite de 800 tokens (`SUMMARY_MAX_TOKENS`).
+
+**Graves que quedan (3):**
+
+| Turno | Qué pasó | Causa |
+| :--- | :--- | :--- |
+| O6 t4–t6 | "Show me something similar that I can visit" → "…is reserved right now… Would you like me to show you similar options?". Después, "The cheaper one, can I see it on Monday?" → "I can't book the visit from here right now. What day and time work for you?" | La agenda decide antes de saber el estado: el agente solo clasifica y no busca las parecidas. El estado se debería consultar antes de decidir quién contesta |
+| O2 t4 | "Our pension is $2,500 a month. Is that enough?" → degradada (`number`) | Comparar el ingreso del lead con el requisito de dos propiedades. No llama a `check_requirements` |
+| O9 t7 | "Can I bring my wife to the visit?" → degradada | El guardrail de categoría protegida (e, pendiente) |
+
+**Moderados:** O4, "This is useless", no ofrece un asesor (la racha no llega, porque los turnos se resuelven).
+O8 t1 muestra "Area: 620" sin m².
+
+**Lectura.** Pasó de 6 graves a 3 y de 3 degradadas a 2, sin datos inventados. Ninguno de los 3 que quedan es
+de una clase que ya se haya arreglado. Siguen siendo de la causa raíz de §3 bis: el sistema decide o verifica sobre
+lo que no sabe todavía (el estado), o el catálogo no trae el dato y el modelo lo calcula.
 
 ## 6. Qué sigue
 
