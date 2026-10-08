@@ -31,8 +31,10 @@ from app.factuality import _NUMBER, Violation, _normalize_number, extract_number
 # `{prop_00231.price}`, `{prop_00231.requirements.down_payment_min}`, `{search.count}`, `{zones}`.
 MARKER = re.compile(r"\{([A-Za-z][\w-]*)(?:\.([A-Za-z_][\w.]*))?\}")
 REFERENCE = re.compile(r"\bprop_\w+")
-# "1. Apartment in El Poblado": la numeración de una lista no es un dato.
-_LIST_NUMBER = re.compile(r"^[ \t]*(?:[-*][ \t]+)?(\d+)[.)](?=\s)", re.MULTILINE)
+# "1. Apartment in El Poblado": la numeración de una lista no es un dato. Tampoco en negrita o en un título
+# ("**1. Ref. prop_00231**", "### 2) Studio"), como la escribe el modelo en vivo (#229).
+_LIST_NUMBER = re.compile(r"^[ \t]*(?:[-*•][ \t]+)?(?:#+[ \t]+)?(?:\*{1,2}|_{1,2})?(\d+)[.)](?=[\s*_]|$)",
+                          re.MULTILINE)
 
 STATUS = {"disponible": "available", "apartado": "reserved", "cerrado": "off the market",
           "sin_verificar": "unverified"}
@@ -44,14 +46,17 @@ MONEY = frozenset({"price", "requirements.down_payment_min", "requirements.month
 PERCENT = frozenset({"requirements.down_payment_percent"})
 NUMBERS = frozenset({"m2", "bedrooms", "bathrooms", "requirements.income_multiple"})
 TEXTS = frozenset({"title", "zone", "address_approx", "address_exact", "description"})
+# Lo que el código calcula de otros campos. "Which one has the best price per square meter?" se degradaba: el
+# número no venía de ninguna tool, y la factualidad no puede saber que es una división (prueba de jurado O5, #247).
+DERIVED = frozenset({"price_per_m2"})
 # Los campos que se pueden pedir de una propiedad o una promoción. El prompt los enumera (`CHAT_SYSTEM`).
-FIELDS = MONEY | PERCENT | NUMBERS | TEXTS | {"amenities", "type", "kind", "status", "valid_until"}
+FIELDS = MONEY | PERCENT | NUMBERS | TEXTS | DERIVED | {"amenities", "type", "kind", "status", "valid_until"}
 
 # Los requisitos también se pueden pedir sin el prefijo: `{prop_00231.down_payment_min}`. Así se los enumera el prompt.
 ALIASES = {f.removeprefix("requirements."): f for f in FIELDS if f.startswith("requirements.")}
 
 # Un `$` antes del marcador del dinero, o un `%` después del porcentaje: el valor ya los trae.
-_MONEY_SIGN = re.compile(r"\$\s*(?=\{[^{}]*\.(?:price|down_payment_min|monthly_income_min)\})")
+_MONEY_SIGN = re.compile(r"\$\s*(?=\{[^{}]*\.(?:price|price_per_m2|down_payment_min|monthly_income_min)\})")
 _PERCENT_SIGN = re.compile(r"(\{[^{}]*\.down_payment_percent\})\s*%")
 
 
@@ -142,6 +147,12 @@ def _value(sources: Sources, ref: str, path: str | None) -> str | None:
     record = sources.records.get(ref)
     if record is None:
         return None
+    if path == "price_per_m2":
+        price, size = record.get("price"), record.get("m2")
+        numeric = all(isinstance(n, (int, float, Decimal)) and not isinstance(n, bool) for n in (price, size))
+        if not numeric or size <= 0:
+            return None
+        return f"${_number(round(Decimal(str(price)) / Decimal(str(size))), money=True)}"
     value: Any = record
     for key in path.split("."):
         value = value.get(key) if isinstance(value, Mapping) else None
@@ -167,8 +178,15 @@ def _value(sources: Sources, ref: str, path: str | None) -> str | None:
     return value if isinstance(value, str) and value.strip() else None
 
 
+# Un número entre llaves no es un marcador: en vivo, al pedirle el marcador, el modelo escribió "${3000}" con el
+# número del lead (#247). Se le quitan las llaves y pasa por la regla de los números como cualquier otro.
+_BRACED_NUMBER = re.compile(r"\{\s*(\$?\d[\d.,]*)\s*\}")
+# Lo que quede entre llaves y no sea un marcador nunca le llega al lead.
+_LEFTOVER_BRACES = re.compile(r"\{[^{}\n]*\}|[{}]")
+
+
 def _tidy(text: str) -> str:
-    return _PERCENT_SIGN.sub(r"\1", _MONEY_SIGN.sub("", text))
+    return _PERCENT_SIGN.sub(r"\1", _MONEY_SIGN.sub("", _BRACED_NUMBER.sub(r"\1", text)))
 
 
 def render(text: str, sources: Sources) -> str:
@@ -263,4 +281,8 @@ def check(text: str, sources: Sources, lead_said: set[str], known_refs: Iterable
     allowed = set(sources.records) | set(known_refs)
     violations += [Violation("reference", ref) for ref in dict.fromkeys(REFERENCE.findall(bare))
                    if ref not in allowed]
+    violations += [Violation("marker", m.group()) for m in _LEFTOVER_BRACES.finditer(bare)]
+    # La cobertura es una lista entera: en vivo, el modelo la puso bajo cada ciudad y salió repetida (#247).
+    if sum(1 for m in MARKER.finditer(text) if m.group(1) == "zones") > 1:
+        violations.append(Violation("marker", "{zones}", hint="{zones} once"))
     return list(dict.fromkeys(violations))

@@ -86,7 +86,9 @@ EDGE_MESSAGES = {
     ("GREETING", GREETED): "Hi",
     ("DISCOVERY", DISCOVERY_COMPLETE): "I'm looking for an apartment",
     ("QUALIFY", QUALIFIED): "How much does it cost?",
-    ("RECOMMEND", VISIT_REQUESTED): "I'd like to schedule a visit",
+    # #229: desde cualquier estado activo, con la propiedad del anuncio como la de interés.
+    **{(state, VISIT_REQUESTED): "I'd like to schedule a visit"
+       for state in ("GREETING", "DISCOVERY", "QUALIFY", "RECOMMEND", "NURTURE")},
     # B-8: en los tests la agenda no responde; el lead deja su horario preferido y la visita queda resuelta.
     ("SCHEDULE", VISIT_SCHEDULED): ("I'd like to schedule a visit", "Tomorrow at 10"),
     ("NURTURE", LEAD_RETURNED): "Hi, I'm still interested",
@@ -171,8 +173,10 @@ def _expected(state, intent):
         return "DISCOVERY"  # el lead vuelve a escribir
     if state == "SCHEDULE":
         return state  # B-8: ninguna intención la agenda; avanza cuando el código resuelve la visita
+    if state == "RECOMMEND":
+        return state  # #229: tampoco se llega a SCHEDULE por una intención; la agenda la arranca el código
     advance_on = {"GREETING": (None, "DISCOVERY"), "DISCOVERY": ("busqueda_propiedad", "QUALIFY"),
-                  "QUALIFY": ("consulta_precio", "RECOMMEND"), "RECOMMEND": ("agendar_visita", "SCHEDULE")}[state]
+                  "QUALIFY": ("consulta_precio", "RECOMMEND")}[state]
     required, target = advance_on
     return target if required in (None, intent) else state
 

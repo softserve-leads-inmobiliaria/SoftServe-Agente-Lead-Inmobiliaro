@@ -66,6 +66,14 @@ def merge_signal(current: Mapping[str, Any], evidence: TurnEvidence) -> dict[str
     return merged
 
 
+def qualification_known(signal: Mapping[str, Any]) -> bool:
+    """La señal acumulada ya tiene algún dato de calificación: presupuesto, cómo se decide, cuándo, o el
+    resultado de `check_requirements`. Es lo que cierra QUALIFY (#229, DT-61)."""
+    return bool(signal.get("budget_hint") or signal.get("decision_maker") == "declarado"
+                or signal.get("urgency") not in (None, "no_declarada")
+                or signal.get("meets_requirements") is not None)
+
+
 def score_turn(current: Mapping[str, Any], evidence: TurnEvidence) -> tuple[dict[str, Any], Score]:
     """(señal acumulada, score) después de este turno."""
     signal = merge_signal(current, evidence)

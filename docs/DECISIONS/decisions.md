@@ -2457,6 +2457,13 @@ pero en tres corridas el modelo nunca repitió la búsqueda.
 - Una búsqueda con solo la zona ("¿qué tienen en Cali?") trae, sin la zona, todo el inventario como
   alternativas. Eso cubre en parte la pregunta de cobertura de #194.
 
+**Actualización (#247).** En la prueba de jurado (set M), después de buscar rentas, "Tell me the address of the
+house in Usaquen" buscó casas en renta en Usaquen. El agente contestó "I don't have any houses for rent in
+Usaquén", y había una en venta. Ahora, como último intento, también se suelta la operación (`type`: venta,
+renta), pero solo si el lead nombró el tipo de inmueble. La casa en venta en Usaquen es la misma casa que
+pidió; en cambio, "algo en preventa en Laureles" no se contesta con una renta cualquiera de Laureles. El orden
+queda zona, tipo y operación: quien renta no compra, así que la operación se suelta al final.
+
 ## DT-58 — La cobertura sale de una tool del catálogo, `list_zones`
 
 **Estado:** aceptada (#194).
@@ -2652,3 +2659,280 @@ Hay además dos fallas que la comparación literal no puede ver:
   bloquearse, y lo mide la evaluación en vivo (`INVENTED_ZONES`).
 - La evaluación en vivo (#216) mide el efecto en las regeneraciones, las respuestas degradadas y la tool
   esperada. Mientras se itera, con una repetición de los escenarios 01, 03, 04 y 07.
+
+**Actualización (#247).** Hay campos que no están en la ficha y que el código calcula. El primero es
+`price_per_m2`: el precio dividido por los m², en dólares y sin decimales. En la prueba de jurado (O5), "Which one
+has the best price per square meter?" se degradaba, porque el número no venía de ninguna tool y la factualidad no
+puede saber que es una división. Sin precio o sin m², el marcador no se completa.
+
+## DT-61 — La visita se pide desde cualquier estado, y el embudo avanza por señales
+
+**Estado:** aceptada (#229).
+
+**Contexto.** La agenda de visitas (B-8, DT-32) y el botón "Schedule a visit" (B-11) solo existían en
+`RECOMMEND`. Para llegar ahí, la FSM pedía dos etiquetas exactas del clasificador: `busqueda_propiedad` en
+`DISCOVERY` y `consulta_precio` en `QUALIFY`. `fsm.py` lo dejaba como una política mínima a reemplazar.
+
+En la evaluación en vivo de #217, `06_requisitos_y_fair_housing` terminó las 5 veces en `DISCOVERY`, con
+presupuesto, requisitos y `check_requirements` pasados. Un lead de un anuncio pregunta por la disponibilidad,
+no busca: ningún mensaje se clasificaba `busqueda_propiedad`. Si pedía la visita, el pedido no llegaba a la
+agenda y lo contestaba el LLM, que no tiene tool de agenda.
+
+**Decisión.**
+
+- **La visita se pide desde cualquier estado activo** (`VISIT_STATES`: todos menos `SCHEDULE` y los
+  terminales). La pide la intención `agendar_visita` o el campo `wants_visit` del clasificador (DT-60).
+  - Si hay una propiedad de interés (la del turno o la recordada), el código ofrece los horarios y la FSM pasa
+    a `SCHEDULE`.
+  - Si no la hay, contesta el agente, que pregunta cuál. Con varios resultados de búsqueda no se adivina: en la
+    prueba de jurado (#247), "the cheapest one" agendaba el primero, y en `RECOMMEND` sin propiedad se pedía un
+    horario que el lead ya había dado.
+- **En `SCHEDULE`, un mensaje que no contesta la oferta lo contesta el agente** (#247): la oferta sigue abierta y
+  se le recuerda al lead cómo elegir. Antes, la agenda contestaba a cualquier pregunta "I didn't quite get which
+  time you prefer", y el lead no podía salir ni corregir la propiedad.
+- **A `SCHEDULE` se llega cuando el código arrancó la agenda** (`visit_started`), no por una intención. Así la
+  FSM y la agenda no pueden quedar desfasadas.
+- **El embudo avanza por señales:**
+  - buscar o mirar una propiedad (`search_properties`, `get_property` o el anuncio) cierra `DISCOVERY`;
+  - el primer dato de calificación en la señal acumulada (presupuesto, cómo se decide, cuándo, o el resultado
+    de `check_requirements`) cierra `QUALIFY`.
+
+  La intención sigue valiendo: es lo único que da el fake LLM (CT-7).
+- **El botón "Schedule a visit"** aparece bajo la respuesta sobre una propiedad en cualquier estado de
+  `VISIT_STATES`.
+- **Si la respuesta la da la agenda, el agente solo clasifica.** En `SCHEDULE`, y cuando el pedido de visita
+  arranca la agenda, no se llama al modelo de conversación. En vivo, el modelo contestaba igual a "1", copiaba
+  los horarios de la oferta, y la factualidad lo regeneraba (y lo degradaba) para una respuesta que el lead
+  nunca leía: dos o tres llamadas perdidas por turno contra el cupo de 10 RPM. El clasificador sigue haciendo
+  falta: "I want to talk to an agent" mientras se agenda pasa a una persona.
+
+**Alternativas descartadas.**
+
+- **Saltar el embudo directo a `RECOMMEND` con el puntaje:** descartado. Los estados intermedios son los que
+  mide el embudo (`funnel_events`), y un salto los dejaría vacíos.
+- **Dejar que el LLM agende con una tool:** descartado por DT-32. La agenda la maneja el código.
+
+**Consecuencias.**
+
+- Un turno avanza un solo estado: un lead que en un mensaje busca y da su presupuesto pasa a `QUALIFY`, y a
+  `RECOMMEND` en el turno siguiente.
+- Los tests de racha y de embudo usan un evento sin el anuncio: en Telegram solo lo trae el `/start`.
+
+## DT-62 — Lo que hoy se adivina sobre el texto pasa a campos del clasificador, sin llamadas nuevas
+
+**Estado:** aceptada (#247).
+
+**Contexto.** La prueba de jurado (#247) hizo preguntas no pautadas, en tres sets (J, N, M, ver
+`harness/scripts/jury.py`). Las respuestas degradadas bajaron de 7/37 a 0/35, pero cada set nuevo traía unos 3
+errores graves con redacciones nuevas. Con ~3 errores graves cada 35 turnos, una demo libre de 15 turnos tiene
+cerca de un 70% de probabilidad de mostrar al menos uno. Los errores caían en pocas clases:
+
+- la propiedad equivocada ("the cheapest one", "ok i wan to see it");
+- la preferencia de día ignorada ("this weekend", "next Tuesday afternoon", "another day");
+- un filtro arrastrado (rentas cuando ya pedía otra cosa);
+- la "frustración" disparada por preguntas neutras.
+
+Cada arreglo con una regex o una regla de prompt resolvía la frase vista, no la siguiente. Una regla de prompt
+llegó a provocar una reserva falsa. Lo que sí quedó resuelto para siempre fue lo que pasó a estructura: los
+marcadores (DT-60) y la agenda en el código (DT-32).
+
+**Decisión.**
+
+- Una decisión que hoy se toma leyendo texto libre pasa a un campo del JSON del clasificador, que ya se llama
+  en cada turno: costo de 0 llamadas. El código valida el campo y, si falta, usa la regla anterior.
+  - `frustrated` (DT-65).
+  - `visit_when` (DT-64).
+  - `refers_to` (DT-63).
+  - `asks_unlisted` (DT-66, agregado después del set O).
+- Un arreglo nuevo es estructural o es un test. No se agregan regex ni reglas de prompt por cada incidente.
+- El modelo de conversación corre con `temperature` 0, igual que el clasificador y el resumen. Antes estaba en
+  0.3: una misma pregunta salía distinta en cada corrida, y la regresión no se podía repetir.
+
+**Alternativas descartadas.**
+
+- **Reescribir el servicio:** el core ya es FastAPI, y el problema no está en el transporte.
+- **Subagentes (planificador, redactor, juez):** cada uno es una llamada más. Con 10 RPM (DT-19) y 3 o 4
+  llamadas por turno, el cupo se agota en la demo, y tampoco resuelven de qué propiedad habla el lead.
+- **Un juez LLM en vivo:** cuesta lo mismo que un subagente. Como evaluador *offline* de las transcripciones
+  sí puede servir.
+- **Fine-tuning o un modelo más grande:** no hay tiempo ni datos, y no quitan la causa.
+
+**Consecuencias.**
+
+- El prompt del clasificador creció (tres campos más y la lista de propiedades mostradas), y su `maxTokens`
+  pasó de 200 a 300. Sigue siendo Haiku.
+- Los datos que hoy no tiene ninguna tool (HOA fees, "the most popular neighborhood") siguen dependiendo del
+  prompt y de A-5. No hay forma estructural de cubrirlos sin una tool que los traiga.
+
+## DT-63 — De qué propiedad habla el mensaje lo dice el clasificador, entre las ya mostradas
+
+**Estado:** aceptada (#247).
+
+**Contexto.** La agenda tenía que saber qué propiedad visitar, y lo deducía de las tools del turno
+(`interest.py`, `_visit_property`). "the cheapest one" agendaba el primer resultado de la búsqueda, y "ok i wan
+to see it" agendaba otra. En la prueba de jurado, "Can I reserve the 4-bedroom one?" (apartada) ofreció horarios
+de la otra casa, y "the price of the reserved apartment" se contestó con una referencia inventada que la
+factualidad degradó. #247 ya había dejado de adivinar con varios resultados, pero entonces la agenda no
+arrancaba aunque el lead dijera cuál quería.
+
+**Decisión.**
+
+- **La lista:** las propiedades que la conversación ya mostró son las de la memoria de hechos (DT-59) más la
+  del anuncio: `interest.shown_properties`, las 8 más recientes. Cada una va al clasificador en una línea con lo
+  que la distingue: tipo, operación, zona, precio y habitaciones, en inglés. No hace falta estado nuevo.
+- **El campo:** el clasificador contesta `refers_to` con el id de una de esas propiedades, `"unclear"` si el
+  mensaje habla de una pero no se sabe cuál, o null. Un id que no está en la lista se descarta
+  (`interest.refers_to`): el modelo no puede traer una propiedad que el lead nunca vio.
+- **La agenda** (`turn._visit_property`):
+  - agenda la propiedad elegida, aunque no sea el primer resultado de la búsqueda;
+  - con `"unclear"` no agenda nada, ni siquiera la recordada: el agente pregunta cuál;
+  - en `SCHEDULE`, si el lead nombra otra de las mostradas, la oferta pasa a ser de esa.
+- **El estado:** la propiedad elegida sale de la memoria, que no guarda el estado (DT-59). Antes de ofrecer
+  horarios, el código lo consulta en el catálogo (`get_availability`, sin pasar por el LLM). Si está apartada o
+  cerrada, contesta con texto fijo (`visits.not_visitable`).
+- **El modelo de conversación** recibe una nota con la propiedad elegida o, si es `"unclear"`, la indicación de
+  preguntar cuál nombrando las opciones (`agent._with_notes`).
+- **La propiedad de interés** de los turnos siguientes pasa a ser la elegida
+  (`interest.remember_property(..., focus)`). Manda sobre una búsqueda del turno, pero no sobre una ficha que el
+  agente consultó en ese turno.
+- **`answered_by_code`** recibe la `Classification` completa, en vez de un argumento por campo.
+
+**Alternativas descartadas.**
+
+- **Seguir deduciéndolo en el código:** cada redacción nueva era un caso nuevo.
+- **Que lo decida el modelo de conversación con una tool:** la agenda no es una tool (DT-32), y el
+  clasificador ya está en el turno.
+- **Guardar una lista aparte de propiedades mostradas:** la memoria de hechos ya la tiene, con vencimiento.
+
+**Consecuencias.**
+
+- El guion del arnés `flujo_completo_hasta_handoff` buscaba un "2-bedroom apartment". Con varios resultados
+  la agenda ya no adivina, y el agente falso no puede elegir, así que ahora busca un "studio", que es uno solo.
+- Una propiedad mostrada hace más de 24 h (el vencimiento de la memoria) ya no está en la lista: el lead
+  tiene que volver a nombrarla o buscarla.
+
+**Actualización (set O).** El estado se consultaba solo para la propiedad elegida por `refers_to`. La recordada
+también se guarda sin estado, y pasaba como visitable. Desde el anuncio de una casa apartada (O6), "Show me
+something similar that I can visit" ofreció horarios de esa misma casa. Ahora se consulta el estado de toda
+propiedad sin estado antes de ofrecer horarios.
+
+## DT-64 — Cuándo quiere la visita el lead lo extrae el clasificador, y la agenda filtra los horarios
+
+**Estado:** aceptada (#247).
+
+**Contexto.** La agenda (B-8) ofrecía los tres primeros horarios libres del asesor, que suelen caer el mismo
+día. "Can I go see it this weekend?" recibía horarios del jueves (set N). "I'd like to visit it next Tuesday
+afternoon" también (M1). "Actually, can we do another day?" recibía "I didn't quite get which time you prefer"
+(M5). Ya iban tres veces en dos sets.
+
+**Decisión.**
+
+- **El campo:** el clasificador contesta `visit_when` cuando el mensaje dice cuándo:
+  - `days`: los días de la semana, y "this weekend" es sábado y domingo;
+  - `part_of_day`: mañana, tarde o noche;
+  - `other_day`: si pide otro día que los ofrecidos.
+
+  `visits.visit_when` lo valida.
+- **El filtro:** con una preferencia, la agenda mira 14 días en vez de 7 y ofrece los primeros horarios que
+  encajan. Si ninguno encaja, lo dice con texto fijo ("I don't have available times on the weekend. These are
+  the closest ones…") y ofrece los más cercanos. Con "another day" se saltan los días ya ofrecidos.
+- **En `SCHEDULE`, una preferencia contesta la oferta** (`visits.answers`): la agenda vuelve a ofrecer
+  horarios, en vez de que conteste el agente o se repita la oferta.
+- **Una hora que cae en otro día del que nombró no cuenta como elegida.** "Thursday at 4 pm" no reserva el
+  miércoles a las 16:00.
+
+**Alternativas descartadas.**
+
+- **Extraer el día con regex en `visits.py`:** es la clase de arreglo que DT-62 deja de hacer. Además el
+  clasificador ya ve la última respuesta del asistente, que es lo que hace falta para entender "another day".
+- **Que el modelo de conversación ofrezca los horarios:** descartado por DT-32. El modelo nunca ve ni inventa
+  horarios.
+
+**Consecuencias.**
+
+- Los domingos no tienen horarios (la agenda atiende de lunes a sábado, de 9 a 18). "This weekend" ofrece el
+  sábado.
+- Sin el campo, por ejemplo con el agente falso, la agenda se comporta como antes.
+
+**Actualización (set O).** El clasificador completaba `days` u `other_day` con la oferta anterior. "Anything in
+the afternoon?", después de ofrecer la mañana del lunes, saltó al lunes siguiente (O6). "Only after 5pm" ofreció
+el jueves de la semana siguiente (O9). Ahora:
+
+- `days` lleva solo los días que nombra el mensaje actual, y "after 5pm" es la franja `evening`;
+- `other_day` va solo cuando pide otro día sin nombrarlo;
+- los días ya ofrecidos se saltan solo con un "another day" a secas.
+
+## DT-65 — La racha sin resolver solo traspasa si el lead se muestra molesto
+
+**Estado:** aceptada (#247). Ajusta DT-16.
+
+**Contexto.** La racha de frustración (A-13, DT-16) contaba turnos seguidos con intención `otro`. "Are you a
+bot?", "Who owns this agency?" y "What are your office hours?" no tienen intención propia. En la prueba de
+jurado (M3), la tercera traspasó a un lead tranquilo con "Sorry I'm not being as helpful as you expected".
+
+**Decisión.**
+
+- El clasificador contesta `frustrated`: true si el mensaje muestra molestia con el asistente (se queja de que
+  no ayuda, repite impaciente, "this is useless"). Una pregunta neutra no cuenta.
+- La racha se sigue contando igual, pero solo traspasa si además el mensaje actual llega con
+  `frustrated: true` (`handoff.is_frustrated(streak, annoyed)`). Si el clasificador no contestó el campo, vale
+  la racha sola, como antes.
+
+**Alternativas descartadas.**
+
+- **Una intención más para las preguntas sobre la agencia:** cubre esas, no las siguientes.
+- **Traspasar por un solo mensaje molesto:** es un cambio de producto. Hoy, quien quiere un asesor lo pide y se
+  lo pasa en el acto.
+
+**Consecuencias.**
+
+- Tres "ok" seguidos ya no traspasan con Bedrock: no hay molestia. Con el agente falso sí, como antes, porque
+  no da el campo.
+
+## DT-66 — Lo que el catálogo no tiene no se contesta con sí o no
+
+**Estado:** aceptada (#247).
+
+**Contexto.** La factualidad (A-5) bloquea números, estados, direcciones, promesas y amenidades que no vienen de
+una tool. Un sí o un no sobre algo que el catálogo no registra no es ninguno de esos, y pasaba entero:
+
+- "Are HOA fees included?" → "No, HOA fees are separate…" (M1), y en la frase siguiente "I don't have the HOA
+  fee amount";
+- "can i share it with a roommate?" → "Yes, absolutely!" (O3);
+- "only for 6 months is that ok" → "Yes, 6 months should be fine!" (O3).
+
+La clase se repitió en dos sets. Además, ante una pregunta así con dos propiedades mostradas, el agente preguntaba
+"which property?" tres veces seguidas (O2) en vez de decir que no tiene el dato de ninguna.
+
+**Decisión.**
+
+- **El campo:** el clasificador contesta `asks_unlisted`: true si el mensaje pregunta algo que una ficha no
+  registra. Entran:
+  - reglas y políticas: mascotas, compartir, subarrendar, plazo del contrato, depósitos;
+  - costos aparte del precio: HOA o administración, servicios, impuestos;
+  - detalles del edificio o de la unidad: piso, ascensor, portería, amueblado, vista, antigüedad, luz natural,
+    accesibilidad;
+  - fechas: entrega, o cuándo se libera;
+  - zonificación o qué se puede construir;
+  - qué hay cerca.
+
+  No entran el precio, el tamaño, las habitaciones, los baños, las amenidades, la zona, la disponibilidad ni
+  los requisitos.
+- **La nota:** con el campo, el modelo de conversación recibe una nota del turno (`agent.UNLISTED_NOTE`): no
+  contestar sí ni no, no adivinar ni generalizar, decir que no tiene el dato y que un asesor lo confirma, y
+  ofrecerle uno. Si hay varias propiedades mostradas, contesta por todas a la vez en lugar de preguntar cuál; la
+  nota de `"unclear"` (DT-63) no se agrega.
+
+**Alternativas descartadas.**
+
+- **Una regla más en el prompt de conversación:** ya existía una general, y no alcanzó. La nota va solo en el
+  turno que la necesita, como la de DT-63.
+- **Un guardrail sobre el texto** que bloquee "Yes"/"No" al principio de la respuesta: es la clase de regex que
+  DT-62 deja de hacer, y degradaría respuestas buenas ("Yes, it has a pool").
+- **Una tool con esos datos:** el inventario de demo no los tiene. Si el catálogo los incorpora, salen de esta
+  lista y los cubre la factualidad.
+
+**Consecuencias.**
+
+- Es una nota, no un bloqueo: el modelo todavía puede desobedecerla. La prueba de jurado mide cuánto.
+- Con el agente falso no cambia nada: no da el campo.

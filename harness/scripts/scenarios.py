@@ -164,8 +164,7 @@ SCENARIOS: dict[str, Scenario] = {
         ),
     ),
     "09_busqueda_hasta_visita": Scenario(
-        ("Busca, pregunta el precio y pide la visita: la agenda (B-8) ofrece horarios y reserva el que elige. Con "
-         "la FSM de hoy la visita solo se puede pedir en RECOMMEND (#229), así que llega buscando y preguntando"),
+        "Busca, pregunta el precio y pide la visita: la agenda (B-8) ofrece horarios y reserva el que elige",
         None,
         (
             Turn("Hi"),
@@ -174,6 +173,18 @@ SCENARIOS: dict[str, Scenario] = {
             Turn("How much is the 2-bedroom one?", tools=("search_properties", "get_property"),
                  expect_any=("185,000",), remembered_ok=True),
             Turn("I'd like to schedule a visit", expect_any=("Reply with the number",)),
+            Turn("1", expect_any=("is booked for",)),
+        ),
+        final_states=frozenset({"HANDOFF"}),
+    ),
+    "11_deep_link_hasta_visita": Scenario(
+        ("Entra por el anuncio, pregunta la disponibilidad y pide la visita sin haber buscado: la agenda se "
+         "ofrece desde cualquier estado (#229)"),
+        "prop_00231",
+        (
+            Turn(""),  # /start prop_00231
+            Turn("Hi, is this apartment still available?", tools=AVAILABILITY, expect_any=("available",)),
+            Turn("Can I go see it?", expect_any=("Reply with the number",)),
             Turn("1", expect_any=("is booked for",)),
         ),
         final_states=frozenset({"HANDOFF"}),

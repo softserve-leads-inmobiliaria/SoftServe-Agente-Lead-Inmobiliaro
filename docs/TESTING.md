@@ -407,6 +407,43 @@ Corrida del 6-oct: 40 conversaciones, 180 turnos con LLM, 78 minutos. Quedó den
 - **Por qué se regenera:** por el mismo patrón. El modelo cita lo que ya dijo antes, o usa "available" para
   otras propiedades, aunque la segunda respuesta salga bien.
 
+### Prueba de jurado (#247)
+
+La evaluación en vivo mide escenarios conocidos. Un jurado pregunta lo que quiere: amenidades que el catálogo
+no tiene, la agencia, opiniones, mensajes desordenados, cambios de idea. `harness/scripts/jury.py` corre
+conversaciones así contra el stack, con el LLM del `.env`, y deja la transcripción para leerla a mano. En cada
+turno anota lo que auditó el guardrail (regenerada, degradada) y, si una corrida anterior falló en ese turno,
+qué hay que mirar.
+
+```
+bash scripts/demo/up.sh                      # con LLM_PROVIDER=bedrock
+python harness/scripts/jury.py M             # un set, ~15 min
+python harness/scripts/jury.py O             # el set más reciente, 10 conversaciones, ~25 min
+python harness/scripts/jury.py M4_preguntas_trampa
+```
+
+- **Sets:**
+  - J: la primera prueba, 6 conversaciones;
+  - N y M: preguntas que el agente no había visto hasta que se corrieron, 6 conversaciones cada uno;
+  - O: 10 perfiles escritos después de DT-62 a DT-65, buscando lo que esos arreglos no cubren.
+
+  Un set nuevo va con otra letra. Sirve **antes** de arreglar algo: un set ya corrido mide regresiones, no
+  generalización.
+- **Cómo se lee:** cada respuesta se clasifica a mano:
+  - **grave**: un dato inventado, la propiedad equivocada, un traspaso o una respuesta degradada sin motivo;
+  - **moderado**: un dato general sin respaldo, o una preferencia ignorada;
+  - **menor**: una opinión o un formato raro.
+
+  El criterio para la demo: ningún dato inventado, y a lo sumo 1 o 2 errores visibles por set.
+- **Informe:** `tmp/jury/<fecha>_<sets>.md`, que no se versiona. Los resultados de cada corrida y qué se
+  arregló están en `docs/presentations/2026-10-07-prueba-de-jurado.md`.
+- **Por qué falló un turno:** la transcripción no trae el motivo. Está en el log del core
+  (`docker compose logs core | grep "guardrail de salida"`): el tipo de violación (`number`, `address`,
+  `reference`…), y el valor solo con `TRACE_CONTENT=1`.
+- **Con la base limpia:** `bash scripts/demo/down.sh` borra la base, y `bash scripts/demo/up.sh` la vuelve a
+  crear con las migraciones, los asesores y el inventario de demo. El jurado crea sus propios leads y
+  conversaciones, así que no necesita nada más.
+
 ## Pruebas automáticas
 
 ```

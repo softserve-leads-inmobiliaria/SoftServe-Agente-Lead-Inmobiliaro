@@ -68,6 +68,10 @@ CASES = [
     ("en_calle_traducida", "The address is Street 10 # 43-12, El Poblado.", False, "", False),
     ("en_avenida_traducida", "It's on Avenue 80 # 33-50.", False, "", False),
     ("en_calificado_ve_calle", "The address is Street 10 # 43-12, El Poblado.", True, "", True),
+    # Prueba de jurado M5 (#247): en la ficha, la vía aproximada y el número de la línea de abajo no son una dirección.
+    ("ficha_approx_arriba_de_dormitorios", "El Poblado, Medellin, near Avenida El Poblado  \n• 1 bedroom, 1 bathroom",
+     False, "", True),
+    ("direccion_en_una_linea_de_la_ficha", "🏢 **For sale**  \nCalle Lerdo 1204  \n• 2 bedrooms", False, "", False),
 ]
 
 assert len(CASES) >= 15, "el gold set de A-6 tiene que cubrir tanto casos que deben pasar como los que no"

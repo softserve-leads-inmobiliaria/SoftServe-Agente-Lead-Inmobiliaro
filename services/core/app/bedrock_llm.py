@@ -22,14 +22,19 @@ from opentelemetry import trace
 from starlette.concurrency import run_in_threadpool
 
 from app.fakes.fake_llm import INTENTS
+from app.interest import UNCLEAR, refers_to, shown_lines
 from app.llm_retry import RETRY, Retrier, RetryBudget, RetryPolicy, error_code
 from app.markers import FIELDS
 from app.rate_limit import RateLimited, RateLimits
+from app.visits import visit_when
 
 logger = logging.getLogger("core.bedrock_llm")
 
 MAX_TOOL_ROUNDS = 3
 MAX_REPLY_TOKENS = 400
+# El resumen del traspaso (A-16) es un JSON de tres secciones: cortado por el límite, no se puede leer y la ficha
+# sale sin resumen. En la prueba de jurado (#247) pasó con 400 (`stop=max_tokens`).
+SUMMARY_MAX_TOKENS = 800
 
 # Tiempo de reintentos del turno en curso (A-14): lo abre `BedrockLLM.turn()` y lo comparten todas las
 # llamadas del turno. Sin turno abierto, cada llamada tiene el suyo.
@@ -40,7 +45,7 @@ _TURN_BUDGET: ContextVar[RetryBudget | None] = ContextVar("llm_turn_retry_budget
 MARKER_FIELDS = sorted((f.removeprefix("requirements.") for f in FIELDS - {"description", "valid_until", "title"}),
                        key=lambda f: (f.startswith(("down_", "income_", "monthly_")), f))
 # Los campos booleanos del clasificador con los que decide el código (DT-60). Si falta uno, se usa la regla.
-CLASSIFIER_FLAGS = ("asks_for_person", "wants_alert", "wants_visit")
+CLASSIFIER_FLAGS = ("asks_for_person", "wants_alert", "wants_visit", "frustrated", "asks_unlisted")
 
 # Lo que lee el LLM va en inglés (#202, DT-55); los valores de las claves son los del contrato y no cambian.
 CLASSIFIER_SYSTEM = (
@@ -56,11 +61,33 @@ CLASSIFIER_SYSTEM = (
     'their own or with other people), or "no_declarado". Do not distinguish who they decide with.\n'
     '- "urgency": "inmediata", "3_meses", "explorando" or "no_declarada", ONLY if the current message says so.\n'
     '- "asks_for_person": true if the current message asks to talk to a person (an agent, an advisor, someone '
-    "who calls them), or accepts the offer to put them in touch with one that the LAST ASSISTANT MESSAGE "
-    'made; otherwise false.\n'
+    "who calls them), or clearly says yes to the offer to put them in touch with one that the LAST ASSISTANT "
+    "MESSAGE made (\"yes\", \"please do\", \"ok, connect me\"); giving information or answering another "
+    'question is not saying yes. Otherwise false.\n'
     '- "wants_alert": true if the current message asks to be notified when a property like the one they want '
     "comes up, or accepts the offer to notify them that the LAST ASSISTANT MESSAGE made; otherwise false.\n"
-    '- "wants_visit": true if the current message asks to visit or see a property in person; otherwise false.\n'
+    '- "wants_visit": true if the current message asks to visit or see a property in person; otherwise false. '
+    'Reserving, holding or buying a property is not a visit.\n'
+    '- "frustrated": true if the current message shows the lead is annoyed with the assistant: complains that it '
+    "isn't helping or understanding, repeats a request impatiently, or says so (\"this is useless\", \"you're not "
+    'answering me"). A neutral or curious question is not frustration. Otherwise false.\n'
+    '- "asks_unlisted": true if the current message asks about something a property listing does not record: '
+    "rules or policies (pets, roommates, subletting, lease length, deposits), costs other than the price (HOA or "
+    "maintenance fees, utilities, taxes), details of the building or the unit (floor, elevator, doorman, "
+    "furnished, view, age, natural light, accessibility), dates (delivery, when it will be free again), zoning or "
+    "what can be built, or what is nearby. Not the price, size, bedrooms, bathrooms, amenities, area, availability "
+    "or the requirements to buy or rent. Otherwise false.\n"
+    '- "visit_when": only if the current message says when the lead would like to visit, an object with '
+    '"days" (a list of "mon", "tue", "wed", "thu", "fri", "sat", "sun"; "this weekend" is ["sat", "sun"]; '
+    "only the days the CURRENT MESSAGE names, never the days of the times offered before; empty if it names "
+    'none), "part_of_day" ("morning", "afternoon", "evening" or null; "after 5pm" is "evening") and '
+    '"other_day" (true only if they ask for a different day without naming it, like "another day"). '
+    "Otherwise null.\n"
+    '- "refers_to": only if PROPERTIES SHOWN is given and the current message is about one of them: its id, '
+    'whether the message names it or describes it ("the cheaper one", "the house", "the one in Laureles", "it" '
+    'when the LAST ASSISTANT MESSAGE talked about only one). "' + UNCLEAR + '" if it is about one of them but '
+    "you can't tell which. null if it is about none of them or about a new search. Never an id that is not in "
+    "the list.\n"
     "Extract only from the CURRENT MESSAGE. Do not infer anything about the person's origin, religion, "
     "gender, nationality or family situation."
 )
@@ -84,7 +111,8 @@ CHAT_SYSTEM = (
     "in this same reply.\n"
     "- If a search has no `properties` but has `alternatives`, there is nothing exactly like what the lead "
     "asked for: say so, and offer the alternatives, making clear they don't match the filter named in "
-    "`alternatives_without` (`zone`: in another area; `kind`: another kind of property). Don't ask the lead "
+    "`alternatives_without` (`zone`: in another area; `kind`: another kind of property; `type`: for sale "
+    "instead of for rent, or the other way round). Don't ask the lead "
     "for their area again.\n"
     "- Never write the tools' internal Spanish values (`venta`, `apartado`…): {ref.type}, {ref.kind} and "
     "{ref.status} say them in English.\n"
@@ -107,9 +135,15 @@ CHAT_SYSTEM = (
     "- The exact address ({ref.address_exact}) is shared only once the lead is qualified (budget, who decides "
     "and when); until then, give {ref.address_approx} and don't give any other reason.\n"
     "- Do not promise discounts, holds, credit approval or the closing of a deal.\n"
+    "- Don't calculate differences, totals or other figures: give each property's own values. Don't give "
+    "opinions about a property or an area, or legal advice, and don't urge the lead to hurry.\n"
     "- Do not ask about or comment on origin, religion, gender, nationality or family situation. If the "
     "lead asks whether any of that matters, say clearly that it doesn't affect how we help them or the "
     "requirements, and go on with the conversation.\n"
+    "- Visits are booked by the system, never by you: don't say a visit is booked or scheduled, and don't say "
+    "you can't arrange one. If the lead wants to visit a property you talked about but haven't looked up "
+    "this turn, look it up with get_property; if it isn't clear which one, ask.\n"
+    "- Before saying we don't have something (a property, a kind, an area), search for it.\n"
     "- If you can't help with something, offer to put the lead in touch with an agent.\n"
     "- Ask at most one question per message."
 )
@@ -146,6 +180,9 @@ class Classification:
     intent: str
     signal: dict[str, Any]
     flags: dict[str, bool] = field(default_factory=dict)  # solo los `CLASSIFIER_FLAGS` que vinieron booleanos
+    when: dict[str, Any] | None = None  # cuándo prefiere la visita (`visits.visit_when`), si lo dijo (#247)
+    # De qué propiedad mostrada habla el mensaje (`interest.refers_to`, #247): un id de la lista, `UNCLEAR` o None.
+    refers_to: str | None = None
 
 
 @dataclass
@@ -257,20 +294,26 @@ class BedrockLLM:
                 _report_retry(code, attempt, decision.delay or 0.0, decision.provider_delay)
                 await self._retrier.sleep(decision.delay or 0.0)
 
-    async def classify(self, text: str, last_assistant: str | None = None) -> Classification:
-        """Intención y señal cruda del mensaje actual. El contexto es solo la última respuesta del asistente."""
+    async def classify(self, text: str, last_assistant: str | None = None,
+                       shown: Sequence[Mapping[str, Any]] = ()) -> Classification:
+        """Intención y señal cruda del mensaje actual. El contexto es la última respuesta del asistente y las
+        propiedades que ya mostró la conversación (`shown`, `interest.shown_properties`), para `refers_to`."""
         prompt = f"CURRENT MESSAGE:\n{text}"
         if last_assistant:
             prompt = f"LAST ASSISTANT MESSAGE (context only):\n{last_assistant}\n\n{prompt}"
+        if shown:
+            prompt = f"PROPERTIES SHOWN (oldest first):\n{shown_lines(list(shown))}\n\n{prompt}"
         response = await self._converse(
             self.classifier_model_id, system=[{"text": CLASSIFIER_SYSTEM}],
             messages=[{"role": "user", "content": [{"text": prompt}]}],
-            inferenceConfig={"maxTokens": 200, "temperature": 0.0})
+            inferenceConfig={"maxTokens": 300, "temperature": 0.0})
         data = parse_json_object(_text_of(response))
         intent = data.get("intent")
         signal = {key: data.get(key) for key in ("budget_hint", "decision_maker", "urgency")}
         flags = {key: data[key] for key in CLASSIFIER_FLAGS if isinstance(data.get(key), bool)}
-        return Classification(intent if intent in INTENTS else "otro", signal, flags)
+        when = visit_when(data.get("visit_when"))
+        about = refers_to(data.get("refers_to"), list(shown))
+        return Classification(intent if intent in INTENTS else "otro", signal, flags, when, about)
 
     async def summarize(self, transcript: str, facts: str) -> dict[str, str]:
         """El resumen del traspaso para el asesor (A-16), con el modelo de conversación y sin tools."""
@@ -278,11 +321,19 @@ class BedrockLLM:
         response = await self._converse(
             self.chat_model_id, system=[{"text": SUMMARY_SYSTEM}],
             messages=[{"role": "user", "content": [{"text": prompt}]}],
-            inferenceConfig={"maxTokens": MAX_REPLY_TOKENS, "temperature": 0.0})
-        data = parse_json_object(_text_of(response))
+            inferenceConfig={"maxTokens": SUMMARY_MAX_TOKENS, "temperature": 0.0})
+        # El motivo va en el error, sin el texto: en la prueba de jurado (#247) falló una vez y el log no decía si
+        # el JSON se cortó por `maxTokens` o si vino una sección vacía.
+        how = (f"stop={response.get('stopReason')}, "
+               f"tokens={(response.get('usage') or {}).get('outputTokens')}/{SUMMARY_MAX_TOKENS}")
+        try:
+            data = parse_json_object(_text_of(response))
+        except LLMFormatError:
+            raise LLMFormatError(f"el resumen no es un objeto JSON ({how})") from None
         sections = {key: data.get(key) for key in SUMMARY_KEYS}
-        if not all(isinstance(value, str) and value.strip() for value in sections.values()):
-            raise LLMFormatError("el resumen no trae las tres secciones")
+        missing = [key for key, value in sections.items() if not (isinstance(value, str) and value.strip())]
+        if missing:
+            raise LLMFormatError(f"al resumen le faltan secciones: {', '.join(missing)} ({how})")
         return {key: value.strip() for key, value in sections.items()}
 
     async def chat(self, history: Sequence[tuple[str, str]], current: str,
@@ -312,7 +363,7 @@ class BedrockLLM:
         result = ChatResult(text="")
         for _ in range(MAX_TOOL_ROUNDS + 1):
             request: dict[str, Any] = {"system": [{"text": system}], "messages": messages,
-                                       "inferenceConfig": {"maxTokens": MAX_REPLY_TOKENS, "temperature": 0.3}}
+                                       "inferenceConfig": {"maxTokens": MAX_REPLY_TOKENS, "temperature": 0.0}}
             if specs:
                 request["toolConfig"] = tool_config(specs)
             response = await self._converse(self.chat_model_id, **request)
@@ -402,7 +453,8 @@ def _described(violation: Any) -> str:
         hint = getattr(violation, "hint", None)
         return f"number '{violation.value}'" + (f" (write {hint} instead)" if hint else " (no marker gives it)")
     if violation.kind == "marker":
-        return f"marker '{violation.value}' (no tool returned that property or field)"
+        hint = getattr(violation, "hint", None)
+        return f"marker '{violation.value}' (" + (f"write {hint}" if hint else "no tool returned that property or field") + ")"
     if violation.kind == "reference":
         return f"reference '{violation.value}' (no tool returned it)"
     return f"{violation.kind} '{violation.value}'"

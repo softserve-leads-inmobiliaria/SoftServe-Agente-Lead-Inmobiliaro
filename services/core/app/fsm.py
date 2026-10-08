@@ -5,7 +5,8 @@ de un estado a otro solo si la arista existe en `TRANSITIONS`; cualquier otra co
 error explícito. El estado se persiste en Postgres (state_store.py, DT-1, DT-11).
 
 Estados terminales: HANDOFF (traspaso normal al asesor), HUMAN_HANDOFF (el lead pidió una persona) y
-LOST (lead perdido). `HUMAN_HANDOFF` es alcanzable desde todos los estados no terminales.
+LOST (lead perdido). `HUMAN_HANDOFF` es alcanzable desde todos los estados no terminales, y `SCHEDULE` desde
+todos los activos: la visita se puede pedir en cualquier momento de la conversación (#229, DT-61).
 """
 from __future__ import annotations
 
@@ -24,17 +25,19 @@ LEAD_RETURNED: Final = "lead_returned"            # el lead vuelve a escribir tr
 HUMAN_REQUESTED: Final = "human_requested"        # petición explícita / frustración / fuera de alcance
 
 TERMINAL_STATES: Final = frozenset({"HANDOFF", "HUMAN_HANDOFF", "LOST"})
+# Donde se puede pedir la visita: todos los estados activos menos `SCHEDULE`, que ya la está agendando (#229).
+VISIT_STATES: Final = frozenset(state for state in FSM_STATES if state not in TERMINAL_STATES | {"SCHEDULE"})
 
 # (estado actual, trigger) -> estado nuevo. Es exactamente el diagrama de design.md §2.
 TRANSITIONS: Final[dict[tuple[str, str], str]] = {
     ("GREETING", GREETED): "DISCOVERY",
     ("DISCOVERY", DISCOVERY_COMPLETE): "QUALIFY",
     ("QUALIFY", QUALIFIED): "RECOMMEND",
-    ("RECOMMEND", VISIT_REQUESTED): "SCHEDULE",
     ("SCHEDULE", VISIT_SCHEDULED): "HANDOFF",
     ("DISCOVERY", NO_RESPONSE): "NURTURE",
     ("NURTURE", LEAD_RETURNED): "DISCOVERY",
     ("NURTURE", NO_RESPONSE): "LOST",
+    **{(state, VISIT_REQUESTED): "SCHEDULE" for state in VISIT_STATES},
     **{(state, HUMAN_REQUESTED): "HUMAN_HANDOFF" for state in FSM_STATES if state not in TERMINAL_STATES},
 }
 
@@ -55,14 +58,15 @@ def next_state(state: str, trigger: str) -> str:
         raise InvalidTransition(state, trigger) from None
 
 
-# Política de avance de la conversación con el fake LLM (CT-7): qué intención hace avanzar cada
-# estado. Es deliberadamente mínima; A-2 y A-9 la reemplazan con señales reales del LLM.
+# Qué hace avanzar cada estado del embudo (#229, DT-61). Avanza por lo que pasó en la conversación, no por la
+# etiqueta del clasificador: en vivo, un lead de un anuncio que preguntaba la disponibilidad y daba su presupuesto
+# se quedaba en DISCOVERY porque ningún mensaje se clasificaba `busqueda_propiedad`. La intención sigue valiendo
+# (es lo único que da el fake LLM, CT-7).
 _ADVANCE: Final[dict[str, tuple[str, str | None]]] = {
     # estado: (trigger, intención que lo dispara; None = cualquier intención)
     "GREETING": (GREETED, None),
-    "DISCOVERY": (DISCOVERY_COMPLETE, "busqueda_propiedad"),
-    "QUALIFY": (QUALIFIED, "consulta_precio"),
-    "RECOMMEND": (VISIT_REQUESTED, "agendar_visita"),
+    "DISCOVERY": (DISCOVERY_COMPLETE, "busqueda_propiedad"),  # o buscó o miró una propiedad (`explored`)
+    "QUALIFY": (QUALIFIED, "consulta_precio"),  # o ya hay datos de calificación (`qualifying`)
 }
 
 
@@ -70,7 +74,8 @@ _ADVANCE: Final[dict[str, tuple[str, str | None]]] = {
 HUMAN_INTENTS: Final = frozenset({"solicitud_humano", "fuera_de_alcance"})
 
 
-def trigger_for(state: str, intent: str, frustrated: bool = False, visit_settled: bool = False) -> str | None:
+def trigger_for(state: str, intent: str, frustrated: bool = False, visit_settled: bool = False,
+                visit_started: bool = False, explored: bool = False, qualifying: bool = False) -> str | None:
     """Trigger que provoca el mensaje de un lead en `state`, o None si no mueve la FSM.
 
     `HUMAN_HANDOFF` se alcanza por tres caminos: petición explícita, intención fuera de alcance y
@@ -79,15 +84,25 @@ def trigger_for(state: str, intent: str, frustrated: bool = False, visit_settled
     ruido, no una petición; solo cuenta cuando se repite.
 
     `SCHEDULE` no avanza por una intención: avanza cuando el código deja resuelta la visita
-    (`visit_settled`, B-8): reservada en la agenda o con el horario preferido del lead para el asesor.
+    (`visit_settled`, B-8): reservada en la agenda o con el horario preferido del lead para el asesor. Tampoco
+    se llega por una intención: se llega cuando el código arrancó la agenda (`visit_started`), desde cualquier
+    estado de `VISIT_STATES`.
+
+    `explored` (el turno buscó o miró una propiedad) cierra DISCOVERY; `qualifying` (la señal acumulada ya
+    tiene algún dato de calificación) cierra QUALIFY.
     """
     if state in TERMINAL_STATES:
         return None
     if intent in HUMAN_INTENTS or frustrated:
         return HUMAN_REQUESTED
-    if state == "NURTURE":
-        return LEAD_RETURNED
     if state == "SCHEDULE":
         return VISIT_SCHEDULED if visit_settled else None
+    if visit_started:
+        return VISIT_REQUESTED
+    if state == "NURTURE":
+        return LEAD_RETURNED
+    if state not in _ADVANCE:
+        return None
     trigger, required_intent = _ADVANCE[state]
-    return trigger if required_intent in (None, intent) else None
+    signalled = (state == "DISCOVERY" and explored) or (state == "QUALIFY" and qualifying)
+    return trigger if signalled or required_intent in (None, intent) else None

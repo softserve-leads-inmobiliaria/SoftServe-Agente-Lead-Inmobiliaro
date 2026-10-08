@@ -315,6 +315,20 @@ CASOS = [
      "disponibilidad_apartada", "I need 4 bedrooms", True),
     ("en_una_oracion_de_relativo_no_es_estado", "Would you like me to find other houses for sale in Usaquen that "
      "are currently available?", "disponibilidad_apartada", "", True),
+    # #247, prueba de jurado: "available" de la información o de un tipo de inventario no es un estado.
+    ("en_la_informacion_disponible_no_es_estado", "I don't have that information available.",
+     "disponibilidad_apartada", "", True),
+    ("en_el_terreno_disponible_no_es_estado", "We have apartments, studios, commercial spaces, and land available "
+     "for sale.", "disponibilidad_apartada", "", True),
+    ("en_lo_que_se_busca_no_es_estado", "Let me help you find an available property. Are you looking for a "
+     "4-bedroom house in Usaquen?", "disponibilidad_apartada", "I need 4 bedrooms", True),
+    # Prueba de jurado (J3 t3, O6 t3): un estado futuro o posible no afirma el de ahora. "Is available again" sí.
+    ("en_cuando_vuelva_a_estar_disponible_no_es_estado", "It's reserved right now, and I don't know when it will "
+     "become available again.", "disponibilidad_apartada", "", True),
+    ("en_si_se_libera_no_es_estado", "If it becomes available, I can let you know.",
+     "disponibilidad_apartada", "", True),
+    ("en_disponible_otra_vez_si_es_estado", "Good news: this one is available again!",
+     "disponibilidad_apartada", "", False),
     ("en_una_disponible_si_es_estado", "It's an available house in Usaquen.", "disponibilidad_apartada", "", False),
     ("en_otras_y_esta_disponible_si_es_estado", "There are other houses available, and this one is available too.",
      "disponibilidad_apartada", "", False),
@@ -338,6 +352,12 @@ CASOS = [
      "Does it have 3 bedrooms?", False),
     ("en_confirma_el_area_del_lead", "It has 120 m² of space.", "ficha_venta", "Is it 120 m2?", False),
     ("en_niega_el_precio_del_lead", "It's not $150,000: it's $185,000.", "ficha_venta", "Is it $150,000?", True),
+    # #247, prueba de jurado: "with a monthly income of $3,000" es el ingreso del lead, no el mínimo de la renta.
+    ("en_el_ingreso_del_lead_no_es_el_requisito", "With a monthly income of $3,000, you don't meet the income "
+     "requirement.", "ficha_renta", "I earn $3,000 a month", True),
+    # #247, prueba de jurado: el número del lead como límite de lo que se buscó no es el precio de la propiedad.
+    ("en_el_limite_del_lead_no_es_el_precio", "I found 1 property under $150,000 in El Poblado.",
+     "busqueda_venta_poblado", "Do you have anything under $150,000?", True),
     ("en_repite_el_presupuesto_del_lead", "With your $200,000 budget, this one at $185,000 fits.", "ficha_venta",
      "My budget is $200,000", True),
     ("en_repite_lo_que_pidio_el_lead", "You're looking for 3 bedrooms; this one has 2 bedrooms.", "ficha_venta",

@@ -367,6 +367,28 @@ def test_the_model_is_told_which_listing_the_lead_came_from():
     assert sent.startswith("Is it still available?") and "ref. prop_00231" in sent
 
 
+# --- #247: lo que el catálogo no tiene (`asks_unlisted`) --------------------------------------------------------
+
+def test_a_question_about_what_the_listings_do_not_record_is_not_answered_yes_or_no():
+    """Prueba de jurado O3: "Can I share it with a roommate?" -> "Yes, absolutely!", un dato inventado."""
+    from app.agent import UNLISTED_NOTE
+
+    client = ScriptedBedrock(classification("otro", asks_unlisted=True),
+                             text("I don't have that detail; an agent can confirm it."))
+    run(agent_for(client).run(TurnInput(event=EVENT, text="can i share it with a roommate?"), FakeCatalog()))
+    assert client.calls_to(CHAT)[0]["messages"][-1]["content"][0]["text"].endswith(UNLISTED_NOTE)
+
+
+def test_with_nothing_on_record_it_answers_for_every_shown_property_instead_of_asking_which():
+    """Prueba de jurado O2: "Does the building have an elevator?" preguntó tres veces "which property?"."""
+    from app.agent import UNCLEAR_NOTE, UNLISTED_NOTE, _with_notes
+
+    shown = {"p1": {"id": "p1", "title": "Studio"}, "p2": {"id": "p2", "title": "2-bedroom"}}
+    text = _with_notes("Is there an elevator?", None, remembered=shown, about="unclear", unlisted=True)
+    assert UNLISTED_NOTE in text and UNCLEAR_NOTE not in text
+    assert UNCLEAR_NOTE in _with_notes("I want to see it", None, remembered=shown, about="unclear")
+
+
 # --- #200: el guardrail quitó una mención de categoría protegida --------------------------------------------
 
 def test_the_model_is_told_a_protected_mention_was_removed_but_not_what_it_was():
@@ -586,3 +608,78 @@ def test_the_classifiers_answers_reach_the_turn():
                              text("Sure."))
     result = run(agent_for(client).run(turn("Let me know when one comes up"), FakeCatalog()))
     assert result.flags == {"wants_alert": True, "wants_visit": False}
+
+
+def test_when_the_agenda_answers_only_the_classifier_is_called():
+    """#229: en vivo el modelo contestaba igual a "1", copiaba los horarios, y se regeneraba para nada."""
+    client = ScriptedBedrock(classification("otro", wants_visit=True))
+    asked = []
+    message = TurnInput(event=EVENT, text="Can I go see it?",
+                        answered_by_code=lambda c: asked.append((c.intent, c.flags)) or True)
+    result = run(agent_for(client).run(message, FakeCatalog()))
+    assert (result.text, result.flags) == ("", {"wants_visit": True}) and client.calls_to(CHAT) == []
+    assert asked == [("otro", {"wants_visit": True})]
+
+
+def test_a_human_request_is_answered_even_if_the_agenda_would_take_the_turn():
+    client = ScriptedBedrock(classification("solicitud_humano", asks_for_person=True))
+    message = TurnInput(event=EVENT, text="I want to talk to an agent", answered_by_code=lambda c: True)
+    assert run(agent_for(client).run(message, FakeCatalog())).intent == "solicitud_humano"
+
+
+
+def test_the_visit_flag_decides_over_the_intent():
+    """#247: "Can I reserve the 4-bedroom one?" sale `agendar_visita`, pero no pide una visita."""
+    from app.turn import _schedules
+
+    prop = {"id": "p1"}
+    assert not _schedules("QUALIFY", "agendar_visita", {"wants_visit": False}, prop, None, "")
+    assert _schedules("QUALIFY", "otro", {"wants_visit": True}, prop, None, "")
+    assert _schedules("QUALIFY", "agendar_visita", {}, prop, None, "")  # sin el campo, la intención
+
+
+def test_saying_when_in_schedule_is_answered_by_the_agenda():
+    """#247 (M5 t7): "another day" en `SCHEDULE` lo contesta la agenda, con otros horarios; no el agente."""
+    from app.turn import _schedules
+
+    offer = {"property": {"id": "p1", "title": "Casa"}, "advisor_id": "a1", "slots": ["2026-10-06T10:00:00-05:00"]}
+    another_day = {"days": [], "part": None, "other_day": True}
+    assert _schedules("SCHEDULE", "otro", {"wants_visit": False}, None, offer, "another day?", another_day)
+    assert not _schedules("SCHEDULE", "otro", {"wants_visit": False}, None, offer, "another day?")
+
+
+def test_the_classifier_says_when_the_lead_wants_to_visit():
+    client = ScriptedBedrock(classification("agendar_visita", visit_when={"days": ["sat", "sun"],
+                                                                          "part_of_day": "morning"}))
+    result = run(agent_for(client).run(TurnInput(event=EVENT, text="This weekend in the morning",
+                                                 answered_by_code=lambda c: True), FakeCatalog()))
+    assert result.visit_when == {"days": [5, 6], "part": "morning", "other_day": False}
+
+
+
+def test_the_status_of_the_properties_the_reply_names_is_looked_up():
+    """#247: "the only available house is the 3-bedroom one (ref. prop_00233)", sin tool del turno: el código
+    consulta las que nombra la respuesta, y la apartada no hace pasar por disponible a la otra."""
+    client = ScriptedBedrock(classification("otro"),
+                             text("The one in Chapinero (ref. prop_2) is reserved; the only available one is ref. prop_1."))
+
+    class Statuses(FakeCatalog):
+        async def call(self, tool, arguments=None):
+            self.calls.append((tool, dict(arguments or {})))
+            status = {"prop_1": "disponible", "prop_2": "apartado"}[arguments["property_id"]]
+            return {"property_id": arguments["property_id"], "status": status, "checked_at": "2026-10-07"}
+
+    catalog = Statuses()
+    message = TurnInput(event=EVENT, text="What about the house in Chapinero?", remembered={"prop_1": {}, "prop_2": {}})
+    result = run(agent_for(client).run(message, catalog))
+    assert result.guard_audits == [] and {args["property_id"] for _, args in catalog.calls} == {"prop_1", "prop_2"}
+
+
+def test_the_model_sees_the_references_of_the_properties_already_shown():
+    """#247: sin ellas, el modelo adivinaba la referencia para escribir el marcador ({prop_00455.price})."""
+    client = ScriptedBedrock(classification("consulta_precio"), text("It's {prop_00242.m2} m²."))
+    remembered = {"prop_00242": {"title": "Commercial space for rent in Chapinero", "m2": 120.0}}
+    message = TurnInput(event=EVENT, text="How big is it?", remembered=remembered)
+    result = run(agent_for(client).run(message, FakeCatalog()))
+    sent = client.calls_to(CHAT)[0]["messages"][-1]["content"][0]["text"]
+    assert "prop_00242 (Commercial space for rent in Chapinero)" in sent and result.text == "It's 120 m²."

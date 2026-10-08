@@ -20,6 +20,7 @@ from app import alerts, facts, reminders, scheduling_client, summary, visits
 from app.agent import Agent, AgentResult, FakeAgent, TurnInput
 from app.alternatives import Alternatives
 from app.availability import AvailabilityGuard
+from app.bedrock_llm import Classification
 from app.demand import SearchLog, UnmetSearch
 from app.fakes.fake_core import FakeCore
 from app.fakes.fake_llm import FakeLLM
@@ -27,7 +28,7 @@ from app.fsm import (
     HUMAN_INTENTS,
     HUMAN_REQUESTED,
     TERMINAL_STATES,
-    VISIT_REQUESTED,
+    VISIT_STATES,
     next_state,
     trigger_for,
 )
@@ -45,14 +46,17 @@ from app.input_guard import (
     inspect_input,
 )
 from app.interest import (
+    UNCLEAR,
+    focused_property,
     interactions,
     listing_greeting,
     property_of_interest,
     remember_property,
+    shown_properties,
     zone_of_interest,
 )
 from app.language_guard import NOT_ENGLISH_REPLY
-from app.lead_scoring import TurnEvidence, score_turn
+from app.lead_scoring import TurnEvidence, qualification_known, score_turn
 from app.qualification import just_qualified
 from app.scheduler import restart_silence
 from app.scoring import Score
@@ -133,7 +137,7 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
             evidence: TurnEvidence | None = None, audits: Sequence[Audit] = (),
             counts_as_unresolved: bool = True, messages: Sequence[SavedMessage] = (),
             visit: VisitStep | None = None, unmet_searches: Sequence[UnmetSearch] = (),
-            alert: Mapping[str, Any] | None = None) -> Transition:
+            alert: Mapping[str, Any] | None = None, annoyed: bool | None = None) -> Transition:
     """Carga y bloquea el estado, aplica el trigger, puntúa, audita y guarda, en una transacción.
 
     `messages` son los mensajes del turno (lead y asistente): van en la misma transacción, así el
@@ -142,7 +146,7 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
     `counts_as_unresolved=False` para los turnos que fuerza el guardrail de entrada: no suman a la
     racha de frustración. `visit` es el paso de agenda del turno (B-8), si lo hubo. `unmet_searches` son
     las búsquedas del turno que no encontraron nada (N-5). `alert`, los filtros de la alerta que pidió el
-    lead (A-18).
+    lead (A-18). `annoyed` es el campo `frustrated` del clasificador: si dice que no, la racha sola no traspasa (#247).
     """
     conversation_id, lead_id = _ids(event)
     with get_tracer().start_as_current_span("fsm.advance") as span, session_scope(engine) as session:
@@ -154,7 +158,14 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         booked = visit is not None and visit.booked
         streak = next_streak(state.unresolved_streak, intent, counts_as_unresolved, evidence.raw_signal,
                              resolved=settled)
-        trigger = trigger_for(state.fsm_state, intent, frustrated=is_frustrated(streak), visit_settled=settled)
+        signal, score = score_turn(state.score_signal, evidence)
+        # La FSM avanza por lo que pasó en el turno (#229, DT-61): la agenda arrancó, se buscó o se miró una
+        # propiedad, o la señal ya tiene datos de calificación.
+        explored = evidence.listing is not None or any(
+            tool in evidence.tool_results for tool in ("search_properties", "get_property"))
+        trigger = trigger_for(state.fsm_state, intent, frustrated=is_frustrated(streak, annoyed),
+                              visit_settled=settled, visit_started=visit is not None and state.fsm_state in VISIT_STATES,
+                              explored=explored, qualifying=qualification_known(signal))
         after = next_state(state.fsm_state, trigger) if trigger else state.fsm_state
         if after != state.fsm_state:
             store.save_state(conversation_id, after)
@@ -164,7 +175,6 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         if booked:
             store.mark_visit_scheduled(lead_id)
             reminders.schedule(session, lead_id, conversation_id, visit.tool_results[VISIT_KEY], datetime.now(UTC))
-        signal, score = score_turn(state.score_signal, evidence)
         store.save_scoring(conversation_id, lead_id, signal, dict(evidence.tool_results), score)
         zone = zone_of_interest(evidence.tool_results)
         if zone:
@@ -276,23 +286,108 @@ def _first_sight(featured: Mapping[str, Any] | None, tool_results: Mapping[str, 
 
 
 async def _visit_step(event: Mapping[str, Any], context: GuardContext, result: AgentResult,
-                      text: str) -> VisitStep | None:
+                      text: str, catalog: Catalog, shown: list[dict[str, Any]]) -> VisitStep | None:
     """El paso de agenda de este turno (B-8), o None si el turno no tiene que ver con la visita.
 
-    Al pedir la visita en `RECOMMEND` se ofrecen horarios; en `SCHEDULE` se lee la respuesta del lead.
-    Si la oferta se perdió (p. ej. un turno forzado por el guardrail no la arrastró), se vuelve a ofrecer.
+    Pedir la visita la arranca desde cualquier estado activo (#229, DT-61): se ofrecen horarios de la propiedad
+    de interés. Si no hay una, contesta el agente, que pregunta cuál. En `SCHEDULE` se lee la respuesta del lead:
+    si no contesta la oferta, contesta el agente y la oferta sigue abierta (#247). Si la oferta se perdió (p. ej.
+    un turno forzado por el guardrail no la arrastró), se vuelve a ofrecer. Si el lead nombra otra de las
+    propiedades mostradas (`refers_to`), la oferta es de esa.
+
+    La propiedad elegida por `refers_to` y la recordada vienen de la memoria, sin estado: se consulta antes de
+    ofrecer horarios, y una apartada o cerrada se contesta con texto fijo.
     """
     state, previous = context.fsm_state, context.last_tool_results
-    asking = state == "RECOMMEND" and trigger_for(state, result.intent) == VISIT_REQUESTED
-    if not asking and state != "SCHEDULE":
+    focus = focused_property(result.refers_to, shown)
+    prop = _visit_property(result.tool_results, previous, result.refers_to, shown)
+    if not _schedules(state, result.intent, result.flags, prop, previous.get(OFFER_KEY), text, result.visit_when):
         return None
     conversation_id, lead_id = (str(value) for value in _ids(event))
     agenda, today = scheduling_client.get_scheduling(), visits.today_local()
     offer = previous.get(OFFER_KEY) if state == "SCHEDULE" else None
-    if isinstance(offer, Mapping):
-        return await visits.follow_up(agenda, conversation_id, lead_id, offer, text, today)
-    prop = property_of_interest(result.tool_results) or property_of_interest(previous)
-    return await visits.start(agenda, lead_id, prop, today)
+    offered_id = ((offer or {}).get("property") or {}).get("id") if isinstance(offer, Mapping) else None
+    if isinstance(offer, Mapping) and (focus is None or focus["id"] == offered_id):
+        return await visits.follow_up(agenda, conversation_id, lead_id, offer, text, today, result.visit_when)
+    # Sin estado vienen la elegida por `refers_to` y la recordada: las dos salen de la memoria. En la prueba de
+    # jurado (O6), desde el anuncio de una casa apartada, "something similar that I can visit" ofrecía esa casa.
+    if prop is not None and prop.get("id") and prop.get("title") and not prop.get("status"):
+        status = await _current_status(catalog, prop["id"])
+        if status not in (None, "disponible"):
+            return VisitStep(visits.not_visitable(prop, status), {})
+    return await visits.start(agenda, lead_id, prop, today, result.visit_when)
+
+
+async def _current_status(catalog: Catalog, prop_id: str) -> str | None:
+    """El estado de la propiedad según el catálogo, o None si no se pudo consultar (se sigue como hasta ahora)."""
+    try:
+        found = await catalog.call("get_availability", {"property_id": prop_id})
+    except Exception:
+        logger.warning("no se pudo consultar el estado de la propiedad antes de ofrecer la visita")
+        return None
+    status = found.get("status") if isinstance(found, Mapping) else None
+    return status if isinstance(status, str) else None
+
+
+def _visit_property(tool_results: Mapping[str, Any], previous: Mapping[str, Any], about: str | None = None,
+                    shown: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
+    """La propiedad que se agenda: la mostrada de la que habla el mensaje según el clasificador (`about`), la que
+    se miró en el turno (o la del anuncio), la de interés de los turnos anteriores o, si el turno solo buscó, el
+    único resultado. Con varios resultados no se adivina cuál (#247: "the cheapest one" agendaba el primero de la
+    búsqueda), tampoco turnos después ("ok i wan to see it"); contesta el agente, que puede mirar la propiedad y
+    agendarla en el mismo turno. Si el clasificador no sabe cuál (`UNCLEAR`), tampoco: el agente pregunta."""
+    if about == UNCLEAR:
+        return None
+    looked = tool_results.get("get_property")
+    focus = focused_property(about, shown or [])
+    if focus is not None:
+        same = isinstance(looked, Mapping) and looked.get("id") == focus["id"]
+        return dict(looked) if same else focus
+    if isinstance(looked, Mapping) and looked.get("id"):
+        return dict(looked)
+    remembered = property_of_interest(previous, sure=True)
+    if remembered:
+        return remembered
+    search = tool_results.get("search_properties")
+    found = search.get("properties") if isinstance(search, Mapping) else None
+    if isinstance(found, list) and len(found) == 1 and isinstance(found[0], Mapping):
+        return dict(found[0])
+    return None
+
+
+def _schedules(state: str, intent: str, flags: Mapping[str, bool], prop: Mapping[str, Any] | None,
+               offer: Any, text: str, when: Mapping[str, Any] | None = None) -> bool:
+    """El turno lo contesta la agenda.
+
+    - En `SCHEDULE`: si el mensaje contesta la oferta (también diciendo cuándo prefiere, `when`) o vuelve a pedir
+      la visita, o si la oferta se perdió.
+    - En los demás estados activos: si el lead pidió la visita y hay una propiedad de interés que se puede
+      visitar (una apartada o cerrada no: contesta el agente, #247).
+
+    El pedido lo dice el campo `wants_visit` del clasificador (#243) y, si no lo contestó, la intención. En la
+    prueba de jurado, "Can I reserve the 4-bedroom one?" salía `agendar_visita` y ofrecía horarios de otra casa.
+    """
+    wants = flags.get("wants_visit")
+    asks = wants if isinstance(wants, bool) else intent == "agendar_visita"
+    if state == "SCHEDULE":
+        return asks or not isinstance(offer, Mapping) or visits.answers(offer, text, when)
+    visitable = prop is not None and prop.get("status") in (None, "disponible")
+    return state in VISIT_STATES and asks and visitable
+
+
+def _answered_by_code(context: GuardContext, listing: Mapping[str, Any] | None, text: str,
+                      shown: list[dict[str, Any]]) -> Callable[[Classification], bool]:
+    """Para el agente: si la respuesta de este turno la va a dar la agenda, solo hace falta clasificar (#229).
+    Es la misma regla que `_visit_step`, con la propiedad que este tendrá: la mostrada de la que habla el mensaje,
+    la del anuncio o la recordada."""
+    previous = context.last_tool_results
+    looked = {"get_property": listing} if listing else {}
+
+    def answered(classification: Classification) -> bool:
+        prop = _visit_property(looked, previous, classification.refers_to, shown)
+        return _schedules(context.fsm_state, classification.intent, classification.flags, prop,
+                          previous.get(OFFER_KEY), text, classification.when)
+    return answered
 
 
 def _alert_step(context: GuardContext, result: AgentResult, searches: SearchLog | None,
@@ -356,7 +451,7 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     span.set_attribute("turn.outcome", "not_english" if verdict.not_english
                        else "out_of_domain" if verdict.out_of_domain
                        else "jailbreak" if verdict.jailbreak else "normal")
-    listing, searches = None, None
+    listing, searches, shown = None, None, []
     if verdict.not_english:
         # Se pide repetirlo en inglés; como fuera de dominio, no mueve la FSM ni cuenta como frustración.
         result = AgentResult(text=NOT_ENGLISH_REPLY, intent="otro")
@@ -374,41 +469,53 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
         searches = SearchLog(Alternatives(catalog))
         guarded = AvailabilityGuard(searches)
         listing = await _listing(event, guarded, context.lead_qualified)
+        shown = shown_properties(facts.evidence(context.last_tool_results, now), listing)
         result = await agent.run(TurnInput(event=event, text=text, history=context.history,
                                            lead_qualified=context.lead_qualified, listing=listing,
                                            protected_removed=verdict.protected_category,
-                                           remembered=facts.evidence(context.last_tool_results, now)), guarded)
+                                           remembered=facts.evidence(context.last_tool_results, now),
+                                           answered_by_code=_answered_by_code(context, listing,
+                                                                              verdict.signal_text, shown)),
+                                 guarded)
         if listing:
             result = _with_listing(result, listing, greet=not event["text"].strip())
     counts = not (verdict.jailbreak or verdict.out_of_domain or verdict.not_english)
     visit = None
     if counts and result.intent not in HUMAN_INTENTS:
         try:
-            visit = await _visit_step(event, context, result, verdict.signal_text)
+            visit = await _visit_step(event, context, result, verdict.signal_text, catalog, shown)
         except Exception:
             logger.exception("fallo el paso de agenda; se pide el horario preferido")
+            visit = visits.ask_preferred(property_of_interest(context.last_tool_results))
+        if visit is None and not result.text:
+            # El agente dejó la respuesta a la agenda (#229) y la agenda no contestó: no se manda un mensaje vacío.
             visit = visits.ask_preferred(property_of_interest(context.last_tool_results))
         if visit is not None:
             # La agenda la maneja el código (DT-32): su respuesta reemplaza la del agente.
             result = replace(result, text=visit.reply, tool_results={**result.tool_results, **visit.tool_results})
-    elif OFFER_KEY in context.last_tool_results:
-        # Un turno forzado por el guardrail no responde a la oferta, pero tampoco la borra.
-        result = replace(result, tool_results={**result.tool_results,
-                                               OFFER_KEY: context.last_tool_results[OFFER_KEY]})
+    offer = context.last_tool_results.get(OFFER_KEY)
+    if visit is None and isinstance(offer, Mapping):
+        # Un turno que no responde a la oferta (forzado por el guardrail, o una pregunta que contesta el agente,
+        # #247) tampoco la borra; si contesta el agente, se le recuerda al lead cómo elegir.
+        text = result.text
+        if counts and context.fsm_state == "SCHEDULE" and result.intent not in HUMAN_INTENTS:
+            text = f"{text}\n\n{visits.reminder(offer)}"
+        result = replace(result, text=text, tool_results={**result.tool_results, OFFER_KEY: offer})
     alert = None
     if visit is None and counts and result.intent not in HUMAN_INTENTS:
         result, alert = _alert_step(context, result, searches, verdict.signal_text)
     outbound = FakeCore().handle_event(event, intent=result.intent, text=result.text)
     if verdict.pii:
         outbound["text"] += " " + PII_REMINDER
-    remembered = facts.carry(remember_property(result.tool_results, context.last_tool_results),
+    remembered = facts.carry(remember_property(result.tool_results, context.last_tool_results,
+                                                focused_property(result.refers_to, shown)),
                              result.tool_results, context.last_tool_results, now)
     evidence = TurnEvidence(raw_signal=_raw_signal(verdict, result.raw_signal), listing=listing,
                             tool_results=alerts.carry_offered(remembered, context.last_tool_results))
     streak = next_streak(context.unresolved_streak, result.intent, raw_signal=evidence.raw_signal,
                          resolved=visit is not None and visit.settled)
     frustrated = (counts and context.fsm_state not in TERMINAL_STATES and result.intent not in HUMAN_INTENTS
-                  and is_frustrated(streak))
+                  and is_frustrated(streak, result.flags.get("frustrated")))
     if frustrated:
         outbound["text"] = FRUSTRATION_REPLY  # esta racha dispara el traspaso: se le avisa al lead
     replaced = frustrated or alerts.requested(verdict.signal_text, result.flags)  # la alerta (A-18) cambia la respuesta
@@ -422,7 +529,8 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     saved = [*_lead_message(verdict, event["text"]), ("assistant", outbound["text"], result.tool_calls or None)]
     audits = [*audits, *result.guard_audits]  # A-5: la factualidad de salida se audita igual que la entrada
     transition = await run_in_threadpool(advance, engine, event, result.intent, evidence, audits, counts, saved,
-                                         visit, searches.unmet if searches else (), alert)
+                                         visit, searches.unmet if searches else (), alert,
+                                         result.flags.get("frustrated"))
     _describe(span, transition)
     span.set_attributes({"lead.qualified_now": transition.qualified,
                          "lead.handoff_now": transition.handoff_reason is not None})

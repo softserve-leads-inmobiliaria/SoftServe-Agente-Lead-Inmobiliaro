@@ -4,7 +4,7 @@ Cubre los 6 *claims* con código (1 crédito, 2 mascotas, 3 negociación, 4 apar
 garantía de cierre). El 8 (urgencia falsa) ya lo cubre A-5 sin cambios; el 6 (promoción no vigente)
 solo cuando lleva número — ver `services/core/app/promise_guard.py` y DT-26. No llama a ningún LLM.
 """
-from app.promise_guard import check, check_deferred
+from app.promise_guard import check, check_deferred, without_urgency
 
 PROPERTY_WITH_AMENITIES = {"get_property": {"id": "p1", "amenities": ["alberca", "gimnasio"]}}
 NO_AMENITIES = {"search_properties": {"properties": [{"id": "p1", "amenities": []}]}}
@@ -70,6 +70,21 @@ CASES = [
     ("en_apartado", "I'll hold it for you, don't worry.", {}, "", False),
     ("en_reservada", "It's reserved for you starting now.", {}, "", False),
     ("en_amenidad_inventada", "That unit has a pool and a gym.", NO_AMENITIES, "", False),
+    # #247, prueba de jurado: nombrarla como algo que confirma un asesor no la afirma, aunque quede lejos de la duda.
+    ("en_amenidad_a_confirmar", "An agent can confirm both the parking and pet policy for you.", NO_AMENITIES, "",
+     True),
+    ("en_amenidad_en_una_lista_de_dudas", "An agent can give you all of this information: the floor, building "
+     "age, parking, and pet policy.", NO_AMENITIES, "", True),
+    ("en_amenidad_entre_preguntas", "Want me to connect you with an agent to answer all these questions: parking, "
+     "pets, floor?", NO_AMENITIES, "", True),
+    # #247: la visita la reserva la agenda; si el modelo dice que quedó agendada, es falso.
+    ("en_visita_agendada_por_el_modelo", "Perfect! Your visit is being scheduled for Sunday.", {}, "", False),
+    ("en_visita_reservada_por_el_modelo", "I've booked your visit for tomorrow at 3pm.", {}, "", False),
+    ("en_ofrecer_la_visita_no_la_agenda", "Would you like to schedule a visit to see it?", {}, "", True),
+    ("en_amenidad_que_da_un_asesor", "I don't have those details in the system. An agent can give you that "
+     "information along with the pet policy and parking.", NO_AMENITIES, "", True),
+    ("en_amenidad_afirmada_aunque_haya_que_confirmar", "It has parking, and an agent can confirm the details.",
+     NO_AMENITIES, "", False),
     ("en_garantia", "It's a done deal, we sign next week.", {}, "", False),
     ("en_garantia_de_compra", "I guarantee you'll get it.", {}, "", False),
 ]
@@ -132,3 +147,19 @@ def test_announcing_a_lookup_for_later_is_a_promise():
 
 def test_deferred_case_ids_are_unique():
     assert len({case[0] for case in DEFERRED_CASES}) == len(DEFERRED_CASES)
+
+
+def test_urging_the_lead_to_hurry_is_removed_and_the_rest_stays():
+    """#247, prueba de jurado: "I'd recommend moving forward soon" después de no poder garantizar el precio."""
+    reply = ("I can't guarantee that prices won't change.\n\nIf you're interested in the Laureles apartment "
+             "(prop_00235, $1,150/month), I'd recommend moving forward soon. What's your monthly income?")
+    assert without_urgency(reply) == "I can't guarantee that prices won't change.\n\nWhat's your monthly income?"
+
+
+def test_a_reply_without_urgency_is_left_as_it_is():
+    reply = "It has 78.5 m² and a gym.\n\n1. Studio in El Poblado\n2. Apartment in Laureles\n\nWant to see it?"
+    assert without_urgency(reply) == reply
+
+
+def test_a_reply_that_is_only_urgency_is_not_emptied():
+    assert without_urgency("Don't wait, it won't last!") == "Don't wait, it won't last!"

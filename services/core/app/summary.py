@@ -24,6 +24,7 @@ from sqlalchemy import Engine, func, select, update
 from starlette.concurrency import run_in_threadpool
 
 from app import address_guard, factuality, promise_guard
+from app.bedrock_llm import LLMFormatError
 from app.channels.notifications import HANDOFF_REASONS, transcript_of
 from app.input_guard import describes_protected, normalize
 from app.interest import property_of_interest
@@ -145,8 +146,10 @@ async def summarize(agent: Any, transcript: Sequence[tuple[str, str]], facts: Su
             sections = await asyncio.wait_for(generate(transcript_text(transcript), facts),
                                               SUMMARY_TIMEOUT_SECONDS)
     except Exception as exc:
+        # El detalle solo de los errores de formato: su mensaje lo arma `BedrockLLM.summarize` sin el contenido.
         logger.warning("no se pudo generar el resumen de la conversación",
-                       extra={"error_type": type(exc).__name__})
+                       extra={"error_type": type(exc).__name__,
+                              "error_detail": str(exc) if isinstance(exc, LLMFormatError) else ""})
         return None
     if not sections or any(not str(sections.get(key) or "").strip() for key, _ in SECTIONS):
         logger.warning("resumen incompleto: la ficha sale sin resumen")

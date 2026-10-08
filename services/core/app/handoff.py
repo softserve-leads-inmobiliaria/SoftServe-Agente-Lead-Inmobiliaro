@@ -10,6 +10,11 @@ Un `otro` suelto
 NO dispara nada —es ruido: un "ok" o un "gracias" caen ahí—, pero varios seguidos sí. Los turnos que
 fuerza el guardrail de entrada (*jailbreak*, fuera de dominio) no cuentan: nadie puede provocar un
 traspaso con mensajes adversariales.
+
+La racha sola no es frustración: tres preguntas fuera de las intenciones ("are you a bot?", "who owns this
+agency?", "what are your office hours?") son `otro` y traspasaban a un lead tranquilo (prueba de jurado M3,
+#247). El traspaso pide además que el clasificador lea molestia en el mensaje actual (`frustrated`); si no
+contestó ese campo, vale la racha sola, como antes.
 """
 from __future__ import annotations
 
@@ -68,8 +73,9 @@ def next_streak(current: int, intent: str, counts: bool = True,
     return current + 1 if not resolved and is_unresolved(intent, raw_signal) else 0
 
 
-def is_frustrated(streak: int) -> bool:
-    return streak >= FRUSTRATION_STREAK
+def is_frustrated(streak: int, annoyed: bool | None = None) -> bool:
+    """La racha llegó al umbral y el lead se muestra molesto. `annoyed=None`: el clasificador no lo dijo."""
+    return streak >= FRUSTRATION_STREAK and annoyed is not False
 
 
 def handoff_reason(after: str, trigger: str | None, intent: str, visit_booked: bool = True) -> str | None:

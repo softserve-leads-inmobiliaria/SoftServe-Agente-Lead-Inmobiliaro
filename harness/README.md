@@ -64,6 +64,14 @@ en qué estado termina. Los corre N veces y calcula, con lo que quedó en Postgr
 de tool esperada, de regeneraciones, de respuestas degradadas y de respaldo, y la latencia
 (`scripts/evaluation.py`, con sus umbrales). Detalle en `docs/TESTING.md`, "Evaluación en vivo repetible".
 
+## Prueba de jurado (#247)
+
+    python harness/scripts/jury.py M                 # con LLM_PROVIDER=bedrock
+
+Son conversaciones no pautadas, como las de un jurado (sets J, N, M y O en `scripts/jury.py`), sin expectativas ni
+umbrales. Dejan la transcripción con las auditorías de cada turno, para leerla a mano. Detalle en
+`docs/TESTING.md`, "Prueba de jurado".
+
 ## Agregar un guion nuevo
 
 Crea `harness/fixtures/<nombre>.jsonl` y declara su estado final en `harness/scripts/expectations.py`

@@ -129,9 +129,9 @@ def test_every_intent_of_the_taxonomy_is_offered_to_the_classifier():
 def test_classify_returns_the_yes_or_no_answers_the_code_decides_with():
     # DT-60: reemplazan a las reglas de `handoff.asks_for_a_person` y `alerts.is_request`.
     client = ScriptedBedrock(classification("solicitud_humano", asks_for_person=True, wants_alert=False,
-                                            wants_visit=False))
+                                            wants_visit=False, frustrated=True))
     flags = run(llm(client).classify("I want to talk to an agent")).flags
-    assert flags == {"asks_for_person": True, "wants_alert": False, "wants_visit": False}
+    assert flags == {"asks_for_person": True, "wants_alert": False, "wants_visit": False, "frustrated": True}
     assert all(f'"{flag}"' in CLASSIFIER_SYSTEM for flag in CLASSIFIER_FLAGS)
 
 
