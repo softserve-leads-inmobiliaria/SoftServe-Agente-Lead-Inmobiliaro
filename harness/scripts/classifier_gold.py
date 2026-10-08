@@ -9,7 +9,11 @@ Cada línea de `harness/gold/classifier.jsonl` es un mensaje con su contexto:
 - `text`; `last`: la última respuesta del asistente; `shown`: las propiedades ya mostradas (ids del catálogo);
 - `intent`, `refers_to`, `visit_when`: se miden solo si están (`visit_when: null` es "no dijo cuándo");
 - `flags`: las que tienen que venir en true; el resto de `CLASSIFIER_FLAGS` se espera en false, salvo las de
-  `unsure`, que no se miden. `needs_lookup` va como clave propia y se mide solo donde está (`LABELED_ONLY`).
+  `unsure`, que no se miden. `needs_lookup` y `asks_if_it_matters` van como clave propia y se miden solo donde
+  están (`LABELED_ONLY`).
+
+El texto pasa antes por el guardrail de entrada, como en el core: el clasificador ve el mensaje sin la mención
+de categoría protegida, y el aviso de que se quitó algo.
 
 Uso (con las credenciales de Bedrock en `.env`, sin otra corrida en vivo al mismo tiempo: 10 RPM, DT-6):
     python harness/scripts/classifier_gold.py               # mide y compara con la línea base
@@ -36,10 +40,11 @@ BASELINE = ROOT / "harness" / "gold" / "classifier_baseline.json"
 REPORTS = ROOT / "tmp" / "gold"
 
 # Los de `app.bedrock_llm.CLASSIFIER_FLAGS` (un test comprueba que sigan iguales).
-FLAGS = ("asks_for_person", "wants_alert", "wants_visit", "frustrated", "asks_unlisted", "needs_lookup")
+FLAGS = ("asks_for_person", "wants_alert", "wants_visit", "frustrated", "asks_unlisted", "needs_lookup",
+         "asks_if_it_matters")
 # Las que llegaron después de etiquetar el gold set: se miden solo en los mensajes que las traen como clave
 # (`"needs_lookup": true`), no se dan por false en el resto.
-LABELED_ONLY = ("needs_lookup",)
+LABELED_ONLY = ("needs_lookup", "asks_if_it_matters")
 DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")  # `date.weekday()`, como `visits.visit_when`
 # 10 llamadas por minuto (DT-6): una cada 6,5 s no hace esperar al limitador del cliente.
 PAUSE_S = 6.5
@@ -134,6 +139,7 @@ async def classify_all(items: list[dict[str, Any]], env: dict[str, str]) -> dict
     sys.path.insert(0, str(ROOT))
     sys.path.insert(0, str(ROOT / "services" / "core"))
     from app.bedrock_llm import BedrockLLM, LLMError
+    from app.input_guard import inspect_input
     from app.llm_config import _bedrock_client, _retry_policy
     from app.llm_retry import Retrier
     from app.rate_limit import RateLimits
@@ -148,7 +154,9 @@ async def classify_all(items: list[dict[str, Any]], env: dict[str, str]) -> dict
     for i, item in enumerate(items, start=1):
         started = time.monotonic()
         try:
-            got = await llm.classify(item["text"], item.get("last"), [catalog[p] for p in item.get("shown", [])])
+            verdict = inspect_input(item["text"])
+            got = await llm.classify(verdict.signal_text, item.get("last"),
+                                     [catalog[p] for p in item.get("shown", [])], verdict.protected_category)
             answers[item["id"]] = observed(got)
         except LLMError as exc:
             answers[item["id"]] = None
