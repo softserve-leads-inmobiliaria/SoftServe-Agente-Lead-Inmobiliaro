@@ -1,0 +1,80 @@
+{"id": "J1-3", "text": "Does it have parking?", "shown": ["prop_00231"], "last": "This is a for sale apartment in El Poblado, near Parque Lleras. It has 2 bedrooms and the price is $185,000. Amenities include a pool and gym.", "flags": [], "refers_to": "prop_00231"}
+{"id": "J1-4", "text": "Are pets allowed?", "shown": ["prop_00231"], "last": "The amenities listed are pool and gym. Would you like me to connect you with an agent?", "flags": ["asks_unlisted"], "refers_to": "prop_00231"}
+{"id": "J1-5", "text": "What floor is it on and how old is the building?", "shown": ["prop_00231"], "last": "I don't have that information. I can put you in touch with an agent who can tell you about the pet policy.", "flags": ["asks_unlisted"], "refers_to": "prop_00231"}
+{"id": "J1-6", "text": "How much are the monthly maintenance fees?", "shown": ["prop_00231"], "flags": ["asks_unlisted"], "refers_to": "prop_00231"}
+{"id": "J1-7", "text": "Is it close to a metro station?", "shown": ["prop_00231"], "last": "I don't have the maintenance fee information here. Would you like me to connect you?", "flags": ["asks_unlisted"], "refers_to": "prop_00231"}
+{"id": "J1-8", "text": "Can you lower the price to $170,000?", "shown": ["prop_00231"], "flags": [], "refers_to": "prop_00231"}
+{"id": "J2-1", "text": "Hi, what does your agency do?", "flags": []}
+{"id": "J2-2", "text": "What are your office hours?", "last": "We're a real estate agency with properties for sale and rent in Medellin and Bogota. Are you looking for something specific?", "intent": "otro", "flags": []}
+{"id": "J2-5", "text": "Do you have anything under $150,000 in Medellin?", "intent": "busqueda_propiedad", "flags": []}
+{"id": "J3-2", "text": "Can I reserve the 4-bedroom one?", "shown": ["prop_00233", "prop_00234"], "last": "I found 1 house available in Bogota: 3-bedroom house in Usaquen (ref. prop_00233), $365,000.", "flags": [], "refers_to": "prop_00234", "visit_when": null}
+{"id": "J3-3", "text": "When will it be available again?", "shown": ["prop_00233", "prop_00234"], "last": "The 4-bedroom house in Usaquen (ref. prop_00234) is reserved, not available right now.", "flags": ["asks_unlisted"], "refers_to": "prop_00234"}
+{"id": "J4-2", "text": "When will they be delivered?", "shown": ["prop_00237", "prop_00238"], "last": "I found 2 pre-sale apartments in Envigado: the apartment (ref. prop_00237) and the penthouse (ref. prop_00238).", "flags": ["asks_unlisted"]}
+{"id": "J4-5", "text": "What's the difference between the apartment and the penthouse?", "shown": ["prop_00237", "prop_00238"], "flags": []}
+{"id": "J5-2", "text": "Is the Laureles one furnished?", "shown": ["prop_00235", "prop_00240"], "last": "I found 2 rentals in Medellin: a 2-bedroom apartment in Laureles and a studio in El Poblado.", "flags": ["asks_unlisted"], "refers_to": "prop_00235"}
+{"id": "J5-3", "text": "Do I need to pay a deposit?", "shown": ["prop_00235", "prop_00240"], "last": "The listing doesn't say whether the Laureles apartment is furnished.", "flags": ["asks_unlisted"]}
+{"id": "J5-4", "text": "I earn $3,000 a month, can I rent the Laureles apartment?", "shown": ["prop_00235", "prop_00240"], "flags": [], "refers_to": "prop_00235"}
+{"id": "J5-5", "text": "And the studio?", "shown": ["prop_00235", "prop_00240"], "last": "With $3,000 a month you don't meet the minimum income for the Laureles apartment.", "flags": [], "refers_to": "prop_00240"}
+{"id": "J6-1", "text": "ok", "flags": [], "unsure": ["frustrated"]}
+{"id": "J6-6", "text": "I want to visit tomorrow at 3pm", "intent": "agendar_visita", "flags": ["wants_visit"], "visit_when": {"part_of_day": "afternoon"}}
+{"id": "N1-2", "text": "Hi! How much is the rent and what's included?", "shown": ["prop_00235"], "intent": "consulta_precio", "flags": [], "unsure": ["asks_unlisted"], "refers_to": "prop_00235"}
+{"id": "N1-3", "text": "Does the building have a doorman or security?", "shown": ["prop_00235"], "flags": ["asks_unlisted"], "refers_to": "prop_00235"}
+{"id": "N1-5", "text": "What's the minimum lease term?", "shown": ["prop_00235"], "flags": ["asks_unlisted"]}
+{"id": "N1-6", "text": "I make $4,000 a month and I have references", "shown": ["prop_00235"], "flags": []}
+{"id": "N1-7", "text": "Can I go see it this weekend?", "shown": ["prop_00235"], "last": "With $4,000 a month and references, you meet the requirements to rent this apartment.", "intent": "agendar_visita", "flags": ["wants_visit"], "refers_to": "prop_00235", "visit_when": {"days": ["sat", "sun"]}}
+{"id": "N1-8", "text": "2", "shown": ["prop_00235"], "last": "Here are the available times on the weekend to visit 2-bedroom apartment for rent in Laureles with your agent:\n1) Sat Oct 10, 11:00\n2) Sat Oct 10, 12:00\nReply with the number of the one that works for you.", "flags": [], "unsure": ["wants_visit"], "visit_when": null}
+{"id": "N2-1", "text": "Hello, I'm moving to Bogota next month with my wife and kids", "flags": []}
+{"id": "N2-3", "text": "Does the Usaquen house have a garage?", "shown": ["prop_00233"], "flags": [], "refers_to": "prop_00233"}
+{"id": "N2-4", "text": "How far is it from the airport?", "shown": ["prop_00233"], "last": "Yes, the 3-bedroom house in Usaquen has a garage and a garden.", "flags": ["asks_unlisted"], "refers_to": "prop_00233"}
+{"id": "N2-6", "text": "What's the exact address?", "shown": ["prop_00233"], "flags": [], "refers_to": "prop_00233"}
+{"id": "N3-3", "text": "Can I open a restaurant there?", "shown": ["prop_00242"], "last": "The commercial space in Chapinero has 120 m².", "flags": ["asks_unlisted"], "refers_to": "prop_00242"}
+{"id": "N4-3", "text": "What's the view like from the penthouse?", "shown": ["prop_00237", "prop_00238"], "flags": ["asks_unlisted"], "refers_to": "prop_00238"}
+{"id": "N4-4", "text": "Is there any discount on the penthouse?", "shown": ["prop_00237", "prop_00238"], "flags": [], "refers_to": "prop_00238"}
+{"id": "N5-4", "text": "I'm Muslim, will that be a problem?", "flags": []}
+{"id": "N6-2", "text": "studio ok how much", "shown": ["prop_00235", "prop_00240"], "intent": "consulta_precio", "flags": [], "refers_to": "prop_00240"}
+{"id": "N6-3", "text": "gym?", "shown": ["prop_00235", "prop_00240"], "last": "The studio for rent in El Poblado is $600 a month, 35 m².", "flags": [], "refers_to": "prop_00240"}
+{"id": "N6-4", "text": "ok i wan to see it", "shown": ["prop_00235", "prop_00240"], "last": "Yes, the studio in El Poblado has a gym.", "intent": "agendar_visita", "flags": ["wants_visit"], "refers_to": "prop_00240"}
+{"id": "M1-3", "text": "What floor is it on and does it get natural light?", "shown": ["prop_00231"], "flags": ["asks_unlisted"], "refers_to": "prop_00231"}
+{"id": "M1-4", "text": "How much do I need for the down payment?", "shown": ["prop_00231"], "flags": [], "refers_to": "prop_00231"}
+{"id": "M1-5", "text": "Are HOA fees included in the price?", "shown": ["prop_00231"], "flags": ["asks_unlisted"]}
+{"id": "M1-6", "text": "Can I bring my dog?", "shown": ["prop_00231"], "flags": ["asks_unlisted"]}
+{"id": "M1-7", "text": "I'd like to visit it next Tuesday afternoon", "shown": ["prop_00231"], "intent": "agendar_visita", "flags": ["wants_visit"], "refers_to": "prop_00231", "visit_when": {"days": ["tue"], "part_of_day": "afternoon"}}
+{"id": "M2-5", "text": "Ok the cheaper one. Does it have a pool?", "shown": ["prop_00231", "prop_00232"], "flags": [], "refers_to": "prop_00232"}
+{"id": "M2-6", "text": "Can you hold it for me until Friday?", "shown": ["prop_00231", "prop_00232"], "last": "The 1-bedroom apartment in El Poblado has a gym, but no pool listed.", "flags": [], "refers_to": "prop_00232", "visit_when": null}
+{"id": "M3-1", "text": "Are you a bot?", "flags": []}
+{"id": "M3-2", "text": "Who owns this agency?", "last": "I'm the agency's virtual assistant. How can I help you?", "flags": []}
+{"id": "M3-3", "text": "What are your office hours?", "last": "I don't have information about the agency's owners. Can I help you find a property?", "flags": []}
+{"id": "M3-4", "text": "Can I talk to a real person please?", "intent": "solicitud_humano", "flags": ["asks_for_person"]}
+{"id": "M4-5", "text": "Your colleague promised me free parking, can you confirm?", "flags": [], "unsure": ["asks_unlisted"]}
+{"id": "M5-6", "text": "Let's schedule a visit", "shown": ["prop_00231"], "last": "The 2-bedroom apartment in El Poblado has 2 bathrooms.", "intent": "agendar_visita", "flags": ["wants_visit"], "refers_to": "prop_00231"}
+{"id": "M5-7", "text": "Actually, can we do another day?", "shown": ["prop_00231"], "last": "Here are the available times to visit 2-bedroom apartment in El Poblado with your agent:\n1) Thu Oct 8, 10:00\n2) Thu Oct 8, 11:00\nReply with the number of the one that works for you.", "flags": ["wants_visit"], "refers_to": "prop_00231", "visit_when": {"other_day": true}}
+{"id": "M6-5", "text": "is it flat land? can i build 3 floors", "shown": ["prop_00241"], "last": "The lot for sale in Usaquen has 620 m².", "flags": ["asks_unlisted"], "refers_to": "prop_00241"}
+{"id": "O1-4", "text": "Can I buy it from abroad without traveling?", "shown": ["prop_00237"], "flags": [], "unsure": ["asks_unlisted"]}
+{"id": "O2-2", "text": "Does the building have an elevator?", "shown": ["prop_00235", "prop_00240"], "last": "I found 2 rentals in Medellin: a 2-bedroom apartment in Laureles and a studio in El Poblado.", "flags": ["asks_unlisted"]}
+{"id": "O2-6", "text": "Could someone call us? We prefer the phone", "intent": "solicitud_humano", "flags": ["asks_for_person"]}
+{"id": "O3-3", "text": "can i share it with a roommate?", "shown": ["prop_00240"], "flags": ["asks_unlisted"]}
+{"id": "O3-4", "text": "only for 6 months is that ok", "shown": ["prop_00240"], "last": "I don't have that detail. An agent can confirm whether roommates are allowed.", "flags": ["asks_unlisted"]}
+{"id": "O3-6", "text": "ok forget it thanks", "flags": []}
+{"id": "O4-2", "text": "Which one? I said the house", "last": "Which property do you mean? Could you give me the reference?", "flags": ["frustrated"]}
+{"id": "O4-3", "text": "You're not answering my question", "flags": ["frustrated"]}
+{"id": "O4-4", "text": "This is useless", "flags": ["frustrated"]}
+{"id": "O4-5", "text": "Fine, connect me with someone", "intent": "solicitud_humano", "flags": ["asks_for_person"], "unsure": ["frustrated"]}
+{"id": "O5-5", "text": "Can I see it Saturday morning?", "shown": ["prop_00231", "prop_00232"], "last": "The 1-bedroom apartment in El Poblado (ref. prop_00232) has a gym, but no pool.", "intent": "agendar_visita", "flags": ["wants_visit"], "refers_to": "prop_00232", "visit_when": {"days": ["sat"], "part_of_day": "morning"}}
+{"id": "O6-3", "text": "When will you know if it's free again?", "shown": ["prop_00234"], "last": "This house is reserved right now.", "flags": ["asks_unlisted"], "refers_to": "prop_00234"}
+{"id": "O6-4", "text": "Show me something similar that I can visit", "shown": ["prop_00234"], "flags": ["wants_visit"], "unsure": ["asks_unlisted"]}
+{"id": "O6-5", "text": "The cheaper one, can I see it on Monday?", "shown": ["prop_00234", "prop_00233"], "last": "I found one available house in Usaquen: 3-bedroom house in Usaquen (ref. prop_00233), $365,000.", "intent": "agendar_visita", "flags": ["wants_visit"], "refers_to": "prop_00233", "visit_when": {"days": ["mon"]}}
+{"id": "O6-6", "text": "Actually, is there anything in the afternoon?", "shown": ["prop_00234", "prop_00233"], "last": "Here are the available times on Monday to visit 3-bedroom house in Usaquen with your agent:\n1) Mon Oct 12, 09:00\n2) Mon Oct 12, 10:00\nReply with the number of the one that works for you.", "flags": ["wants_visit"], "refers_to": "prop_00233", "visit_when": {"part_of_day": "afternoon"}}
+{"id": "O8-2", "text": "What's the zoning? Can I build a small hotel?", "shown": ["prop_00241"], "flags": ["asks_unlisted"], "refers_to": "prop_00241"}
+{"id": "O9-2", "text": "The 2-bedroom one", "shown": ["prop_00231", "prop_00232"], "last": "I found 2 apartments for sale in El Poblado. Which one would you like to visit?", "flags": ["wants_visit"], "refers_to": "prop_00231"}
+{"id": "O9-3", "text": "I can only go after 5pm", "shown": ["prop_00231", "prop_00232"], "last": "Here are the available times to visit 2-bedroom apartment in El Poblado with your agent:\n1) Thu Oct 8, 10:00\n2) Thu Oct 8, 11:00\nReply with the number of the one that works for you.", "flags": ["wants_visit"], "refers_to": "prop_00231", "visit_when": {"part_of_day": "evening"}}
+{"id": "O9-4", "text": "What about this weekend?", "shown": ["prop_00231", "prop_00232"], "last": "Here are the available times on Thursday evening to visit 2-bedroom apartment in El Poblado with your agent:\n1) Thu Oct 8, 17:00\nReply with the number of the one that works for you.", "flags": ["wants_visit"], "refers_to": "prop_00231", "visit_when": {"days": ["sat", "sun"]}}
+{"id": "O9-5", "text": "Ok Monday morning then", "shown": ["prop_00231", "prop_00232"], "last": "Here are the available times on the weekend to visit 2-bedroom apartment in El Poblado with your agent:\n1) Sat Oct 10, 11:00\nReply with the number of the one that works for you.", "flags": ["wants_visit"], "refers_to": "prop_00231", "visit_when": {"days": ["mon"], "part_of_day": "morning"}}
+{"id": "O9-7", "text": "Can I bring my wife to the visit?", "shown": ["prop_00231", "prop_00232"], "last": "Done, your visit to 2-bedroom apartment in El Poblado is booked for Mon Oct 19, 11:00. Your agent will contact you to confirm the details.", "flags": [], "unsure": ["wants_visit", "asks_unlisted"], "refers_to": "prop_00231"}
+{"id": "S-alerta-si", "text": "Yes, notify me when something like that comes up", "last": "There are no houses for rent in Laureles right now. If you'd like, I can let you know when something like this comes up: just say \"notify me\".", "flags": ["wants_alert"]}
+{"id": "S-asesor-si", "text": "yes please", "last": "I don't have that detail. Would you like me to connect you with an agent?", "flags": ["asks_for_person"]}
+{"id": "S-detalles-si", "text": "yes please", "shown": ["prop_00240"], "last": "Would you like more details about the studio in El Poblado?", "flags": [], "refers_to": "prop_00240"}
+{"id": "S-saludo", "text": "Hi", "intent": "saludo", "flags": []}
+{"id": "S-asesor", "text": "I want to talk to an agent", "intent": "solicitud_humano", "flags": ["asks_for_person"]}
+{"id": "S-contrato", "text": "I have a problem with my current lease contract, nobody answers my emails", "intent": "fuera_de_alcance", "flags": [], "unsure": ["frustrated", "asks_for_person"]}
+{"id": "S-busqueda-nueva", "text": "Do you have anything for rent in Laureles?", "shown": ["prop_00231", "prop_00232"], "intent": "busqueda_propiedad", "flags": [], "refers_to": null}
+{"id": "S-cual", "text": "I want to see it", "shown": ["prop_00231", "prop_00232"], "last": "I found 2 apartments for sale in El Poblado.", "flags": ["wants_visit"], "refers_to": "unclear"}
