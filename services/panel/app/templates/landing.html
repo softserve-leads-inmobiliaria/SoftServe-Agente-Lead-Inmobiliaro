@@ -3,95 +3,238 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Properties</title>
+  <title>Available properties</title>
   <style>
     :root {
       --bg: #f4f6f8; --surface: #ffffff; --surface-2: #f0f2f5;
       --ink: #1b1f24; --muted: #525a66; --line: #e3e6ea;
       --brand: #1f4e79; --brand-soft: #e8f0f8; --on-brand: #ffffff;
-      --radius: 12px; --radius-sm: 8px;
+      --tg: #229ed9; --on-tg: #ffffff;
+      --radius: 16px; --radius-sm: 10px;
+      --shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 1px 3px rgba(16, 24, 40, .06);
+      --shadow-lg: 0 14px 30px rgba(16, 24, 40, .13);
       --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px;
-      --text-xs: 12px; --text-sm: 13px; --text-base: 15px; --text-xl: 24px; --text-2xl: 30px;
+      --text-xs: 12px; --text-sm: 13px; --text-base: 15px; --text-lg: 18px;
+      --text-xl: 24px; --text-2xl: 30px; --max: 1120px;
     }
     @media (prefers-color-scheme: dark) {
       :root {
         --bg: #12151a; --surface: #1b1f24; --surface-2: #232830;
         --ink: #e8eaed; --muted: #9aa4b2; --line: #2c323b;
         --brand: #8ab4f8; --brand-soft: #1e2b3d; --on-brand: #10151b;
+        --tg: #229ed9; --on-tg: #ffffff;
+        --shadow: 0 1px 2px rgba(0, 0, 0, .3); --shadow-lg: 0 14px 30px rgba(0, 0, 0, .45);
       }
     }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--ink);
-      font: var(--text-base)/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    body { margin: 0; color: var(--ink); font: var(--text-base)/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background:
+        radial-gradient(1100px 460px at 50% -260px, var(--brand-soft), transparent),
+        var(--bg);
+      min-height: 100vh; }
     a { color: var(--brand); }
     a:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-    header.page { padding: var(--space-5) var(--space-4) var(--space-2); max-width: 1120px; margin: 0 auto; }
-    h1 { font-size: var(--text-2xl); margin: 0 0 var(--space-1); }
-    .muted { color: var(--muted); font-size: var(--text-sm); }
-    .notice { max-width: 1120px; margin: var(--space-2) auto 0; padding: var(--space-3) var(--space-4);
-      background: var(--brand-soft); color: var(--brand); border: 1px solid var(--brand);
-      border-radius: var(--radius-sm); }
-    .grid { display: grid; gap: var(--space-4); padding: var(--space-4);
-      max-width: 1120px; margin: 0 auto;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
-    .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-      overflow: hidden; display: flex; flex-direction: column; }
-    .card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: var(--surface-2); }
-    .card-body { padding: var(--space-4); display: grid; gap: var(--space-2); flex: 1; }
-    .card-title { font-size: var(--text-lg, 18px); margin: 0; }
-    .badges { display: flex; flex-wrap: wrap; gap: var(--space-1); }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: var(--text-xs);
-      font-weight: 600; border: 1px solid var(--line); color: var(--muted); }
-    .price { font-size: var(--text-xl); font-weight: 600; }
-    .specs { color: var(--muted); font-size: var(--text-sm); }
-    .btn { display: inline-block; text-align: center; text-decoration: none; font-size: var(--text-sm);
-      padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--brand);
-      background: var(--brand); color: var(--on-brand); margin-top: auto; }
-    .btn:hover { filter: brightness(1.08); }
-    .empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: var(--space-5); }
+    svg { display: block; }
+
+    .wrap { max-width: var(--max); margin: 0 auto; padding: 0 var(--space-4); }
+
+    /* Header */
+    .site-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+      padding: var(--space-5) 0 var(--space-2); }
+    .brand { display: flex; align-items: center; gap: var(--space-3); text-decoration: none; color: var(--ink);
+      font-weight: 700; letter-spacing: -.01em; }
+    .brand .logo { width: 36px; height: 36px; border-radius: var(--radius-sm); background: var(--brand);
+      color: var(--on-brand); display: grid; place-items: center; box-shadow: var(--shadow); }
+    .brand .logo svg { width: 20px; height: 20px; }
+    .brand small { display: block; font-weight: 500; font-size: var(--text-xs); color: var(--muted); }
+    .header-hint { display: none; align-items: center; gap: var(--space-2); font-size: var(--text-sm);
+      color: var(--muted); }
+    .header-hint svg { width: 16px; height: 16px; color: var(--tg); }
+    @media (min-width: 640px) { .header-hint { display: inline-flex; } }
+
+    /* Hero */
+    .hero { padding: var(--space-5) 0 var(--space-2); max-width: 720px; }
+    .eyebrow { margin: 0 0 var(--space-3); text-transform: uppercase; letter-spacing: .14em;
+      font-size: var(--text-xs); font-weight: 700; color: var(--brand); }
+    .hero h1 { margin: 0 0 var(--space-3); font-size: clamp(30px, 5vw, 46px); line-height: 1.06;
+      letter-spacing: -.025em; }
+    .lede { margin: 0 0 var(--space-4); color: var(--muted); font-size: 17px; max-width: 58ch; }
+    .count-pill { display: inline-flex; align-items: center; gap: var(--space-2); background: var(--surface);
+      border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-size: var(--text-sm);
+      font-weight: 600; box-shadow: var(--shadow); }
+    .count-pill svg { width: 15px; height: 15px; color: var(--brand); }
+
+    /* Notice */
+    .notice { display: flex; align-items: center; gap: var(--space-2); margin: var(--space-5) 0 0;
+      padding: var(--space-3) var(--space-4); background: var(--brand-soft); color: var(--brand);
+      border: 1px solid var(--brand); border-radius: var(--radius-sm); font-size: var(--text-sm); }
+    .notice svg { width: 18px; height: 18px; flex: none; }
+
+    /* Grid */
+    .grid { display: grid; gap: var(--space-5); padding: var(--space-5) 0 var(--space-6, 32px);
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+
+    /* Card */
+    .card { position: relative; display: flex; flex-direction: column; overflow: hidden;
+      background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+      box-shadow: var(--shadow); transition: transform .18s ease, box-shadow .18s ease; }
+    .card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
+    @media (prefers-reduced-motion: reduce) {
+      .card, .card:hover { transition: none; transform: none; }
+    }
+    .media { position: relative; aspect-ratio: 4 / 3; background: var(--surface-2); }
+    .media img { width: 100%; height: 100%; object-fit: cover; }
+    .media-placeholder { width: 100%; height: 100%; display: grid; place-items: center; gap: var(--space-2);
+      align-content: center; color: var(--brand);
+      background: linear-gradient(135deg, var(--brand-soft), var(--surface-2)); }
+    .media-placeholder svg { width: 44px; height: 44px; opacity: .75; }
+    .media-placeholder span { font-size: var(--text-sm); font-weight: 600; color: var(--muted); text-transform: capitalize; }
+    .tag { position: absolute; top: var(--space-3); left: var(--space-3); padding: 4px 10px; border-radius: 999px;
+      font-size: var(--text-xs); font-weight: 700; text-transform: capitalize; background: var(--brand);
+      color: var(--on-brand); box-shadow: var(--shadow); }
+
+    .card-body { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); flex: 1; }
+    .card-title { margin: 0; font-size: var(--text-lg); line-height: 1.3; }
+    .location { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: var(--text-sm); }
+    .location svg { width: 15px; height: 15px; flex: none; }
+    .badges { display: flex; flex-wrap: wrap; gap: 6px; }
+    .badge { padding: 3px 9px; border-radius: 999px; font-size: var(--text-xs); font-weight: 600;
+      text-transform: capitalize; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); }
+    .price { margin: 0; font-size: var(--text-xl); font-weight: 700; letter-spacing: -.01em; }
+    .price .per { font-size: var(--text-sm); font-weight: 500; color: var(--muted); }
+    .specs { display: flex; flex-wrap: wrap; gap: var(--space-3); list-style: none; margin: 0;
+      padding: var(--space-3) 0 0; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--text-sm); }
+    .specs li { display: flex; align-items: center; gap: 6px; }
+    .specs svg { width: 16px; height: 16px; color: var(--brand); }
+
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+      margin-top: auto; padding: 11px 14px; border-radius: var(--radius-sm); text-decoration: none;
+      font-size: var(--text-sm); font-weight: 600; background: var(--tg); color: var(--on-tg);
+      border: 1px solid var(--tg); transition: filter .15s ease; }
+    .btn:hover { filter: brightness(1.07); }
+    .btn svg { width: 18px; height: 18px; }
+
+    .empty { grid-column: 1 / -1; display: grid; place-items: center; gap: var(--space-3);
+      padding: 56px var(--space-4); text-align: center; color: var(--muted); }
+    .empty svg { width: 48px; height: 48px; color: var(--brand); opacity: .6; }
+
+    .site-footer { margin-top: var(--space-5); padding: var(--space-5) 0 48px; border-top: 1px solid var(--line);
+      color: var(--muted); font-size: var(--text-sm); text-align: center; }
   </style>
 </head>
 <body>
-  <header class="page">
-    <h1>Available properties</h1>
-    <p class="muted">Pick a property and ask about it on Telegram. The agent already knows which one you mean.</p>
+  <header class="site-header wrap">
+    <a class="brand" href="/properties">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-6h6v6"/></svg>
+      </span>
+      <span>Properties<small>Real estate</small></span>
+    </a>
+    {% if telegram_configured %}
+    <span class="header-hint">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></svg>
+      Ask us on Telegram
+    </span>
+    {% endif %}
   </header>
 
+  <section class="hero wrap">
+    <p class="eyebrow">Available now</p>
+    <h1>Find a place you'll love.</h1>
+    <p class="lede">
+      Browse the homes we have on the market.
+      {% if telegram_configured %}Open any one on Telegram and the agent already knows which property you mean.{% else %}Reach out for more details on any listing.{% endif %}
+    </p>
+    <span class="count-pill">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-6h6v6"/></svg>
+      {{ listings|length }} {% if listings|length == 1 %}property{% else %}properties{% endif %} available
+    </span>
+  </section>
+
   {% if not telegram_configured %}
-  <p class="notice" role="status">Telegram isn't configured, so the chat buttons are hidden.</p>
+  <div class="wrap">
+    <p class="notice" role="status">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>
+      Telegram isn't configured, so the chat buttons are hidden.
+    </p>
+  </div>
   {% endif %}
 
-  <main class="grid">
+  <main class="grid wrap">
     {% for listing in listings %}
     {% set prop = listing.property %}
     <article class="card">
-      {% if prop.photo_url %}
-      <img src="{{ prop.photo_url }}" alt="{{ prop.title }}" loading="lazy">
-      {% endif %}
+      <div class="media">
+        {% if prop.photo_url %}
+        <img src="{{ prop.photo_url }}" alt="{{ prop.title }}" loading="lazy">
+        {% else %}
+        <div class="media-placeholder" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-6h6v6"/></svg>
+          <span>{{ label("property_kind", prop.kind) }}</span>
+        </div>
+        {% endif %}
+        <span class="tag">{{ label("property_type", prop.type) }}</span>
+      </div>
       <div class="card-body">
         <h2 class="card-title">{{ prop.title }}</h2>
+        <p class="location">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+          {{ prop.zone }}
+        </p>
         <div class="badges">
           <span class="badge">{{ label("property_kind", prop.kind) }}</span>
-          <span class="badge">{{ label("property_type", prop.type) }}</span>
-          <span class="badge">{{ prop.zone }}</span>
         </div>
         <p class="price">
-          ${{ "{:,.0f}".format(prop.price) }}{% if prop.type == "renta" %}<span class="muted">/mo</span>{% endif %}
+          ${{ "{:,.0f}".format(prop.price) }}{% if prop.type == "renta" %}<span class="per"> /mo</span>{% endif %}
         </p>
-        <p class="specs">
-          {{ "{:,.0f}".format(prop.m2) }} m²
-          {%- if prop.bedrooms %} · {{ prop.bedrooms }} bed{% endif %}
-          {%- if prop.bathrooms %} · {{ "{:g}".format(prop.bathrooms) }} bath{% endif %}
-        </p>
+        <ul class="specs">
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9V5a2 2 0 0 1 2-2h4"/><path d="M21 9V5a2 2 0 0 0-2-2h-4"/><path d="M3 15v4a2 2 0 0 0 2 2h4"/><path d="M21 15v4a2 2 0 0 1-2 2h-4"/></svg>
+            {{ "{:,.0f}".format(prop.m2) }} m²
+          </li>
+          {% if prop.bedrooms %}
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+            {{ prop.bedrooms }} bed
+          </li>
+          {% endif %}
+          {% if prop.bathrooms %}
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6 6.5 3.5a1.5 1.5 0 0 0-1-.5C4.7 3 4 3.7 4 4.5V17a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5H4"/><path d="M2 12h20"/></svg>
+            {{ "{:g}".format(prop.bathrooms) }} bath
+          </li>
+          {% endif %}
+        </ul>
         {% if listing.telegram_url %}
         <a class="btn" href="{{ listing.telegram_url }}" target="_blank" rel="noopener"
-           aria-label="Ask about {{ prop.title }} on Telegram">Ask on Telegram</a>
+           aria-label="Ask about {{ prop.title }} on Telegram">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></svg>
+          Ask on Telegram
+        </a>
         {% endif %}
       </div>
     </article>
     {% else %}
-    <p class="empty">No properties are available right now.</p>
+    <p class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-6h6v6"/></svg>
+      No properties are available right now.
+    </p>
     {% endfor %}
   </main>
+
+  <footer class="site-footer wrap">
+    Prices and availability are subject to change.
+  </footer>
 </body>
 </html>
