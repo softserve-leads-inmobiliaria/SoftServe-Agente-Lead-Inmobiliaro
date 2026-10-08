@@ -507,7 +507,9 @@ una clase nueva y necesita su mecanismo.
 | La preferencia de día u hora ignorada | `visit_when` del clasificador; la agenda filtra los horarios (DT-64) | gold set (`visit_when`), `test_visits.py` |
 | Horarios de una propiedad que no se puede visitar | `VisitRouter`: el estado se consulta antes de decidir quién contesta (DT-67) | `test_refers_to.py`, `test_turn_decision.py` |
 | Un traspaso sin que lo pida (frustración por preguntas neutras) | Flag `frustrated` y `asks_for_person` del clasificador (DT-65, #228) | gold set, `test_handoff*.py` |
-| Origen, religión o familia comentados o usados | Guardrail de entrada de categorías protegidas y respuesta fija (#200) | `test_fair_housing_gold_set.py`, `test_input_guard_turn.py` |
+| Origen, religión o familia comentados o usados | Guardrail de entrada de categorías protegidas; la respuesta fija, solo con `asks_if_it_matters` del clasificador (#200, DT-69) | `test_fair_housing_gold_set.py`, `test_input_guard_turn.py`, gold set (`asks_if_it_matters`) |
+| Contesta sin consultar el catálogo (pide filtros en vez de buscar) | Flag `needs_lookup` del clasificador y la primera ronda con `toolChoice: any` (DT-68) | gold set (`needs_lookup`), `test_agent.py` |
+| Una respuesta correcta degradada | Cada falso positivo de la salida, en el guardrail que lo dio, con la traza de `TRACE_CONTENT=1` (DT-70) | `test_agent.py`, `test_markers.py` |
 | Una zona inventada o una búsqueda vacía sin alternativas | `list_zones` y `alternatives` del catálogo (#194, #213) | `test_alternatives.py` |
 | Una respuesta que no se sabe por qué salió así | `turn.decision` en cada turno (paso 0) | `test_turn_decision.py` |
 

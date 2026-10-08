@@ -3034,3 +3034,67 @@ conversación ("search right away"), que no siempre sigue.
 - Una ronda más del modelo de conversación cuando no iba a buscar: es justo cuando hacía falta, pero cuenta para
   los 10 RPM.
 - Repetir el mismo pedido seguido al clasificador devuelve lo mismo: las repeticiones inmediatas no miden ruido.
+
+## DT-69 — Si una categoría protegida importa lo decide el clasificador
+
+**Estado:** aceptada (#247).
+
+**Contexto.** El guardrail de entrada quita del mensaje la mención de una categoría protegida (#200), y la
+respuesta fija `PROTECTED_ANSWER` salía con una regla sobre el texto que queda: "?" e intención `otro`. Fallaba
+para los dos lados:
+
+- "Can foreigners buy property here?" llega como "Can buy property here?": el clasificador da una búsqueda, la
+  regla no salta y el modelo contestó "Yes, both available" (J4 t4).
+- "Can I bring my wife to the visit?" llega como "Can I bring my partner to the visit?": con "?" e intención
+  `otro`, recibía "What kind of property are you looking for?" con la visita ya reservada (O9 t7).
+
+**Decisión.**
+
+- Cuando el guardrail quitó algo, el clasificador recibe junto al mensaje el aviso de que falta una parte
+  (`REMOVED_NOTE`, sin decir qué) y contesta `asks_if_it_matters`: si el mensaje pregunta si esa característica
+  importa para comprar, rentar, los requisitos o el trato.
+- La respuesta fija sale solo con `asks_if_it_matters` en true. Si el clasificador no contesta el campo, queda la
+  regla anterior.
+- La instrucción del campo va en el aviso, no en `CLASSIFIER_SYSTEM`: el prompt de sistema queda igual para todos
+  los demás mensajes.
+- El gold set pasa cada mensaje por el guardrail de entrada, como el core: el clasificador ve lo mismo que en
+  producción.
+
+**Alternativas descartadas.**
+
+- **La línea del campo en `CLASSIFIER_SYSTEM`:** en el gold set movió otros campos en mensajes sin relación,
+  medido contra el prompt anterior mensaje por mensaje: 4 peores (J4-2, N1-8, N4-4, O6-6) y 2 mejores.
+- **Ajustar la regla de "?" e intención:** es la clase de regla que DT-62 reemplaza; "foreigners" ya no está en
+  el texto que la regla puede leer.
+
+**Consecuencias.**
+
+- Gold set (93 mensajes): `asks_if_it_matters` 8/8; los demás campos, con el mismo prompt de sistema.
+- En vivo: J4 t4 recibe la respuesta fija y O9 t7 va al modelo.
+- Al probarlo apareció que el guardrail de entrada no detectaba "We're a gay couple" ni "same-sex couple"
+  (sí "I'm gay"). Se agregaron, con su par en el gold set de fair housing.
+
+## DT-70 — Dos falsos positivos de la salida que degradaban respuestas correctas
+
+**Estado:** aceptada (#247).
+
+**Contexto.** Las 3 degradadas de la primera medida de J, N, M y O. Con `TRACE_CONTENT=1` (local, datos de
+prueba), dos de ellas resultaron ser respuestas correctas que el guardrail no dejó pasar:
+
+- **O5 t2** ("Which one has the best price per square meter?"): el borrador era "Let me check the price per
+  square meter for both: {prop_00231.price_per_m2}…". Los marcadores se completaban con la memoria, sin tool en el
+  turno, y la regla de #234 ("let me check" sin consultar nada) lo tomó por una búsqueda prometida. En la
+  regeneración, el modelo escribió las cifras a mano y se degradó.
+- **O8 t3** ("I'll pay cash, I decide alone and I want to close this month"): el lead califica en ese mismo
+  mensaje, pero la calificación se actualiza después del turno; el catálogo no da la dirección exacta y el
+  marcador `{prop_00241.address_exact}` queda sin valor. La corrección no decía qué usar, y la regeneración pidió
+  lo mismo.
+
+**Decisión.**
+
+- Una respuesta con marcadores cuenta como consultada para #234: el dato va en ese mismo mensaje.
+- Un marcador de `address_exact` sin valor lleva en la corrección la pista `{ref.address_approx}`, como los
+  números llevan el marcador que les corresponde (DT-60).
+
+**Consecuencias.** La tercera (J1 t9, una diferencia calculada al comparar) ya la cubre la regla de no calcular
+y la corrección: en la corrida siguiente pasó.
