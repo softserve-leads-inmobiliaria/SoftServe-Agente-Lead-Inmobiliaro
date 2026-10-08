@@ -3095,6 +3095,13 @@ prueba), dos de ellas resultaron ser respuestas correctas que el guardrail no de
 - Una respuesta con marcadores cuenta como consultada para #234: el dato va en ese mismo mensaje.
 - Un marcador de `address_exact` sin valor lleva en la corrección la pista `{ref.address_approx}`, como los
   números llevan el marcador que les corresponde (DT-60).
+- En la corrida siguiente aparecieron dos más, de la misma clase (la regeneración no podía corregirse):
+  - **J2 t6:** la regeneración escribió "ref. {prop_00238.id}". `{ref.id}` se completa con la referencia, sin
+    agregarlo al prompt.
+  - **J5 t4:** `{prop_00235.income_multiple}` no viene en `check_requirements`, solo en `get_property`. La
+    corrección ya pedía llamar a get_property, y el modelo repetía el marcador. Si falla un marcador con
+    campo y sin pista que lo reemplace, la primera ronda de la regeneración va con `toolChoice: any`, como
+    `needs_lookup` (DT-68).
 
 **Consecuencias.** La tercera (J1 t9, una diferencia calculada al comparar) ya la cubre la regla de no calcular
 y la corrección: en la corrida siguiente pasó.
