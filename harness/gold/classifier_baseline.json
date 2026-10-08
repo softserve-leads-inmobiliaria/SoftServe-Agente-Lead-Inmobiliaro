@@ -1,10 +1,11 @@
 {
   "asks_for_person": 1.0,
-  "asks_unlisted": 0.9466666666666667,
-  "frustrated": 0.987012987012987,
+  "asks_unlisted": 0.9629629629629629,
+  "frustrated": 1.0,
   "intent": 1.0,
+  "needs_lookup": 0.9333333333333333,
   "refers_to": 1.0,
-  "visit_when": 0.8461538461538461,
+  "visit_when": 0.9230769230769231,
   "wants_alert": 1.0,
-  "wants_visit": 1.0
+  "wants_visit": 0.9880952380952381
 }
