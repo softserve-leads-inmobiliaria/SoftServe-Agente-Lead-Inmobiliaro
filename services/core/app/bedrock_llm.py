@@ -386,10 +386,17 @@ class BedrockLLM:
 
         `messages` es la conversación del primer intento (`ChatResult.messages`), con sus rondas de tools: así
         el modelo ya tiene los datos y no vuelve a pedirlos (#232). Sin ella, se arma desde el historial.
+
+        Si falló un marcador de una propiedad sin otro que lo reemplace, la primera ronda obliga a llamar una tool
+        (como `needs_lookup`, DT-68): en J5 t4 (#247) `{prop_00235.income_multiple}` no venía en
+        `check_requirements`, la corrección pedía get_property y el modelo volvía a escribir el mismo marcador.
         """
         system = f"{CHAT_SYSTEM}\n\n{_correction_prompt(previous_reply, violations)}"
         conversation = [dict(message) for message in messages] or to_messages(history, current)
-        return await self._converse_loop(conversation, specs, run_tool, system=system)
+        missing = any(v.kind == "marker" and not getattr(v, "hint", None) and "." in str(v.value)
+                      and not str(v.value).startswith("{search.")
+                      for v in violations)
+        return await self._converse_loop(conversation, specs, run_tool, system=system, look_up=missing)
 
     async def _converse_loop(self, messages: list[dict[str, Any]], specs: Sequence[Mapping[str, Any]],
                              run_tool: ToolRunner, system: str = CHAT_SYSTEM, look_up: bool = False) -> ChatResult:

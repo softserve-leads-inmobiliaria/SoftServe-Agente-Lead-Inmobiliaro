@@ -139,6 +139,8 @@ def _value(sources: Sources, ref: str, path: str | None) -> str | None:
         return _zones(sources.zones) if ref == "zones" and sources.zones else None
     if ref == "search":
         return str(sources.search_count) if path == "count" and sources.search_count is not None else None
+    if path == "id":  # "ref. {prop_00238.id}": la referencia ya es el marcador (#247, visto en vivo)
+        return ref if ref in sources.records else None
     path = ALIASES.get(path, path)
     if path not in FIELDS:
         return None
