@@ -225,6 +225,19 @@ def test_a_malformed_bedrock_summary_is_a_format_error(raw):
         run(llm.summarize("Lead: hola", ""))
 
 
+def test_a_format_error_says_why_without_the_content():
+    """#247: en la prueba de jurado falló una vez y el log no decía si el JSON se cortó o vino una sección vacía."""
+    _, llm = bedrock(text(json.dumps({"busca": "Casa en Usaquen", "objeciones": "", "siguiente_paso": "Llamar"})))
+    with pytest.raises(LLMFormatError) as missing:
+        run(llm.summarize("Lead: hola", ""))
+    assert "objeciones" in str(missing.value) and "stop=end_turn" in str(missing.value)
+    assert "Usaquen" not in str(missing.value)
+    _, llm = bedrock(text('{"busca": "Casa en Usaquen", "objeciones": "Ninguna", "sigui'))
+    with pytest.raises(LLMFormatError, match="no es un objeto JSON") as cut:
+        run(llm.summarize("Lead: hola", ""))
+    assert "Usaquen" not in str(cut.value)
+
+
 def test_the_bedrock_agent_summary_passes_through_the_guardrails():
     _, llm = bedrock(text(json.dumps(sections())))
     assert run(summary.summarize(BedrockAgent(llm), TRANSCRIPT, FACTS)) == render(sections())

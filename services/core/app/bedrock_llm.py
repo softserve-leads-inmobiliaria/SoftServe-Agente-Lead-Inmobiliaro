@@ -311,10 +311,18 @@ class BedrockLLM:
             self.chat_model_id, system=[{"text": SUMMARY_SYSTEM}],
             messages=[{"role": "user", "content": [{"text": prompt}]}],
             inferenceConfig={"maxTokens": MAX_REPLY_TOKENS, "temperature": 0.0})
-        data = parse_json_object(_text_of(response))
+        # El motivo va en el error, sin el texto: en la prueba de jurado (#247) falló una vez y el log no decía si
+        # el JSON se cortó por `maxTokens` o si vino una sección vacía.
+        how = (f"stop={response.get('stopReason')}, "
+               f"tokens={(response.get('usage') or {}).get('outputTokens')}/{MAX_REPLY_TOKENS}")
+        try:
+            data = parse_json_object(_text_of(response))
+        except LLMFormatError:
+            raise LLMFormatError(f"el resumen no es un objeto JSON ({how})") from None
         sections = {key: data.get(key) for key in SUMMARY_KEYS}
-        if not all(isinstance(value, str) and value.strip() for value in sections.values()):
-            raise LLMFormatError("el resumen no trae las tres secciones")
+        missing = [key for key, value in sections.items() if not (isinstance(value, str) and value.strip())]
+        if missing:
+            raise LLMFormatError(f"al resumen le faltan secciones: {', '.join(missing)} ({how})")
         return {key: value.strip() for key, value in sections.items()}
 
     async def chat(self, history: Sequence[tuple[str, str]], current: str,
