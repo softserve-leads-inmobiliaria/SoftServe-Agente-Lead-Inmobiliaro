@@ -159,6 +159,9 @@ el pipeline de FAQ a la disponibilidad/cuota de ese proveedor para algo que no l
 **Consecuencias.** `C-5` fija el nombre exacto del modelo y su dimensión al implementarse; ese
 valor es el que define `N` en el esquema de `FaqEntry`.
 
+**Nota (7-oct).** `C-5` quedó como tarea futura, fuera del capstone (#31). La decisión sigue en pie para
+cuando se retome; mientras tanto `faq_entries` queda en el esquema sin uso.
+
 ---
 
 ## DT-8 — Versionado de los contratos: `schema_version` en el evento, archivo nuevo si es incompatible

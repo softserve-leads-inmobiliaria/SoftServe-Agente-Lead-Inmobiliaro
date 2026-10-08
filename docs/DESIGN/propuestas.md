@@ -135,7 +135,7 @@ tocan:
 | **`need_fit`** solo cuenta resultados de `search_properties` | ~2 | **Es base.** Un lead que llega por el anuncio de una propiedad que entra en su presupuesto queda con `need_fit = 0`, y eso sesga la conversión por banda del score |
 | #119: `decision_maker` y "mi esposa" | ~4 | No la bloquea, pero cambia un contrato: conviene antes de sumar más cambios de esquema |
 | #104: endurecer el stack de Docker | ~4 | Independiente y barato; tiene que estar antes de la demo |
-| `C-5` (#31): FAQ con embeddings | 6 | Independiente. Para la demo aporta menos que §2 |
+| `C-5` (#31): FAQ con embeddings | 6 | Independiente. Para la demo aporta menos que §2. Tarea futura: fuera del capstone (7-oct) |
 | `OBS-6` (#48): E2E contra el bot real | 6 | Independiente, pero `Z-2` depende de ella |
 | `Z-1` (#51), `Z-2` (#52): hardening y demo | 16 | Cierre por definición: `Z-1` no admite alcance nuevo, así que las propuestas tienen que entrar antes |
 
