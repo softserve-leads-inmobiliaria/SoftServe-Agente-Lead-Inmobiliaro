@@ -191,7 +191,8 @@ class BedrockAgent:
             visible = [_visible(s) for s in specs]
             current = _with_notes(turn.text, turn.listing, turn.protected_removed, turn.remembered, about,
                                   flags.get("asks_unlisted") is True, route.unvisitable)
-            chat = await self._llm.chat(turn.history, current, visible, run_tool)
+            chat = await self._llm.chat(turn.history, current, visible, run_tool,
+                                        look_up=flags.get("needs_lookup") is True)
             if not chat.text:
                 raise LLMFormatError("respuesta vacía")
             # El estado que consultó `visit_route` es de este turno: respalda "it's reserved" sin otra consulta.
