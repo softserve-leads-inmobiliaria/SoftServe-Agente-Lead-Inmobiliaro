@@ -17,7 +17,7 @@ from app.agent import (
     TurnInput,
     VisitRoute,
 )
-from app.bedrock_llm import BedrockLLM
+from app.bedrock_llm import REMOVED_NOTE, BedrockLLM
 from app.fakes.fake_llm import REPLIES
 from app.input_guard import OMITTED_MESSAGE
 from app.rate_limit import RateLimits
@@ -417,6 +417,29 @@ def test_the_bedrock_agent_answers_that_a_protected_characteristic_does_not_matt
     result = run(agent_for(client).run(message, FakeCatalog()))
     assert (result.text, result.intent) == (PROTECTED_ANSWER, "otro")
     assert client.calls_to(CHAT) == []
+
+
+def test_the_classifier_is_told_something_was_removed_and_decides_if_the_lead_asks_whether_it_matters():
+    # #247: "Can foreigners buy property here?" llega sin "foreigners" y no es `otro`; igual se contesta fijo.
+    client = ScriptedBedrock(classification("busqueda_propiedad", asks_if_it_matters=True))
+    message = TurnInput(event=EVENT, text="Can buy property here?", protected_removed=True)
+    result = run(agent_for(client).run(message, FakeCatalog()))
+    assert (result.text, result.route) == (PROTECTED_ANSWER, "protected") and client.calls_to(CHAT) == []
+    assert REMOVED_NOTE in client.calls_to(FAST)[0]["messages"][0]["content"][0]["text"]
+
+
+def test_a_question_about_something_else_goes_to_the_model_even_if_something_was_removed():
+    # "Can I bring my partner to the visit?" ("wife" pasa a "partner"): con "?" e intención `otro` recibía la fija.
+    client = ScriptedBedrock(classification("otro", asks_if_it_matters=False), text("Sure, they're welcome."))
+    message = TurnInput(event=EVENT, text="Can I bring my partner to the visit?", protected_removed=True)
+    result = run(agent_for(client).run(message, FakeCatalog()))
+    assert result.text != PROTECTED_ANSWER and len(client.calls_to(CHAT)) == 1
+
+
+def test_without_a_removed_mention_the_classifier_gets_no_notice():
+    client = ScriptedBedrock(classification("otro"), text("Sure."))
+    run(agent_for(client).run(turn("does that matter?"), FakeCatalog()))
+    assert REMOVED_NOTE not in client.calls_to(FAST)[0]["messages"][0]["content"][0]["text"]
 
 
 def test_the_fake_agent_answers_that_a_protected_characteristic_does_not_matter():

@@ -14,6 +14,7 @@ from app.bedrock_llm import (
     CLASSIFIER_SYSTEM,
     MARKER_FIELDS,
     MAX_TOOL_ROUNDS,
+    REMOVED_NOTE,
     BedrockLLM,
     LLMError,
     LLMFormatError,
@@ -132,7 +133,8 @@ def test_classify_returns_the_yes_or_no_answers_the_code_decides_with():
                                             wants_visit=False, frustrated=True))
     flags = run(llm(client).classify("I want to talk to an agent")).flags
     assert flags == {"asks_for_person": True, "wants_alert": False, "wants_visit": False, "frustrated": True}
-    assert all(f'"{flag}"' in CLASSIFIER_SYSTEM for flag in CLASSIFIER_FLAGS)
+    # `asks_if_it_matters` se pide solo cuando el guardrail quitó algo (`REMOVED_NOTE`).
+    assert all(f'"{flag}"' in CLASSIFIER_SYSTEM + REMOVED_NOTE for flag in CLASSIFIER_FLAGS)
 
 
 def test_a_yes_or_no_answer_that_is_missing_or_not_a_boolean_is_left_out():
