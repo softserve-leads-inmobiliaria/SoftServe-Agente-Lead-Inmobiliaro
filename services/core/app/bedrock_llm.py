@@ -497,7 +497,8 @@ def _described(violation: Any) -> str:
         hint = getattr(violation, "hint", None)
         return f"marker '{violation.value}' (" + (f"write {hint}" if hint else "no tool returned that property or field") + ")"
     if violation.kind == "reference":
-        return f"reference '{violation.value}' (no tool returned it)"
+        # M2 t4 (#247): "if you have a reference number (like prop_xxxxx)" y, al corregirse, "like prop_00123".
+        return f"reference '{violation.value}' (no tool returned it; never write a reference as an example)"
     return f"{violation.kind} '{violation.value}'"
 
 
