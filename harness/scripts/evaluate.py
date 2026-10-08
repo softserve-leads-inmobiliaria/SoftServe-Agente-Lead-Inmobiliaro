@@ -71,8 +71,9 @@ def send(core_url: str, conversation_id: str, lead_id: str, text: str, property_
 def _audits(connection: Any, conversation_id: str) -> list[str]:
     from sqlalchemy import text
 
+    # Sin `turn.decision` (actor `turn`): no es una detección del guardrail, la lee `jury.py`.
     return list(connection.execute(text("SELECT action FROM audit_log WHERE payload->>'conversation_id' = :c "
-                                        "ORDER BY id"), {"c": conversation_id}).scalars())
+                                        "AND actor <> 'turn' ORDER BY id"), {"c": conversation_id}).scalars())
 
 
 def _assistant_tool_calls(connection: Any, conversation_id: str) -> list[list[dict[str, Any]] | None]:

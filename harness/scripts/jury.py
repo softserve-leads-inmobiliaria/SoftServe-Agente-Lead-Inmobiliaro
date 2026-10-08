@@ -4,6 +4,8 @@ La evaluación en vivo (`evaluate.py`) mide los escenarios conocidos con expecta
 contrario: preguntas como las de un jurado que no vio el guion (amenidades que el catálogo no tiene, la agencia,
 opiniones, frases desordenadas, cambios de idea). No tiene umbrales: deja la transcripción con lo que el
 guardrail auditó en cada turno, y en los turnos donde una corrida anterior falló, qué hay que mirar (`WATCH`).
+Debajo de cada respuesta va por qué contestó así (`turn.decision`): quién la escribió, la intención, los campos del
+clasificador y los tipos de violación de la salida, sin valores.
 
 Hay cuatro sets: J (7-oct, 6 conversaciones), N y M (sin ver hasta que se corrieron, 6 y 6) y O (10). Un set nuevo se agrega
 con otra letra; el criterio para cerrar #247 es que ninguno invente un dato y que se vean a lo sumo 1 o 2 errores.
@@ -25,15 +27,17 @@ import urllib.request
 import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from evaluate import DEFAULT_PAUSE_S, _audits, core_settings, send  # noqa: E402
+from evaluate import DEFAULT_PAUSE_S, core_settings, send  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 REPORTS = ROOT / "tmp" / "jury"
+DECISION = "turn.decision"  # la auditoría de por qué contestó así el turno (app/turn.py)
 
 # Conversación -> (deep-link o None, mensajes). Un mensaje vacío es el `/start` del anuncio.
 CONVERSATIONS: dict[str, tuple[str | None, list[str]]] = {
@@ -292,6 +296,38 @@ WATCH: dict[tuple[str, int], str] = {
 }
 
 
+def _audit_rows(connection: Any, conversation_id: str) -> list[tuple[str, dict[str, Any]]]:
+    from sqlalchemy import text
+
+    return [(action, payload or {}) for action, payload in connection.execute(
+        text("SELECT action, payload FROM audit_log WHERE payload->>'conversation_id' = :c ORDER BY id"),
+        {"c": conversation_id})]
+
+
+def _why(rows: list[tuple[str, dict[str, Any]]]) -> tuple[list[str], str | None]:
+    """Las auditorías de un turno como se leen en la transcripción: las acciones (con los tipos de violación de la
+    salida) y la línea de `turn.decision`, si la hay."""
+    actions, why = [], None
+    for action, payload in rows:
+        if action == DECISION:
+            route, agent = payload.get("route", "?"), payload.get("agent_route")
+            route += f" (agente: {agent})" if agent and agent != route else ""
+            intent, classified = payload.get("intent", "?"), payload.get("classified")
+            intent += f" (clasificador: {classified})" if classified and classified != intent else ""
+            parts = [f"ruta {route}", f"intención {intent}"]
+            flags = payload.get("flags") or {}
+            parts += [f"{'' if value else 'no '}{name}" for name, value in sorted(flags.items()) if value is not None]
+            if payload.get("refers_to"):
+                parts.append(f"habla de {payload['refers_to']}")
+            if payload.get("visit_when"):
+                parts.append(f"cuándo {payload['visit_when']}")
+            why = " · ".join(parts)
+        else:
+            kinds = payload.get("kinds")
+            actions.append(f"{action}[{','.join(kinds)}]" if kinds else action)
+    return actions, why
+
+
 def _names(selected: list[str]) -> list[str]:
     """Las conversaciones de los sets (`M`) o nombres (`M4_preguntas_trampa`) pedidos; todas si no se pide nada."""
     if not selected:
@@ -345,12 +381,14 @@ def main(argv: list[str] | None = None) -> int:
                 reply, latency, error = send(args.core_url, conversation_id, lead_id, message,
                                              property_id if i == 1 else None, args.timeout)
                 with engine.connect() as connection:
-                    audits = _audits(connection, conversation_id)
-                new, seen = audits[seen:], len(audits)
-                print(f"  {i}: {latency:.1f}s {new}" + (f" ERROR {error}" if error else ""), flush=True)
+                    audits = _audit_rows(connection, conversation_id)
+                (new, why), seen = _why(audits[seen:]), len(audits)
+                print(f"  {i}: {latency:.1f}s {new} {why or ''}" + (f" ERROR {error}" if error else ""), flush=True)
                 lines += [f"**{i}. Lead:** {message or '(/start)'}", "",
                           f"**Agente** ({latency:.1f}s{', ' + ', '.join(new) if new else ''}):", "",
                           *[f"> {row}" for row in (reply or f"(sin respuesta: {error})").splitlines()], ""]
+                if why:
+                    lines += [f"*Por qué:* {why}", ""]
                 if (name, i) in WATCH:
                     lines += [f"*Mirar:* {WATCH[(name, i)]}", ""]
                 out.write_text("\n".join(lines), encoding="utf-8")
