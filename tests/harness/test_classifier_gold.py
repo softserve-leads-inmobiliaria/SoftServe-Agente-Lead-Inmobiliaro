@@ -18,7 +18,7 @@ from app.interest import UNCLEAR  # noqa: E402
 from app.visits import visit_when  # noqa: E402
 
 ITEMS = gold.load()
-KEYS = {"id", "text", "last", "shown", "intent", "flags", "unsure", "refers_to", "visit_when"}
+KEYS = {"id", "text", "last", "shown", "intent", "flags", "unsure", "refers_to", "visit_when", *gold.LABELED_ONLY}
 
 
 def test_the_gold_set_has_enough_messages_with_unique_ids():
@@ -40,8 +40,9 @@ def test_every_label_is_one_the_classifier_can_answer():
 def test_every_field_is_measured_somewhere():
     measured = {field for item in ITEMS for field in gold.expected(item)}
     assert measured == {"intent", "refers_to", "visit_when", *CLASSIFIER_FLAGS}
-    for flag in CLASSIFIER_FLAGS:  # cada bandera, con al menos un caso en true
-        assert any(flag in item.get("flags", []) for item in ITEMS), flag
+    for flag in CLASSIFIER_FLAGS:  # cada bandera, con al menos un caso en true y uno en false
+        assert any(gold.expected(item).get(flag) is True for item in ITEMS), flag
+        assert any(gold.expected(item).get(flag) is False for item in ITEMS), flag
 
 
 def test_the_flags_and_days_are_the_ones_of_the_core():
@@ -58,6 +59,11 @@ def test_flags_not_listed_are_expected_false_unless_unsure():
                                    "asks_unlisted": False}
 
 
+def test_a_flag_added_later_is_measured_only_where_it_is_labeled():
+    assert "needs_lookup" not in gold.expected({"id": "x", "text": "lot", "flags": []})
+    assert gold.expected({"id": "x", "text": "lot", "flags": [], "needs_lookup": True})["needs_lookup"] is True
+
+
 def _answer(intent="otro", refers_to=None, when=None, **flags):
     return gold.observed(SimpleNamespace(intent=intent, flags=flags, refers_to=refers_to, when=when))
 
@@ -66,7 +72,8 @@ def test_each_field_is_scored_on_its_own_and_a_missing_flag_is_a_miss():
     items = [{"id": "a", "text": "Can I see it on Monday?", "shown": ["prop_00233"], "intent": "agendar_visita",
               "flags": ["wants_visit"], "refers_to": "prop_00233", "visit_when": {"days": ["mon"]}}]
     right = _answer("agendar_visita", "prop_00233", {"days": [0], "part": None, "other_day": False},
-                    wants_visit=True, asks_for_person=False, wants_alert=False, frustrated=False, asks_unlisted=False)
+                    wants_visit=True, asks_for_person=False, wants_alert=False, frustrated=False, asks_unlisted=False,
+                    needs_lookup=True)
     assert gold.score(items, {"a": right})["misses"] == []
     wrong = _answer("agendar_visita", "prop_00233", None, wants_visit=True)
     result = gold.score(items, {"a": wrong})

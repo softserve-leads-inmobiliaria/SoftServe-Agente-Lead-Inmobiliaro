@@ -721,3 +721,24 @@ def test_the_time_of_the_booked_visit_can_be_repeated_but_not_another_one():
     client = ScriptedBedrock(classification("otro"), text(reply.replace("10:00", "11:30")), text("See you then!"))
     result = run(agent_for(client).run(booked, FakeCatalog(properties=[])))
     assert result.guard_audits == [("output.factuality_regenerated", {"violations": 2, "kinds": ["number"]})]
+
+
+# --- #247: lo que necesita el catálogo se consulta antes de contestar -------------------------------------------
+
+def test_when_the_message_needs_the_catalog_the_first_round_must_call_a_tool():
+    # Evaluación de J, N, M y O (8-oct): "lot" y "whats the cheapest u have then" se contestaban pidiendo operación
+    # y ciudad, sin buscar.
+    client = ScriptedBedrock(classification("busqueda_propiedad", needs_lookup=True),
+                             tool_use("search_properties", {"kind": "terreno"}), text("There's a lot in Usaquen."))
+    run(agent_for(client).run(TurnInput(event=EVENT, text="lot"), FakeCatalog()))
+    first, second = client.calls_to(CHAT)
+    assert first["toolConfig"]["toolChoice"] == {"any": {}}
+    assert "toolChoice" not in second["toolConfig"]  # con los resultados, tiene que poder contestar
+
+
+@pytest.mark.parametrize("flag", [False, None])
+def test_without_needs_lookup_the_model_may_answer_without_tools(flag):
+    signal = {} if flag is None else {"needs_lookup": flag}
+    client = ScriptedBedrock(classification("saludo", **signal), text("Hi! How can I help?"))
+    run(agent_for(client).run(TurnInput(event=EVENT, text="hi there"), FakeCatalog()))
+    assert "toolChoice" not in client.calls_to(CHAT)[0]["toolConfig"]
