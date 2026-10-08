@@ -778,6 +778,24 @@ def test_a_property_marker_without_a_value_makes_the_regeneration_call_a_tool():
     assert "toolChoice" not in draft["toolConfig"] and regeneration["toolConfig"]["toolChoice"] == {"any": {}}
 
 
+SHOWN = {"p1": {"id": "p1", "title": "3-bedroom house in Usaquen"},
+         "p2": {"id": "p2", "title": "4-bedroom house in Usaquen"}}
+
+
+@pytest.mark.parametrize("last, forced", [
+    ("I found 1 house available: 3-bedroom house in Usaquen (ref. p1).", True),  # J3 t2 (#247)
+    ("The 4-bedroom house in Usaquen is reserved.", False),
+    ("The house (ref. p2) has 4 bedrooms.", False),
+])
+def test_a_shown_property_the_last_reply_did_not_name_is_looked_up_first(last, forced):
+    client = ScriptedBedrock(classification("otro", refers_to="p2"),
+                             tool_use("get_property", {"property_id": "p2"}), text("Sure, let me tell you more."))
+    message = TurnInput(event=EVENT, text="Can I reserve the 4-bedroom one?", remembered=SHOWN,
+                        history=[("user", "Houses in Bogota?"), ("assistant", last)])
+    run(agent_for(client).run(message, FakeCatalog()))
+    assert ("toolChoice" in client.calls_to(CHAT)[0]["toolConfig"]) is forced
+
+
 def test_a_typed_number_does_not_force_a_tool_in_the_regeneration():
     client = ScriptedBedrock(classification("otro"), text("It's $2,000,000."), text("What's your budget?"))
     run(agent_for(client).run(TurnInput(event=EVENT, text="How much is it?"), FakeCatalog()))

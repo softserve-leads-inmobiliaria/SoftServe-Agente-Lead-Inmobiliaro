@@ -300,6 +300,9 @@ CASOS = [
      "disponibilidad_apartada", "", True),
     ("en_lo_que_hay_disponible_no_es_estado", "Tell me your budget and I'll tell you what is available.",
      "disponibilidad_apartada", "", True),
+    # Con un adverbio en medio (#247, O10 t2, una respuesta sobre el mercado).
+    ("en_lo_disponible_ahora_no_es_estado", "What I can do is show you what's currently available.",
+     "disponibilidad_apartada", "", True),
     # Al ofrecer alternativas de una apartada, "available" califica a otras propiedades en plural (#220, visto
     # en la evaluación en vivo). En singular, o dicho de esta, sigue siendo el estado.
     ("en_otras_disponibles_no_es_estado", "Would you like me to find other available houses in Usaquen?",
