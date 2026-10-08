@@ -103,6 +103,17 @@ Y lo que todavía no hace bien (medido, no por diseño):
 El criterio de #52 pide 2 o 3 ensayos contra los contenedores reales. Cada ensayo es una corrida de
 `12_guion_demo`; la noche del 8-oct van 5 (`evaluate.py --reps 5`, junto con los demás escenarios de la demo).
 
+Cómo correr un ensayo medido sin perder nada:
+
+1. El equipo no se suspende durante la corrida (unas 2 horas con `--reps 5`). Si igual se corta, el informe
+   queda con lo medido hasta ahí, marcado como incompleto.
+2. `python harness/scripts/evaluate.py --reps 5` deja `tmp/eval/<fecha>_evaluacion.md` y `.json`: cada turno con
+   su texto, la respuesta, las tools, los guardrails que saltaron, la ruta, el clasificador y la latencia.
+3. **Antes de apagar el stack**, `python harness/scripts/tokens.py tmp/eval/<fecha>_evaluacion.json`: los tokens y
+   las llamadas al LLM solo están en Phoenix, y `down.sh` borra su volumen.
+4. Antes de presentar, `bash scripts/demo/down.sh` y `bash scripts/demo/up.sh`: la cola del panel y la vista de
+   negocio quedan sin los leads de las corridas. Lo mismo después de un ensayo a mano que cierre la operación.
+
 | Fecha | Cómo | Turnos OK | Degradadas | Estado y banda | Notas |
 | :--- | :--- | ---: | ---: | :--- | :--- |
 | | | | | | |

@@ -155,6 +155,25 @@ def core_settings() -> dict[str, str]:
     return dict(line.split("=", 1) for line in out.stdout.splitlines() if "=" in line)
 
 
+def write_report(base: Path, runs: list[ScenarioRun], scenarios: dict[str, Scenario], settings: dict[str, str],
+                 args: argparse.Namespace, started: datetime, planned: int) -> None:
+    """El informe (.md) y los datos (.json) de lo corrido hasta ahora. Si faltan conversaciones, lo dice."""
+    minutes = (datetime.now() - started).total_seconds() / 60
+    header = [
+        f"# Evaluación en vivo — {started:%Y-%m-%d %H:%M}",
+        "",
+        f"- Proveedor: `{settings.get('LLM_PROVIDER', '?')}` · conversación: `{settings.get('BEDROCK_MODEL_ID_CHAT', '?')}`"
+        f" · intención: `{settings.get('BEDROCK_MODEL_ID_CLASSIFIER', '?')}`",
+        f"- {args.reps} corrida(s) de {len(scenarios)} escenario(s), {minutes:.0f} min · pausa entre turnos {args.pausa:.0f}s",
+    ]
+    if len(runs) < planned:
+        header.append(f"- **Incompleta:** {len(runs)} de {planned} conversaciones.")
+    base.with_suffix(".md").write_text(render_report(runs, scenarios, header), encoding="utf-8")
+    payload = {"started": started.isoformat(), "settings": settings, "reps": args.reps,
+               "planned_conversations": planned, "complete": len(runs) == planned, **as_json(runs, scenarios)}
+    base.with_suffix(".json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     from sqlalchemy import create_engine
 
@@ -184,29 +203,26 @@ def main(argv: list[str] | None = None) -> int:
     started = datetime.now()
     engine = create_engine(args.database_url or database_url())
     runs: list[ScenarioRun] = []
+    REPORTS.mkdir(parents=True, exist_ok=True)
+    base = REPORTS / f"{started:%Y-%m-%d_%H%M%S}_evaluacion"
+    scenarios = {name: ALL[name] for name in names}
+    planned = args.reps * len(names)
+    complete = False
     try:
         for rep in range(1, args.reps + 1):
             for name in names:
                 print(f"{name} #{rep}", flush=True)
                 runs.append(run_scenario(name, ALL[name], rep, core_url=args.core_url, engine=engine,
                                          pause_s=args.pausa, timeout=args.timeout))
+                # Se reescribe después de cada conversación: si la corrida se corta (Ctrl+C, el equipo se
+                # suspende, se cae el core), lo medido hasta ahí queda en disco, marcado como incompleto.
+                write_report(base, runs, scenarios, settings, args, started, planned)
+        complete = True
     finally:
         engine.dispose()
-
-    minutes = (datetime.now() - started).total_seconds() / 60
-    header = [
-        f"# Evaluación en vivo — {started:%Y-%m-%d %H:%M}",
-        "",
-        f"- Proveedor: `{settings.get('LLM_PROVIDER', '?')}` · conversación: `{settings.get('BEDROCK_MODEL_ID_CHAT', '?')}`"
-        f" · intención: `{settings.get('BEDROCK_MODEL_ID_CLASSIFIER', '?')}`",
-        f"- {args.reps} corrida(s) de {len(names)} escenario(s), {minutes:.0f} min · pausa entre turnos {args.pausa:.0f}s",
-    ]
-    REPORTS.mkdir(parents=True, exist_ok=True)
-    base = REPORTS / f"{started:%Y-%m-%d_%H%M%S}_evaluacion"
-    scenarios = {name: ALL[name] for name in names}
-    base.with_suffix(".md").write_text(render_report(runs, scenarios, header), encoding="utf-8")
-    payload = {"started": started.isoformat(), "settings": settings, "reps": args.reps, **as_json(runs, scenarios)}
-    base.with_suffix(".json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        if runs and not complete:
+            write_report(base, runs, scenarios, settings, args, started, planned)
+            print(f"\nCORRIDA INCOMPLETA: {len(runs)} de {planned} conversaciones. Informe: {base.with_suffix('.md')}")
 
     total = summarize(runs, scenarios)
     problems = breaches(total)
