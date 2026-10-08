@@ -329,7 +329,9 @@ async def _output_violations(text: str, tool_results: Mapping[str, Any],
                   + factuality.check_lead_claims(bare, tool_results, turn.text, turn.remembered)
                   + address_guard.check(reply, turn.lead_qualified, turn.text)
                   + promise_guard.check(reply, {"remembered": dict(turn.remembered), **tool_results}, turn.text)
-                  + promise_guard.check_deferred(reply, consulted_tools=bool(tool_results)))
+                  # Con marcadores, el dato va en esta misma respuesta: "Let me check the price per m²: "
+                  # {p.price_per_m2}" no deja nada pendiente (#247, O5 t2 se degradaba).
+                  + promise_guard.check_deferred(reply, consulted_tools=bool(tool_results) or bare != text))
     return list(dict.fromkeys(violations)), reply
 
 
