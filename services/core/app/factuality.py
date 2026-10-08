@@ -38,8 +38,10 @@ _STATUS_WORDS = {
 _NOT_BEFORE = r"(?<!not )(?<!n't )(?<!n’t )(?<!no longer )"
 # "Available" también es el dinero o el tiempo del lead: "how much do you have available for the down
 # payment?" o "are you available on Friday?" no hablan de la propiedad (#202, visto en vivo). Tampoco "what's
-# available": es el inventario en general, no el estado de una propiedad (#213, visto en vivo).
-_NOT_THE_PROPERTY = re.compile(r"(?:\bhave|\bhas|\byou|\byou're|\bwe're|\bthey're|\bwhat's|\bwhat’s|\bwhat is)\s+$",
+# available": es el inventario en general, no el estado de una propiedad (#213, visto en vivo). Con un adverbio en
+# medio también: "what's currently available" degradaba una respuesta sobre el mercado (#247, O10 t2).
+_NOT_THE_PROPERTY = re.compile(r"(?:\bhave|\bhas|\byou|\byou're|\bwe're|\bthey're|\bwhat's|\bwhat’s|\bwhat is)"
+                               r"(?:\s+(?:currently|still|now|actually))?\s+$",
                                re.IGNORECASE)
 _STATUS = re.compile(_NOT_BEFORE + r"\b(" + "|".join(sorted(_STATUS_WORDS, key=len, reverse=True)) + r")\b",
                      re.IGNORECASE)

@@ -195,8 +195,8 @@ class BedrockAgent:
             visible = [_visible(s) for s in specs]
             current = _with_notes(turn.text, turn.listing, turn.protected_removed, turn.remembered, about,
                                   flags.get("asks_unlisted") is True, route.unvisitable)
-            chat = await self._llm.chat(turn.history, current, visible, run_tool,
-                                        look_up=flags.get("needs_lookup") is True)
+            look_up = flags.get("needs_lookup") is True or _not_talked_about(about, shown, last_assistant)
+            chat = await self._llm.chat(turn.history, current, visible, run_tool, look_up=look_up)
             if not chat.text:
                 raise LLMFormatError("respuesta vacía")
             # El estado que consultó `visit_route` es de este turno: respalda "it's reserved" sin otra consulta.
@@ -252,6 +252,20 @@ UNLISTED_NOTE = ("(The lead may be asking about something the listings don't rec
 UNVISITABLE_NOTE = ("(The lead wants to visit {title} (ref. {id}), but it is {status} right now and can't be visited. "
                     "Say so in one sentence, then search for similar properties that are available (same area and "
                     "kind, or the closest) and show them, so the lead can pick one to visit.)")
+
+
+def _not_talked_about(about: str | None, shown: Sequence[Mapping[str, Any]], last_assistant: str | None) -> bool:
+    """El mensaje habla de una propiedad ya mostrada que la última respuesta no nombra: hay que consultarla.
+
+    J3 t2 (#247): "Can I reserve the 4-bedroom one?" sobre la casa apartada que trajo la búsqueda; el clasificador
+    acertaba `refers_to`, y el modelo, sin consultar, contestaba que no había ninguna de 4 habitaciones.
+    """
+    focused = interest.focused_property(about, list(shown))
+    if focused is None:
+        return False
+    said = (last_assistant or "").lower()
+    title = str(focused.get("title") or "").lower()
+    return focused["id"].lower() not in said and not (title and title in said)
 
 
 def _with_notes(text: str, listing: Mapping[str, Any] | None, protected_removed: bool = False,
