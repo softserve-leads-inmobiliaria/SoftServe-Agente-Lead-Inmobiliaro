@@ -15,6 +15,7 @@ from app.agent import (
     BedrockAgent,
     FakeAgent,
     TurnInput,
+    VisitRoute,
 )
 from app.bedrock_llm import BedrockLLM
 from app.fakes.fake_llm import REPLIES
@@ -612,12 +613,34 @@ def test_the_classifiers_answers_reach_the_turn():
     assert result.flags == {"wants_alert": True, "wants_visit": False}
 
 
+async def by_code(classification):
+    return VisitRoute(by_code=True)
+
+
+def test_a_property_that_cannot_be_visited_is_answered_by_the_model_with_similar_ones():
+    # Prueba de jurado O6 (#247): "Show me something similar that I can visit" desde el anuncio de una casa
+    # apartada -> la agenda contestaba "is reserved" y nadie buscaba las parecidas.
+    async def reserved(classification):
+        return VisitRoute(unvisitable={"id": "prop_00234", "title": "House in Usaquen", "status": "apartado"})
+    client = ScriptedBedrock(classification("busqueda_propiedad", wants_visit=True),
+                             text("That house is reserved, but here are similar ones."))
+    message = TurnInput(event=EVENT, text="Show me something similar that I can visit", visit_route=reserved)
+    result = run(agent_for(client).run(message, FakeCatalog()))
+    assert result.text == "That house is reserved, but here are similar ones." and result.route == "agent"
+    sent = client.calls_to(CHAT)[0]["messages"][-1]["content"][0]["text"]
+    assert ("The lead wants to visit House in Usaquen (ref. prop_00234), but it is reserved right now" in sent
+            and "search for similar properties that are available" in sent)
+
+
 def test_when_the_agenda_answers_only_the_classifier_is_called():
     """#229: en vivo el modelo contestaba igual a "1", copiaba los horarios, y se regeneraba para nada."""
     client = ScriptedBedrock(classification("otro", wants_visit=True))
     asked = []
-    message = TurnInput(event=EVENT, text="Can I go see it?",
-                        answered_by_code=lambda c: asked.append((c.intent, c.flags)) or True)
+
+    async def by_code(c):
+        asked.append((c.intent, c.flags))
+        return VisitRoute(by_code=True)
+    message = TurnInput(event=EVENT, text="Can I go see it?", visit_route=by_code)
     result = run(agent_for(client).run(message, FakeCatalog()))
     assert (result.text, result.flags) == ("", {"wants_visit": True}) and client.calls_to(CHAT) == []
     assert asked == [("otro", {"wants_visit": True})]
@@ -625,7 +648,7 @@ def test_when_the_agenda_answers_only_the_classifier_is_called():
 
 def test_a_human_request_is_answered_even_if_the_agenda_would_take_the_turn():
     client = ScriptedBedrock(classification("solicitud_humano", asks_for_person=True))
-    message = TurnInput(event=EVENT, text="I want to talk to an agent", answered_by_code=lambda c: True)
+    message = TurnInput(event=EVENT, text="I want to talk to an agent", visit_route=by_code)
     assert run(agent_for(client).run(message, FakeCatalog())).intent == "solicitud_humano"
 
 
@@ -654,7 +677,7 @@ def test_the_classifier_says_when_the_lead_wants_to_visit():
     client = ScriptedBedrock(classification("agendar_visita", visit_when={"days": ["sat", "sun"],
                                                                           "part_of_day": "morning"}))
     result = run(agent_for(client).run(TurnInput(event=EVENT, text="This weekend in the morning",
-                                                 answered_by_code=lambda c: True), FakeCatalog()))
+                                                 visit_route=by_code), FakeCatalog()))
     assert result.visit_when == {"days": [5, 6], "part": "morning", "other_day": False}
 
 
@@ -685,3 +708,16 @@ def test_the_model_sees_the_references_of_the_properties_already_shown():
     result = run(agent_for(client).run(message, FakeCatalog()))
     sent = client.calls_to(CHAT)[0]["messages"][-1]["content"][0]["text"]
     assert "prop_00242 (Commercial space for rent in Chapinero)" in sent and result.text == "It's 120 m²."
+
+
+def test_the_time_of_the_booked_visit_can_be_repeated_but_not_another_one():
+    # Prueba de jurado O9 (#247): "Can I bring my wife to the visit?" -> "See you both on Monday, October 19th at
+    # 10:00!" se degradaba: la hora la había escrito la agenda, pero no era fuente de nada.
+    reply = "Of course! See you both on Monday, October 19th at 10:00."
+    booked = TurnInput(event=EVENT, text="Can I bring my partner to the visit?", booked_at="2026-10-19T10:00:00-05:00")
+    client = ScriptedBedrock(classification("otro"), text(reply))
+    result = run(agent_for(client).run(booked, FakeCatalog(properties=[])))
+    assert (result.text, result.guard_audits) == (reply, [])
+    client = ScriptedBedrock(classification("otro"), text(reply.replace("10:00", "11:30")), text("See you then!"))
+    result = run(agent_for(client).run(booked, FakeCatalog(properties=[])))
+    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 2, "kinds": ["number"]})]

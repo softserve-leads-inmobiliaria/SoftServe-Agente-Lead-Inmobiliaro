@@ -9,7 +9,7 @@ from catalog_stub import stub_call
 from test_bedrock_llm import llm
 from test_visits_turn import INBOUND, agenda  # noqa: F401 (fixture)
 
-from app.agent import UNCLEAR_NOTE, AgentResult, _with_notes
+from app.agent import UNCLEAR_NOTE, AgentResult, VisitRoute, _with_notes
 from app.bedrock_llm import Classification
 from app.interest import (
     REMEMBERED_KEY,
@@ -127,14 +127,18 @@ class Catalog:
         return stub_call(tool, arguments)
 
 
+SIMILAR = "That one is reserved. These similar houses are available: ..."
+
+
 class Scripted:
     """Un agente con turnos guionados: busca dos casas (o mira la ficha de `first`), y después pide visitar la que
-    diga `refers_to`."""
+    diga `refers_to`. Como el agente de Bedrock, pregunta a `visit_route` quién contesta; con `routes=False`, como
+    `FakeAgent`, no pregunta y contesta siempre él."""
 
     name = "guionado"
 
-    def __init__(self, about, first=None):
-        self.about, self.turns = about, 0
+    def __init__(self, about, first=None, routes=True):
+        self.about, self.turns, self.routes = about, 0, routes
         found = {"properties": [{**BIG_HOUSE, "status": "apartado"}, {**HOUSE, "status": "disponible"}]}
         self.first = first or {"search_properties": found}
 
@@ -144,15 +148,17 @@ class Scripted:
             return AgentResult(text="Here it is.", intent="busqueda_propiedad", tool_results=self.first,
                                tool_calls=[{"name": name, "is_error": False} for name in self.first])
         flags = {"wants_visit": True}
-        # Como el agente de Bedrock: si la agenda va a contestar, solo clasifica; si no, pregunta cuál.
-        answered = turn.answered_by_code(Classification("agendar_visita", {}, flags, None, self.about))
-        return AgentResult(text="" if answered else "Which of the two houses would you like to see?",
-                           intent="agendar_visita", flags=flags, refers_to=self.about,
-                           route="agenda" if answered else "agent")
+        # Como el agente de Bedrock: si la agenda va a contestar, solo clasifica; si la propiedad no se puede
+        # visitar, busca parecidas; si no sabe cuál, pregunta.
+        route = (await turn.visit_route(Classification("agendar_visita", {}, flags, None, self.about))
+                 if self.routes else VisitRoute())
+        text = "" if route.by_code else SIMILAR if route.unvisitable else "Which of the two houses would you like to see?"
+        return AgentResult(text=text, intent="agendar_visita", flags=flags, refers_to=self.about,
+                           route="agenda" if route.by_code else "agent")
 
 
-def _conversation(engine, about, statuses, first=None):
-    agent, catalog = Scripted(about, first), Catalog(statuses)
+def _conversation(engine, about, statuses, first=None, routes=True):
+    agent, catalog = Scripted(about, first, routes), Catalog(statuses)
     ids = {"conversation_id": str(uuid.uuid4()), "lead_id": str(uuid.uuid4())}
 
     def say(message):
@@ -169,13 +175,22 @@ def test_the_visit_is_offered_for_the_property_the_lead_means(engine, agenda):  
     assert catalog.checked == ["prop_00233"]
 
 
-def test_a_reserved_property_gets_no_slots_and_the_lead_is_told_why(engine, agenda):  # noqa: F811
-    # Prueba de jurado: pedir la casa apartada ofrecía horarios de la otra.
+def test_a_reserved_property_gets_no_slots_and_the_agent_shows_similar_ones(engine, agenda):  # noqa: F811
+    # Prueba de jurado: pedir la casa apartada ofrecía horarios de la otra; después (O6), la agenda decía que
+    # estaba apartada sin buscar parecidas.
     say, catalog = _conversation(engine, "prop_00234", {"prop_00233": "disponible", "prop_00234": "apartado"})
+    say("Houses in Usaquen?")
+    assert say("Can I visit the 4-bedroom one?") == SIMILAR
+    assert not any(operation == "get_slots" for operation, _ in agenda.calls)
+    assert catalog.checked == ["prop_00234"]  # una sola consulta del estado: la decisión vale para la agenda
+
+
+def test_without_asking_the_route_the_agenda_says_why_with_fixed_text(engine, agenda):  # noqa: F811
+    say, _ = _conversation(engine, "prop_00234", {"prop_00233": "disponible", "prop_00234": "apartado"},
+                           routes=False)
     say("Houses in Usaquen?")
     reply = say("Can I visit the 4-bedroom one?")
     assert reply.startswith("4-bedroom house in Usaquen is reserved right now, so I can't book a visit to it.")
-    assert not any(operation == "get_slots" for operation, _ in agenda.calls)
 
 
 @pytest.mark.parametrize("about", [UNCLEAR, None])
@@ -192,6 +207,12 @@ def test_a_remembered_reserved_property_gets_no_slots_either(engine, agenda):  #
     say, catalog = _conversation(engine, None, {"prop_00234": "apartado"},
                                  first={"get_property": BIG_HOUSE})  # sin estado, como la recordada
     say("Tell me about the 4-bedroom house")
-    reply = say("Show me something similar that I can visit")
-    assert reply.startswith("4-bedroom house in Usaquen is reserved right now")
+    assert say("Show me something similar that I can visit") == SIMILAR
     assert catalog.checked == ["prop_00234"] and not any(op == "get_slots" for op, _ in agenda.calls)
+
+
+def test_an_available_property_still_gets_its_slots_from_the_agenda(engine, agenda):  # noqa: F811
+    say, catalog = _conversation(engine, None, {"prop_00233": "disponible"}, first={"get_property": HOUSE})
+    say("Tell me about the 3-bedroom house")
+    assert say("Can I visit it?").startswith("Here are the available times to visit 3-bedroom house in Usaquen")
+    assert catalog.checked == ["prop_00233"]

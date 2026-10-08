@@ -37,9 +37,9 @@ def test_each_turn_says_who_wrote_the_reply_and_what_the_classifier_read(engine,
     assert second["flags"] == {"wants_visit": True} and second["refers_to"] == "prop_00233"
 
 
-def test_a_property_that_cannot_be_visited_shows_as_its_own_agenda_reply(engine, agenda):  # noqa: F811
+def test_a_property_that_cannot_be_visited_is_recorded_with_who_answered(engine, agenda):  # noqa: F811
     *_, last = _say_all(engine, "prop_00234", ["Houses in Usaquen?", "Can I visit the 4-bedroom one?"])
-    assert last["route"] == "agenda:not_visitable"
+    assert (last["route"], last["unvisitable"]) == ("agent", "prop_00234")
 
 
 def test_the_decision_carries_nothing_the_lead_wrote(engine, agenda):  # noqa: F811
