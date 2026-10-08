@@ -95,8 +95,6 @@ Y lo que todavía no hace bien (medido, no por diseño):
 
 - La promoción del depa dice "valid until December 31, 2099": es el dato del seed, puesto lejos para que los
   tests no venzan.
-- La respuesta fija de fair housing termina con "What kind of property are you looking for?" aunque el lead vino
-  de un anuncio.
 - Si el lead pregunta por una propiedad apartada que vio en una búsqueda, el agente puede decir que "se la
   mostró".
 
