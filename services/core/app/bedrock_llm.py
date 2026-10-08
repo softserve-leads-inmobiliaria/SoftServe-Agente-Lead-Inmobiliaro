@@ -389,12 +389,14 @@ class BedrockLLM:
 
         Si falló un marcador de una propiedad sin otro que lo reemplace, la primera ronda obliga a llamar una tool
         (como `needs_lookup`, DT-68): en J5 t4 (#247) `{prop_00235.income_multiple}` no venía en
-        `check_requirements`, la corrección pedía get_property y el modelo volvía a escribir el mismo marcador.
+        `check_requirements`, la corrección pedía get_property y el modelo volvía a escribir el mismo marcador. Lo
+        mismo con un número escrito a mano que ningún marcador respalda ("minimum $3,450").
         """
         system = f"{CHAT_SYSTEM}\n\n{_correction_prompt(previous_reply, violations)}"
         conversation = [dict(message) for message in messages] or to_messages(history, current)
-        missing = any(v.kind == "marker" and not getattr(v, "hint", None) and "." in str(v.value)
-                      and not str(v.value).startswith("{search.")
+        missing = any(not getattr(v, "hint", None)
+                      and (v.kind == "number" or v.kind == "marker" and "." in str(v.value)
+                           and not str(v.value).startswith("{search."))
                       for v in violations)
         return await self._converse_loop(conversation, specs, run_tool, system=system, look_up=missing)
 

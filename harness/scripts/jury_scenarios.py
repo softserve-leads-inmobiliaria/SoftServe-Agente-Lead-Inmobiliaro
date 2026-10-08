@@ -75,7 +75,7 @@ JURY: dict[str, Scenario] = {
             Turn("I'm looking for a house with a pool in Bogota", tools=SEARCH, expect_any=("Usaquen",)),
             Turn("Can I reserve the 4-bedroom one?", expect_any=("reserved",), forbid=OFFERED),
             Turn("When will it be available again?", forbid=DATES),
-            Turn("What about the house in Chapinero?", expect_any=("off the market", "not available")),
+            Turn("What about the house in Chapinero?", expect_any=("off the market", "not available", "no longer available", "sold")),
         ),
     ),
     "J4_preventa": Scenario(

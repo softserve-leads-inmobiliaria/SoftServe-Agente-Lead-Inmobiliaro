@@ -796,9 +796,18 @@ def test_a_shown_property_the_last_reply_did_not_name_is_looked_up_first(last, f
     assert ("toolChoice" in client.calls_to(CHAT)[0]["toolConfig"]) is forced
 
 
-def test_a_typed_number_does_not_force_a_tool_in_the_regeneration():
-    client = ScriptedBedrock(classification("otro"), text("It's $2,000,000."), text("What's your budget?"))
+def test_a_typed_number_no_marker_gives_makes_the_regeneration_call_a_tool():
+    # J5 t4: "minimum $3,450" a mano; corregido, el modelo escribía el marcador sin consultar.
+    client = ScriptedBedrock(classification("otro"), text("It's $2,000,000."),
+                             tool_use("get_property", {"property_id": "p1"}), text("What's your budget?"))
     run(agent_for(client).run(TurnInput(event=EVENT, text="How much is it?"), FakeCatalog()))
+    assert client.calls_to(CHAT)[1]["toolConfig"]["toolChoice"] == {"any": {}}
+
+
+def test_a_violation_with_a_marker_to_use_does_not_force_a_tool():
+    remembered = {"p1": {"bathrooms": 2.5}, "p2": {"bathrooms": 2.5}}  # el número es de dos: la pista los nombra
+    client = ScriptedBedrock(classification("otro"), text("It has 2.5 baths."), text("It has {p1.bathrooms} baths."))
+    run(agent_for(client).run(TurnInput(event=EVENT, text="Baths?", remembered=remembered), FakeCatalog()))
     assert "toolChoice" not in client.calls_to(CHAT)[1]["toolConfig"]
 
 
