@@ -98,8 +98,8 @@ generalicen. Para eso hace falta un set nuevo (§6).
 | M1 t7 "next Tuesday afternoon" | Horarios del jueves | ✅ Martes 13-oct, 12:00, 13:00 y 14:00 |
 | M5 t7 "another day" | "I didn't quite get which time" | ✅ Ofrece horarios de otro día |
 | M4 t6 "the reserved apartment" | Degradada (referencia inventada) | ✅ "We've only talked about the 3-bedroom house in Usaquén… which is available" |
-| M1 t5 "HOA fees included?" | Afirmaba que van aparte | ❌ Igual: "No, HOA fees are separate". Ninguna tool trae ese dato (DT-62, consecuencias) |
-| M2 t3 presupuesto y cuota inicial | Los mezclaba | ⚠️ Mejor, pero insinúa que con $140,000 cubre la cuota; en t6 pregunta si ese es el monto para la cuota |
+| M1 t5 "HOA fees included?" | Afirmaba que van aparte | ❌ Igual, y ahora se contradice: "No, HOA fees are separate…" y en la frase siguiente "I don't have the HOA fee amount in the system". El "No" sigue siendo inventado; ninguna tool trae ese dato (DT-62, consecuencias) |
+| M2 t3 presupuesto y cuota inicial | Los mezclaba | ⚠️ Mejor, pero insinúa que con $140,000 cubre la cuota, y afirma sin respaldo que "could potentially finance the rest with a bank". En t6 pregunta si ese es el monto para la cuota |
 
 **Nuevo en M r2:**
 
@@ -111,8 +111,14 @@ generalicen. Para eso hace falta un set nuevo (§6).
 - **Menor.** M5 t7: "Here are the available times on another day…" suena raro. Sale de `visits.describe` cuando
   la preferencia es solo `other_day`.
 - **Menor.** M2 t6: "that's handled by the system once you're ready".
-- **A revisar.** El log del core trae `no se pudo generar el resumen de la conversación (LLMFormatError)` en uno
-  de los traspasos (M3 t4 o M4 t5). La ficha sale sin resumen (DT-46), pero conviene ver si se repite.
+- **A revisar.** El log del core trae `no se pudo generar el resumen de la conversación (LLMFormatError)` a las
+  23:01:41 UTC, en uno de los traspasos (M3 t4 o M4 t5). La ficha salió sin resumen (DT-46), y en la demo eso
+  se nota. Hay dos causas posibles y el log no decía cuál:
+  - el JSON se cortó por `maxTokens` (400): el recorte a la última frase completa solo se aplica al chat;
+  - vino una sección vacía o null.
+
+  Desde esta corrida, el aviso trae `error_detail` con el motivo (JSON ilegible o qué sección faltó),
+  `stopReason` y los tokens de salida, sin el contenido. Si se repite en O, se arregla con eso.
 
 **Lectura.** Hay 0 graves y 2 moderados que se ven en una demo libre (el terreno y la confirmación de la
 visita). Los dos que dependen de datos que no hay (HOA fees, cuota inicial) siguen igual, como se esperaba.
@@ -121,22 +127,30 @@ visita). Los dos que dependen de datos que no hay (HOA fees, cuota inicial) sigu
 
 En este orden:
 
-1. **Guion de la demo (#52).** El camino seguro: deep-link, precio, requisitos, visita con día pedido y asesor.
-   Es la red de seguridad aunque lo demás salga bien.
+1. **PR en draft** de `core/247-jurado-sobre-main`: `Closes #229`, `Refs #247`, `Refs #51`. #247 se cierra
+   recién cuando O cumpla el criterio: el "No" de las HOA fees es un dato inventado.
 2. **Un set nuevo (O)** antes de tocar nada más. Es lo único que mide si los arreglos generalizan: correr
-   otra vez J, N o M solo mide regresiones.
-3. **D, regresión con expectativas.** Pasar J, N y M a escenarios de `scenarios.py` con expectativas por turno
+   otra vez J, N o M solo mide regresiones. **2 o 3 de sus 6 conversaciones las escribe una persona del
+   equipo, como lo haría el jurado.** Quien escribió los arreglos tiende a preguntar lo que ya sabe que funciona.
+3. **Decidir según O:**
+   - si cumple el criterio, no se hacen más cambios de comportamiento. Lo de mensajes cortos entra solo si
+     vuelve a aparecer;
+   - si no cumple, se arregla con la regla de DT-62 y solo las clases que se repitan. Las candidatas son
+     buscar con un solo tipo de inmueble ("lot") y que `refers_to` tome la propiedad de la última respuesta.
+4. **Guion de la demo (#52),** con lo que O muestre que es seguro, más una respuesta preparada para las
+   preguntas fuera del catálogo (HOA fees, servicios del edificio).
+5. **D, regresión con expectativas.** Pasar J, N y M a escenarios de `scenarios.py` con expectativas por turno
    (qué propiedad, qué no puede decir), para que `evaluate.py` los mida. Un juez LLM *offline* sobre las
    transcripciones es opcional y va a ritmo de 10 RPM.
-4. **Lo que dejó M r2** (§5):
+6. **Lo que dejó M r2** (§5):
    - el agente no busca con mensajes cortos de un solo tipo ("lot");
    - pide confirmar la propiedad cuando la conversación ya venía hablando de una: `refers_to` podría tomar la
      propiedad de la última respuesta del asistente;
    - el texto de "another day" en `visits.describe`;
    - el resumen del traspaso que falló con `LLMFormatError`.
-5. **Lo que sigue sin estructura:** datos que ninguna tool trae (HOA fees, servicios del edificio) y mezclar
+7. **Lo que sigue sin estructura:** datos que ninguna tool trae (HOA fees, servicios del edificio) y mezclar
    presupuesto con cuota inicial. Hoy dependen del prompt y de A-5.
-6. **Antes del cierre (Z-1):** `evaluate.py --reps 5` con el código final, y comparar con la línea base del
+8. **Antes del cierre (Z-1), una sola vez:** `evaluate.py --reps 5` con el código final, y comparar con la línea base del
    6-oct en `TESTING.md`.
 
 ## 7. Cómo retomar desde cero
