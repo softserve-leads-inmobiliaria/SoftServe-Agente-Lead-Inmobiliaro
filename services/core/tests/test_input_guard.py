@@ -355,6 +355,8 @@ def test_english_real_estate_and_neutral_messages_are_not_out_of_domain(text):
     "My nationality is Colombian", "I'm pregnant", "I'm gay", "we're engaged",
     "I'm Colombian", "I’m Venezuelan", "we are Argentinians", "I'm Mexican", "We're American",
     "I'm from Venezuela", "We're originally from Peru", "I was born in Mexico", "I come from the US",
+    "We're a gay couple, is that a problem?", "we are lesbian", "Is it ok for a same-sex couple?",
+    "somos una pareja gay", "somos lesbianas",
 ])
 def test_english_protected_categories_are_flagged(text):
     verdict = inspect_input(text)

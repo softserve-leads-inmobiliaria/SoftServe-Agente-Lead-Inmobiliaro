@@ -472,6 +472,16 @@ def test_announcing_a_lookup_without_calling_any_tool_is_regenerated():
     assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1, "kinds": ["promise"]})]
 
 
+def test_announcing_a_lookup_is_fine_when_the_same_reply_gives_the_data():
+    # #247, O5 t2: los marcadores salieron de la memoria, sin tool en el turno, y la respuesta se degradaba.
+    remembered = {"p1": {"price": 200000, "m2": 80}}
+    client = ScriptedBedrock(classification("consulta_precio"),
+                             text("Let me check the price per square meter: {p1.price_per_m2}."))
+    message = TurnInput(event=EVENT, text="What's the price per square meter?", remembered=remembered)
+    result = run(agent_for(client).run(message, FakeCatalog()))
+    assert result.text == "Let me check the price per square meter: $2,500." and result.guard_audits == []
+
+
 # --- #228: un traspaso solo si el mensaje lo pide ------------------------------------------------------------
 
 OFFER = ("I can't promise discounts. However, I can put you in touch with an agent who can discuss payment options.")
