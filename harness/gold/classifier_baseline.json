@@ -1,5 +1,6 @@
 {
   "asks_for_person": 1.0,
+  "asks_if_it_matters": 1.0,
   "asks_unlisted": 0.9629629629629629,
   "frustrated": 1.0,
   "intent": 1.0,
