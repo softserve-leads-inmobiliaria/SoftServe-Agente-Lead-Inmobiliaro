@@ -147,7 +147,8 @@ class Scripted:
         # Como el agente de Bedrock: si la agenda va a contestar, solo clasifica; si no, pregunta cuál.
         answered = turn.answered_by_code(Classification("agendar_visita", {}, flags, None, self.about))
         return AgentResult(text="" if answered else "Which of the two houses would you like to see?",
-                           intent="agendar_visita", flags=flags, refers_to=self.about)
+                           intent="agendar_visita", flags=flags, refers_to=self.about,
+                           route="agenda" if answered else "agent")
 
 
 def _conversation(engine, about, statuses, first=None):

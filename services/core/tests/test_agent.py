@@ -223,7 +223,7 @@ def test_an_invented_price_gets_one_chance_to_regenerate_and_the_fix_is_used():
     catalog = FakeCatalog(properties=[{"id": "p1", "title": "Casa", "price": 2350000, "status": "disponible"}])
     result = run(agent_for(client).run(turn(), catalog))
     assert result.text == "I have one at $2,350,000." and result.intent == "busqueda_propiedad"
-    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1})]
+    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1, "kinds": ["number"]})]
     assert result.tool_results == {"search_properties": {"properties": catalog.properties}}
 
 
@@ -234,6 +234,8 @@ def test_an_invented_price_that_survives_the_regeneration_degrades_to_an_advisor
     result = run(agent_for(client).run(turn(), catalog))
     assert result.text == FACTUALITY_DEGRADE_REPLY and result.intent == "otro"
     assert [a for a, _ in result.guard_audits] == ["output.factuality_regenerated", "output.factuality_degraded"]
+    # El registro del turno guarda lo que dijo el clasificador y por qué ruta salió (paso 0 del plan).
+    assert (result.classified, result.route) == ("busqueda_propiedad", "degraded")
 
 
 def test_the_lead_qualified_flag_never_changes_after_a_regeneration():
@@ -311,7 +313,7 @@ def test_an_address_in_prose_gets_one_chance_to_regenerate_and_the_fix_is_used()
                              text("It's in El Poblado, near Parque Lleras."))
     result = run(agent_for(client).run(turn(lead_qualified=False), FakeCatalog()))
     assert result.text == "It's in El Poblado, near Parque Lleras."
-    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 2})]
+    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 2, "kinds": ["address", "number"]})]
 
 
 def test_an_address_that_survives_regeneration_degrades_to_an_advisor_offer():
@@ -333,7 +335,7 @@ def test_an_unauthorized_promise_gets_one_chance_to_regenerate_and_the_fix_is_us
                              text("I'll check your situation with an agent."))
     result = run(agent_for(client).run(turn(lead_qualified=False), FakeCatalog()))
     assert result.text == "I'll check your situation with an agent."
-    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1})]
+    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1, "kinds": ["promise"]})]
 
 
 def test_an_unauthorized_promise_that_survives_regeneration_degrades_to_an_advisor_offer():
@@ -443,7 +445,7 @@ def test_announcing_a_lookup_without_calling_any_tool_is_regenerated():
                              text("There are no promotions I can confirm right now. What's your budget?"))
     result = run(agent_for(client).run(turn("Can you give me a discount?"), FakeCatalog()))
     assert result.text.startswith("There are no promotions")
-    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1})]
+    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1, "kinds": ["promise"]})]
 
 
 # --- #228: un traspaso solo si el mensaje lo pide ------------------------------------------------------------
