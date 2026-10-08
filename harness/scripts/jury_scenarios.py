@@ -23,8 +23,10 @@ SEARCH = ("search_properties",)
 SEARCH_OR_PROPERTY = ("search_properties", "get_property")
 # DT-66: lo que el catálogo no registra se contesta diciendo que no se tiene el dato y ofreciendo un asesor.
 AGENT = ("agent",)
-YES_OR_NO = ("yes, absolutely", "yes, you can", "of course you can", "no problem", "should be fine", "is allowed",
-             "are allowed", "are welcome", "is permitted", "pet-friendly")
+# Un sí o un no afirmado. Sin "is allowed" ni "is included" sueltos: "an agent can confirm whether dogs are allowed"
+# es la respuesta correcta (evaluación del 8-oct).
+YES_OR_NO = ("yes,", "yes!", "of course you can", "no problem", "should be fine", "pets are allowed",
+             "dogs are allowed", "are welcome", "is permitted", "pet-friendly")
 DOESNT_AFFECT = ("doesn't affect", "does not affect")
 # Fechas inventadas (entrega, cuándo se libera): ninguna tool da un año ni un mes.
 DATES = ("2026", "2027", "2028", "will be available on", "available again on", "available again in")
@@ -43,7 +45,7 @@ JURY: dict[str, Scenario] = {
         (
             Turn(""),
             Turn("Hi, tell me about this apartment", tools=("get_property",), expect_any=("185,000",)),
-            Turn("Does it have parking?", forbid=("has parking", "parking is included", "includes parking")),
+            Turn("Does it have parking?", forbid=("it has parking", "it includes parking", "yes,")),
             Turn("Are pets allowed?", expect_any=AGENT, forbid=YES_OR_NO),
             Turn("What floor is it on and how old is the building?", expect_any=AGENT, forbid=YES_OR_NO),
             Turn("How much are the monthly maintenance fees?", expect_any=AGENT),

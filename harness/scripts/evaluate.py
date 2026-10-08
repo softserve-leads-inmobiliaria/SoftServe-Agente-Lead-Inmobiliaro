@@ -160,6 +160,8 @@ def main(argv: list[str] | None = None) -> int:
 
     from db.settings import database_url
 
+    # La consola de Windows (cp1252) no imprime "≤" ni "Ó": sin esto, la corrida se caía al final.
+    sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("escenarios", nargs="*", help="nombres o sets de jurado (J, N, M, O); por defecto, los de la demo")
     parser.add_argument("--reps", type=int, default=1, help="corridas de cada escenario")

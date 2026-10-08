@@ -153,6 +153,8 @@ async def classify_all(items: list[dict[str, Any]], env: dict[str, str]) -> dict
 
 
 def main(argv: list[str] | None = None) -> int:
+    # La consola de Windows (cp1252) no imprime "≤" ni "Ó": sin esto, la corrida se caía al final.
+    sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("ids", nargs="*", help="solo estos mensajes; por defecto, todos")
     parser.add_argument("--guardar", action="store_true", help="dejar esta corrida como línea base")
