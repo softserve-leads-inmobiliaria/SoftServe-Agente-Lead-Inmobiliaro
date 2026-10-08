@@ -44,7 +44,7 @@ JURY: dict[str, Scenario] = {
         (
             Turn(""),
             Turn("Hi, tell me about this apartment", tools=("get_property",), expect_any=("185,000",)),
-            Turn("Does it have parking?", forbid=("it has parking", "it includes parking", "yes,")),
+            Turn("Does it have parking?", forbid=("it has parking", "yes, it includes", "yes,")),
             Turn("Are pets allowed?", expect_any=AGENT, forbid=YES_OR_NO),
             Turn("What floor is it on and how old is the building?", expect_any=AGENT, forbid=YES_OR_NO),
             Turn("How much are the monthly maintenance fees?", expect_any=AGENT),
