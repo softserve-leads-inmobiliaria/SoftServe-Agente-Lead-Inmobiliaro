@@ -485,7 +485,8 @@ Las dos usan la cuota de Bedrock: no se corren a la vez, ni con el jurado.
 
 - **Ruido entre corridas:** aun con temperatura 0, el clasificador cambia 2 o 3 respuestas de 80 de una corrida a
   otra (8-oct: O6-6 falló en `wants_visit` en una y en `visit_when` en otra). Un campo que baja un solo mensaje
-  puede ser ruido: se repite la corrida, o solo esos mensajes, antes de descartar el cambio.
+  puede ser ruido: se compara ese mensaje con el prompt anterior antes de descartar el cambio. Repetir el mismo
+  mensaje seguido no sirve: devuelve siempre lo mismo.
 - **Con el catálogo vacío** todo turno falla ("no properties for rent in Medellin"). El 8-oct la base del stack
   quedó sin propiedades después de correr los tests del harness contra el mismo Postgres. Antes de `evaluate.py`
   o `jury.py`, `bash scripts/demo/up.sh` vuelve a sembrar el inventario.

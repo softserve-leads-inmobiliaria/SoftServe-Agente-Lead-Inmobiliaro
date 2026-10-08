@@ -2995,3 +2995,42 @@ at 10:00!" se degradaba (`number`): la hora la había escrito la agenda, pero no
 la visita reservada se guarda en `last_tool_results` (`visits.BOOKED_KEY`) y pasa al agente
 (`TurnInput.booked_at`). Sus números, tal como los escribió la agenda (`visits.slot_label`), cuentan como
 conocidos, igual que los del lead.
+
+## DT-68 — Lo que necesita el catálogo se consulta antes de contestar
+
+**Estado:** aceptada (#247).
+
+**Contexto.** La primera medida de J, N, M y O con expectativas por turno (`evaluate.py J N M O`, 8-oct) dejó 11
+fallos reales. La clase más grande (7) fue contestar sin consultar el catálogo: ante "lot", "how big", "need
+something cheap near a university" o "whats the cheapest u have then", el modelo pedía operación y ciudad en vez
+de buscar; ante "Are there any promotions?" preguntaba de cuál propiedad. Hoy lo cubría una regla del prompt de
+conversación ("search right away"), que no siempre sigue.
+
+**Decisión.**
+
+- El clasificador contesta `needs_lookup`: true si contestar el mensaje necesita datos del catálogo que la última
+  respuesta no dio (qué propiedades hay, aunque sea en una o dos palabras; la más barata; el precio, las
+  promociones o los requisitos de una propiedad; comparar).
+- Con `needs_lookup`, la primera ronda del modelo de conversación va con `toolChoice: any`: tiene que llamar al
+  menos una tool antes de escribir. Las rondas siguientes y la regeneración van sin obligación, para que pueda
+  contestar con los resultados.
+- En el gold set, `needs_lookup` se mide solo en los mensajes que la etiquetan (`LABELED_ONLY`), sin reetiquetar
+  los anteriores.
+
+**Alternativas descartadas.**
+
+- **Otra regla en el prompt de conversación:** ya existía y no alcanzó.
+- **Que el código busque con filtros extraídos por el clasificador:** más campos (zona, tipo, operación,
+  presupuesto) y una búsqueda con criterios propios; el modelo ya sabe armar la búsqueda, solo no la hacía.
+- **Una definición acotada** ("solo una búsqueda, o una propiedad de la que no se habló"): en el gold set empeoró
+  `asks_unlisted` en "Does it have parking?" y "gym?", y en la práctica la amplia ya daba false a "gym?".
+
+**Consecuencias.**
+
+- Gold set (86 mensajes): `needs_lookup` 93%; `asks_unlisted` 96% y `visit_when` 92%, más que la línea base.
+  `wants_visit` bajó un mensaje (O6-6, "is there anything in the afternoon?"), que ya fallaba sin la flag.
+- En vivo (M6, O3, J3, J4, O6): se arreglaron M6 t3 y t4, J4 t3 y O3 t5; O3 t1 y t2 ahora consultan. No se
+  arregló J3 t2 ("Can I reserve the 4-bedroom one?"): el clasificador no lo marca.
+- Una ronda más del modelo de conversación cuando no iba a buscar: es justo cuando hacía falta, pero cuenta para
+  los 10 RPM.
+- Repetir el mismo pedido seguido al clasificador devuelve lo mismo: las repeticiones inmediatas no miden ruido.

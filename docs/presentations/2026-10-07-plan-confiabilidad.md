@@ -119,7 +119,9 @@ De los 12 fallos, uno era una prohibición mal escrita (M1 t6, ya corregida). Lo
    something cheap near a university", "whats the cheapest u have then"); dice que no mostró la casa de 4
    habitaciones (J3 t2); pregunta de cuál propiedad son las promociones en vez de mirar las dos (J4 t3). Hoy la
    cubre una regla del prompt de conversación ("search right away"), que no alcanza. **Es la clase más grande y no
-   tiene un mecanismo propio.**
+   tiene un mecanismo propio.** → DT-68: `needs_lookup` del clasificador y la primera ronda con `toolChoice: any`.
+   En vivo arregló M6 t3–t4, J4 t3 y O3 t5; O3 t1–t2 consultan pero no muestran el estudio de $600; J3 t2 sigue
+   sin arreglar.
 2. **Degradadas (3):** un número al comparar (J1 t9, `number`), el precio por m² (O5 t2, `promise`) y "I'll pay
    cash… close this month" (O8 t3, `marker`).
 3. **La respuesta fija de categorías protegidas fuera de lugar (1):** O9 t7, "Can I bring my wife to the visit?",
