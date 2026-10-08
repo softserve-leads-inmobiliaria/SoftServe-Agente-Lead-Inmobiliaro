@@ -79,6 +79,20 @@ O2 queda fuera de la demo (ver §5).
 
 ### Paso 1 — PR chico de O6 y O9 (`Refs #247`)
 
+**Estado (7-oct): hecho en código, con tests, y verificado en vivo** (`tmp/jury/2026-10-07_230546_O.md`). Está en
+DT-67.
+
+- **O6:**
+  - t4 busca y muestra la casa parecida disponible (prop_00233);
+  - t5 ("the cheaper one… on Monday") ofrece los horarios del lunes de esa casa;
+  - t6, los de la tarde.
+- **O9 t7:** "See you both on Mon Oct 19 at 11:00!", sin degradarse.
+- Ningún turno se regeneró ni se degradó.
+- **Moderado nuevo:** O6 t2 dice "this house is reserved (reserved)". El modelo repitió el marcador del estado
+  entre paréntesis.
+
+Lo que se planeó:
+
 Con tests primero; después se reconstruye el core y se repiten solo O6 y O9.
 
 - **O6:** el estado se conoce antes de decidir quién contesta. Opciones: `answered_by_code` asíncrono con el

@@ -2936,3 +2936,48 @@ La clase se repitió en dos sets. Además, ante una pregunta así con dos propie
 
 - Es una nota, no un bloqueo: el modelo todavía puede desobedecerla. La prueba de jurado mide cuánto.
 - Con el agente falso no cambia nada: no da el campo.
+
+## DT-67 — Quién contesta la visita se decide con el estado ya consultado, y una sola vez
+
+**Estado:** aceptada (#247). Ajusta DT-61 y DT-63.
+
+**Contexto.** El agente decidía si la respuesta la daba la agenda (#229) con una regla síncrona, sobre la
+propiedad recordada o la del anuncio. Esas no traen el estado. La agenda lo consultaba después, cuando la
+decisión ya estaba tomada. En la prueba de jurado (O6), desde el anuncio de una casa apartada:
+
+- "Show me something similar that I can visit" → la agenda contestaba con texto fijo "…is reserved right now…
+  Would you like me to show you similar options?". Nadie buscaba las parecidas;
+- "The cheaper one, can I see it on Monday?" → el clasificador no sabía cuál (`unclear`, con razón: no se había
+  mostrado ninguna), y la agenda pedía un horario preferido sin propiedad.
+
+El registro del turno (`turn.decision`, paso 0 del plan de confiabilidad) mostró esa cadena.
+
+**Decisión.**
+
+- `TurnInput.visit_route` reemplaza a `answered_by_code`. Es asíncrona y devuelve un `VisitRoute`:
+  - `by_code`: contesta la agenda;
+  - `unvisitable`: pidió visitar una propiedad apartada o cerrada (`id`, `title`, `status`);
+  - ninguno de los dos: contesta el modelo.
+- La implementa `turn.VisitRouter`. Antes de decidir, consulta el estado de la propiedad que tendría la oferta
+  (`get_availability`). Lo guarda para el turno: `_visit_step` lo reutiliza.
+- Si no se puede visitar, contesta el modelo de conversación con una nota del turno (`agent.UNVISITABLE_NOTE`):
+  dice en una frase que no se puede, busca parecidas disponibles y las muestra. El estado consultado respalda
+  "it's reserved" en la factualidad, sin otra consulta. En ese turno, `_visit_step` no pisa la respuesta.
+- Sin router (el agente falso), queda lo de antes: el texto fijo de `visits.not_visitable`.
+
+**Alternativas descartadas.**
+
+- **Que la agenda busque las parecidas:** sería otra búsqueda con criterios propios, y mostrar propiedades ya lo
+  hace el modelo con las tools y los marcadores (DT-60).
+- **Traer siempre el estado de la recordada:** una consulta al catálogo en cada turno, aunque no se pida visita.
+
+**Consecuencias.**
+
+- Cuando se pide una visita, una consulta de estado por turno, solo si la propiedad no lo trae.
+- La decisión se toma una vez: lo que vio el agente vale para la agenda.
+
+**Relacionado (O9, misma corrida).** "Can I bring my wife to the visit?" → "See you both on Monday, October 19th
+at 10:00!" se degradaba (`number`): la hora la había escrito la agenda, pero no era fuente de nada. La hora de
+la visita reservada se guarda en `last_tool_results` (`visits.BOOKED_KEY`) y pasa al agente
+(`TurnInput.booked_at`). Sus números, tal como los escribió la agenda (`visits.slot_label`), cuentan como
+conocidos, igual que los del lead.
