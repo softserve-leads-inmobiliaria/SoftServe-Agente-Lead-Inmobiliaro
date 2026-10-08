@@ -38,6 +38,8 @@ class TurnObservation:
     audits: list[str] = field(default_factory=list)  # acciones nuevas en `audit_log` durante el turno
     latency_s: float = 0.0
     error: str | None = None  # el turno no llegó a responder (HTTP, timeout)
+    # Por qué contestó así (`turn.decision`): la ruta, la intención y lo que leyó el clasificador.
+    decision: dict[str, Any] | None = None
 
 
 @dataclass
@@ -90,6 +92,26 @@ def turn_failures(turn: Turn, obs: TurnObservation) -> list[str]:
     missing = [action for action in turn.audits if action not in obs.audits]
     if missing:
         failures.append(f"sin la auditoría {missing}")
+    return failures + decision_failures(turn, obs.decision)
+
+
+def route_matches(route: str, expected: tuple[str, ...]) -> bool:
+    """La ruta `agenda` vale para cualquier paso de la agenda (`agenda:offer`); `agenda:booked`, solo para ese."""
+    return any(route == want or route.startswith(want + ":") for want in expected)
+
+
+def decision_failures(turn: Turn, decision: dict[str, Any] | None) -> list[str]:
+    """Lo que el turno no cumplió de quién contestó (`route`) y de qué propiedad entendió que habla (`about`)."""
+    if not (turn.route or turn.about):
+        return []
+    if decision is None:
+        return ["sin turn.decision"]
+    failures = []
+    route = decision.get("route") or "?"
+    if turn.route and not route_matches(route, turn.route):
+        failures.append(f"ruta {route}, se esperaba {' o '.join(turn.route)}")
+    if turn.about and decision.get("refers_to") != turn.about:
+        failures.append(f"habla de {decision.get('refers_to')}, se esperaba {turn.about}")
     return failures
 
 
