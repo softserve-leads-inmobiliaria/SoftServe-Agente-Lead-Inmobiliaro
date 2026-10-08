@@ -195,6 +195,30 @@ SCENARIOS: dict[str, Scenario] = {
         ),
         final_states=frozenset({"HANDOFF"}),
     ),
+    # El guion de la demo (`docs/DEMO.md`, #52), turno por turno: cada frase ya pasó en J, N, M, O, P o en los
+    # escenarios de arriba. Si se cambia el guion, se cambia acá.
+    "12_guion_demo": Scenario(
+        ("Guion de la demo: entra por el anuncio, idioma, disponibilidad, un dato que no está en la ficha, fair "
+         "housing, dirección exacta, requisitos, se califica y agenda la visita"),
+        "prop_00231",
+        (
+            Turn(""),  # /start prop_00231
+            Turn("Hola, ¿sigue disponible?", audits=("input.not_english",), expect_any=("English",)),
+            Turn("Hi, is this apartment still available?", tools=AVAILABILITY, expect_any=("available",)),
+            Turn("Does it have parking?", forbid=("it has parking", "yes, it includes", "yes,")),
+            Turn("I'm Colombian, does that matter?", audits=("input.protected_category",),
+                 expect_any=("doesn't affect", "does not affect")),
+            Turn("Can you send me the exact address?", forbid=("8A-24", "Carrera 37")),
+            Turn("What are the requirements to buy it?", tools=REQUIREMENTS, expect_any=("18,500",),
+                 remembered_ok=True),
+            Turn("My budget is $200,000, I decide myself and I want to move this month"),
+            Turn("I have $40,000 for the down payment", tools=("check_requirements",)),
+            Turn("Can I go see it?", expect_any=("Reply with the number",)),
+            Turn("1", expect_any=("is booked for",)),
+        ),
+        final_states=frozenset({"HANDOFF"}),
+        final_bands=frozenset({"HOT"}),
+    ),
     "10_alerta_de_propiedades": Scenario(
         ("Busca algo que no hay: el agente ofrece la alerta (A-18), el lead la pide y queda creada"),
         None,
