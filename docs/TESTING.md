@@ -453,6 +453,56 @@ python harness/scripts/jury.py M4_preguntas_trampa
   crear con las migraciones, los asesores y el inventario de demo. El jurado crea sus propios leads y
   conversaciones, así que no necesita nada más.
 
+### Medir sin leer a mano (#247, paso 2 del plan de confiabilidad)
+
+Leer las transcripciones del jurado sirve para encontrar una clase de error nueva, pero no para saber si un
+arreglo rompió otra. Para eso hay dos mediciones repetibles:
+
+- **Las conversaciones del jurado, con expectativas por turno.** Están en `harness/scripts/jury_scenarios.py`:
+  `jury.py` las corre para leerlas y `evaluate.py` las mide con las reglas de la evaluación en vivo. Además de
+  las tools, los textos esperados y los prohibidos, cada turno puede exigir quién contesta (`route`, leído de
+  `turn.decision`) y de qué propiedad habla el mensaje (`about`, el `refers_to` del clasificador).
+
+  ```
+  python harness/scripts/evaluate.py O                # un set
+  python harness/scripts/evaluate.py J N M O          # los cuatro, ~1 h a 10 RPM
+  ```
+
+  Sin nombres, `evaluate.py` sigue corriendo solo los escenarios de la demo.
+- **El gold set del clasificador.** `harness/gold/classifier.jsonl` tiene unos 75 mensajes, de J, N, M, O y
+  sintéticos, cada uno con su contexto (las propiedades mostradas y la última respuesta del asistente) y los
+  campos esperados: intención, las cinco flags, `refers_to` y `visit_when`. `harness/scripts/classifier_gold.py`
+  llama al clasificador real con cada uno (~8 min) y da la exactitud por campo. **Un cambio al prompt del
+  clasificador se acepta solo si ningún campo baja** de `harness/gold/classifier_baseline.json`. La línea base
+  se actualiza con `--guardar`, en el mismo PR que la justifica. No corre en CI: necesita Bedrock.
+
+  ```
+  python harness/scripts/classifier_gold.py            # mide y compara; sale con 1 si un campo bajó
+  python harness/scripts/classifier_gold.py O6-5 O9-3  # solo esos mensajes
+  ```
+
+Las dos usan la cuota de Bedrock: no se corren a la vez, ni con el jurado.
+
+#### Clases de error: qué mecanismo es dueño de cada una
+
+Cada clase de error tiene **un** mecanismo que la resuelve y un test que lo cubre (DT-62: no una regex ni una regla
+de prompt por frase vista). Un error nuevo se anota en la clase que le corresponde; si no cabe en ninguna, es
+una clase nueva y necesita su mecanismo.
+
+| Clase de error | Mecanismo dueño | Tests |
+| :--- | :--- | :--- |
+| Un dato del catálogo inventado (precio, área, estado, requisito) | Marcadores: el modelo escribe `{prop.campo}` y el código pone el valor (DT-60); la factualidad regenera o degrada lo que no viene de una tool (A-5) | `test_markers*.py`, `test_factuality*.py` |
+| La dirección exacta antes de calificar | Guardrail de dirección (A-6) | `test_address_guard_gold_set.py` |
+| Una promesa (descuento, apartar, crédito) | Guardrail de promesas (A-7) | `test_promise_guard.py` |
+| Un sí o un no sobre lo que el catálogo no registra (mascotas, cuotas, piso) | Flag `asks_unlisted` del clasificador y la nota al modelo (DT-66) | gold set (`asks_unlisted`), `test_agent.py` |
+| La propiedad equivocada ("the cheaper one", "it") | `refers_to` del clasificador, entre las ya mostradas (DT-63) | gold set (`refers_to`), `test_refers_to.py` |
+| La preferencia de día u hora ignorada | `visit_when` del clasificador; la agenda filtra los horarios (DT-64) | gold set (`visit_when`), `test_visits.py` |
+| Horarios de una propiedad que no se puede visitar | `VisitRouter`: el estado se consulta antes de decidir quién contesta (DT-67) | `test_refers_to.py`, `test_turn_decision.py` |
+| Un traspaso sin que lo pida (frustración por preguntas neutras) | Flag `frustrated` y `asks_for_person` del clasificador (DT-65, #228) | gold set, `test_handoff*.py` |
+| Origen, religión o familia comentados o usados | Guardrail de entrada de categorías protegidas y respuesta fija (#200) | `test_fair_housing_gold_set.py`, `test_input_guard_turn.py` |
+| Una zona inventada o una búsqueda vacía sin alternativas | `list_zones` y `alternatives` del catálogo (#194, #213) | `test_alternatives.py` |
+| Una respuesta que no se sabe por qué salió así | `turn.decision` en cada turno (paso 0) | `test_turn_decision.py` |
+
 ## Pruebas automáticas
 
 ```
