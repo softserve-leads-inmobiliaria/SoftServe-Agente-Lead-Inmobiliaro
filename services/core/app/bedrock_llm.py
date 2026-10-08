@@ -42,7 +42,7 @@ _TURN_BUDGET: ContextVar[RetryBudget | None] = ContextVar("llm_turn_retry_budget
 MARKER_FIELDS = sorted((f.removeprefix("requirements.") for f in FIELDS - {"description", "valid_until", "title"}),
                        key=lambda f: (f.startswith(("down_", "income_", "monthly_")), f))
 # Los campos booleanos del clasificador con los que decide el código (DT-60). Si falta uno, se usa la regla.
-CLASSIFIER_FLAGS = ("asks_for_person", "wants_alert", "wants_visit", "frustrated")
+CLASSIFIER_FLAGS = ("asks_for_person", "wants_alert", "wants_visit", "frustrated", "asks_unlisted")
 
 # Lo que lee el LLM va en inglés (#202, DT-55); los valores de las claves son los del contrato y no cambian.
 CLASSIFIER_SYSTEM = (
@@ -68,10 +68,18 @@ CLASSIFIER_SYSTEM = (
     '- "frustrated": true if the current message shows the lead is annoyed with the assistant: complains that it '
     "isn't helping or understanding, repeats a request impatiently, or says so (\"this is useless\", \"you're not "
     'answering me"). A neutral or curious question is not frustration. Otherwise false.\n'
+    '- "asks_unlisted": true if the current message asks about something a property listing does not record: '
+    "rules or policies (pets, roommates, subletting, lease length, deposits), costs other than the price (HOA or "
+    "maintenance fees, utilities, taxes), details of the building or the unit (floor, elevator, doorman, "
+    "furnished, view, age, natural light, accessibility), dates (delivery, when it will be free again), zoning or "
+    "what can be built, or what is nearby. Not the price, size, bedrooms, bathrooms, amenities, area, availability "
+    "or the requirements to buy or rent. Otherwise false.\n"
     '- "visit_when": only if the current message says when the lead would like to visit, an object with '
     '"days" (a list of "mon", "tue", "wed", "thu", "fri", "sat", "sun"; "this weekend" is ["sat", "sun"]; '
-    'empty if no day is named), "part_of_day" ("morning", "afternoon", "evening" or null) and "other_day" '
-    "(true if they ask for a different day than the times the LAST ASSISTANT MESSAGE offered). Otherwise null.\n"
+    "only the days the CURRENT MESSAGE names, never the days of the times offered before; empty if it names "
+    'none), "part_of_day" ("morning", "afternoon", "evening" or null; "after 5pm" is "evening") and '
+    '"other_day" (true only if they ask for a different day without naming it, like "another day"). '
+    "Otherwise null.\n"
     '- "refers_to": only if PROPERTIES SHOWN is given and the current message is about one of them: its id, '
     'whether the message names it or describes it ("the cheaper one", "the house", "the one in Laureles", "it" '
     'when the LAST ASSISTANT MESSAGE talked about only one). "' + UNCLEAR + '" if it is about one of them but '

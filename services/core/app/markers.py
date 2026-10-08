@@ -46,14 +46,17 @@ MONEY = frozenset({"price", "requirements.down_payment_min", "requirements.month
 PERCENT = frozenset({"requirements.down_payment_percent"})
 NUMBERS = frozenset({"m2", "bedrooms", "bathrooms", "requirements.income_multiple"})
 TEXTS = frozenset({"title", "zone", "address_approx", "address_exact", "description"})
+# Lo que el código calcula de otros campos. "Which one has the best price per square meter?" se degradaba: el
+# número no venía de ninguna tool, y la factualidad no puede saber que es una división (prueba de jurado O5, #247).
+DERIVED = frozenset({"price_per_m2"})
 # Los campos que se pueden pedir de una propiedad o una promoción. El prompt los enumera (`CHAT_SYSTEM`).
-FIELDS = MONEY | PERCENT | NUMBERS | TEXTS | {"amenities", "type", "kind", "status", "valid_until"}
+FIELDS = MONEY | PERCENT | NUMBERS | TEXTS | DERIVED | {"amenities", "type", "kind", "status", "valid_until"}
 
 # Los requisitos también se pueden pedir sin el prefijo: `{prop_00231.down_payment_min}`. Así se los enumera el prompt.
 ALIASES = {f.removeprefix("requirements."): f for f in FIELDS if f.startswith("requirements.")}
 
 # Un `$` antes del marcador del dinero, o un `%` después del porcentaje: el valor ya los trae.
-_MONEY_SIGN = re.compile(r"\$\s*(?=\{[^{}]*\.(?:price|down_payment_min|monthly_income_min)\})")
+_MONEY_SIGN = re.compile(r"\$\s*(?=\{[^{}]*\.(?:price|price_per_m2|down_payment_min|monthly_income_min)\})")
 _PERCENT_SIGN = re.compile(r"(\{[^{}]*\.down_payment_percent\})\s*%")
 
 
@@ -144,6 +147,12 @@ def _value(sources: Sources, ref: str, path: str | None) -> str | None:
     record = sources.records.get(ref)
     if record is None:
         return None
+    if path == "price_per_m2":
+        price, size = record.get("price"), record.get("m2")
+        numeric = all(isinstance(n, (int, float, Decimal)) and not isinstance(n, bool) for n in (price, size))
+        if not numeric or size <= 0:
+            return None
+        return f"${_number(round(Decimal(str(price)) / Decimal(str(size))), money=True)}"
     value: Any = record
     for key in path.split("."):
         value = value.get(key) if isinstance(value, Mapping) else None

@@ -295,8 +295,8 @@ async def _visit_step(event: Mapping[str, Any], context: GuardContext, result: A
     un turno forzado por el guardrail no la arrastró), se vuelve a ofrecer. Si el lead nombra otra de las
     propiedades mostradas (`refers_to`), la oferta es de esa.
 
-    La propiedad elegida por `refers_to` viene de la memoria, sin estado: se consulta antes de ofrecer horarios,
-    y una apartada o cerrada se contesta con texto fijo.
+    La propiedad elegida por `refers_to` y la recordada vienen de la memoria, sin estado: se consulta antes de
+    ofrecer horarios, y una apartada o cerrada se contesta con texto fijo.
     """
     state, previous = context.fsm_state, context.last_tool_results
     focus = focused_property(result.refers_to, shown)
@@ -309,10 +309,12 @@ async def _visit_step(event: Mapping[str, Any], context: GuardContext, result: A
     offered_id = ((offer or {}).get("property") or {}).get("id") if isinstance(offer, Mapping) else None
     if isinstance(offer, Mapping) and (focus is None or focus["id"] == offered_id):
         return await visits.follow_up(agenda, conversation_id, lead_id, offer, text, today, result.visit_when)
-    if focus is not None and prop is not None and prop.get("id") == focus["id"] and not prop.get("status"):
-        status = await _current_status(catalog, focus["id"])
+    # Sin estado vienen la elegida por `refers_to` y la recordada: las dos salen de la memoria. En la prueba de
+    # jurado (O6), desde el anuncio de una casa apartada, "something similar that I can visit" ofrecía esa casa.
+    if prop is not None and prop.get("id") and prop.get("title") and not prop.get("status"):
+        status = await _current_status(catalog, prop["id"])
         if status not in (None, "disponible"):
-            return VisitStep(visits.not_visitable(focus, status), {})
+            return VisitStep(visits.not_visitable(prop, status), {})
     return await visits.start(agenda, lead_id, prop, today, result.visit_when)
 
 

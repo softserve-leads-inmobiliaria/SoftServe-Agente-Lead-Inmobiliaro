@@ -162,7 +162,8 @@ class BedrockAgent:
                 return await catalog.call(name, arguments)
 
             visible = [_visible(s) for s in specs]
-            current = _with_notes(turn.text, turn.listing, turn.protected_removed, turn.remembered, about)
+            current = _with_notes(turn.text, turn.listing, turn.protected_removed, turn.remembered, about,
+                                  flags.get("asks_unlisted") is True)
             chat = await self._llm.chat(turn.history, current, visible, run_tool)
             if not chat.text:
                 raise LLMFormatError("respuesta vacía")
@@ -205,14 +206,19 @@ PROTECTED_NOTE = ("(Part of the lead's message was removed because it mentioned 
                   "matters, tell them it doesn't affect how we help them or the requirements.)")
 UNCLEAR_NOTE = ("(It's not clear which of the properties already shown the lead means: ask them which one, "
                 "naming the options. Don't guess.)")
+UNLISTED_NOTE = ("(The lead is asking about something the listings don't record. Don't answer yes or no and don't "
+                 "guess or generalize: say you don't have that detail and that an agent can confirm it, and offer to "
+                 "connect them. If several properties were shown, answer for all of them at once instead of asking "
+                 "which one.)")
 
 
 def _with_notes(text: str, listing: Mapping[str, Any] | None, protected_removed: bool = False,
-                remembered: Mapping[str, Any] | None = None, about: str | None = None) -> str:
+                remembered: Mapping[str, Any] | None = None, about: str | None = None,
+                unlisted: bool = False) -> str:
     """El mensaje del lead más lo que el LLM tiene que saber del turno: la referencia del anuncio por el que
     llegó (#122), las de las propiedades que ya vio la conversación (#247), de cuál de ellas habla el mensaje según
-    el clasificador (`about`, #247) y que el guardrail quitó una mención de categoría protegida (#200), sin el dato
-    quitado.
+    el clasificador (`about`, #247), si pregunta algo que el catálogo no tiene (`unlisted`, #247) y que el guardrail
+    quitó una mención de categoría protegida (#200), sin el dato quitado.
     Solo lo ve el LLM: no se guarda en el historial ni cuenta como algo que dijo el lead para la factualidad."""
     notes = []
     if listing:
@@ -227,8 +233,12 @@ def _with_notes(text: str, listing: Mapping[str, Any] | None, protected_removed:
     focused = interest.focused_property(about, interest.shown_properties(remembered or {}, listing))
     if focused:
         notes.append(f"(The lead's message is about {focused['id']} ({focused['title']}).)")
-    elif about == interest.UNCLEAR:
+    elif about == interest.UNCLEAR and not unlisted:
         notes.append(UNCLEAR_NOTE)
+    # "Can I share it with a roommate?" -> "Yes, absolutely!" (O3), "No, HOA fees are separate" (M1): el sí o el no
+    # de algo que el catálogo no tiene era un dato inventado, y la factualidad no ve números ni estados en él.
+    if unlisted:
+        notes.append(UNLISTED_NOTE)
     if protected_removed:
         notes.append(PROTECTED_NOTE)
     return "\n\n".join([text, *notes])

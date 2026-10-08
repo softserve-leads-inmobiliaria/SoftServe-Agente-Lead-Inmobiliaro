@@ -263,8 +263,11 @@ async def follow_up(scheduling: SchedulingClient, conversation_id: str, lead_id:
         chosen = None
     if chosen is None and when:
         offered = frozenset(datetime.fromisoformat(slot).astimezone(LOCAL_TZ).date() for slot in slots)
+        # Los días ofrecidos se saltan solo con "another day" a secas. Con un día o una franja, el mismo día puede
+        # servir: "anything in the afternoon?" después de la mañana del lunes saltaba al lunes siguiente (O6).
+        just_another_day = when.get("other_day") and not when.get("days") and not when.get("part")
         return await _offer(scheduling, lead_id, prop, today, when=when,
-                            skip_days=offered if when.get("other_day") else frozenset())
+                            skip_days=offered if just_another_day else frozenset())
     if chosen is None:
         intro = "I didn't quite get which time you prefer. These are the ones I have:"
         return VisitStep(offer_text(prop, slots, intro), {OFFER_KEY: dict(offer)})

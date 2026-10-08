@@ -61,6 +61,10 @@ _INVENTORY_THAT = re.compile(r"\b" + _INVENTORY + r"\b[^.!?\n]{0,60}\b(?:that|wh
 # Ni el de lo que se va a buscar: "let me help you find an available property" (#243, visto en vivo).
 _SEARCHING_FOR = re.compile(r"\b(?:find|look for|looking for|search for|searching for)\s+(?:an?|some|another)\s+$",
                             re.IGNORECASE)
+# Ni el de un estado futuro o posible: "I don't know when it will become available again", "if it becomes available".
+# No afirma el estado de ahora; en la prueba de jurado (J3 t3, O6 t3), "when will it be free again?" se degradaba.
+_FUTURE_BEFORE = re.compile(r"\b(?:becomes?|became|becoming|will be|would be|could be|might be|may be|['’]ll be)"
+                            r"(?:\s+\w+)?\s+$", re.IGNORECASE)
 _OTHER_INVENTORY_BEFORE = re.compile(r"\b(?:other|more|any|no)(?:\s+[\w-]+){0,3}?\s+" + _INVENTORY + r"\s+$",
                                      re.IGNORECASE)
 
@@ -70,7 +74,7 @@ def _not_the_property(text: str, match: re.Match[str]) -> bool:
     before = text[:match.start()]
     return bool(_NOT_THE_PROPERTY.search(before) or _OTHER_INVENTORY_BEFORE.search(before)
                 or _INVENTORY_BEFORE.search(before) or _INVENTORY_THAT.search(before) or _SEARCHING_FOR.search(before)
-                or _INVENTORY_NEXT.match(text, match.end()))
+                or _FUTURE_BEFORE.search(before) or _INVENTORY_NEXT.match(text, match.end()))
 
 
 @dataclass(frozen=True)
