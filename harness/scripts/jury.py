@@ -280,6 +280,15 @@ WATCH: dict[tuple[str, int], str] = {
     ("M5_cambio_de_idea", 6): "M r2: pide confirmar la propiedad aunque venía hablando de la prop_00231",
     ("M5_cambio_de_idea", 7): "M r1: 'another day' -> 'I didn't quite get which time' (DT-64)",
     ("M6_mensajes_cortos_y_raros", 3): "M r2: no busca terrenos; pide operación y ciudad tres turnos seguidos",
+    ("O2_pareja_mayor_accesibilidad", 2): "O r1: 'which property?' tres veces en vez de decir que no hay dato (DT-66)",
+    ("O3_estudiante_con_poco_presupuesto", 3): "O r1: 'Yes, absolutely!' a compartir: política inventada (DT-66)",
+    ("O3_estudiante_con_poco_presupuesto", 5): "O r1: degradada tras 4 turnos sin buscar (pendiente)",
+    ("O5_comparador", 2): "O r1: precio por m² degradado (DT-60, price_per_m2)",
+    ("O6_anuncio_de_una_apartada", 3): "O r1: '¿cuándo se libera?' degradado por 'available' futuro (A-5)",
+    ("O6_anuncio_de_una_apartada", 4): "O r1: ofreció horarios de la misma casa apartada (DT-63, estado)",
+    ("O6_anuncio_de_una_apartada", 6): "O r1: 'afternoon' saltó al lunes siguiente (DT-64)",
+    ("O9_visita_con_restricciones", 3): "O r1: 'after 5pm' ofreció el jueves siguiente (DT-64)",
+    ("O9_visita_con_restricciones", 7): "O r1: 'bring my wife' -> respuesta fija de fair housing (pendiente)",
 }
 
 
