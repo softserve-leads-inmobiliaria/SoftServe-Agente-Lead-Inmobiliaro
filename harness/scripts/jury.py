@@ -319,6 +319,8 @@ def _why(rows: list[tuple[str, dict[str, Any]]]) -> tuple[list[str], str | None]
             parts += [f"{'' if value else 'no '}{name}" for name, value in sorted(flags.items()) if value is not None]
             if payload.get("refers_to"):
                 parts.append(f"habla de {payload['refers_to']}")
+            if payload.get("unvisitable"):
+                parts.append(f"no se puede visitar {payload['unvisitable']}")
             if payload.get("visit_when"):
                 parts.append(f"cuándo {payload['visit_when']}")
             why = " · ".join(parts)
