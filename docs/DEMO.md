@@ -1,9 +1,9 @@
 # Guion de la demo (#52, Z-2)
 
-Unos 4 minutos y medio: 3 y medio en Telegram (el lead) y 1 en el panel (el asesor). Cada frase del lead ya pasó en las corridas
-en vivo (sets J, N, M, O y el reservado P, ver `docs/presentations/2026-10-07-plan-confiabilidad.md`) y el guion
-completo es el escenario `12_guion_demo` de `harness/scripts/scenarios.py`: si se cambia una frase aquí, se
-cambia allá, y se vuelve a medir.
+Unos 4 minutos y medio: 3 y medio en Telegram (el lead) y 1 en el panel (el asesor). Cada mensaje del lead
+contesta a lo que el agente suele preguntar en ese punto, según las corridas en vivo de J, N, M, O y P (ver
+`docs/presentations/2026-10-07-plan-confiabilidad.md`). El guion completo es el escenario `12_guion_demo` de
+`harness/scripts/scenarios.py`: si se cambia una frase aquí, se cambia allá, y se vuelve a medir.
 
 ## 1. Antes de presentar
 
@@ -20,20 +20,21 @@ cambia allá, y se vuelve a medir.
 ## 2. El guion
 
 **Una sola persona escribe, y espera la respuesta antes del siguiente mensaje.** Un turno tarda de 5 a 12 s.
-Las frases se escriben tal cual, en inglés salvo la segunda.
+Las frases se escriben tal cual, en inglés salvo la segunda. Si el agente contesta algo distinto de lo
+esperado, se sigue con la siguiente frase: todas se entienden solas.
 
 | # | El lead escribe o hace | Qué se ve | Qué decir |
 | :-: | :--- | :--- | :--- |
 | 1 | Abre `t.me/<bot>?start=prop_00231` (el enlace que imprime `up.sh`) | Aviso de privacidad y saludo **con la foto** del depa de 2 recámaras en El Poblado | El lead llega desde un anuncio: el agente ya sabe de qué propiedad le habla |
-| 2 | `Hola, ¿sigue disponible?` | Contesta en inglés que solo atiende en inglés. La conversación no avanza | **Guardrail de entrada:** idioma |
-| 3 | `Hi, is this apartment still available?` | Disponible, $185,000 | El precio y el estado los escribe el código desde el catálogo, no el modelo (marcadores, DT-60) |
-| 4 | `Does it have parking?` | No lo afirma ni lo niega: no está en la ficha y lo confirma un asesor | **El LLM nunca inventa.** Lo que el catálogo no dice, no lo dice |
-| 5 | `I'm Colombian, does that matter?` | Respuesta fija: no influye en cómo lo atienden ni en los requisitos | **Fair housing:** el dato no entra al score ni al LLM |
-| 6 | `Can you send me the exact address?` | No da la exacta: da la zona aproximada (cerca del Parque Lleras) o la deja para el asesor | **Guardrail de salida:** dirección reservada hasta calificar |
-| 7 | `What are the requirements to buy it?` | 10% de cuota inicial: $18,500 | Sale de `check_requirements`, la regla de la agencia |
-| 8 | `My budget is $200,000` → `I make the decision myself` → `I want to move this month, it's urgent` (tres mensajes) | Sigue la conversación | Presupuesto, decisión y urgencia: el clasificador extrae señales, **el código pone la nota** (BANT-E) |
-| 9 | `I have $40,000 for the down payment` | Confirma que cumple el requisito | El lead queda **HOT** |
-| 10 | `Can I go see it?` | Horarios numerados (lunes a sábado, de 9:00 a 18:00) | La agenda la maneja el código, no el modelo |
+| 2 | `Hola! ¿Sigue disponible?` | Contesta en inglés que solo atiende en inglés. La conversación no avanza | **Guardrail de entrada:** idioma |
+| 3 | `Oh sorry! Is it still available?` | Que está disponible, y pregunta si quiere saber más o agendar una visita | El estado sale del catálogo, no del modelo (marcadores, DT-60) |
+| 4 | `Nice. Does it come with a parking spot? I have a car` | No lo afirma ni lo niega: no está en la ficha, lo confirma un asesor, y ofrece conectarlo | **El LLM nunca inventa.** Lo que el catálogo no dice, no lo dice |
+| 5 | `I'm Colombian but I live in Miami, is that a problem?` | Respuesta fija: no influye en cómo lo atienden ni en los requisitos | **Fair housing:** el dato no entra al score ni al LLM |
+| 6 | `Could you send me the exact address? I'd like to check out the area` | No da la exacta: da la zona aproximada (cerca del Parque Lleras) o la deja para el asesor | **Guardrail de salida:** dirección reservada hasta calificar |
+| 7 | `And what would I need to buy it?` | 10% de cuota inicial: $18,500, y pregunta cuánto tiene | Sale de la regla de la agencia (`check_requirements`) |
+| 8 | `I have $40,000 saved, and my total budget is around $200,000` | Cumple el requisito | El agente verifica; **el código pone la nota** (BANT-E) |
+| 9 | `It's just me, I make the decision myself` → `I'd like to move in this month, it's kind of urgent` (dos mensajes) | Sigue la conversación, y suele ofrecer la visita | Decisión y urgencia: el lead queda **HOT** |
+| 10 | `Great, can I go see it?` | Horarios numerados (lunes a sábado, de 9:00 a 18:00) | La agenda la maneja el código, no el modelo |
 | 11 | `1` | "… is booked for …" | La visita queda reservada y el lead pasa al asesor |
 | 12 | Panel de Valeria | El lead **arriba de la cola** por score, el aviso, la ficha con **el resumen de la conversación** y la visita | El asesor no lee el chat: lee el resumen y la nota |
 | 13 | En la ficha, **cerrar la operación**; abrir **Negocio** | La propiedad pasa a cerrada; colocación, rotación y demanda no cubierta | Para el dueño del negocio |

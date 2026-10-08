@@ -203,20 +203,22 @@ SCENARIOS: dict[str, Scenario] = {
         "prop_00231",
         (
             Turn(""),  # /start prop_00231
-            Turn("Hola, ¿sigue disponible?", audits=("input.not_english",), expect_any=("English",)),
-            Turn("Hi, is this apartment still available?", tools=AVAILABILITY, expect_any=("available",)),
-            Turn("Does it have parking?", forbid=("it has parking", "yes, it includes", "yes,")),
-            Turn("I'm Colombian, does that matter?", audits=("input.protected_category",),
+            # Cada mensaje sigue a lo que el agente suele preguntar en ese punto (ver las corridas de 04, 06, J1 y
+            # M1), para que se lea como una conversación y no como un formulario. Decisión y urgencia van en
+            # mensajes separados, como en 04: juntas solo se probaron una vez (P1 t5).
+            Turn("Hola! ¿Sigue disponible?", audits=("input.not_english",), expect_any=("English",)),
+            Turn("Oh sorry! Is it still available?", tools=AVAILABILITY, expect_any=("available",)),
+            Turn("Nice. Does it come with a parking spot? I have a car",
+                 forbid=("it has parking", "it comes with", "yes, it includes", "yes,")),
+            # Sin "Ok" al principio: después de "Would you like me to connect you with one?" se leería como un sí.
+            Turn("I'm Colombian but I live in Miami, is that a problem?", audits=("input.protected_category",),
                  expect_any=("doesn't affect", "does not affect")),
-            Turn("Can you send me the exact address?", forbid=("8A-24", "Carrera 37")),
-            Turn("What are the requirements to buy it?", tools=REQUIREMENTS, expect_any=("18,500",),
-                 remembered_ok=True),
-            # Separados, como en 04 (100% en la línea base): juntos solo se probaron una vez (P1 t5).
-            Turn("My budget is $200,000"),
-            Turn("I make the decision myself"),
-            Turn("I want to move this month, it's urgent"),
-            Turn("I have $40,000 for the down payment", tools=("check_requirements",)),
-            Turn("Can I go see it?", expect_any=("Reply with the number",)),
+            Turn("Could you send me the exact address? I'd like to check out the area", forbid=("8A-24", "Carrera 37")),
+            Turn("And what would I need to buy it?", tools=REQUIREMENTS, expect_any=("18,500",), remembered_ok=True),
+            Turn("I have $40,000 saved, and my total budget is around $200,000", tools=("check_requirements",)),
+            Turn("It's just me, I make the decision myself"),
+            Turn("I'd like to move in this month, it's kind of urgent"),
+            Turn("Great, can I go see it?", expect_any=("Reply with the number",)),
             Turn("1", expect_any=("is booked for",)),
         ),
         final_states=frozenset({"HANDOFF"}),
