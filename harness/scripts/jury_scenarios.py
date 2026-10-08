@@ -204,7 +204,7 @@ JURY: dict[str, Scenario] = {
             Turn("gym?", expect_any=("gym",), forbid=("doesn't have a gym", "no gym")),
             # N r1: "ok i wan to see it" agendaba otra propiedad (DT-63).
             Turn("ok i wan to see it", route=("agenda",), about="prop_00240",
-                 expect_any=("Studio for rent in El Poblado",)),
+                 expect_any=("studio for rent in El Poblado",)),
             Turn("1", route=("agenda:booked",), expect_any=BOOKED),
         ),
     ),

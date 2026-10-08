@@ -19,6 +19,7 @@ from app.visits import (
     follow_up,
     slot_label,
     start,
+    the_title,
     visit_when,
 )
 
@@ -90,6 +91,16 @@ def test_an_answer_that_does_not_pick_exactly_one_slot_is_not_a_choice(text):
 
 def test_slots_are_shown_in_local_time_with_the_weekday():
     assert slot_label("2026-10-06T15:00:00+00:00") == "Tue Oct 6, 10:00"
+
+
+@pytest.mark.parametrize("title,expected", [
+    ("2-bedroom apartment in El Poblado", "the 2-bedroom apartment in El Poblado"),
+    ("Studio for rent in El Poblado", "the studio for rent in El Poblado"),
+    ("Pre-sale penthouse in Envigado", "the pre-sale penthouse in Envigado"),
+    ("Torre Alta apartment", "the Torre Alta apartment"),  # un nombre propio no se toca
+])
+def test_the_title_reads_as_a_sentence(title, expected):
+    assert the_title({"title": title}) == expected
 
 
 # --- ofrecer ----------------------------------------------------------------------------------------------
