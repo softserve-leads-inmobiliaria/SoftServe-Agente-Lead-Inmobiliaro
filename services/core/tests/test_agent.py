@@ -769,6 +769,21 @@ def test_when_the_message_needs_the_catalog_the_first_round_must_call_a_tool():
     assert "toolChoice" not in second["toolConfig"]  # con los resultados, tiene que poder contestar
 
 
+def test_a_property_marker_without_a_value_makes_the_regeneration_call_a_tool():
+    # J5 t4: `check_requirements` no trae el múltiplo del ingreso y la regeneración repetía el mismo marcador.
+    client = ScriptedBedrock(classification("otro"), text("You need {p1.income_multiple} times the rent."),
+                             tool_use("get_property", {"property_id": "p1"}), text("How much do you earn a month?"))
+    run(agent_for(client).run(TurnInput(event=EVENT, text="What do I need?"), FakeCatalog()))
+    draft, regeneration, _ = client.calls_to(CHAT)
+    assert "toolChoice" not in draft["toolConfig"] and regeneration["toolConfig"]["toolChoice"] == {"any": {}}
+
+
+def test_a_typed_number_does_not_force_a_tool_in_the_regeneration():
+    client = ScriptedBedrock(classification("otro"), text("It's $2,000,000."), text("What's your budget?"))
+    run(agent_for(client).run(TurnInput(event=EVENT, text="How much is it?"), FakeCatalog()))
+    assert "toolChoice" not in client.calls_to(CHAT)[1]["toolConfig"]
+
+
 @pytest.mark.parametrize("flag", [False, None])
 def test_without_needs_lookup_the_model_may_answer_without_tools(flag):
     signal = {} if flag is None else {"needs_lookup": flag}
