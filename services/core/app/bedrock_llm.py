@@ -45,8 +45,7 @@ _TURN_BUDGET: ContextVar[RetryBudget | None] = ContextVar("llm_turn_retry_budget
 MARKER_FIELDS = sorted((f.removeprefix("requirements.") for f in FIELDS - {"description", "valid_until", "title"}),
                        key=lambda f: (f.startswith(("down_", "income_", "monthly_")), f))
 # Los campos booleanos del clasificador con los que decide el código (DT-60). Si falta uno, se usa la regla.
-CLASSIFIER_FLAGS = ("asks_for_person", "wants_alert", "wants_visit", "frustrated", "asks_unlisted",
-                    "needs_lookup")
+CLASSIFIER_FLAGS = ("asks_for_person", "wants_alert", "wants_visit", "frustrated", "asks_unlisted")
 
 # Lo que lee el LLM va en inglés (#202, DT-55); los valores de las claves son los del contrato y no cambian.
 CLASSIFIER_SYSTEM = (
@@ -83,12 +82,6 @@ CLASSIFIER_SYSTEM = (
     "details of the building or the unit (floor, elevator, doorman, furnished, view, age, natural light, "
     "accessibility), dates (delivery, when it will be free again), zoning or what can be built, or what is "
     "nearby. Otherwise false.\n"
-    '- "needs_lookup": true if answering the current message needs catalog data that the LAST ASSISTANT '
-    "MESSAGE did not already give: which properties there are (for a kind, an area, sale or rent, or a budget, "
-    "even in one or two words like \"apartments?\" or \"under 300k\"), the cheapest or the biggest, or a "
-    "property's price, size, amenities, availability, promotions or requirements, or comparing properties. "
-    "false for greetings and thanks, questions about the agency or the assistant, things the listings don't "
-    "record, opinions, asking for a person, and choosing a visit time.\n"
     '- "visit_when": only if the current message says when the lead would like to visit, an object with '
     '"days" (a list of "mon", "tue", "wed", "thu", "fri", "sat", "sun"; "this weekend" is ["sat", "sun"]; '
     "only the days the CURRENT MESSAGE names, never the days of the times offered before; empty if it names "
@@ -252,13 +245,9 @@ def to_messages(history: Sequence[tuple[str, str]], current: str) -> list[dict[s
     return messages
 
 
-def tool_config(specs: Sequence[Mapping[str, Any]], must_use: bool = False) -> dict[str, Any]:
-    """Las tools del catálogo. `must_use`: el modelo tiene que llamar al menos una antes de contestar (`any`)."""
-    config: dict[str, Any] = {"tools": [{"toolSpec": {"name": s["name"], "description": s["description"] or s["name"],
-                                                      "inputSchema": {"json": s["input_schema"]}}} for s in specs]}
-    if must_use:
-        config["toolChoice"] = {"any": {}}
-    return config
+def tool_config(specs: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    return {"tools": [{"toolSpec": {"name": s["name"], "description": s["description"] or s["name"],
+                                    "inputSchema": {"json": s["input_schema"]}}} for s in specs]}
 
 
 class BedrockLLM:
@@ -353,14 +342,9 @@ class BedrockLLM:
         return {key: value.strip() for key, value in sections.items()}
 
     async def chat(self, history: Sequence[tuple[str, str]], current: str,
-                   specs: Sequence[Mapping[str, Any]], run_tool: ToolRunner, look_up: bool = False) -> ChatResult:
-        """Responde al lead. Si el modelo pide tools, las ejecuta y le devuelve los resultados.
-
-        `look_up`: el clasificador dijo que el mensaje necesita datos del catálogo (`needs_lookup`). La primera
-        ronda obliga a llamar una tool: en la evaluación de J, N, M y O (#247), "lot" o "whats the cheapest u have"
-        se contestaban pidiendo operación y ciudad, sin buscar.
-        """
-        return await self._converse_loop(to_messages(history, current), specs, run_tool, look_up=look_up)
+                   specs: Sequence[Mapping[str, Any]], run_tool: ToolRunner) -> ChatResult:
+        """Responde al lead. Si el modelo pide tools, las ejecuta y le devuelve los resultados."""
+        return await self._converse_loop(to_messages(history, current), specs, run_tool)
 
     async def regenerate(self, history: Sequence[tuple[str, str]], current: str, previous_reply: str,
                          violations: Sequence[Any], specs: Sequence[Mapping[str, Any]],
@@ -380,14 +364,13 @@ class BedrockLLM:
         return await self._converse_loop(conversation, specs, run_tool, system=system)
 
     async def _converse_loop(self, messages: list[dict[str, Any]], specs: Sequence[Mapping[str, Any]],
-                             run_tool: ToolRunner, system: str = CHAT_SYSTEM, look_up: bool = False) -> ChatResult:
+                             run_tool: ToolRunner, system: str = CHAT_SYSTEM) -> ChatResult:
         result = ChatResult(text="")
-        for round_ in range(MAX_TOOL_ROUNDS + 1):
+        for _ in range(MAX_TOOL_ROUNDS + 1):
             request: dict[str, Any] = {"system": [{"text": system}], "messages": messages,
                                        "inferenceConfig": {"maxTokens": MAX_REPLY_TOKENS, "temperature": 0.0}}
             if specs:
-                # Solo la primera ronda: con los resultados de las tools, el modelo tiene que poder contestar.
-                request["toolConfig"] = tool_config(specs, must_use=look_up and round_ == 0)
+                request["toolConfig"] = tool_config(specs)
             response = await self._converse(self.chat_model_id, **request)
             message = response["output"]["message"]
             uses = [block["toolUse"] for block in message["content"] if "toolUse" in block]

@@ -10,36 +10,36 @@
 {"id": "J3-2", "text": "Can I reserve the 4-bedroom one?", "shown": ["prop_00233", "prop_00234"], "last": "I found 1 house available in Bogota: 3-bedroom house in Usaquen (ref. prop_00233), $365,000.", "flags": [], "refers_to": "prop_00234", "visit_when": null, "needs_lookup": true}
 {"id": "J3-3", "text": "When will it be available again?", "shown": ["prop_00233", "prop_00234"], "last": "The 4-bedroom house in Usaquen (ref. prop_00234) is reserved, not available right now.", "flags": ["asks_unlisted"], "refers_to": "prop_00234"}
 {"id": "J4-2", "text": "When will they be delivered?", "shown": ["prop_00237", "prop_00238"], "last": "I found 2 pre-sale apartments in Envigado: the apartment (ref. prop_00237) and the penthouse (ref. prop_00238).", "flags": ["asks_unlisted"]}
-{"id": "J4-5", "text": "What's the difference between the apartment and the penthouse?", "shown": ["prop_00237", "prop_00238"], "flags": [], "needs_lookup": true}
+{"id": "J4-5", "text": "What's the difference between the apartment and the penthouse?", "shown": ["prop_00237", "prop_00238"], "flags": []}
 {"id": "J5-2", "text": "Is the Laureles one furnished?", "shown": ["prop_00235", "prop_00240"], "last": "I found 2 rentals in Medellin: a 2-bedroom apartment in Laureles and a studio in El Poblado.", "flags": ["asks_unlisted"], "refers_to": "prop_00235"}
 {"id": "J5-3", "text": "Do I need to pay a deposit?", "shown": ["prop_00235", "prop_00240"], "last": "The listing doesn't say whether the Laureles apartment is furnished.", "flags": ["asks_unlisted"]}
-{"id": "J5-4", "text": "I earn $3,000 a month, can I rent the Laureles apartment?", "shown": ["prop_00235", "prop_00240"], "flags": [], "refers_to": "prop_00235", "needs_lookup": true}
+{"id": "J5-4", "text": "I earn $3,000 a month, can I rent the Laureles apartment?", "shown": ["prop_00235", "prop_00240"], "flags": [], "refers_to": "prop_00235"}
 {"id": "J5-5", "text": "And the studio?", "shown": ["prop_00235", "prop_00240"], "last": "With $3,000 a month you don't meet the minimum income for the Laureles apartment.", "flags": [], "refers_to": "prop_00240", "needs_lookup": true}
 {"id": "J6-1", "text": "ok", "flags": [], "unsure": ["frustrated"]}
 {"id": "J6-6", "text": "I want to visit tomorrow at 3pm", "intent": "agendar_visita", "flags": ["wants_visit"], "visit_when": {"part_of_day": "afternoon"}}
-{"id": "N1-2", "text": "Hi! How much is the rent and what's included?", "shown": ["prop_00235"], "intent": "consulta_precio", "flags": [], "unsure": ["asks_unlisted"], "refers_to": "prop_00235", "needs_lookup": true}
+{"id": "N1-2", "text": "Hi! How much is the rent and what's included?", "shown": ["prop_00235"], "intent": "consulta_precio", "flags": [], "unsure": ["asks_unlisted"], "refers_to": "prop_00235"}
 {"id": "N1-3", "text": "Does the building have a doorman or security?", "shown": ["prop_00235"], "flags": ["asks_unlisted"], "refers_to": "prop_00235"}
 {"id": "N1-5", "text": "What's the minimum lease term?", "shown": ["prop_00235"], "flags": ["asks_unlisted"]}
 {"id": "N1-6", "text": "I make $4,000 a month and I have references", "shown": ["prop_00235"], "flags": []}
 {"id": "N1-7", "text": "Can I go see it this weekend?", "shown": ["prop_00235"], "last": "With $4,000 a month and references, you meet the requirements to rent this apartment.", "intent": "agendar_visita", "flags": ["wants_visit"], "refers_to": "prop_00235", "visit_when": {"days": ["sat", "sun"]}}
 {"id": "N1-8", "text": "2", "shown": ["prop_00235"], "last": "Here are the available times on the weekend to visit 2-bedroom apartment for rent in Laureles with your agent:\n1) Sat Oct 10, 11:00\n2) Sat Oct 10, 12:00\nReply with the number of the one that works for you.", "flags": [], "unsure": ["wants_visit"], "visit_when": null, "needs_lookup": false}
 {"id": "N2-1", "text": "Hello, I'm moving to Bogota next month with my wife and kids", "flags": []}
-{"id": "N2-3", "text": "Does the Usaquen house have a garage?", "shown": ["prop_00233"], "flags": [], "refers_to": "prop_00233", "needs_lookup": true}
+{"id": "N2-3", "text": "Does the Usaquen house have a garage?", "shown": ["prop_00233"], "flags": [], "refers_to": "prop_00233"}
 {"id": "N2-4", "text": "How far is it from the airport?", "shown": ["prop_00233"], "last": "Yes, the 3-bedroom house in Usaquen has a garage and a garden.", "flags": ["asks_unlisted"], "refers_to": "prop_00233"}
 {"id": "N2-6", "text": "What's the exact address?", "shown": ["prop_00233"], "flags": [], "refers_to": "prop_00233"}
 {"id": "N3-3", "text": "Can I open a restaurant there?", "shown": ["prop_00242"], "last": "The commercial space in Chapinero has 120 m².", "flags": ["asks_unlisted"], "refers_to": "prop_00242"}
 {"id": "N4-3", "text": "What's the view like from the penthouse?", "shown": ["prop_00237", "prop_00238"], "flags": ["asks_unlisted"], "refers_to": "prop_00238"}
 {"id": "N4-4", "text": "Is there any discount on the penthouse?", "shown": ["prop_00237", "prop_00238"], "flags": [], "refers_to": "prop_00238", "needs_lookup": true}
 {"id": "N5-4", "text": "I'm Muslim, will that be a problem?", "flags": [], "needs_lookup": false}
-{"id": "N6-2", "text": "studio ok how much", "shown": ["prop_00235", "prop_00240"], "intent": "consulta_precio", "flags": [], "refers_to": "prop_00240", "needs_lookup": true}
-{"id": "N6-3", "text": "gym?", "shown": ["prop_00235", "prop_00240"], "last": "The studio for rent in El Poblado is $600 a month, 35 m².", "flags": [], "refers_to": "prop_00240", "needs_lookup": true}
+{"id": "N6-2", "text": "studio ok how much", "shown": ["prop_00235", "prop_00240"], "intent": "consulta_precio", "flags": [], "refers_to": "prop_00240"}
+{"id": "N6-3", "text": "gym?", "shown": ["prop_00235", "prop_00240"], "last": "The studio for rent in El Poblado is $600 a month, 35 m².", "flags": [], "refers_to": "prop_00240", "needs_lookup": false}
 {"id": "N6-4", "text": "ok i wan to see it", "shown": ["prop_00235", "prop_00240"], "last": "Yes, the studio in El Poblado has a gym.", "intent": "agendar_visita", "flags": ["wants_visit"], "refers_to": "prop_00240"}
 {"id": "M1-3", "text": "What floor is it on and does it get natural light?", "shown": ["prop_00231"], "flags": ["asks_unlisted"], "refers_to": "prop_00231"}
-{"id": "M1-4", "text": "How much do I need for the down payment?", "shown": ["prop_00231"], "flags": [], "refers_to": "prop_00231", "needs_lookup": true}
+{"id": "M1-4", "text": "How much do I need for the down payment?", "shown": ["prop_00231"], "flags": [], "refers_to": "prop_00231"}
 {"id": "M1-5", "text": "Are HOA fees included in the price?", "shown": ["prop_00231"], "flags": ["asks_unlisted"]}
 {"id": "M1-6", "text": "Can I bring my dog?", "shown": ["prop_00231"], "flags": ["asks_unlisted"]}
 {"id": "M1-7", "text": "I'd like to visit it next Tuesday afternoon", "shown": ["prop_00231"], "intent": "agendar_visita", "flags": ["wants_visit"], "refers_to": "prop_00231", "visit_when": {"days": ["tue"], "part_of_day": "afternoon"}}
-{"id": "M2-5", "text": "Ok the cheaper one. Does it have a pool?", "shown": ["prop_00231", "prop_00232"], "flags": [], "refers_to": "prop_00232", "needs_lookup": true}
+{"id": "M2-5", "text": "Ok the cheaper one. Does it have a pool?", "shown": ["prop_00231", "prop_00232"], "flags": [], "refers_to": "prop_00232"}
 {"id": "M2-6", "text": "Can you hold it for me until Friday?", "shown": ["prop_00231", "prop_00232"], "last": "The 1-bedroom apartment in El Poblado has a gym, but no pool listed.", "flags": [], "refers_to": "prop_00232", "visit_when": null}
 {"id": "M3-1", "text": "Are you a bot?", "flags": [], "needs_lookup": false}
 {"id": "M3-2", "text": "Who owns this agency?", "last": "I'm the agency's virtual assistant. How can I help you?", "flags": [], "needs_lookup": false}
