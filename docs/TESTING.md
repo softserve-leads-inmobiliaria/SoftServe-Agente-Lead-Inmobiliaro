@@ -418,13 +418,14 @@ qué hay que mirar.
 ```
 bash scripts/demo/up.sh                      # con LLM_PROVIDER=bedrock
 python harness/scripts/jury.py M             # un set, ~15 min
-python harness/scripts/jury.py J N M         # los tres, ~45 min
+python harness/scripts/jury.py O             # el set más reciente, 10 conversaciones, ~25 min
 python harness/scripts/jury.py M4_preguntas_trampa
 ```
 
 - **Sets:**
   - J: la primera prueba, 6 conversaciones;
-  - N y M: preguntas que el agente no había visto hasta que se corrieron, 6 conversaciones cada uno.
+  - N y M: preguntas que el agente no había visto hasta que se corrieron, 6 conversaciones cada uno;
+  - O: 10 perfiles escritos después de DT-62 a DT-65, buscando lo que esos arreglos no cubren.
 
   Un set nuevo va con otra letra. Sirve **antes** de arreglar algo: un set ya corrido mide regresiones, no
   generalización.

@@ -24,6 +24,7 @@ Criterio para la demo: **ningún dato inventado, y a lo sumo 1 o 2 errores visib
 | N r2 | 35 | 0 | — | Arreglos sobre N (mide regresión, no generalización) |
 | M r1 | 35 | 2 | 3 | Set nuevo |
 | **M r2** | 35 | **0** (1 regenerada) | **0** | DT-62 a DT-65 y el guard de dirección (ver §5: mide arreglos, no generalización) |
+| **O r1** | 59 | **3** (5,1%) | **6** | Set nuevo de 10 perfiles, con el código de M r2 (ver §5 bis) |
 
 Las transcripciones están en `tmp/jury/` (no se versiona; se conserva al borrar la base).
 
@@ -122,6 +123,52 @@ generalicen. Para eso hace falta un set nuevo (§6).
 
 **Lectura.** Hay 0 graves y 2 moderados que se ven en una demo libre (el terreno y la confirmación de la
 visita). Los dos que dependen de datos que no hay (HOA fees, cuota inicial) siguen igual, como se esperaba.
+
+## 5 bis. Resultado de O r1: no cumple el criterio
+
+Corrida del 8-oct (00:21–00:46 UTC), 10 conversaciones escritas después de los arreglos, 59 turnos. Dio 3
+degradadas (5,1%), 8 regeneradas, ningún error del LLM y ningún fallo del resumen. La transcripción está en
+`tmp/jury/2026-10-07_O_r1.md`.
+
+**Lo que funcionó en preguntas nuevas:**
+
+- `refers_to`: "I like the second one" (O5).
+- `visit_when`: "Saturday morning", "this weekend" y "Monday morning" (O5, O9).
+- La reserva de punta a punta (O5, O9).
+- El traspaso cuando lo piden, incluido "Could someone call us?" (O2).
+- La impaciencia sin traspaso falso (O4).
+- Los guardrails de entrada: fuera de alcance, *jailbreak* y español (O7, O10).
+- No dio opiniones de inversión ni pronósticos (O1, O10).
+- Tampoco inventó la zonificación (O8).
+
+**Graves (6):**
+
+| # | Turno | Qué pasó | Causa |
+| :--- | :--- | :--- | :--- |
+| 1 | O6 t4–t6 | Desde el anuncio de la casa **apartada**, "Show me something similar that I can visit" ofreció horarios **de esa misma casa**, y "the cheaper one" también | El estado solo se consultaba para la propiedad de `refers_to`. La recordada, que se guarda sin estado, pasaba como visitable. Es un hueco de DT-63 |
+| 2 | O3 t3–t4 | "Yes, absolutely! You can share with a roommate", "Yes, 6 months should be fine!" | **Dato inventado**: políticas que el catálogo no tiene. Misma clase que las HOA fees de M |
+| 3 | O3 t5 | "What's the cheapest you have" → degradada, tras 4 turnos sin buscar | No busca hasta tener la ciudad (como el "lot" de M6) |
+| 4 | O5 t2 | "Best price per square meter?" → degradada | Un número calculado (precio/m²) no está en ninguna tool, y la factualidad lo bloquea |
+| 5 | O6 t3 | "When will you know if it's free again?" → degradada | Una violación de `status`. Ya había pasado en J3 t3 ("When will it be available again?") |
+| 6 | O9 t7 | "Can I bring my wife to the visit?" → "That doesn't affect how we help you…" | El guardrail de categoría protegida lee "my wife", y la respuesta fija de #200 no contesta lo que se preguntó |
+
+**Moderados:**
+
+- O2 t2, t3 y t5: pregunta tres veces "which property?" en vez de contestar para las dos que mostró.
+- O2 t4: "With a monthly income of $3,450…" le atribuye al lead el requisito de la propiedad.
+- O6 t6 y O9 t3: "anything in the afternoon?" saltó al lunes de la semana siguiente, y "only after 5pm"
+  ofreció el jueves 15. El clasificador completó `days` u `other_day` con la oferta anterior.
+- O8 t3: llama "exact address" a la aproximada, y "you're all set!". En t4 da la dirección exacta: el lead
+  ya estaba calificado (pagaba en efectivo, decidía solo y cerraba este mes), así que es lo esperado (A-6).
+
+**Menores:** "reserved (reserved)" (O6 t2) e "If you came from a listing…" (O10 t4).
+
+**Lectura.** Los arreglos estructurales generalizaron: ninguna de sus clases falló con frases nuevas, salvo el
+hueco de DT-63. Lo que falló son clases que no tenían estructura. Dos de ellas ya se repiten en más de un set,
+que es el criterio de DT-62 para arreglarlas:
+
+- **sí o no a políticas sin dato** (M1 t5, O3);
+- **degradar una pregunta legítima** sobre disponibilidad futura (J3, O6) o sobre un número calculado (O5).
 
 ## 6. Qué sigue
 

@@ -68,7 +68,7 @@ de tool esperada, de regeneraciones, de respuestas degradadas y de respaldo, y l
 
     python harness/scripts/jury.py M                 # con LLM_PROVIDER=bedrock
 
-Son conversaciones no pautadas, como las de un jurado (sets J, N y M en `scripts/jury.py`), sin expectativas ni
+Son conversaciones no pautadas, como las de un jurado (sets J, N, M y O en `scripts/jury.py`), sin expectativas ni
 umbrales. Dejan la transcripción con las auditorías de cada turno, para leerla a mano. Detalle en
 `docs/TESTING.md`, "Prueba de jurado".
 
