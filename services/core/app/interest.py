@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from app.markers import KIND, TYPE
-from app.visits import OFFER_KEY, VISIT_KEY
+from app.visits import OFFER_KEY, VISIT_KEY, the_title
 
 # La propiedad de interés más reciente, arrastrada de turno en turno en `last_tool_results` (B-8): ese
 # campo se sobrescribe cada turno, y la visita se pide varios turnos después de ver la propiedad. El
@@ -127,7 +127,7 @@ def listing_greeting(listing: Mapping[str, Any]) -> str:
     """Saludo del lead que llega por el anuncio de una propiedad (#122). Título y referencia salen del
     catálogo; la referencia queda en el historial para que el LLM sepa de qué propiedad se habla después."""
     return (f"Hi! I'm the agency's assistant. I see you came from the listing for "
-            f"{listing['title']} (ref. {listing['id']}). What would you like to know?")
+            f"{the_title(listing)} (ref. {listing['id']}). What would you like to know?")
 
 
 def zone_of_interest(tool_results: Mapping[str, Any]) -> str | None:

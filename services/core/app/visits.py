@@ -135,12 +135,28 @@ def slot_label(slot: str) -> str:
     return f"{_WEEKDAYS[local.weekday()]} {_MONTHS[local.month - 1]} {local.day}, {local:%H:%M}"
 
 
+# Primeras palabras de los títulos del catálogo que son sustantivos comunes: después de "the" van en minúscula
+# ("the studio for rent in El Poblado"). Un título que empieza con un nombre propio queda como está.
+_COMMON_START = frozenset({"apartment", "house", "studio", "lot", "land", "commercial", "office",
+                           "pre-sale", "penthouse", "loft", "duplex", "townhouse"})
+
+
+def the_title(prop: Mapping[str, Any]) -> str:
+    """El título de la propiedad con artículo, para el texto que escribe el código (#52): "to visit the
+    2-bedroom apartment in El Poblado" en vez de "to visit 2-bedroom apartment in El Poblado"."""
+    title = str(prop["title"])
+    first = title.split(" ", 1)[0]
+    if first.lower() in _COMMON_START:
+        title = title[0].lower() + title[1:]
+    return f"the {title}"
+
+
 def _listing(slots: list[str]) -> str:
     return "\n".join(f"{n}) {slot_label(slot)}" for n, slot in enumerate(slots, start=1))
 
 
 def offer_text(prop: Mapping[str, Any], slots: list[str], intro: str | None = None) -> str:
-    intro = intro or f"Here are the available times to visit {prop['title']} with your agent:"
+    intro = intro or f"Here are the available times to visit {the_title(prop)} with your agent:"
     return f"{intro}\n{_listing(slots)}\nReply with the number of the one that works for you."
 
 
@@ -207,7 +223,7 @@ def reminder(offer: Mapping[str, Any]) -> str:
 def not_visitable(prop: Mapping[str, Any], status: str) -> str:
     """La propiedad que pidió visitar está apartada o cerrada (#247): lo dice el código, con el estado del catálogo."""
     label = STATUS.get(status, "not available")
-    return (f"{prop['title']} is {label} right now, so I can't book a visit to it. "
+    return (f"The {the_title(prop)[4:]} is {label} right now, so I can't book a visit to it. "
             "Would you like me to show you similar options that are available?")
 
 
@@ -252,9 +268,9 @@ async def _offer(scheduling: SchedulingClient, lead_id: str, prop: dict[str, Any
         return ask_preferred(prop, "no_slots")
     wanted = describe(when) if when else ""
     if wanted and fitting:
-        intro = intro or f"Here are the available times {wanted} to visit {prop['title']} with your agent:"
+        intro = intro or f"Here are the available times {wanted} to visit {the_title(prop)} with your agent:"
     elif wanted:
-        intro = f"I don't have available times {wanted}. These are the closest ones to visit {prop['title']}:"
+        intro = f"I don't have available times {wanted}. These are the closest ones to visit {the_title(prop)}:"
     offer = {"property": prop, "advisor_id": advisor_id, "slots": slots}
     kind = "closest" if wanted and not fitting else "offer"
     return VisitStep(offer_text(prop, slots, intro), {OFFER_KEY: offer}, kind=kind)
@@ -305,6 +321,6 @@ async def follow_up(scheduling: SchedulingClient, conversation_id: str, lead_id:
                                         "That time was just taken. These are still free:"), kind="slot_taken")
         return ask_preferred(prop, "scheduling_error")
     booked = {"property": prop, "visit_id": visit.get("visit_id"), "scheduled_at": visit.get("scheduled_at", chosen)}
-    reply = (f"Done, your visit to {prop['title']} is booked for {slot_label(chosen)}. "
+    reply = (f"Done, your visit to {the_title(prop)} is booked for {slot_label(chosen)}. "
              "Your agent will contact you to confirm the details.")
     return VisitStep(reply, {VISIT_KEY: booked}, settled=True, booked=True, kind="booked")
