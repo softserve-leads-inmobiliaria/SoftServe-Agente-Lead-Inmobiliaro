@@ -40,7 +40,7 @@ Cinco principios. Cada cambio de este plan debe poder justificarse con uno de el
 | Caso | Qué pasa | Causa | Clase |
 | :--- | :--- | :--- | :--- |
 | **O6** t4–t6 | Casa apartada que llega desde un anuncio. "Show me something similar that I can visit" no busca parecidas; después, "I can't book the visit from here right now". En t5 sale `PREFERRED_ASK` sin explicación | `_answered_by_code` es síncrono y decide antes de saber el estado: la propiedad del anuncio no trae `status` | Decidir antes de saber el estado |
-| **O9** t7 | "Can I bring my wife to the visit?" → el guard de categoría protegida reescribe y luego la factualidad degrada | Un acompañante de la familia no es una pregunta sobre la categoría protegida. Falta saber qué regla de factualidad saltó (no hay logs) | Fair housing / verificación por detección |
+| **O9** t7 | "Can I bring my wife to the visit?" → degradada (`number`) | La respuesta repite la hora de la visita ya reservada ("Monday, October 19th at 10:00"), y esa hora no es fuente de ningún marcador. Confirmado en el paso 0 | Dato del turno sin marcador |
 | **O2** t4 | "Our pension is $2,500 a month. Is that enough?" → degradada (`number`) | No llama a `check_requirements` para comparar con el requisito de dos propiedades | Comparar contra requisitos |
 
 O2 queda fuera de la demo (ver §5).
@@ -62,8 +62,20 @@ O2 queda fuera de la demo (ver §5).
 
   Las auditorías de la factualidad llevan además `kinds`. La agenda dice qué contestó (`VisitStep.kind`):
   `offer`, `closest`, `not_visitable`, `fallback_empty`, `fallback_error`, `scheduling_error`, `no_slots`…
-  Así, el `PREFERRED_ASK` de O6 t5 dirá de dónde salió. `jury.py` lo imprime como *Por qué:*. Falta correr O6 y
-  O9 con el core reconstruido.
+  Así, el `PREFERRED_ASK` de O6 t5 dirá de dónde salió. `jury.py` lo imprime como *Por qué:*. El registro guarda
+  también la intención del clasificador (`classified`), porque degradar la cambia a `otro`.
+- **Corrida del 7-oct (O6 y O9, `tmp/jury/2026-10-07_223953_O.md`)**, con lo que ahora explica el registro:
+  - **O6 t4** ("something similar that I can visit"): ruta `agenda:not_visitable`, y el agente se la dejó a la
+    agenda. Nadie busca las parecidas.
+  - **O6 t5** ("The cheaper one, can I see it on Monday?"): `refers_to=unclear` → `agenda:no_property` →
+    `PREFERRED_ASK`. El clasificador tiene razón: "the cheaper one" habla de opciones que nunca se mostraron. La
+    causa es t4.
+  - **O6 t6**: `agenda:not_visitable` otra vez, sobre la casa apartada.
+  - **O9 t7** ("Can I bring my wife to the visit?"): violación `number` en el borrador y en la regeneración, y
+    degradada. Una segunda corrida con `TRACE_CONTENT=1` (local, datos de prueba) mostró el número: *"See you
+    both on Monday, October 19th at 10:00!"*. **Es la hora de la visita ya reservada**, que no es fuente de
+    ningún marcador. No es un problema de fair housing. El clasificador dio `consulta_precio`, así que
+    `PROTECTED_ANSWER` no salta, y está bien: el lead no pregunta si la categoría importa.
 
 ### Paso 1 — PR chico de O6 y O9 (`Refs #247`)
 
@@ -73,9 +85,10 @@ Con tests primero; después se reconstruye el core y se repiten solo O6 y O9.
   estado en caché, o traer el estado junto con el anuncio. Si la propiedad no se puede visitar, contesta el
   modelo con una nota ("prop_X está apartada; busca disponibles parecidas") y `_visit_step` no pisa su
   respuesta. Explicar el `PREFERRED_ASK` de t5.
-- **O9:** `PROTECTED_ANSWER` solo cuando el lead pregunta si la categoría importa ("do you rent to families?"),
-  no cuando la menciona ("can I bring my wife?"). Encontrar la regla de factualidad que bloqueó y sumar el caso
-  al gold set.
+- **O9 (diagnóstico corregido en el paso 0):** la visita reservada es un dato del turno anterior que la
+  factualidad no conoce. Arreglo por construcción (DT-60): la visita reservada como fuente de marcadores
+  (`{visit.when}`, con la fecha y la hora como las escribe `visits.slot_label`). El prompt la enumera junto a
+  los demás marcadores. El caso entra a los tests de `markers`. `PROTECTED_ANSWER` no se toca.
 
 ### Paso 2 — Medir sin leer a mano
 
