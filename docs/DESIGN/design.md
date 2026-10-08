@@ -63,10 +63,14 @@ stateDiagram-v2
 Enum: `GREETING | DISCOVERY | QUALIFY | RECOMMEND | SCHEDULE | HANDOFF | HUMAN_HANDOFF | NURTURE | LOST`.
 `HUMAN_HANDOFF` es alcanzable desde **cualquier** estado — no es exclusivo del final del funnel.
 Se llega por tres caminos: petición explícita del lead, una intención fuera del alcance del agente, o una
-racha de 3 turnos seguidos sin resolver (proxy de frustración); el detalle está en `decisions.md` (DT-16).
+racha de 3 turnos seguidos sin resolver en la que el último mensaje muestra molestia (el campo `frustrated` del
+clasificador); el detalle está en `decisions.md` (DT-16, DT-65).
 
 `SCHEDULE` también se alcanza desde cualquier estado activo: pedir la visita arranca la agenda si hay una
-propiedad de interés (en `RECOMMEND`, aunque no la haya). El embudo avanza por lo que pasó en la conversación y
+propiedad de interés que se pueda visitar. Cuál es lo dice el clasificador (`refers_to`), eligiendo entre las
+propiedades que la conversación ya mostró; si no se sabe cuál, el agente pregunta y no se adivina (DT-63). Los
+horarios se filtran por el día y la franja que pidió el lead (`visit_when`, DT-64). El embudo avanza por lo que
+pasó en la conversación y
 no solo por la intención: buscar o mirar una propiedad cierra `DISCOVERY`, y el primer dato de calificación
 (presupuesto, cómo se decide, cuándo, o `check_requirements`) cierra `QUALIFY` (DT-61).
 
