@@ -153,7 +153,7 @@ class BedrockAgent:
         last_assistant = next((content for role, content in reversed(turn.history) if role == "assistant"), None)
         try:
             shown = interest.shown_properties(turn.remembered, turn.listing)
-            classification = await self._llm.classify(turn.text, last_assistant, shown)
+            classification = await self._llm.classify(turn.text, last_assistant, shown, turn.protected_removed)
             intent, flags, when = classification.intent, classification.flags, classification.when
             about = classification.refers_to
             guard_audits: list[tuple[str, dict[str, Any]]] = []
@@ -173,9 +173,13 @@ class BedrockAgent:
                      else VisitRoute())
             if route.by_code:
                 return AgentResult(text="", intent=intent, guard_audits=guard_audits, route="agenda", **read)
-            if turn.protected_removed and "?" in turn.text and intent == "otro":
+            matters = flags.get("asks_if_it_matters")
+            if turn.protected_removed and (matters if matters is not None
+                                           else "?" in turn.text and intent == "otro"):
                 # #200: "does that matter?" se contesta siempre igual. En vivo el modelo ignoraba la nota y
-                # seguía con el enganche, o lo degradaba la factualidad.
+                # seguía con el enganche, o lo degradaba la factualidad. Lo decide el clasificador (#247): la
+                # regla de "?" e intención `otro` se la daba a "Can I bring my partner to the visit?" y no a
+                # "Can buy property here?" (sin "foreigners"). Queda si el clasificador no contestó el campo.
                 return AgentResult(text=PROTECTED_ANSWER, intent="otro", guard_audits=guard_audits, route="protected",
                                    **read)
             specs = await catalog.tool_specs()

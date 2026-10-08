@@ -46,7 +46,16 @@ MARKER_FIELDS = sorted((f.removeprefix("requirements.") for f in FIELDS - {"desc
                        key=lambda f: (f.startswith(("down_", "income_", "monthly_")), f))
 # Los campos booleanos del clasificador con los que decide el código (DT-60). Si falta uno, se usa la regla.
 CLASSIFIER_FLAGS = ("asks_for_person", "wants_alert", "wants_visit", "frustrated", "asks_unlisted",
-                    "needs_lookup")
+                    "needs_lookup", "asks_if_it_matters")
+# El guardrail quitó una mención de categoría protegida (#200): el clasificador sabe que falta algo, no qué, y
+# solo entonces se le pide `asks_if_it_matters`. En `CLASSIFIER_SYSTEM` la misma línea movía otros campos en
+# mensajes sin nada que ver (gold set, #247: 4 peores y 2 mejores).
+REMOVED_NOTE = ("(PART OF THE CURRENT MESSAGE WAS REMOVED: it mentioned a personal characteristic such as "
+                "origin, nationality, religion, gender or family situation. Also add the key "
+                "\"asks_if_it_matters\": true if the current message asks whether that characteristic "
+                "matters for buying or renting, for the requirements or for how they will be treated "
+                "(\", does that matter?\", \"Can buy property here?\", \"Is it ok if ?\"); false if it asks "
+                "about something else, like bringing someone to a visit, a price or a property.)")
 
 # Lo que lee el LLM va en inglés (#202, DT-55); los valores de las claves son los del contrato y no cambian.
 CLASSIFIER_SYSTEM = (
@@ -311,10 +320,13 @@ class BedrockLLM:
                 await self._retrier.sleep(decision.delay or 0.0)
 
     async def classify(self, text: str, last_assistant: str | None = None,
-                       shown: Sequence[Mapping[str, Any]] = ()) -> Classification:
+                       shown: Sequence[Mapping[str, Any]] = (), removed: bool = False) -> Classification:
         """Intención y señal cruda del mensaje actual. El contexto es la última respuesta del asistente y las
-        propiedades que ya mostró la conversación (`shown`, `interest.shown_properties`), para `refers_to`."""
+        propiedades que ya mostró la conversación (`shown`, `interest.shown_properties`), para `refers_to`.
+        `removed`: el guardrail quitó una mención de categoría protegida, para `asks_if_it_matters`."""
         prompt = f"CURRENT MESSAGE:\n{text}"
+        if removed:
+            prompt = f"{prompt}\n{REMOVED_NOTE}"
         if last_assistant:
             prompt = f"LAST ASSISTANT MESSAGE (context only):\n{last_assistant}\n\n{prompt}"
         if shown:
