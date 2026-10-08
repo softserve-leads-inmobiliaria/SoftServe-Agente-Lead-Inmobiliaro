@@ -32,6 +32,9 @@ logger = logging.getLogger("core.bedrock_llm")
 
 MAX_TOOL_ROUNDS = 3
 MAX_REPLY_TOKENS = 400
+# El resumen del traspaso (A-16) es un JSON de tres secciones: cortado por el límite, no se puede leer y la ficha
+# sale sin resumen. En la prueba de jurado (#247) pasó con 400 (`stop=max_tokens`).
+SUMMARY_MAX_TOKENS = 800
 
 # Tiempo de reintentos del turno en curso (A-14): lo abre `BedrockLLM.turn()` y lo comparten todas las
 # llamadas del turno. Sin turno abierto, cada llamada tiene el suyo.
@@ -318,11 +321,11 @@ class BedrockLLM:
         response = await self._converse(
             self.chat_model_id, system=[{"text": SUMMARY_SYSTEM}],
             messages=[{"role": "user", "content": [{"text": prompt}]}],
-            inferenceConfig={"maxTokens": MAX_REPLY_TOKENS, "temperature": 0.0})
+            inferenceConfig={"maxTokens": SUMMARY_MAX_TOKENS, "temperature": 0.0})
         # El motivo va en el error, sin el texto: en la prueba de jurado (#247) falló una vez y el log no decía si
         # el JSON se cortó por `maxTokens` o si vino una sección vacía.
         how = (f"stop={response.get('stopReason')}, "
-               f"tokens={(response.get('usage') or {}).get('outputTokens')}/{MAX_REPLY_TOKENS}")
+               f"tokens={(response.get('usage') or {}).get('outputTokens')}/{SUMMARY_MAX_TOKENS}")
         try:
             data = parse_json_object(_text_of(response))
         except LLMFormatError:
