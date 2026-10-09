@@ -3,7 +3,7 @@ theme: default
 title: Agente de Leads Inmobiliarios
 info: |
   Estado del proyecto al 5 de octubre de 2026. Equipo #2, SoftServe Project Lab.
-  Guion completo: docs/presentations/2026-10-05-estado-del-proyecto.md
+  Guion completo: docs/archive/presentations/2026-10-05-estado-del-proyecto.md
 colorSchema: light
 transition: slide-left
 mdc: true
@@ -395,7 +395,7 @@ class: text-center
 # ⑧ Preguntas
 
 <div class="text-sm opacity-75 mt-6">
-Repositorio y guion completo: <code>docs/presentations/2026-10-05-estado-del-proyecto.md</code>
+Repositorio y guion completo: <code>docs/archive/presentations/2026-10-05-estado-del-proyecto.md</code>
 </div>
 
 <!--

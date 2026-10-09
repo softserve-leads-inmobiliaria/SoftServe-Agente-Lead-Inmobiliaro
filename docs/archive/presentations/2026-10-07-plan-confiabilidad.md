@@ -238,7 +238,7 @@ Solo si P muestra la clase "sí o no sobre datos que no existen":
 4. Cerrar #247 y #51.
 
 **Estado (8-oct, noche).** El detalle completo, con el costo, los límites y la evidencia, está en
-[`2026-10-08-cierre-de-evaluacion.md`](2026-10-08-cierre-de-evaluacion.md).
+[`2026-10-08-cierre-de-evaluacion.md`](../../internal/presentations/2026-10-08-cierre-de-evaluacion.md).
 
 - **1 y 2, hechos.** El comportamiento está congelado desde P, y el guion está en `DEMO.md`.
 - **3, hecho:** demo × 5 a las 18:48 (`tmp/eval/2026-10-08_184806_evaluacion.md`). 284/285 turnos OK, 1 degradada

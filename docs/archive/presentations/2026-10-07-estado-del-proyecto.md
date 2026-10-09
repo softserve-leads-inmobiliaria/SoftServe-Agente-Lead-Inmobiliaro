@@ -68,7 +68,7 @@ El 5 de octubre el producto estaba **completo en funcionalidad**. Estos dos día
 | **Robustez del canal** | #227, #231, #210, #211 | Mensajes seguidos del mismo lead en orden, la respuesta no espera el resumen del traspaso, la foto sale una vez, el chat del asesor no se trata como lead |
 
 Las decisiones de arquitectura pasaron de 53 a **60** (DT-54…DT-60), todas en
-[`decisions.md`](../DECISIONS/decisions.md).
+[`decisions.md`](../../DECISIONS/decisions.md).
 
 ## 3. Cómo está el backlog
 
@@ -100,7 +100,7 @@ aparece al probar en vivo entra como issue `[gap]` o `[bug]` con su prioridad, s
 
 ## 4. Una historia típica: A-5, la factualidad
 
-Elegimos [A-5](../STORIES/A-05.md) porque muestra que una historia cerrada no es una historia terminada:
+Elegimos [A-5](../../internal/STORIES/A-05.md) porque muestra que una historia cerrada no es una historia terminada:
 se cerró el 22 de septiembre y esta semana se rediseñó con lo que mostraron las pruebas en vivo.
 
 > **Como agencia, quiero que ningún número (precio, m², recámaras, etc.) que el agente mencione pueda
