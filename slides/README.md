@@ -2,7 +2,7 @@
 
 Diapositivas en [Slidev](https://sli.dev): todo el contenido está en [`slides.md`](slides.md) y los estilos en `style.css`.
 El guion completo, con los datos de cada diapositiva, es
-[`2026-10-05-estado-del-proyecto.md`](../2026-10-05-estado-del-proyecto.md).
+[`2026-10-05-estado-del-proyecto.md`](../docs/archive/presentations/2026-10-05-estado-del-proyecto.md).
 
 Requiere Node 20 o más reciente. La primera vez, `npm install` descarga unos 500 MB en `node_modules/`
 (no se versiona).

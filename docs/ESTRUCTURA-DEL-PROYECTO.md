@@ -42,7 +42,8 @@ SoftServe-Agente-Lead-Inmobiliaro/
 │   ├── session.py / settings.py / logging_config.py / repo_root.py
 │   ├── testing.py               # Base temporal ya migrada para los tests
 │   ├── migrations/              # Alembic
-│   ├── tests/
+│   ├── slides/                      # Diapositivas en Slidev de la presentación del 5-oct (Node, fuera del stack)
+├── tests/
 │   └── Dockerfile               # Imagen de los servicios migrate y seed
 ├── services/
 │   ├── core/                    # FSM, agente, guardrails, score y canal de Telegram
@@ -93,7 +94,7 @@ SoftServe-Agente-Lead-Inmobiliaro/
     └── archive/                 # Documentos superados: se conservan como registro, no se mantienen
         ├── README.md            # Qué hay y qué lo reemplaza
         ├── propuestas.md        # Propuestas que se convirtieron en la épica E6
-        └── presentations/       # Presentaciones anteriores y sus diapositivas
+        └── presentations/       # Presentaciones anteriores
 ```
 
 ## 2. `db/` — paquete compartido

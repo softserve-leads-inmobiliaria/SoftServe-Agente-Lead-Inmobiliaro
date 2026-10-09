@@ -8,7 +8,7 @@ y en el [índice interno](../internal/README.md).
 | :--- | :--- | :--- |
 | [`presentations/2026-09-24-revision-de-avance.md`](presentations/2026-09-24-revision-de-avance.md) | Primera revisión de avance: objetivo, arquitectura, backlog y guion de demo | [Estado del 9-oct](../internal/presentations/2026-10-09-estado-del-proyecto.md) |
 | [`presentations/2026-10-01-estado-del-proyecto.md`](presentations/2026-10-01-estado-del-proyecto.md) | Estado al 1 de octubre: qué funcionaba en vivo, qué faltaba por persona, riesgos | Estado del 9-oct |
-| [`presentations/2026-10-05-estado-del-proyecto.md`](presentations/2026-10-05-estado-del-proyecto.md) | Guion de la presentación del 5 de octubre. Sus diapositivas (Slidev) están en [`presentations/slides/`](presentations/slides/README.md) | Estado del 9-oct |
+| [`presentations/2026-10-05-estado-del-proyecto.md`](presentations/2026-10-05-estado-del-proyecto.md) | Guion de la presentación del 5 de octubre. Sus diapositivas (Slidev) están en [`slides/`](../../slides/README.md), en la raíz del repositorio | Estado del 9-oct |
 | [`presentations/2026-10-07-estado-del-proyecto.md`](presentations/2026-10-07-estado-del-proyecto.md) | Estado al 7 de octubre: inglés y Colombia, factualidad por construcción, primera prueba de jurado | Estado del 9-oct |
 | [`presentations/2026-10-07-prueba-de-jurado.md`](presentations/2026-10-07-prueba-de-jurado.md) | Resultados de los sets J, N y M y la estrategia de campos del clasificador (DT-62 a DT-65) | [Cierre de la evaluación](../internal/presentations/2026-10-08-cierre-de-evaluacion.md) |
 | [`presentations/2026-10-07-plan-confiabilidad.md`](presentations/2026-10-07-plan-confiabilidad.md) | Plan de trabajo hasta la demo (pasos 0 a 5), ya ejecutado | Cierre de la evaluación |
