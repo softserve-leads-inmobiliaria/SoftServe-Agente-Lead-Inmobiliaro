@@ -116,4 +116,22 @@ Cómo correr un ensayo medido sin perder nada:
 
 | Fecha | Cómo | Turnos OK | Degradadas | Estado y banda | Notas |
 | :--- | :--- | ---: | ---: | :--- | :--- |
-| | | | | | |
+| 8-oct, 18:48 | `evaluate.py --reps 5` (`tmp/eval/2026-10-08_184806_evaluacion.md`) | 55/55 (100%) | 0 | 5/5 `HANDOFF`, 5/5 HOT | 7% regeneradas; latencia p50 6,0 s, p95 12,2 s. Una vez dijo "The system can arrange that for you" |
+
+**La misma corrida, los 12 escenarios de la demo** (60 conversaciones, 285 turnos, 122 min), contra la línea base
+del 6-oct de `docs/TESTING.md`:
+
+| Corrida | Turnos OK | Tool esperada | Regeneradas | Degradadas | Respaldo | Estado final | Latencia p50 / p95 |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Línea base, 6-oct (8 escenarios) | 93% | 99% | 24% | 4% | 0 | 100% | 5,9 s / 11,6 s |
+| Cierre, 8-oct (12 escenarios) | 284/285 (99,6%) | 100% | 6% | 1 (0,4%) | 0 | 30/30 | 6,3 s / 9,8 s |
+
+- **La única falla:** `01_deep_link_hasta_asesor` #5 t6 ("We want to move in within the next two months") salió
+  degradada: una respuesta segura en vez de un dato dudoso.
+- **Costo** (`2026-10-08_184806_evaluacion_tokens.md`): 679 llamadas al LLM (2,4 por turno) y 6.101 tokens por
+  turno, casi todos de entrada. Con los precios de Bedrock, unos 5 dólares las 60 conversaciones: menos de 2
+  centavos por turno.
+- **Corridas descartadas:** a las 20:19 se detuvo el script que iba a seguir con J, N, M, O y P, por los créditos
+  de AWS vencidos. A las 20:20 se relanzó por error una segunda corrida en paralelo, creyendo cortada también la
+  primera (`2026-10-08_202019` y `2026-10-08_202706`). Compitieron por el cupo y por la agenda: su única falla
+  (`09` t5, "That time was just taken") es un horario que reservó la otra corrida. No cuentan.

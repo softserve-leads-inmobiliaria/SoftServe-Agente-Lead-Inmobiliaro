@@ -237,6 +237,16 @@ Solo si P muestra la clase "sí o no sobre datos que no existen":
 3. `evaluate.py --reps 5` una sola vez y comparar con la línea base del 6-oct en `TESTING.md`.
 4. Cerrar #247 y #51.
 
+**Estado (8-oct, noche).** El detalle completo, con el costo, los límites y la evidencia, está en
+[`2026-10-08-cierre-de-evaluacion.md`](2026-10-08-cierre-de-evaluacion.md).
+
+- **1 y 2, hechos.** El comportamiento está congelado desde P, y el guion está en `DEMO.md`.
+- **3, hecho:** demo × 5 a las 18:48 (`tmp/eval/2026-10-08_184806_evaluacion.md`). 284/285 turnos OK, 1 degradada
+  (0,4%), 6% regeneradas y `12_guion_demo` 5/5. La línea base del 6-oct tenía 93% de turnos OK y 4% degradadas.
+- **La confirmación de J, N, M, O y P con el código final no se corrió**, por los créditos de AWS vencidos. Cómo
+  retomarla: §7.1 del cierre.
+- **4, pendiente.** Lo decide el dueño del repo, después de fusionar la pila de ramas.
+
 ## 5. Fuera de alcance para la demo
 
 - Que el estado se escriba solo por marcador (sin excepciones en la factualidad).
@@ -255,5 +265,8 @@ Solo si P muestra la clase "sí o no sobre datos que no existen":
 - PRs en draft; sacarlos de draft, aprobar y fusionar lo decide el dueño del repo.
 
 ## 7. Pendiente de definir
+
+- Si hay créditos de AWS para la confirmación final de J, N, M, O y P (unos 90 minutos y unos US$3,50 a 4). Ver
+  el cierre, §7.1.
 
 - La fecha de la demo, para saber hasta qué paso se llega.

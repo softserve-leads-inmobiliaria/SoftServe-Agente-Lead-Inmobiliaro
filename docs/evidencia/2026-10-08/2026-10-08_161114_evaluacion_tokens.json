@@ -1,0 +1,312 @@
+{
+  "report_started": "2026-10-08T16:11:14.061631",
+  "conversations": 28,
+  "conversations_with_traces": 28,
+  "turns": 161,
+  "calls": 402,
+  "tokens": {
+    "llm.token_count.prompt": 1034349,
+    "llm.token_count.completion": 40659,
+    "llm.token_count.total": 1075008
+  },
+  "per_turn": {
+    "calls_mean": 2.5,
+    "tokens_mean": 6681
+  },
+  "per_model": {
+    "us.anthropic.claude-sonnet-4-5-20250929-v1:0": {
+      "calls": 246,
+      "llm.token_count.prompt": 824956,
+      "llm.token_count.completion": 19749,
+      "llm.token_count.total": 844705
+    },
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0": {
+      "calls": 156,
+      "llm.token_count.prompt": 209393,
+      "llm.token_count.completion": 20910,
+      "llm.token_count.total": 230303
+    }
+  },
+  "per_conversation": [
+    {
+      "scenario": "J1_detalles_fuera_del_catalogo",
+      "rep": 1,
+      "conversation_id": "be04dad0-f180-4d6d-9693-c67acd9cfda8",
+      "turns": 8,
+      "calls": 26,
+      "llm.token_count.prompt": 73114,
+      "llm.token_count.completion": 2211,
+      "llm.token_count.total": 75325
+    },
+    {
+      "scenario": "J2_la_agencia",
+      "rep": 1,
+      "conversation_id": "3ddda007-9d8b-4361-a6ee-d58fa49bb8b8",
+      "turns": 7,
+      "calls": 16,
+      "llm.token_count.prompt": 40159,
+      "llm.token_count.completion": 1686,
+      "llm.token_count.total": 41845
+    },
+    {
+      "scenario": "J3_apartadas_y_cerradas",
+      "rep": 1,
+      "conversation_id": "815f4617-cbb6-46e0-8f5f-226a5428a46d",
+      "turns": 4,
+      "calls": 12,
+      "llm.token_count.prompt": 31652,
+      "llm.token_count.completion": 1131,
+      "llm.token_count.total": 32783
+    },
+    {
+      "scenario": "J4_preventa",
+      "rep": 1,
+      "conversation_id": "de842225-29b2-4165-a3dc-ef94ff27ea88",
+      "turns": 5,
+      "calls": 11,
+      "llm.token_count.prompt": 26397,
+      "llm.token_count.completion": 1399,
+      "llm.token_count.total": 27796
+    },
+    {
+      "scenario": "J5_renta",
+      "rep": 1,
+      "conversation_id": "3c38b80a-46b3-4aaa-bb91-36d103d38fdd",
+      "turns": 5,
+      "calls": 15,
+      "llm.token_count.prompt": 41182,
+      "llm.token_count.completion": 1443,
+      "llm.token_count.total": 42625
+    },
+    {
+      "scenario": "J6_ambiguo_y_fuera_de_tema",
+      "rep": 1,
+      "conversation_id": "9dc1688e-da63-4891-bd7b-c765fb13be2d",
+      "turns": 7,
+      "calls": 16,
+      "llm.token_count.prompt": 42809,
+      "llm.token_count.completion": 1409,
+      "llm.token_count.total": 44218
+    },
+    {
+      "scenario": "N1_renta_desde_el_anuncio",
+      "rep": 1,
+      "conversation_id": "563af104-ab82-4560-bb25-faca09528311",
+      "turns": 7,
+      "calls": 17,
+      "llm.token_count.prompt": 42278,
+      "llm.token_count.completion": 1511,
+      "llm.token_count.total": 43789
+    },
+    {
+      "scenario": "N2_familia_a_bogota",
+      "rep": 1,
+      "conversation_id": "24288644-c76d-43b7-8a65-e94fa72877d6",
+      "turns": 7,
+      "calls": 20,
+      "llm.token_count.prompt": 54740,
+      "llm.token_count.completion": 1832,
+      "llm.token_count.total": 56572
+    },
+    {
+      "scenario": "N3_comercial_y_terreno",
+      "rep": 1,
+      "conversation_id": "c13f9cfb-b40b-467b-9111-fb7d1803326b",
+      "turns": 5,
+      "calls": 18,
+      "llm.token_count.prompt": 49652,
+      "llm.token_count.completion": 1646,
+      "llm.token_count.total": 51298
+    },
+    {
+      "scenario": "N4_inversion_y_opiniones",
+      "rep": 1,
+      "conversation_id": "aacf0209-10e1-4b42-a7c2-e15cae082add",
+      "turns": 5,
+      "calls": 13,
+      "llm.token_count.prompt": 37012,
+      "llm.token_count.completion": 1775,
+      "llm.token_count.total": 38787
+    },
+    {
+      "scenario": "N5_adversarial",
+      "rep": 1,
+      "conversation_id": "2ade7fe4-a55f-4ef2-9d39-3cb0ac989658",
+      "turns": 5,
+      "calls": 9,
+      "llm.token_count.prompt": 21234,
+      "llm.token_count.completion": 887,
+      "llm.token_count.total": 22121
+    },
+    {
+      "scenario": "N6_escritura_desordenada",
+      "rep": 1,
+      "conversation_id": "383ea2a5-ed74-44d5-bdf2-dc719c293276",
+      "turns": 5,
+      "calls": 13,
+      "llm.token_count.prompt": 33175,
+      "llm.token_count.completion": 1333,
+      "llm.token_count.total": 34508
+    },
+    {
+      "scenario": "M1_compra_desde_el_anuncio",
+      "rep": 1,
+      "conversation_id": "ceb85691-c25c-4fe6-bf58-e97416d1d9ef",
+      "turns": 6,
+      "calls": 16,
+      "llm.token_count.prompt": 40933,
+      "llm.token_count.completion": 1271,
+      "llm.token_count.total": 42204
+    },
+    {
+      "scenario": "M2_primer_comprador",
+      "rep": 1,
+      "conversation_id": "9fef1eca-69b0-417d-a878-ede4888d6571",
+      "turns": 6,
+      "calls": 15,
+      "llm.token_count.prompt": 37822,
+      "llm.token_count.completion": 1622,
+      "llm.token_count.total": 39444
+    },
+    {
+      "scenario": "M3_agente_humano",
+      "rep": 1,
+      "conversation_id": "50653e9d-ebb6-49f0-b640-2bf46efe9f6a",
+      "turns": 4,
+      "calls": 7,
+      "llm.token_count.prompt": 13621,
+      "llm.token_count.completion": 641,
+      "llm.token_count.total": 14262
+    },
+    {
+      "scenario": "M4_preguntas_trampa",
+      "rep": 1,
+      "conversation_id": "30efff69-a665-47b8-a7bd-6d92cf578638",
+      "turns": 6,
+      "calls": 16,
+      "llm.token_count.prompt": 40626,
+      "llm.token_count.completion": 1444,
+      "llm.token_count.total": 42070
+    },
+    {
+      "scenario": "M5_cambio_de_idea",
+      "rep": 1,
+      "conversation_id": "510f6bc5-5b6b-42fb-b0fc-9c72f6343e7e",
+      "turns": 7,
+      "calls": 17,
+      "llm.token_count.prompt": 43804,
+      "llm.token_count.completion": 1978,
+      "llm.token_count.total": 45782
+    },
+    {
+      "scenario": "M6_mensajes_cortos_y_raros",
+      "rep": 1,
+      "conversation_id": "2fe2e6c1-beb7-4938-b229-2bf2f516322d",
+      "turns": 5,
+      "calls": 13,
+      "llm.token_count.prompt": 31491,
+      "llm.token_count.completion": 1090,
+      "llm.token_count.total": 32581
+    },
+    {
+      "scenario": "O1_inversionista_extranjero",
+      "rep": 1,
+      "conversation_id": "5c7c490a-9010-49f2-8237-9d4ab9088c9b",
+      "turns": 5,
+      "calls": 13,
+      "llm.token_count.prompt": 34024,
+      "llm.token_count.completion": 1213,
+      "llm.token_count.total": 35237
+    },
+    {
+      "scenario": "O2_pareja_mayor_accesibilidad",
+      "rep": 1,
+      "conversation_id": "61a132b7-fb2e-4437-a8e9-09b6e2343e5b",
+      "turns": 6,
+      "calls": 14,
+      "llm.token_count.prompt": 35410,
+      "llm.token_count.completion": 1635,
+      "llm.token_count.total": 37045
+    },
+    {
+      "scenario": "O3_estudiante_con_poco_presupuesto",
+      "rep": 1,
+      "conversation_id": "1b670489-b6b7-48d0-ba2f-1a734541860e",
+      "turns": 6,
+      "calls": 15,
+      "llm.token_count.prompt": 36479,
+      "llm.token_count.completion": 1362,
+      "llm.token_count.total": 37841
+    },
+    {
+      "scenario": "O4_lead_impaciente",
+      "rep": 1,
+      "conversation_id": "9cc5104a-3aa9-44fd-a2ad-7abee61dd4ef",
+      "turns": 5,
+      "calls": 12,
+      "llm.token_count.prompt": 29125,
+      "llm.token_count.completion": 1447,
+      "llm.token_count.total": 30572
+    },
+    {
+      "scenario": "O5_comparador",
+      "rep": 1,
+      "conversation_id": "58de25d4-bbdf-4581-8693-204cf18d39fc",
+      "turns": 6,
+      "calls": 17,
+      "llm.token_count.prompt": 47903,
+      "llm.token_count.completion": 2397,
+      "llm.token_count.total": 50300
+    },
+    {
+      "scenario": "O6_anuncio_de_una_apartada",
+      "rep": 1,
+      "conversation_id": "1be0553c-5a08-4a07-b4e8-bcb237039531",
+      "turns": 5,
+      "calls": 12,
+      "llm.token_count.prompt": 29248,
+      "llm.token_count.completion": 1271,
+      "llm.token_count.total": 30519
+    },
+    {
+      "scenario": "O7_idiomas_y_emojis",
+      "rep": 1,
+      "conversation_id": "709b5fdc-e212-4014-aee4-6b3f8841cf46",
+      "turns": 6,
+      "calls": 13,
+      "llm.token_count.prompt": 33844,
+      "llm.token_count.completion": 1429,
+      "llm.token_count.total": 35273
+    },
+    {
+      "scenario": "O8_comprador_de_terreno_listo",
+      "rep": 1,
+      "conversation_id": "a85a9878-0cd5-4be1-b2a6-51141f70ae3a",
+      "turns": 5,
+      "calls": 17,
+      "llm.token_count.prompt": 46769,
+      "llm.token_count.completion": 1362,
+      "llm.token_count.total": 48131
+    },
+    {
+      "scenario": "O9_visita_con_restricciones",
+      "rep": 1,
+      "conversation_id": "3e494d44-34fd-4f9d-90a3-f95d67a45448",
+      "turns": 7,
+      "calls": 10,
+      "llm.token_count.prompt": 19312,
+      "llm.token_count.completion": 1367,
+      "llm.token_count.total": 20679
+    },
+    {
+      "scenario": "O10_fuera_de_alcance",
+      "rep": 1,
+      "conversation_id": "8e78ee24-6465-40b8-801c-3c555206646e",
+      "turns": 6,
+      "calls": 9,
+      "llm.token_count.prompt": 20534,
+      "llm.token_count.completion": 867,
+      "llm.token_count.total": 21401
+    }
+  ]
+}
