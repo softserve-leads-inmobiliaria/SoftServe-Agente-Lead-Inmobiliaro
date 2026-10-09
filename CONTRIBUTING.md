@@ -1,10 +1,10 @@
 # Cómo trabajamos — reglas del equipo
 
 Documento corto, operativo. El *por qué* de las decisiones de arquitectura vive en
-`docs/DECISIONS/decisions.md`; el *qué* de cada historia vive en `docs/STORIES/`. Esto es el
+`docs/DECISIONS/decisions.md`; el *qué* de cada historia vive en `docs/internal/STORIES/`. Esto es el
 *cómo* del día a día con 3 personas tocando el mismo repo a la vez.
 
-**¿Primera vez usando Git/GitHub en equipo?** Empezá por [`docs/ONBOARDING.md`](docs/ONBOARDING.md)
+**¿Primera vez usando Git/GitHub en equipo?** Empezá por [`docs/internal/ONBOARDING.md`](docs/internal/ONBOARDING.md)
 — tiene el flujo completo paso a paso con los comandos exactos. Este documento son las reglas;
 ese es el tutorial.
 
@@ -35,13 +35,13 @@ listo, solo esperando que la cuenta lo permita.
 ## Ramas y Pull Requests
 
 - Nombre de rama: `<track>/<ID>-slug-corto` — ej. `core/a-4-recomendacion-datos-reales`,
-  `borde/b-1-bot-telegram`. El `<ID>` coincide con el de `docs/STORIES/<ID>.md` y con el título
+  `borde/b-1-bot-telegram`. El `<ID>` coincide con el de `docs/internal/STORIES/<ID>.md` y con el título
   `[ID] ...` del Issue — así se puede rastrear rama → Issue → historia sin ambigüedad.
 - Un PR = una historia (o un `[gap]`/`[tech-debt]` chico). Si un PR crece hasta tocar 2 historias
   no relacionadas, se parte.
 - **Quién revisa:** idealmente la persona que consume el contrato/módulo desde el otro lado (ej.
   quien construyó `catalog.get_property` revisa el PR que lo consume desde `core`) — no solo
-  "cualquiera del equipo". Esto ya está en la Definition of Done común de `docs/STORIES/README.md`.
+  "cualquiera del equipo". Esto ya está en la Definition of Done común de `docs/internal/STORIES/README.md`.
 - No mergear con CI en rojo. Si un *contract test* se rompe, se arregla el contrato o el consumidor
   antes de mergear — nunca se "arregla después".
 - El merge lo hace quien revisó (o el autor, una vez aprobado) — no auto-mergear sin aprobación
@@ -65,9 +65,9 @@ Regla ya fijada en `docs/ESTRUCTURA-DEL-PROYECTO.md` §0/§3, repetida acá porq
 olvida bajo presión de entrega:
 
 - **Estado** (To Do / In Progress / Done) vive **solo** en GitHub Issues/Project. Nunca lo
-  marques en `docs/STORIES/<ID>.md` ni en un `todo.md` paralelo.
+  marques en `docs/internal/STORIES/<ID>.md` ni en un `todo.md` paralelo.
 - **Contenido de la historia** (criterios de aceptación, DoD) vive **solo** en
-  `docs/STORIES/<ID>.md`. El Issue es tracking, no la fuente — si el alcance cambia de verdad,
+  `docs/internal/STORIES/<ID>.md`. El Issue es tracking, no la fuente — si el alcance cambia de verdad,
   se edita el `.md` vía PR, no solo el Issue.
 - Si dudás dónde poner algo nuevo, es más probable que ya exista un lugar (`docs/DECISIONS/`,
   `docs/DESIGN/`) que necesite un archivo nuevo.
@@ -90,7 +90,7 @@ olvida bajo presión de entrega:
 Antes de cerrar (o al mergear el PR que lo cierra), revisar — no todo aplica siempre, pero el
 chequeo es obligatorio, no opcional:
 
-- **¿La historia cambió de alcance real respecto a `docs/STORIES/<ID>.md`?** Si sí, editar ese
+- **¿La historia cambió de alcance real respecto a `docs/internal/STORIES/<ID>.md`?** Si sí, editar ese
   archivo en el mismo PR — no dejar que el Issue diga una cosa y el `.md` otra.
 - **¿Se tomó una decisión de arquitectura nueva (o se cambió una existente)?** Agregar su entrada
   en `docs/DECISIONS/decisions.md`, enlazando al Issue/PR — ya está en la Definition of Done común.

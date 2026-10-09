@@ -18,5 +18,5 @@ tmp/
 .DS_Store
 Thumbs.db
 
-# Node (diapositivas en docs/presentations/slides)
+# Node (diapositivas en docs/archive/presentations/slides)
 node_modules/
