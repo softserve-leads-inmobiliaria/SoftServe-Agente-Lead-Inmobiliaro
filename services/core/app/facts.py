@@ -31,13 +31,15 @@ CITABLE = ("id", "title", "type", "kind", "zone", "price", "m2", "bedrooms", "ba
 
 
 def _properties(tool_results: Mapping[str, Any]) -> Iterator[Mapping[str, Any]]:
-    """Las propiedades que trajeron las tools del turno: la ficha, los resultados de la búsqueda y sus alternativas."""
+    """Las propiedades que trajeron las tools del turno: la ficha, los resultados de la búsqueda, sus alternativas y
+    las no disponibles. Estas también se mostraron: sin ellas, "Can I reserve the 4-bedroom one?" no tenía de
+    cuál hablar y el modelo decía que no había ninguna (J3 t2, #247). El estado no se guarda nunca."""
     looked_up = tool_results.get("get_property")
     if isinstance(looked_up, Mapping):
         yield looked_up
     search = tool_results.get("search_properties")
     if isinstance(search, Mapping):
-        for key in ("properties", "alternatives"):
+        for key in ("properties", "alternatives", "unavailable"):
             found = search.get(key)
             for prop in found if isinstance(found, list) else ():
                 if isinstance(prop, Mapping):

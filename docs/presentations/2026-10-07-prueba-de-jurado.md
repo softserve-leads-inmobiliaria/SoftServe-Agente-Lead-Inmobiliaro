@@ -242,6 +242,8 @@ lo que no sabe todavía (el estado), o el catálogo no trae el dato y el modelo 
 
 ## 6. Qué sigue
 
+> **Reemplazado** por [`2026-10-07-plan-confiabilidad.md`](2026-10-07-plan-confiabilidad.md) (pasos 0 a 5). Lo de abajo queda como registro.
+
 En este orden:
 
 1. **PR en draft** de `core/247-jurado-sobre-main`: `Closes #229`, `Refs #247`, `Refs #51`. #247 se cierra

@@ -23,25 +23,28 @@ from evaluation import (  # noqa: E402
     summarize,
     turn_failures,
 )
+from jury_scenarios import JURY  # noqa: E402
 from scenarios import INVENTED_ZONES, INVENTORY_ZONES, SCENARIOS, Scenario, Turn  # noqa: E402
+
+ALL = {**SCENARIOS, **JURY}
 
 CORE_APP = ROOT / "services" / "core" / "app"
 
 
-def _obs(text="hi", reply="Sure, here it is.", tools=(), audits=(), latency=1.0, error=None):
-    return TurnObservation(text, reply, list(tools), list(audits), latency, error)
+def _obs(text="hi", reply="Sure, here it is.", tools=(), audits=(), latency=1.0, error=None, decision=None):
+    return TurnObservation(text, reply, list(tools), list(audits), latency, error, decision)
 
 
 # --- Escenarios alineados con el resto del repo --------------------------------------------------------
 
 def test_every_expected_tool_has_a_contract():
-    tools = {tool for s in SCENARIOS.values() for t in s.turns for tool in t.tools}
+    tools = {tool for s in ALL.values() for t in s.turns for tool in t.tools}
     contracts = {p.name.removesuffix(".schema.json") for p in (ROOT / "contracts" / "mcp").glob("*.schema.json")}
     assert tools and tools <= contracts
 
 
 def test_every_expected_audit_is_one_the_core_writes():
-    actions = {action for s in SCENARIOS.values() for t in s.turns for action in t.audits}
+    actions = {action for s in ALL.values() for t in s.turns for action in t.audits}
     source = "".join(p.read_text(encoding="utf-8") for p in CORE_APP.glob("*.py"))
     assert actions and all(f'"{action}"' in source for action in actions)
 
@@ -68,8 +71,30 @@ def test_conversar_uses_the_same_scenarios():
 
 
 def test_every_scenario_expects_something():
-    for name, scenario in SCENARIOS.items():
-        assert any(t.tools or t.expect_any or t.audits or t.forbid for t in scenario.turns), name
+    for name, scenario in ALL.items():
+        assert any(t.tools or t.expect_any or t.audits or t.forbid or t.route for t in scenario.turns), name
+
+
+def test_every_expected_route_is_one_the_core_writes():
+    source = "".join(p.read_text(encoding="utf-8") for p in CORE_APP.glob("*.py"))
+    for scenario in ALL.values():
+        for route in (route for turn in scenario.turns for route in turn.route):
+            name, _, kind = route.partition(":")
+            assert f'"{name}"' in source, route  # `route="handoff"`, `route: str = "agent"`, `"frustration" if`
+            assert not kind or f'kind="{kind}"' in source, route
+
+
+def test_every_property_a_turn_is_about_is_in_the_catalog():
+    data = (ROOT / "services" / "catalog" / "app" / "data.py").read_text(encoding="utf-8")
+    abouts = {turn.about for s in ALL.values() for turn in s.turns if turn.about}
+    assert abouts and all(f'"id": "{about}"' in data for about in abouts)
+
+
+def test_the_jury_runs_the_same_conversations_it_measures():
+    import jury
+
+    assert jury.CONVERSATIONS == {name: (s.property_id, [t.text for t in s.turns]) for name, s in JURY.items()}
+    assert not set(JURY) & set(SCENARIOS)
 
 
 # --- Un turno -------------------------------------------------------------------------------------------
@@ -117,6 +142,27 @@ def test_fallback_degraded_and_errors_fail():
                     audits=[evaluation.REGENERATED, evaluation.DEGRADED])
     assert turn_failures(Turn("x"), degraded) == ["respuesta degradada por la factualidad"]
     assert turn_failures(Turn("x"), _obs(error="TimeoutError: timed out")) == ["sin respuesta: TimeoutError: timed out"]
+
+
+DECIDED = {"route": "agenda:offer", "agent_route": "agenda", "refers_to": "prop_00233"}
+
+
+@pytest.mark.parametrize("route, ok", [(("agenda",), True), (("agenda:offer",), True), (("agenda:booked",), False),
+                                       (("agent", "handoff"), False)])
+def test_the_route_is_read_from_the_turn_decision(route, ok):
+    turn = Turn("Can I see it on Monday?", route=route)
+    assert (turn_failures(turn, _obs(decision=DECIDED)) == []) is ok
+
+
+def test_the_property_the_message_is_about_is_read_from_the_turn_decision():
+    assert turn_failures(Turn("the cheaper one", about="prop_00233"), _obs(decision=DECIDED)) == []
+    assert turn_failures(Turn("the cheaper one", about="prop_00234"), _obs(decision=DECIDED)) == [
+        "habla de prop_00233, se esperaba prop_00234"]
+
+
+def test_without_a_turn_decision_the_route_cannot_pass_but_other_turns_do_not_need_it():
+    assert turn_failures(Turn("x", route=("agent",)), _obs()) == ["sin turn.decision"]
+    assert turn_failures(Turn("x"), _obs()) == []
 
 
 def test_a_regeneration_alone_is_not_a_failure():

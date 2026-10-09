@@ -137,6 +137,7 @@ EN_MENCIONES: tuple[tuple[str, str, str], ...] = (
     ("en_woman", "género", "I'm a woman"),
     ("en_gay", "orientación sexual", "I'm gay"),
     ("en_trans", "orientación sexual", "I'm trans"),
+    ("en_gay_couple", "orientación sexual", "we're a gay couple"),
     ("en_married", "estado civil", "I'm married"),
     ("en_single", "estado civil", "I'm single"),
     ("en_divorced", "estado civil", "I'm divorced"),

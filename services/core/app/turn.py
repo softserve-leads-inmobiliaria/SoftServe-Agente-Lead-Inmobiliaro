@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any, Awaitable, Callable, Mapping, Sequence
 
@@ -17,7 +17,7 @@ from sqlalchemy import Engine
 from starlette.concurrency import run_in_threadpool
 
 from app import alerts, facts, reminders, scheduling_client, summary, visits
-from app.agent import Agent, AgentResult, FakeAgent, TurnInput
+from app.agent import Agent, AgentResult, FakeAgent, TurnInput, VisitRoute
 from app.alternatives import Alternatives
 from app.availability import AvailabilityGuard
 from app.bedrock_llm import Classification
@@ -124,7 +124,26 @@ def _ids(event: Mapping[str, Any]) -> tuple[uuid.UUID, uuid.UUID]:
 def _write_audits(store: StateStore, event: Mapping[str, Any], audits: Sequence[Audit]) -> None:
     for action, detail in audits:
         store.audit(action, {"conversation_id": str(event["conversation_id"]),
-                             "lead_id": str(event["lead_id"]), "event_id": str(event["event_id"]), **detail})
+                             "lead_id": str(event["lead_id"]), "event_id": str(event["event_id"]), **detail},
+                    actor="turn" if action == DECISION else "input_guard")
+
+
+# Por qué contestó así el turno (paso 0 del plan de confiabilidad): lo que entendió el clasificador y quién escribió
+# la respuesta. No es una detección del guardrail: va con otro `actor`, y sin nada que haya escrito el lead.
+DECISION = "turn.decision"
+
+
+def _decision(result: AgentResult, visit: VisitStep | None, frustrated: bool, alerted: bool,
+              unvisitable: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """`route`: quién escribió lo que leyó el lead. `agent_route`: qué hizo el agente antes; si difieren, el código
+    reemplazó su respuesta (p. ej. `agent` -> `agenda:offer`). `unvisitable`: pidió visitar esa propiedad, que no se
+    puede (`VisitRouter`)."""
+    route = ("frustration" if frustrated else f"agenda:{visit.kind or '?'}" if visit is not None
+             else "alert" if alerted else result.route)
+    return {"route": route, "agent_route": result.route, "intent": result.intent, "classified": result.classified,
+            "flags": dict(result.flags),
+            "refers_to": result.refers_to, "visit_when": result.visit_when,
+            "unvisitable": (unvisitable or {}).get("id")}
 
 
 def read_guard_context(engine: Engine, event: Mapping[str, Any]) -> GuardContext:
@@ -198,7 +217,7 @@ def advance(engine: Engine, event: Mapping[str, Any], intent: str,
         _describe(span, transition)
         if reason:
             span.set_attribute("fsm.handoff_reason", reason)
-        span.set_attribute("guardrail.audits", [action for action, _ in audits])
+        span.set_attribute("guardrail.audits", [action for action, _ in audits if action != DECISION])
         return transition
 
 
@@ -286,7 +305,7 @@ def _first_sight(featured: Mapping[str, Any] | None, tool_results: Mapping[str, 
 
 
 async def _visit_step(event: Mapping[str, Any], context: GuardContext, result: AgentResult,
-                      text: str, catalog: Catalog, shown: list[dict[str, Any]]) -> VisitStep | None:
+                      text: str, router: VisitRouter) -> VisitStep | None:
     """El paso de agenda de este turno (B-8), o None si el turno no tiene que ver con la visita.
 
     Pedir la visita la arranca desde cualquier estado activo (#229, DT-61): se ofrecen horarios de la propiedad
@@ -296,26 +315,81 @@ async def _visit_step(event: Mapping[str, Any], context: GuardContext, result: A
     propiedades mostradas (`refers_to`), la oferta es de esa.
 
     La propiedad elegida por `refers_to` y la recordada vienen de la memoria, sin estado: se consulta antes de
-    ofrecer horarios, y una apartada o cerrada se contesta con texto fijo.
+    ofrecer horarios. Si el agente ya supo que no se puede visitar (`VisitRouter.unvisitable`), su respuesta, con
+    las parecidas que buscó, no se pisa. Si no (p. ej. `FakeAgent`), se contesta con texto fijo.
     """
-    state, previous = context.fsm_state, context.last_tool_results
-    focus = focused_property(result.refers_to, shown)
+    if router.unvisitable is not None:
+        return None
+    state, previous, shown = context.fsm_state, context.last_tool_results, router.shown
     prop = _visit_property(result.tool_results, previous, result.refers_to, shown)
     if not _schedules(state, result.intent, result.flags, prop, previous.get(OFFER_KEY), text, result.visit_when):
         return None
     conversation_id, lead_id = (str(value) for value in _ids(event))
     agenda, today = scheduling_client.get_scheduling(), visits.today_local()
-    offer = previous.get(OFFER_KEY) if state == "SCHEDULE" else None
-    offered_id = ((offer or {}).get("property") or {}).get("id") if isinstance(offer, Mapping) else None
-    if isinstance(offer, Mapping) and (focus is None or focus["id"] == offered_id):
+    offer = _open_offer(context, focused_property(result.refers_to, shown))
+    if offer is not None:
         return await visits.follow_up(agenda, conversation_id, lead_id, offer, text, today, result.visit_when)
     # Sin estado vienen la elegida por `refers_to` y la recordada: las dos salen de la memoria. En la prueba de
     # jurado (O6), desde el anuncio de una casa apartada, "something similar that I can visit" ofrecía esa casa.
-    if prop is not None and prop.get("id") and prop.get("title") and not prop.get("status"):
-        status = await _current_status(catalog, prop["id"])
-        if status not in (None, "disponible"):
-            return VisitStep(visits.not_visitable(prop, status), {})
+    status = await router.status(prop)
+    if prop is not None and status not in (None, "disponible"):
+        return VisitStep(visits.not_visitable(prop, status), {}, kind="not_visitable")
     return await visits.start(agenda, lead_id, prop, today, result.visit_when)
+
+
+def _open_offer(context: GuardContext, focus: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
+    """La oferta de horarios que contesta el mensaje: la abierta en `SCHEDULE`, si no nombra otra propiedad."""
+    offer = context.last_tool_results.get(OFFER_KEY) if context.fsm_state == "SCHEDULE" else None
+    if not isinstance(offer, Mapping):
+        return None
+    offered_id = (offer.get("property") or {}).get("id")
+    return offer if focus is None or focus["id"] == offered_id else None
+
+
+@dataclass
+class VisitRouter:
+    """Quién contesta un pedido de visita (`VisitRoute`), con el estado de la propiedad ya consultado (#247, O6).
+
+    El agente lo llama después de clasificar, y `_visit_step` lo vuelve a usar: el estado se consulta una sola vez
+    por turno, y lo que decidió el agente vale también para la agenda.
+    """
+
+    context: GuardContext
+    listing: Mapping[str, Any] | None
+    text: str
+    shown: list[dict[str, Any]]
+    catalog: Catalog
+    statuses: dict[str, str | None] = field(default_factory=dict)
+    unvisitable: Mapping[str, Any] | None = None
+
+    async def __call__(self, classification: Classification) -> VisitRoute:
+        previous = self.context.last_tool_results
+        looked = {"get_property": self.listing} if self.listing else {}
+        prop = _visit_property(looked, previous, classification.refers_to, self.shown)
+        # El estado se mira después: acá solo importa si pidió visitar una propiedad que se sabe cuál es.
+        unknown = {**prop, "status": None} if prop is not None else None
+        if not _schedules(self.context.fsm_state, classification.intent, classification.flags, unknown,
+                          previous.get(OFFER_KEY), self.text, classification.when):
+            return VisitRoute()
+        if _open_offer(self.context, focused_property(classification.refers_to, self.shown)) is not None:
+            return VisitRoute(by_code=True)
+        status = await self.status(prop)
+        if prop is not None and status not in (None, "disponible"):
+            self.unvisitable = {"id": prop["id"], "title": prop.get("title"), "status": status}
+            return VisitRoute(unvisitable=self.unvisitable)
+        return VisitRoute(by_code=True)
+
+    async def status(self, prop: Mapping[str, Any] | None) -> str | None:
+        """El estado de la propiedad: el que trae (de una tool de este turno) o, si no, el del catálogo."""
+        if prop is None or not prop.get("id"):
+            return None
+        if isinstance(prop.get("status"), str):
+            return prop["status"]
+        if not prop.get("title"):
+            return None
+        if prop["id"] not in self.statuses:
+            self.statuses[prop["id"]] = await _current_status(self.catalog, prop["id"])
+        return self.statuses[prop["id"]]
 
 
 async def _current_status(catalog: Catalog, prop_id: str) -> str | None:
@@ -373,21 +447,6 @@ def _schedules(state: str, intent: str, flags: Mapping[str, bool], prop: Mapping
         return asks or not isinstance(offer, Mapping) or visits.answers(offer, text, when)
     visitable = prop is not None and prop.get("status") in (None, "disponible")
     return state in VISIT_STATES and asks and visitable
-
-
-def _answered_by_code(context: GuardContext, listing: Mapping[str, Any] | None, text: str,
-                      shown: list[dict[str, Any]]) -> Callable[[Classification], bool]:
-    """Para el agente: si la respuesta de este turno la va a dar la agenda, solo hace falta clasificar (#229).
-    Es la misma regla que `_visit_step`, con la propiedad que este tendrá: la mostrada de la que habla el mensaje,
-    la del anuncio o la recordada."""
-    previous = context.last_tool_results
-    looked = {"get_property": listing} if listing else {}
-
-    def answered(classification: Classification) -> bool:
-        prop = _visit_property(looked, previous, classification.refers_to, shown)
-        return _schedules(context.fsm_state, classification.intent, classification.flags, prop,
-                          previous.get(OFFER_KEY), text, classification.when)
-    return answered
 
 
 def _alert_step(context: GuardContext, result: AgentResult, searches: SearchLog | None,
@@ -452,15 +511,16 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
                        else "out_of_domain" if verdict.out_of_domain
                        else "jailbreak" if verdict.jailbreak else "normal")
     listing, searches, shown = None, None, []
+    router = VisitRouter(context, None, verdict.signal_text, [], catalog)
     if verdict.not_english:
         # Se pide repetirlo en inglés; como fuera de dominio, no mueve la FSM ni cuenta como frustración.
-        result = AgentResult(text=NOT_ENGLISH_REPLY, intent="otro")
+        result = AgentResult(text=NOT_ENGLISH_REPLY, intent="otro", route="input_guard")
     elif verdict.out_of_domain:
-        result = AgentResult(text=_out_of_domain_reply(context), intent="otro")
+        result = AgentResult(text=_out_of_domain_reply(context), intent="otro", route="input_guard")
     elif verdict.jailbreak:
         # Se contesta como una pregunta de dominio cualquiera: no se refleja la instrucción, no se
         # llama al LLM y no dispara efectos (traspaso a humano, búsquedas).
-        result = AgentResult(text=FakeLLM().generate_reply("otro"), intent="otro")
+        result = AgentResult(text=FakeLLM().generate_reply("otro"), intent="otro", route="input_guard")
     else:
         # El agente solo ve el texto filtrado y el historial que guardó este mismo servicio.
         text = verdict.signal_text if verdict.signal_text.strip() or not event["text"].strip() else OMITTED_MESSAGE
@@ -470,12 +530,13 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
         guarded = AvailabilityGuard(searches)
         listing = await _listing(event, guarded, context.lead_qualified)
         shown = shown_properties(facts.evidence(context.last_tool_results, now), listing)
+        router = VisitRouter(context, listing, verdict.signal_text, shown, catalog)
         result = await agent.run(TurnInput(event=event, text=text, history=context.history,
                                            lead_qualified=context.lead_qualified, listing=listing,
                                            protected_removed=verdict.protected_category,
                                            remembered=facts.evidence(context.last_tool_results, now),
-                                           answered_by_code=_answered_by_code(context, listing,
-                                                                              verdict.signal_text, shown)),
+                                           booked_at=visits.booked_at(context.last_tool_results),
+                                           visit_route=router),
                                  guarded)
         if listing:
             result = _with_listing(result, listing, greet=not event["text"].strip())
@@ -483,13 +544,13 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
     visit = None
     if counts and result.intent not in HUMAN_INTENTS:
         try:
-            visit = await _visit_step(event, context, result, verdict.signal_text, catalog, shown)
+            visit = await _visit_step(event, context, result, verdict.signal_text, router)
         except Exception:
             logger.exception("fallo el paso de agenda; se pide el horario preferido")
-            visit = visits.ask_preferred(property_of_interest(context.last_tool_results))
+            visit = visits.ask_preferred(property_of_interest(context.last_tool_results), "fallback_error")
         if visit is None and not result.text:
             # El agente dejó la respuesta a la agenda (#229) y la agenda no contestó: no se manda un mensaje vacío.
-            visit = visits.ask_preferred(property_of_interest(context.last_tool_results))
+            visit = visits.ask_preferred(property_of_interest(context.last_tool_results), "fallback_empty")
         if visit is not None:
             # La agenda la maneja el código (DT-32): su respuesta reemplaza la del agente.
             result = replace(result, text=visit.reply, tool_results={**result.tool_results, **visit.tool_results})
@@ -501,9 +562,10 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
         if counts and context.fsm_state == "SCHEDULE" and result.intent not in HUMAN_INTENTS:
             text = f"{text}\n\n{visits.reminder(offer)}"
         result = replace(result, text=text, tool_results={**result.tool_results, OFFER_KEY: offer})
-    alert = None
+    alert, before_alert = None, result.text
     if visit is None and counts and result.intent not in HUMAN_INTENTS:
         result, alert = _alert_step(context, result, searches, verdict.signal_text)
+    alerted = result.text != before_alert and result.text in (alerts.CREATED_TEXT, alerts.NO_SEARCH_TEXT)
     outbound = FakeCore().handle_event(event, intent=result.intent, text=result.text)
     if verdict.pii:
         outbound["text"] += " " + PII_REMINDER
@@ -511,7 +573,8 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
                                                 focused_property(result.refers_to, shown)),
                              result.tool_results, context.last_tool_results, now)
     evidence = TurnEvidence(raw_signal=_raw_signal(verdict, result.raw_signal), listing=listing,
-                            tool_results=alerts.carry_offered(remembered, context.last_tool_results))
+                            tool_results=visits.carry_booked(alerts.carry_offered(remembered, context.last_tool_results),
+                                                             context.last_tool_results))
     streak = next_streak(context.unresolved_streak, result.intent, raw_signal=evidence.raw_signal,
                          resolved=visit is not None and visit.settled)
     frustrated = (counts and context.fsm_state not in TERMINAL_STATES and result.intent not in HUMAN_INTENTS
@@ -523,11 +586,16 @@ async def _run_turn(engine: Engine, event: Mapping[str, Any], catalog: Catalog, 
                                    evidence.tool_results, context.last_tool_results)
     evidence = replace(evidence, tool_results=shown)
 
+    decision = _decision(result, visit, frustrated, alerted, router.unvisitable)
     span.set_attributes({"turn.intent": result.intent, "turn.tools": sorted(result.tool_results),
                          "turn.agent": agent.name, "turn.llm_error": result.llm_error or "",
-                         "turn.output_guard": [action for action, _ in result.guard_audits]})
+                         "turn.output_guard": [action for action, _ in result.guard_audits],
+                         "turn.route": decision["route"], "turn.agent_route": decision["agent_route"],
+                         "turn.refers_to": result.refers_to or "",
+                         "turn.flags": sorted(name for name, value in result.flags.items() if value)})
     saved = [*_lead_message(verdict, event["text"]), ("assistant", outbound["text"], result.tool_calls or None)]
-    audits = [*audits, *result.guard_audits]  # A-5: la factualidad de salida se audita igual que la entrada
+    # A-5: la factualidad de salida se audita igual que la entrada; después, por qué contestó así el turno.
+    audits = [*audits, *result.guard_audits, (DECISION, decision)]
     transition = await run_in_threadpool(advance, engine, event, result.intent, evidence, audits, counts, saved,
                                          visit, searches.unmet if searches else (), alert,
                                          result.flags.get("frustrated"))

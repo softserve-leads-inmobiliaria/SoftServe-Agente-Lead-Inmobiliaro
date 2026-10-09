@@ -139,6 +139,8 @@ def _value(sources: Sources, ref: str, path: str | None) -> str | None:
         return _zones(sources.zones) if ref == "zones" and sources.zones else None
     if ref == "search":
         return str(sources.search_count) if path == "count" and sources.search_count is not None else None
+    if path == "id":  # "ref. {prop_00238.id}": la referencia ya es el marcador (#247, visto en vivo)
+        return ref if ref in sources.records else None
     path = ALIASES.get(path, path)
     if path not in FIELDS:
         return None
@@ -256,14 +258,25 @@ def lead_numbers(texts: Iterable[str]) -> set[str]:
     return {n for text in texts for n in extract_numbers(text)}
 
 
+def _marker_hint(sources: Sources, ref: str, path: str | None) -> str | None:
+    """Qué escribir en lugar de un marcador sin valor, si hay uno que sí lo tiene.
+
+    La dirección exacta no viene mientras el lead no califica (A-6): en O8 t3 (#247) el lead calificó en ese
+    mismo mensaje, el modelo la pidió, y la regeneración la volvió a pedir porque nadie le dijo qué usar.
+    """
+    if path == "address_exact" and _value(sources, ref, "address_approx") is not None:
+        return f"{{{ref}.address_approx}}"
+    return None
+
+
 def check(text: str, sources: Sources, lead_said: set[str], known_refs: Iterable[str] = ()) -> list[Violation]:
     """Lo que el modelo escribió como dato sin un marcador que lo respalde.
 
     `lead_said` son los números que escribió el lead en la conversación (`lead_numbers`); `known_refs`, las
     referencias que puede nombrar sin que una tool las haya dado (la del anuncio, las que escribió el lead).
     """
-    violations = [Violation("marker", m.group()) for m in MARKER.finditer(text)
-                  if _value(sources, m.group(1), m.group(2)) is None]
+    violations = [Violation("marker", m.group(), hint=_marker_hint(sources, m.group(1), m.group(2)))
+                  for m in MARKER.finditer(text) if _value(sources, m.group(1), m.group(2)) is None]
     for line in text.split("\n"):
         bare_line = outside(line)
         named = ({m.group(1) for m in MARKER.finditer(line)} | set(REFERENCE.findall(bare_line))) & set(sources.records)

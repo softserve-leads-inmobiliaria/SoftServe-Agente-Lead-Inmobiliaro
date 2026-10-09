@@ -174,6 +174,9 @@ _PROTECTED = _any((
     rf"\b{_EN_SELF}(?:catholic|christian|muslim|jew|atheist|evangelical|buddhist|hindu|mormon)\b",
     rf"\b(?:i{_APOS}?m (?:an? )?(?:woman|man|gay|lesbian|trans|transgender|bisexual|non-?binary)|gender"
     r"|sexual orientation|pregnant|lgbt\w*)\b",
+    # "We're a gay couple" no pasaba por "I'm" (#247).
+    rf"\b(?:(?:we{_APOS}?re|we are) (?:an? )?(?:gay|lesbian|queer)|(?:gay|lesbian|queer|same[- ]sex) "
+    r"(?:couple|partners?|family|marriage))\b",
     rf"\b(?:married|divorced|widow(?:ed|er)?|single (?:mom|mother|dad|father|parent)|marital status"
     rf"|i{_APOS}?m single|i am single|(?:i{_APOS}?m|we{_APOS}?re|i am|we are) engaged)\b",
     r"\b(?:i|we) have (?:\w+ )?(?:kids|children|a baby|a son|a daughter|sons|daughters)\b",
@@ -181,6 +184,7 @@ _PROTECTED = _any((
     r"\b(?:nacionalidad|extranjer[oa]s?|migrantes?|inmigrantes?|indigenas?|raza|origen etnico)\b",
     r"\b(?:religion|catolic[oa]s?|cristian[oa]s?|musulman\w*|judi[oa]s?|ateo|atea|evangelic[oa]s?|budistas?)\b",
     r"\b(?:soy (?:mujer|hombre|gay|lesbiana|trans)|genero|orientacion sexual|embarazad[oa])\b",
+    r"\b(?:somos (?:gays?|lesbianas)|pareja (?:gay|homosexual|del mismo sexo))\b",
     r"\b(?:casad[oa]s?|solter[oa]s?|divorciad[oa]s?|viud[oa]s?|madre soltera|padre soltero|estado civil)\b",
     r"\b(?:tengo hij[oa]s|mis hij[oa]s)\b",
     r"\bmi (?:espos[oa]|marido|mujer|novi[oa])\b",

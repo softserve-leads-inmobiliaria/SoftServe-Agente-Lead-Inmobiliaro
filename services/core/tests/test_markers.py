@@ -74,6 +74,19 @@ def test_a_marker_that_cannot_be_filled_is_left_as_it_is_and_blocked():
         assert check(text, s, set()) == [markers.Violation("marker", text)], text
 
 
+def test_the_id_marker_is_the_reference_of_a_property_a_tool_gave():
+    s = sources(("get_property", CASA))
+    assert render("ref. {p1.id}", s) == "ref. p1" and check("ref. {p1.id}", s, set()) == []
+    assert check("{p2.id}", s, set()) == [markers.Violation("marker", "{p2.id}")]
+
+
+def test_an_exact_address_not_given_yet_points_to_the_approximate_one():
+    # A-6: hasta que el lead califica, el catálogo no da la exacta (#247, O8 t3).
+    [violation] = check("It's at {p1.address_exact}.", sources(("get_property", CASA)), set())
+    assert violation.hint == "{p1.address_approx}"
+    assert check("{p1.price}", sources(), set())[0].hint is None
+
+
 def test_the_status_only_comes_from_this_turn_never_from_memory():
     remembered = {"p1": {k: v for k, v in CASA.items() if k != "status"}}
     s = sources(remembered=remembered)

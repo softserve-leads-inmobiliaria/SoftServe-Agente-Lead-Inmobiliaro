@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Mapping
 
@@ -35,6 +35,8 @@ PREFERENCE_DAYS = 14  # con un día pedido ("next Tuesday") se mira más adelant
 
 OFFER_KEY = "visit_offer"  # oferta en curso: horarios ofrecidos, o la espera de un horario preferido
 VISIT_KEY = "visit"  # visita resuelta: reservada (`visit_id`, `scheduled_at`) o con `preferred_time`
+# La hora de la visita reservada, que sigue en los turnos siguientes (`VISIT_KEY` dura solo el turno siguiente).
+BOOKED_KEY = "booked_visit"
 
 # Los horarios se muestran en inglés (#202, DT-55); la respuesta del lead se entiende en inglés y en español.
 _WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
@@ -118,6 +120,9 @@ class VisitStep:
     tool_results: dict[str, Any] = field(default_factory=dict)
     settled: bool = False  # la visita quedó resuelta: reservada o con un horario preferido para el asesor
     booked: bool = False  # hay una visita real en `visits`
+    # Qué contestó la agenda, para el registro del turno (`turn.decision`): "offer", "reoffer", "unclear_choice",
+    # "booked", "slot_taken", "ask_preferred", "preferred_again", "preferred_saved", "not_visitable"...
+    kind: str = ""
 
 
 def today_local(now: datetime | None = None) -> date:
@@ -130,12 +135,28 @@ def slot_label(slot: str) -> str:
     return f"{_WEEKDAYS[local.weekday()]} {_MONTHS[local.month - 1]} {local.day}, {local:%H:%M}"
 
 
+# Primeras palabras de los títulos del catálogo que son sustantivos comunes: después de "the" van en minúscula
+# ("the studio for rent in El Poblado"). Un título que empieza con un nombre propio queda como está.
+_COMMON_START = frozenset({"apartment", "house", "studio", "lot", "land", "commercial", "office",
+                           "pre-sale", "penthouse", "loft", "duplex", "townhouse"})
+
+
+def the_title(prop: Mapping[str, Any]) -> str:
+    """El título de la propiedad con artículo, para el texto que escribe el código (#52): "to visit the
+    2-bedroom apartment in El Poblado" en vez de "to visit 2-bedroom apartment in El Poblado"."""
+    title = str(prop["title"])
+    first = title.split(" ", 1)[0]
+    if first.lower() in _COMMON_START:
+        title = title[0].lower() + title[1:]
+    return f"the {title}"
+
+
 def _listing(slots: list[str]) -> str:
     return "\n".join(f"{n}) {slot_label(slot)}" for n, slot in enumerate(slots, start=1))
 
 
 def offer_text(prop: Mapping[str, Any], slots: list[str], intro: str | None = None) -> str:
-    intro = intro or f"Here are the available times to visit {prop['title']} with your agent:"
+    intro = intro or f"Here are the available times to visit {the_title(prop)} with your agent:"
     return f"{intro}\n{_listing(slots)}\nReply with the number of the one that works for you."
 
 
@@ -202,12 +223,31 @@ def reminder(offer: Mapping[str, Any]) -> str:
 def not_visitable(prop: Mapping[str, Any], status: str) -> str:
     """La propiedad que pidió visitar está apartada o cerrada (#247): lo dice el código, con el estado del catálogo."""
     label = STATUS.get(status, "not available")
-    return (f"{prop['title']} is {label} right now, so I can't book a visit to it. "
+    return (f"The {the_title(prop)[4:]} is {label} right now, so I can't book a visit to it. "
             "Would you like me to show you similar options that are available?")
 
 
-def ask_preferred(prop: Mapping[str, Any] | None) -> VisitStep:
-    return VisitStep(PREFERRED_ASK, {OFFER_KEY: {"property": prop, "preferred_time": True}})
+def carry_booked(tool_results: Mapping[str, Any], previous: Mapping[str, Any]) -> dict[str, Any]:
+    """`tool_results` con la hora de la visita reservada: la de este turno o la que ya se recordaba."""
+    visit = tool_results.get(VISIT_KEY)
+    if isinstance(visit, Mapping) and isinstance(visit.get("scheduled_at"), str):
+        return {**tool_results, BOOKED_KEY: {"scheduled_at": visit["scheduled_at"]}}
+    if isinstance(previous.get(BOOKED_KEY), Mapping):
+        return {**tool_results, BOOKED_KEY: dict(previous[BOOKED_KEY])}
+    return dict(tool_results)
+
+
+def booked_at(previous: Mapping[str, Any]) -> str | None:
+    """La hora de la visita reservada en la conversación, si la hay."""
+    for key in (VISIT_KEY, BOOKED_KEY):
+        found = previous.get(key)
+        if isinstance(found, Mapping) and isinstance(found.get("scheduled_at"), str):
+            return found["scheduled_at"]
+    return None
+
+
+def ask_preferred(prop: Mapping[str, Any] | None, kind: str = "ask_preferred") -> VisitStep:
+    return VisitStep(PREFERRED_ASK, {OFFER_KEY: {"property": prop, "preferred_time": True}}, kind=kind)
 
 
 async def _offer(scheduling: SchedulingClient, lead_id: str, prop: dict[str, Any], today: date,
@@ -221,18 +261,19 @@ async def _offer(scheduling: SchedulingClient, lead_id: str, prop: dict[str, Any
         free = [str(slot) for slot in found["slots"]
                 if datetime.fromisoformat(str(slot)).astimezone(LOCAL_TZ).date() not in skip_days]
     except (SchedulingError, KeyError, TypeError, ValueError):
-        return ask_preferred(prop)
+        return ask_preferred(prop, "scheduling_error")
     fitting = [slot for slot in free if _fits(slot, when)]
     slots = (fitting or free)[:OFFERED_SLOTS]
     if not slots:
-        return ask_preferred(prop)
+        return ask_preferred(prop, "no_slots")
     wanted = describe(when) if when else ""
     if wanted and fitting:
-        intro = intro or f"Here are the available times {wanted} to visit {prop['title']} with your agent:"
+        intro = intro or f"Here are the available times {wanted} to visit {the_title(prop)} with your agent:"
     elif wanted:
-        intro = f"I don't have available times {wanted}. These are the closest ones to visit {prop['title']}:"
+        intro = f"I don't have available times {wanted}. These are the closest ones to visit {the_title(prop)}:"
     offer = {"property": prop, "advisor_id": advisor_id, "slots": slots}
-    return VisitStep(offer_text(prop, slots, intro), {OFFER_KEY: offer})
+    kind = "closest" if wanted and not fitting else "offer"
+    return VisitStep(offer_text(prop, slots, intro), {OFFER_KEY: offer}, kind=kind)
 
 
 async def start(scheduling: SchedulingClient, lead_id: str, prop: Mapping[str, Any] | None,
@@ -241,7 +282,7 @@ async def start(scheduling: SchedulingClient, lead_id: str, prop: Mapping[str, A
     preferido."""
     summary = _property(prop)
     if summary is None:
-        return ask_preferred(None)
+        return ask_preferred(None, "no_property")
     return await _offer(scheduling, lead_id, summary, today, when=when)
 
 
@@ -254,9 +295,9 @@ async def follow_up(scheduling: SchedulingClient, conversation_id: str, lead_id:
     prop = offer.get("property")
     if offer.get("preferred_time"):
         if not _WHEN.search(_normalize(text)):
-            return VisitStep(PREFERRED_AGAIN, {OFFER_KEY: dict(offer)})
+            return VisitStep(PREFERRED_AGAIN, {OFFER_KEY: dict(offer)}, kind="preferred_again")
         return VisitStep(PREFERRED_THANKS, {VISIT_KEY: {"property": prop, "preferred_time": text.strip()}},
-                         settled=True)
+                         settled=True, kind="preferred_saved")
     slots = list(offer.get("slots") or [])
     chosen = choose_slot(text, slots)
     if chosen is not None and when and not _fits(chosen, {"days": when.get("days")}):
@@ -270,16 +311,16 @@ async def follow_up(scheduling: SchedulingClient, conversation_id: str, lead_id:
                             skip_days=offered if just_another_day else frozenset())
     if chosen is None:
         intro = "I didn't quite get which time you prefer. These are the ones I have:"
-        return VisitStep(offer_text(prop, slots, intro), {OFFER_KEY: dict(offer)})
+        return VisitStep(offer_text(prop, slots, intro), {OFFER_KEY: dict(offer)}, kind="unclear_choice")
     try:
         visit = await scheduling.book(f"{conversation_id}:{chosen}", lead_id, prop["id"],
                                       offer["advisor_id"], chosen)
     except SchedulingError as exc:
         if exc.code == "SLOT_TAKEN":
-            return await _offer(scheduling, lead_id, prop, today,
-                                "That time was just taken. These are still free:")
-        return ask_preferred(prop)
+            return replace(await _offer(scheduling, lead_id, prop, today,
+                                        "That time was just taken. These are still free:"), kind="slot_taken")
+        return ask_preferred(prop, "scheduling_error")
     booked = {"property": prop, "visit_id": visit.get("visit_id"), "scheduled_at": visit.get("scheduled_at", chosen)}
-    reply = (f"Done, your visit to {prop['title']} is booked for {slot_label(chosen)}. "
+    reply = (f"Done, your visit to {the_title(prop)} is booked for {slot_label(chosen)}. "
              "Your agent will contact you to confirm the details.")
-    return VisitStep(reply, {VISIT_KEY: booked}, settled=True, booked=True)
+    return VisitStep(reply, {VISIT_KEY: booked}, settled=True, booked=True, kind="booked")

@@ -6,16 +6,20 @@ import pytest
 
 from app.scheduling_client import SchedulingError
 from app.visits import (
+    BOOKED_KEY,
     OFFER_KEY,
     PREFERRED_AGAIN,
     PREFERRED_ASK,
     PREFERRED_THANKS,
     VISIT_KEY,
     answers,
+    booked_at,
+    carry_booked,
     choose_slot,
     follow_up,
     slot_label,
     start,
+    the_title,
     visit_when,
 )
 
@@ -87,6 +91,16 @@ def test_an_answer_that_does_not_pick_exactly_one_slot_is_not_a_choice(text):
 
 def test_slots_are_shown_in_local_time_with_the_weekday():
     assert slot_label("2026-10-06T15:00:00+00:00") == "Tue Oct 6, 10:00"
+
+
+@pytest.mark.parametrize("title,expected", [
+    ("2-bedroom apartment in El Poblado", "the 2-bedroom apartment in El Poblado"),
+    ("Studio for rent in El Poblado", "the studio for rent in El Poblado"),
+    ("Pre-sale penthouse in Envigado", "the pre-sale penthouse in Envigado"),
+    ("Torre Alta apartment", "the Torre Alta apartment"),  # un nombre propio no se toca
+])
+def test_the_title_reads_as_a_sentence(title, expected):
+    assert the_title({"title": title}) == expected
 
 
 # --- ofrecer ----------------------------------------------------------------------------------------------
@@ -253,3 +267,14 @@ def test_a_part_of_day_after_the_offer_can_be_the_same_day():
     when = {"days": [0], "part": "afternoon", "other_day": True}
     step = run(follow_up(agenda, "conv-1", "lead-1", offer, "Anything in the afternoon?", TODAY, when))
     assert offer_of(step)["slots"][0] == monday_afternoon
+
+
+def test_the_time_of_the_booked_visit_stays_for_the_next_turns():
+    booked = {VISIT_KEY: {"property": PROP, "visit_id": "v1", "scheduled_at": SLOTS[0]}}
+    after = carry_booked(booked, {})
+    assert after[BOOKED_KEY] == {"scheduled_at": SLOTS[0]} and booked_at(booked) == SLOTS[0]
+    later = carry_booked({"search_properties": {}}, after)
+    assert booked_at(later) == SLOTS[0]
+    # Un horario preferido no es una visita reservada: no tiene hora del sistema.
+    preferred = {VISIT_KEY: {"property": PROP, "preferred_time": "Saturday morning"}}
+    assert BOOKED_KEY not in carry_booked(preferred, {}) and booked_at(preferred) is None
