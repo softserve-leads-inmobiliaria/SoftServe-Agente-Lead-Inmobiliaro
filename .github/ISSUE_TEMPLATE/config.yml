@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Índice de historias del backlog
-    url: https://github.com/softserve-leads-inmobiliaria/SoftServe-Agente-Lead-Inmobiliaro/blob/main/docs/STORIES/README.md
+    url: https://github.com/softserve-leads-inmobiliaria/SoftServe-Agente-Lead-Inmobiliaro/blob/main/docs/internal/STORIES/README.md
     about: Ver qué historias existen y su estado de prioridad/puntos/dependencias antes de crear una nueva.
