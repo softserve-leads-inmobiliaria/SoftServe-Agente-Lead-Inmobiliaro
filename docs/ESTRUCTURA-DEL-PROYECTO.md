@@ -75,19 +75,25 @@ SoftServe-Agente-Lead-Inmobiliaro/
 │   └── infra/                   # Compose, Dockerfiles y enlaces de la documentación, sin Docker
 └── docs/                        # Único árbol de documentación (§3)
     ├── README.md                # Índice de navegación
-    ├── ONBOARDING.md            # Tutorial de Git/GitHub para el equipo
     ├── ESTRUCTURA-DEL-PROYECTO.md
     ├── TESTING.md               # Levantar el stack, probar a mano, correr cada suite
     ├── DEMO.md                  # Guion de la demo en vivo, límites por diseño y ensayos medidos (Z-2)
     ├── DECISIONS/decisions.md   # Bitácora de decisiones de arquitectura (DT-*)
     ├── DESIGN/
     │   ├── design.md            # Referencia compartida y estado real del sistema (§5)
+    │   ├── arquitectura-por-piezas.md  # Un diagrama por pieza del sistema
     │   ├── guardrails.md        # Guardrails de entrada y salida, y su cobertura
-    │   ├── panel-ui.md          # Boceto de UI/UX del panel de asesores (#178)
-    │   └── propuestas.md        # Funcionalidades propuestas, todavía sin historias
-    ├── STORIES/                 # Épicas, roadmap e historias de usuario, un archivo por historia
-    ├── presentations/           # Presentaciones de avance, una por fecha
-    └── evidencia/               # Informes de las corridas en vivo, una carpeta por fecha
+    │   └── panel-ui.md          # Boceto de UI/UX del panel de asesores (#178)
+    ├── internal/                # Uso del equipo: no hace falta para entender el producto
+    │   ├── README.md            # Índice de lo interno
+    │   ├── ONBOARDING.md        # Tutorial de Git/GitHub para el equipo
+    │   ├── STORIES/             # Épicas, roadmap e historias de usuario, un archivo por historia
+    │   ├── presentations/       # Presentación vigente y cierre de la evaluación
+    │   └── evidencia/           # Informes de las corridas en vivo, una carpeta por fecha
+    └── archive/                 # Documentos superados: se conservan como registro, no se mantienen
+        ├── README.md            # Qué hay y qué lo reemplaza
+        ├── propuestas.md        # Propuestas que se convirtieron en la épica E6
+        └── presentations/       # Presentaciones anteriores y sus diapositivas
 ```
 
 ## 2. `db/` — paquete compartido
@@ -109,6 +115,11 @@ SoftServe-Agente-Lead-Inmobiliaro/
 **Si se pivotea de arquitectura, el plan anterior se borra (queda recuperable en el historial) el mismo
 día del pivote**: nunca queda un segundo árbol completo navegable.
 
+- `docs/` tiene tres niveles. En la raíz, lo que sirve para entender el producto y correrlo (diseño,
+  decisiones, pruebas, demo). En `docs/internal/`, lo que usa el equipo para trabajar (historias, guía de
+  Git, presentaciones vigentes, evidencia). En `docs/archive/`, lo superado: presentaciones de fechas
+  pasadas y propuestas ya construidas. Lo archivado no se actualiza, y no cuenta como un segundo árbol: es
+  registro, no plan.
 - `docs/README.md` es el único índice de navegación. `tests/infra/test_docs_links.py` exige que todo
   `.md` del repo se alcance desde el README raíz y que ningún enlace relativo esté roto.
 - `docs/DECISIONS/decisions.md` es la bitácora técnica del *por qué* (contexto, alternativas,
@@ -118,7 +129,7 @@ día del pivote**: nunca queda un segundo árbol completo navegable.
   pendiente), no solo la lista de lo que debería existir.
 - `docs/DESIGN/design.md` §5 es la foto de qué está construido de verdad, separada del plan de las
   secciones 1-4.
-- `docs/STORIES/` tiene un archivo por historia. El manual está en `docs/STORIES/README.md`.
+- `docs/internal/STORIES/` tiene un archivo por historia. El manual está en `docs/internal/STORIES/README.md`.
 
 ## 4. `services/*` — convención por servicio
 
@@ -140,7 +151,7 @@ memoria que se persista después, así que memoria y base no pueden divergir.
 ## 5. Gestión de estado del backlog — una sola fuente de verdad
 
 GitHub Issues + Project es el **único** lugar donde vive el estado (To Do / In Progress / Done) de
-cualquier historia. `docs/STORIES/<ID>.md` es el contenido versionado de la historia (criterios de
+cualquier historia. `docs/internal/STORIES/<ID>.md` es el contenido versionado de la historia (criterios de
 aceptación, Definition of Done): no repite ni cachea su propio estado. Así no hace falta auditar a mano
 que Issues, Project y documentos digan lo mismo.
 

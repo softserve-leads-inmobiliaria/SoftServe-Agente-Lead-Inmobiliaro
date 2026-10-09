@@ -3,7 +3,7 @@
 Este documento **no es una narrativa de arquitectura completa** — es la tabla/lista/regla exacta
 que 2 o más historias necesitan usar *igual* para que el trabajo en paralelo no diverja. Si una
 historia puede definir algo por sí sola sin que otra dependa de esa definición exacta, ese detalle
-vive en la propia historia (`docs/STORIES/<ID>.md`), no acá.
+vive en la propia historia (`docs/internal/STORIES/<ID>.md`), no acá.
 
 El *por qué* de cada elección de arquitectura vive en `docs/DECISIONS/decisions.md`.
 
@@ -172,7 +172,7 @@ Las cajas con borde punteado no están construidas.
 | Conversaciones E2E contra los 3 servicios (`OBS-6`): con el agente *fake*, 8/8 guiones comprobados en Postgres y en la cola del panel, más una conversación manual por Telegram (deep-link, traspaso, `STOP`); con Bedrock (Haiku 4.5, 3-oct, `--sin-frases`), ningún turno al texto de respaldo. El modelo suele pedir la zona antes de buscar, así que algunos guiones terminan en `QUALIFY` o `SCHEDULE` en vez del estado del agente *fake*: caminos válidos que la corrida con el LLM real acepta | DT-43, #48 |
 | Llamadas reales a Bedrock con reintentos (`A-14`): ráfaga de 8 turnos, 36 `ThrottlingException` reintentadas, ningún turno cayó al texto de respaldo (Haiku 4.5, `us-east-1`) | DT-30 |
 | La conversación nueva tras un traspaso conserva el score del lead (#84): el caso se vio en vivo y quedó cubierto por un test | DT-29 |
-| **Evaluación en vivo con Bedrock** (#216, #247): los 12 escenarios de la demo × 5 (60 conversaciones, 285 turnos) dieron 99,6% de turnos OK, 0,4% degradadas, 0 respaldos y 100% de estado final, con latencia p50 6,3 s y p95 9,8 s. El guion de la demo pasó 5 de 5 hasta `HANDOFF` y HOT | `docs/evidencia/2026-10-08/`, `docs/presentations/2026-10-08-cierre-de-evaluacion.md` |
+| **Evaluación en vivo con Bedrock** (#216, #247): los 12 escenarios de la demo × 5 (60 conversaciones, 285 turnos) dieron 99,6% de turnos OK, 0,4% degradadas, 0 respaldos y 100% de estado final, con latencia p50 6,3 s y p95 9,8 s. El guion de la demo pasó 5 de 5 hasta `HANDOFF` y HOT | `docs/internal/evidencia/2026-10-08/`, `docs/internal/presentations/2026-10-08-cierre-de-evaluacion.md` |
 | **Guardrails de salida contra Bedrock**: la factualidad regenera (6% de los turnos del cierre) y degrada (0,4%) en vivo; la dirección exacta se retiene hasta calificar y se da después; la respuesta fija de fair housing sale ante "I'm Colombian, is that a problem?"; las promesas (descuento, fijar el precio, apartar) no se hacen. En el set reservado P, leído turno a turno, 0 datos inventados en 37 turnos | DT-60, DT-66 a DT-70; sets J, N, M, O y P de `harness/scripts/jury_scenarios.py` |
 | **Visita desde cualquier estado** (`B-8`, DT-61, DT-67): desde la búsqueda y desde el anuncio, sin buscar antes, la agenda ofrece tres horarios y reserva el elegido (escenarios `09`, `11` y `12`, 15 de 15). Una propiedad apartada o cerrada no se agenda | DT-61, DT-67 |
 | **Cobertura por `list_zones`** (DT-58): pregunta por zonas y por ciudades sin inventario, sin nombrar barrios inventados (escenario `08`, 5 de 5) | DT-58 |
