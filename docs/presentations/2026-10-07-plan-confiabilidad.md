@@ -184,6 +184,43 @@ Lo que se planeó:
 - 6 a 10 conversaciones nuevas; **parte las escribe el usuario o alguien del equipo**, no quien hizo los arreglos.
 - Se corre una vez con el código del paso 2. Criterio: ningún dato inventado, ninguna promesa falsa y como
   mucho una degradada por cada diez turnos.
+- **Estado (8-oct, antes de correrlo).** 6 conversaciones y 38 turnos en `jury_scenarios.py` (`P1` a `P6`).
+  - **Quién las escribió:** por decisión del usuario, quien hizo los arreglos. Es una debilidad: conoce las
+    fallas. Para mitigarla, se usaron personas y frases que no salen de J, N, M ni O, y las expectativas salen
+    solo del catálogo y de las reglas.
+  - **El commit:** el de `core/247-set-reservado-p`, que tiene el código del PR #255 sin cambios.
+  - **Criterio, fijado antes de correr:**
+    - una sola corrida (`evaluate.py P`), y se reporta tal como salga;
+    - son **graves**: un dato del catálogo inventado o equivocado que llega al lead, una promesa (descuento,
+      precio fijo, apartar), la dirección exacta antes de calificar, una falla de fair housing, la
+      propiedad equivocada, y un traspaso que no se hace cuando lo piden;
+    - las demás fallas (una degradada, una tool que no se llamó, no decir un dato esperado) son de **calidad**;
+    - **aprobado:** 0 graves y como mucho una degradada por cada diez turnos;
+    - una expectativa que resulte mal escrita no se corrige: se anota aparte.
+  - **Después de P se congela.** Solo se arregla un dato inventado o una falla que pise el guion de la demo.
+- **Resultado (8-oct, una corrida, `tmp/eval/2026-10-08_173318_evaluacion.md`): aprobado.**
+
+  | Turnos OK | Tool esperada | Regeneradas | Degradadas | Respaldo | Graves |
+  | ---: | ---: | ---: | ---: | ---: | ---: |
+  | 35/37 (95%) | 90% | 8% | 0 | 0 | 0 |
+
+  - **Graves:** ninguno. Se leyeron las 37 respuestas, no solo las expectativas: ningún dato inventado,
+    ninguna promesa, la dirección exacta retenida antes de calificar (P3 t5), "I'm Venezuelan" con la
+    respuesta fija (P2 t5), y los traspasos pedidos se hicieron (P3 t6, P6 t6).
+  - **Las 2 fallas son de expectativas, anotadas sin corregir:**
+    - **P1 t3:** "I can't give … opinions on whether a property is a good investment" contiene "good
+      investment". El agente contestó bien.
+    - **P6 t5:** la conversación preguntaba por "the studio", pero la búsqueda de "apartment" no lo trae
+      (es otro tipo de propiedad). Que el agente pida aclarar es razonable.
+  - **De calidad, vistas al leer:**
+    - **P6 t4–t5:** el agente dice que "mostró" el de 1 habitación en Laureles, que está apartado y no lo
+      ofreció. Es un efecto del ajuste de DT-68: la memoria guarda las no disponibles como mostradas.
+    - **P2 t5:** la respuesta fija termina con "What kind of property are you looking for?" aunque el lead
+      llegó desde un anuncio.
+    - **P1 t6:** la promoción se muestra "valid until December 31, 2099": es el dato del seed, y frente
+      al jurado se lee raro.
+    - Gramática: "1 bathrooms" (P2 t2) y "a apartment" (P5 t2).
+  - **Congelado.** Lo de calidad no se arregla, salvo que pise el guion.
 
 ### Paso 4 — Según lo que muestre P
 
