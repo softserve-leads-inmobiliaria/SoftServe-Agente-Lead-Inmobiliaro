@@ -2939,3 +2939,183 @@ La clase se repitió en dos sets. Además, ante una pregunta así con dos propie
 
 - Es una nota, no un bloqueo: el modelo todavía puede desobedecerla. La prueba de jurado mide cuánto.
 - Con el agente falso no cambia nada: no da el campo.
+
+**Ajuste (8-oct, gold set del clasificador).** La primera corrida del gold set (`harness/gold/classifier.jsonl`)
+mostró que `asks_unlisted` también se marcaba en lo que la ficha sí tiene: "Does the Usaquen house have a
+garage?", "gym?", "Does it have parking?", el pie, la dirección exacta. Con la nota, el modelo podía contestar
+"no tengo ese dato" sobre un garaje que la casa tiene. Dos cambios:
+
+- **El prompt del clasificador** enumera lo que la ficha registra, con las amenidades por nombre (las del
+  vocabulario de `promise_guard`, un test lo comprueba), y dice que una pregunta sobre eso es false aunque la
+  respuesta sea no. Los ejemplos del prompt son frases distintas de las del gold set. `asks_unlisted` subió de 92%
+  a 95% y ningún campo bajó. Siguen marcándose "gym?" y el pie: para el modelo, el pie es "un costo aparte".
+- **La nota** ya no supone que la marca es exacta: si lo que pregunta es un campo del catálogo (precio, área,
+  habitaciones, dirección, disponibilidad, promociones, requisitos, amenidades), contesta con la tool. Si no, la
+  regla de siempre. Verificado en vivo (`evaluate.py J1… N6… M1…`): "gym?" contesta el gimnasio y el pie $18,500;
+  "parking" y "Can I bring my dog?" siguen en "no tengo el dato, un asesor lo confirma".
+
+## DT-67 — Quién contesta la visita se decide con el estado ya consultado, y una sola vez
+
+**Estado:** aceptada (#247). Ajusta DT-61 y DT-63.
+
+**Contexto.** El agente decidía si la respuesta la daba la agenda (#229) con una regla síncrona, sobre la
+propiedad recordada o la del anuncio. Esas no traen el estado. La agenda lo consultaba después, cuando la
+decisión ya estaba tomada. En la prueba de jurado (O6), desde el anuncio de una casa apartada:
+
+- "Show me something similar that I can visit" → la agenda contestaba con texto fijo "…is reserved right now…
+  Would you like me to show you similar options?". Nadie buscaba las parecidas;
+- "The cheaper one, can I see it on Monday?" → el clasificador no sabía cuál (`unclear`, con razón: no se había
+  mostrado ninguna), y la agenda pedía un horario preferido sin propiedad.
+
+El registro del turno (`turn.decision`, paso 0 del plan de confiabilidad) mostró esa cadena.
+
+**Decisión.**
+
+- `TurnInput.visit_route` reemplaza a `answered_by_code`. Es asíncrona y devuelve un `VisitRoute`:
+  - `by_code`: contesta la agenda;
+  - `unvisitable`: pidió visitar una propiedad apartada o cerrada (`id`, `title`, `status`);
+  - ninguno de los dos: contesta el modelo.
+- La implementa `turn.VisitRouter`. Antes de decidir, consulta el estado de la propiedad que tendría la oferta
+  (`get_availability`). Lo guarda para el turno: `_visit_step` lo reutiliza.
+- Si no se puede visitar, contesta el modelo de conversación con una nota del turno (`agent.UNVISITABLE_NOTE`):
+  dice en una frase que no se puede, busca parecidas disponibles y las muestra. El estado consultado respalda
+  "it's reserved" en la factualidad, sin otra consulta. En ese turno, `_visit_step` no pisa la respuesta.
+- Sin router (el agente falso), queda lo de antes: el texto fijo de `visits.not_visitable`.
+
+**Alternativas descartadas.**
+
+- **Que la agenda busque las parecidas:** sería otra búsqueda con criterios propios, y mostrar propiedades ya lo
+  hace el modelo con las tools y los marcadores (DT-60).
+- **Traer siempre el estado de la recordada:** una consulta al catálogo en cada turno, aunque no se pida visita.
+
+**Consecuencias.**
+
+- Cuando se pide una visita, una consulta de estado por turno, solo si la propiedad no lo trae.
+- La decisión se toma una vez: lo que vio el agente vale para la agenda.
+
+**Relacionado (O9, misma corrida).** "Can I bring my wife to the visit?" → "See you both on Monday, October 19th
+at 10:00!" se degradaba (`number`): la hora la había escrito la agenda, pero no era fuente de nada. La hora de
+la visita reservada se guarda en `last_tool_results` (`visits.BOOKED_KEY`) y pasa al agente
+(`TurnInput.booked_at`). Sus números, tal como los escribió la agenda (`visits.slot_label`), cuentan como
+conocidos, igual que los del lead.
+
+## DT-68 — Lo que necesita el catálogo se consulta antes de contestar
+
+**Estado:** aceptada (#247).
+
+**Contexto.** La primera medida de J, N, M y O con expectativas por turno (`evaluate.py J N M O`, 8-oct) dejó 11
+fallos reales. La clase más grande (7) fue contestar sin consultar el catálogo: ante "lot", "how big", "need
+something cheap near a university" o "whats the cheapest u have then", el modelo pedía operación y ciudad en vez
+de buscar; ante "Are there any promotions?" preguntaba de cuál propiedad. Hoy lo cubría una regla del prompt de
+conversación ("search right away"), que no siempre sigue.
+
+**Decisión.**
+
+- El clasificador contesta `needs_lookup`: true si contestar el mensaje necesita datos del catálogo que la última
+  respuesta no dio (qué propiedades hay, aunque sea en una o dos palabras; la más barata; el precio, las
+  promociones o los requisitos de una propiedad; comparar).
+- Con `needs_lookup`, la primera ronda del modelo de conversación va con `toolChoice: any`: tiene que llamar al
+  menos una tool antes de escribir. Las rondas siguientes y la regeneración van sin obligación, para que pueda
+  contestar con los resultados.
+- En el gold set, `needs_lookup` se mide solo en los mensajes que la etiquetan (`LABELED_ONLY`), sin reetiquetar
+  los anteriores.
+
+**Alternativas descartadas.**
+
+- **Otra regla en el prompt de conversación:** ya existía y no alcanzó.
+- **Que el código busque con filtros extraídos por el clasificador:** más campos (zona, tipo, operación,
+  presupuesto) y una búsqueda con criterios propios; el modelo ya sabe armar la búsqueda, solo no la hacía.
+- **Una definición acotada** ("solo una búsqueda, o una propiedad de la que no se habló"): en el gold set empeoró
+  `asks_unlisted` en "Does it have parking?" y "gym?", y en la práctica la amplia ya daba false a "gym?".
+
+**Consecuencias.**
+
+- Gold set (86 mensajes): `needs_lookup` 93%; `asks_unlisted` 96% y `visit_when` 92%, más que la línea base.
+  `wants_visit` bajó un mensaje (O6-6, "is there anything in the afternoon?"), que ya fallaba sin la flag.
+- En vivo (M6, O3, J3, J4, O6): se arreglaron M6 t3 y t4, J4 t3 y O3 t5; O3 t1 y t2 ahora consultan. No se
+  arregló J3 t2 ("Can I reserve the 4-bedroom one?"): el clasificador no lo marca.
+- **Ajuste (8-oct, J3 t2).** La casa de 4 habitaciones vino en `unavailable` de la búsqueda, y la memoria
+  (`facts`) solo guardaba `properties` y `alternatives`: no estaba entre las mostradas y el clasificador no
+  tenía a cuál referirse (en vivo, `refers_to=None`; el gold set la daba por mostrada). Ahora la memoria guarda
+  también las `unavailable`, nunca su estado. Y si `refers_to` señala una propiedad mostrada que la última
+  respuesta no nombra (ni la referencia ni el título), la primera ronda también va con `toolChoice: any`. En
+  vivo, J3 t2 consulta la ficha y el estado y dice que está apartada.
+- Una ronda más del modelo de conversación cuando no iba a buscar: es justo cuando hacía falta, pero cuenta para
+  los 10 RPM.
+- Repetir el mismo pedido seguido al clasificador devuelve lo mismo: las repeticiones inmediatas no miden ruido.
+
+## DT-69 — Si una categoría protegida importa lo decide el clasificador
+
+**Estado:** aceptada (#247).
+
+**Contexto.** El guardrail de entrada quita del mensaje la mención de una categoría protegida (#200), y la
+respuesta fija `PROTECTED_ANSWER` salía con una regla sobre el texto que queda: "?" e intención `otro`. Fallaba
+para los dos lados:
+
+- "Can foreigners buy property here?" llega como "Can buy property here?": el clasificador da una búsqueda, la
+  regla no salta y el modelo contestó "Yes, both available" (J4 t4).
+- "Can I bring my wife to the visit?" llega como "Can I bring my partner to the visit?": con "?" e intención
+  `otro`, recibía "What kind of property are you looking for?" con la visita ya reservada (O9 t7).
+
+**Decisión.**
+
+- Cuando el guardrail quitó algo, el clasificador recibe junto al mensaje el aviso de que falta una parte
+  (`REMOVED_NOTE`, sin decir qué) y contesta `asks_if_it_matters`: si el mensaje pregunta si esa característica
+  importa para comprar, rentar, los requisitos o el trato.
+- La respuesta fija sale solo con `asks_if_it_matters` en true. Si el clasificador no contesta el campo, queda la
+  regla anterior.
+- La instrucción del campo va en el aviso, no en `CLASSIFIER_SYSTEM`: el prompt de sistema queda igual para todos
+  los demás mensajes.
+- El gold set pasa cada mensaje por el guardrail de entrada, como el core: el clasificador ve lo mismo que en
+  producción.
+
+**Alternativas descartadas.**
+
+- **La línea del campo en `CLASSIFIER_SYSTEM`:** en el gold set movió otros campos en mensajes sin relación,
+  medido contra el prompt anterior mensaje por mensaje: 4 peores (J4-2, N1-8, N4-4, O6-6) y 2 mejores.
+- **Ajustar la regla de "?" e intención:** es la clase de regla que DT-62 reemplaza; "foreigners" ya no está en
+  el texto que la regla puede leer.
+
+**Consecuencias.**
+
+- Gold set (93 mensajes): `asks_if_it_matters` 8/8; los demás campos, con el mismo prompt de sistema.
+- En vivo: J4 t4 recibe la respuesta fija y O9 t7 va al modelo.
+- Al probarlo apareció que el guardrail de entrada no detectaba "We're a gay couple" ni "same-sex couple"
+  (sí "I'm gay"). Se agregaron, con su par en el gold set de fair housing.
+
+## DT-70 — Dos falsos positivos de la salida que degradaban respuestas correctas
+
+**Estado:** aceptada (#247).
+
+**Contexto.** Las 3 degradadas de la primera medida de J, N, M y O. Con `TRACE_CONTENT=1` (local, datos de
+prueba), dos de ellas resultaron ser respuestas correctas que el guardrail no dejó pasar:
+
+- **O5 t2** ("Which one has the best price per square meter?"): el borrador era "Let me check the price per
+  square meter for both: {prop_00231.price_per_m2}…". Los marcadores se completaban con la memoria, sin tool en el
+  turno, y la regla de #234 ("let me check" sin consultar nada) lo tomó por una búsqueda prometida. En la
+  regeneración, el modelo escribió las cifras a mano y se degradó.
+- **O8 t3** ("I'll pay cash, I decide alone and I want to close this month"): el lead califica en ese mismo
+  mensaje, pero la calificación se actualiza después del turno; el catálogo no da la dirección exacta y el
+  marcador `{prop_00241.address_exact}` queda sin valor. La corrección no decía qué usar, y la regeneración pidió
+  lo mismo.
+
+**Decisión.**
+
+- Una respuesta con marcadores cuenta como consultada para #234: el dato va en ese mismo mensaje.
+- Un marcador de `address_exact` sin valor lleva en la corrección la pista `{ref.address_approx}`, como los
+  números llevan el marcador que les corresponde (DT-60).
+- En la corrida siguiente aparecieron dos más, de la misma clase (la regeneración no podía corregirse):
+  - **J2 t6:** la regeneración escribió "ref. {prop_00238.id}". `{ref.id}` se completa con la referencia, sin
+    agregarlo al prompt.
+  - **J5 t4:** `{prop_00235.income_multiple}` no viene en `check_requirements`, solo en `get_property`. La
+    corrección ya pedía llamar a get_property, y el modelo repetía el marcador. Si falla un marcador con
+    campo y sin pista que lo reemplace, la primera ronda de la regeneración va con `toolChoice: any`, como
+    `needs_lookup` (DT-68). Lo mismo si el borrador escribió a mano un número que ningún marcador respalda:
+    en la corrida siguiente, J5 t4 y O2 t4 escribieron "minimum $3,450" sin consultar.
+  - **M2 t4:** "if you have a reference number (like prop_xxxxx)", y al corregirse "like prop_00123". La
+    corrección de una referencia dice ahora que no se escriban referencias de ejemplo.
+  - **O10 t2** ("Will prices go up next year?"): "what's currently available" se tomó por un estado. La
+    excepción de #213 ("what's available") acepta un adverbio en medio.
+
+**Consecuencias.** La tercera (J1 t9, una diferencia calculada al comparar) ya la cubre la regla de no calcular
+y la corrección: en la corrida siguiente pasó.

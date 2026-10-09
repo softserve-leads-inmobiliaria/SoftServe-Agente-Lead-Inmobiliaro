@@ -9,6 +9,8 @@ Uso (con el stack arriba y LLM_PROVIDER=bedrock: `bash scripts/demo/up.sh`):
     python harness/scripts/evaluate.py                      # todos los escenarios, una vez
     python harness/scripts/evaluate.py --reps 5             # la corrida de referencia
     python harness/scripts/evaluate.py --reps 3 08_cobertura_de_zonas
+    python harness/scripts/evaluate.py O                    # un set de la prueba de jurado (`jury_scenarios.py`)
+    python harness/scripts/evaluate.py J N M O              # los cuatro (~1 h a 10 RPM)
 
 Deja tmp/eval/<fecha>_evaluacion.md y .json (tmp/ no se versiona). Sale con 0 si los totales quedan dentro
 de los umbrales.
@@ -37,6 +39,7 @@ from evaluation import (  # noqa: E402
     render_report,
     summarize,
 )
+from jury_scenarios import JURY, jury_set  # noqa: E402
 from scenarios import SCENARIOS, Scenario  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -46,6 +49,9 @@ REPORTS = ROOT / "tmp" / "eval"
 # El core limita a 10 llamadas por minuto y por modelo (DT-6) y un turno con tools hace 3 o 4: con esta
 # pausa (la misma de conversar.py) la cola del limitador no llega a vencer.
 DEFAULT_PAUSE_S = 20.0
+# Los escenarios de la demo y los de la prueba de jurado (#247). Sin nombres, se corren solo los de la demo.
+ALL: dict[str, Scenario] = {**SCENARIOS, **JURY}
+DECISION = "turn.decision"  # por qué contestó así el turno (app/turn.py)
 
 
 def send(core_url: str, conversation_id: str, lead_id: str, text: str, property_id: str | None,
@@ -71,8 +77,30 @@ def send(core_url: str, conversation_id: str, lead_id: str, text: str, property_
 def _audits(connection: Any, conversation_id: str) -> list[str]:
     from sqlalchemy import text
 
+    # Sin `turn.decision` (actor `turn`): no es una detección del guardrail, la lee `jury.py`.
     return list(connection.execute(text("SELECT action FROM audit_log WHERE payload->>'conversation_id' = :c "
-                                        "ORDER BY id"), {"c": conversation_id}).scalars())
+                                        "AND actor <> 'turn' ORDER BY id"), {"c": conversation_id}).scalars())
+
+
+def _decisions(connection: Any, conversation_id: str) -> list[dict[str, Any]]:
+    from sqlalchemy import text
+
+    return list(connection.execute(text("SELECT payload FROM audit_log WHERE payload->>'conversation_id' = :c "
+                                        "AND action = :a AND actor = 'turn' ORDER BY id"),
+                                   {"c": conversation_id, "a": DECISION}).scalars())
+
+
+def names_for(selected: list[str]) -> list[str]:
+    """Los escenarios pedidos: nombres, o la letra de un set de la prueba de jurado (`O`). Sin nada, los de la demo."""
+    if not selected:
+        return list(SCENARIOS)
+    names: list[str] = []
+    for item in selected:
+        found = jury_set(item) if len(item) == 1 else [item] if item in ALL else []
+        if not found:
+            raise SystemExit(f"desconocido: {item}; sets J, N, M, O o uno de {list(ALL)}")
+        names += [name for name in found if name not in names]
+    return names
 
 
 def _assistant_tool_calls(connection: Any, conversation_id: str) -> list[list[dict[str, Any]] | None]:
@@ -89,19 +117,21 @@ def run_scenario(name: str, scenario: Scenario, rep: int, *, core_url: str, engi
 
     conversation_id, lead_id = str(uuid.uuid4()), str(uuid.uuid4())
     run = ScenarioRun(name, rep, conversation_id=conversation_id)
-    seen_audits = 0
-    seen_replies = 0
+    seen_audits = seen_replies = seen_decisions = 0
     for i, turn in enumerate(scenario.turns):
         reply, latency, error = send(core_url, conversation_id, lead_id, turn.text,
                                      scenario.property_id if i == 0 else None, timeout)
         with engine.connect() as connection:
             audits = _audits(connection, conversation_id)
             replies = _assistant_tool_calls(connection, conversation_id)
+            decisions = _decisions(connection, conversation_id)
         tools = [call["name"] for call in (replies[-1] or [])] if len(replies) > seen_replies else []
         new_audits = audits[seen_audits:]
-        run.turns.append(TurnObservation(turn.text, reply, tools, new_audits, round(latency, 2), error))
-        seen_audits, seen_replies = len(audits), len(replies)
-        print(f"  turno {i + 1}: {latency:.1f}s tools={tools} audits={new_audits}"
+        decision = decisions[-1] if len(decisions) > seen_decisions else None
+        run.turns.append(TurnObservation(turn.text, reply, tools, new_audits, round(latency, 2), error, decision))
+        seen_audits, seen_replies, seen_decisions = len(audits), len(replies), len(decisions)
+        print(f"  turno {i + 1}: {latency:.1f}s tools={tools} audits={new_audits} "
+              f"ruta={(decision or {}).get('route')}"
               + (f" ERROR {error}" if error else ""), flush=True)
         if turn.text:  # el deep-link sin texto no llama al LLM
             time.sleep(pause_s)
@@ -130,8 +160,10 @@ def main(argv: list[str] | None = None) -> int:
 
     from db.settings import database_url
 
+    # La consola de Windows (cp1252) no imprime "≤" ni "Ó": sin esto, la corrida se caía al final.
+    sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("escenarios", nargs="*", help="por defecto, todos")
+    parser.add_argument("escenarios", nargs="*", help="nombres o sets de jurado (J, N, M, O); por defecto, los de la demo")
     parser.add_argument("--reps", type=int, default=1, help="corridas de cada escenario")
     parser.add_argument("--pausa", type=float, default=DEFAULT_PAUSE_S, help="segundos entre turnos")
     parser.add_argument("--timeout", type=float, default=120.0, help="segundos de espera por turno")
@@ -139,10 +171,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--database-url", default=None, help="por defecto, la de db/settings.py")
     args = parser.parse_args(argv)
 
-    unknown = [name for name in args.escenarios if name not in SCENARIOS]
-    if unknown:
-        parser.error(f"escenarios desconocidos: {unknown}; hay {list(SCENARIOS)}")
-    names = args.escenarios or list(SCENARIOS)
+    names = names_for(args.escenarios)
     try:
         urllib.request.urlopen(args.core_url.rstrip("/") + "/health", timeout=5).close()
     except OSError as exc:
@@ -159,7 +188,7 @@ def main(argv: list[str] | None = None) -> int:
         for rep in range(1, args.reps + 1):
             for name in names:
                 print(f"{name} #{rep}", flush=True)
-                runs.append(run_scenario(name, SCENARIOS[name], rep, core_url=args.core_url, engine=engine,
+                runs.append(run_scenario(name, ALL[name], rep, core_url=args.core_url, engine=engine,
                                          pause_s=args.pausa, timeout=args.timeout))
     finally:
         engine.dispose()
@@ -174,11 +203,12 @@ def main(argv: list[str] | None = None) -> int:
     ]
     REPORTS.mkdir(parents=True, exist_ok=True)
     base = REPORTS / f"{started:%Y-%m-%d_%H%M%S}_evaluacion"
-    base.with_suffix(".md").write_text(render_report(runs, SCENARIOS, header), encoding="utf-8")
-    payload = {"started": started.isoformat(), "settings": settings, "reps": args.reps, **as_json(runs, SCENARIOS)}
+    scenarios = {name: ALL[name] for name in names}
+    base.with_suffix(".md").write_text(render_report(runs, scenarios, header), encoding="utf-8")
+    payload = {"started": started.isoformat(), "settings": settings, "reps": args.reps, **as_json(runs, scenarios)}
     base.with_suffix(".json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    total = summarize(runs, SCENARIOS)
+    total = summarize(runs, scenarios)
     problems = breaches(total)
     print(f"\nTurnos OK {total['turns_passed']}/{total['turns']} · regeneradas {total['regenerated']} · "
           f"degradadas {total['degraded']} · respaldo {total['fallback']} · "

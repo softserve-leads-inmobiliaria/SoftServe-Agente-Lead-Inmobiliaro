@@ -32,6 +32,19 @@ def test_every_note_points_to_a_turn_that_exists():
         assert note.strip()
 
 
+def test_under_each_reply_goes_why_it_was_answered_that_way():
+    rows = [("input.protected_category", {}), ("output.factuality_regenerated", {"violations": 2, "kinds": ["number"]}),
+            (jury.DECISION, {"route": "agenda:offer", "agent_route": "agent", "intent": "otro",
+                             "classified": "agendar_visita",
+                             "flags": {"wants_visit": True, "frustrated": False, "asks_unlisted": None},
+                             "refers_to": "prop_00233", "visit_when": None})]
+    actions, why = jury._why(rows)
+    assert actions == ["input.protected_category", "output.factuality_regenerated[number]"]
+    assert why == ("ruta agenda:offer (agente: agent) · intención otro (clasificador: agendar_visita) · "
+                   "no frustrated · wants_visit · habla de prop_00233")
+    assert jury._why([("input.pii", {})]) == (["input.pii"], None)  # un turno sin decisión (p. ej. /stop)
+
+
 def test_only_the_first_turn_can_be_the_empty_start_of_a_listing():
     for name, (listing, turns) in jury.CONVERSATIONS.items():
         assert all(turns[1:]), name

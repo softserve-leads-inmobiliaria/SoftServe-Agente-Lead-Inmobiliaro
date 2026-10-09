@@ -66,7 +66,8 @@ class Chat:
     def audits(self, action=None):
         with self.engine.connect() as connection:
             rows = connection.execute(text(
-                "SELECT action, actor, payload FROM audit_log WHERE payload->>'conversation_id' = :c ORDER BY id"),
+                "SELECT action, actor, payload FROM audit_log WHERE payload->>'conversation_id' = :c "
+                "AND actor <> 'turn' ORDER BY id"),
                 {"c": self.conversation_id}).all()
         return [r for r in rows if action is None or r.action == action]
 

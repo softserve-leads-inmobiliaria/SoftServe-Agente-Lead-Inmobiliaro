@@ -136,7 +136,7 @@ def test_without_the_memory_the_same_reply_is_regenerated():
     turn = TurnInput(event=EVENT, text="how much was it again?")
     result = asyncio.run(_agent(text("It's $185,000."), text("Which property do you mean?"))
                          .run(turn, NoToolsCatalog()))
-    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1})]
+    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1, "kinds": ["number"]})]
 
 
 def test_a_remembered_amenity_backs_the_reply():

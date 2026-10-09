@@ -15,8 +15,9 @@ from app.agent import (
     BedrockAgent,
     FakeAgent,
     TurnInput,
+    VisitRoute,
 )
-from app.bedrock_llm import BedrockLLM
+from app.bedrock_llm import REMOVED_NOTE, BedrockLLM
 from app.fakes.fake_llm import REPLIES
 from app.input_guard import OMITTED_MESSAGE
 from app.rate_limit import RateLimits
@@ -223,7 +224,7 @@ def test_an_invented_price_gets_one_chance_to_regenerate_and_the_fix_is_used():
     catalog = FakeCatalog(properties=[{"id": "p1", "title": "Casa", "price": 2350000, "status": "disponible"}])
     result = run(agent_for(client).run(turn(), catalog))
     assert result.text == "I have one at $2,350,000." and result.intent == "busqueda_propiedad"
-    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1})]
+    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1, "kinds": ["number"]})]
     assert result.tool_results == {"search_properties": {"properties": catalog.properties}}
 
 
@@ -234,6 +235,8 @@ def test_an_invented_price_that_survives_the_regeneration_degrades_to_an_advisor
     result = run(agent_for(client).run(turn(), catalog))
     assert result.text == FACTUALITY_DEGRADE_REPLY and result.intent == "otro"
     assert [a for a, _ in result.guard_audits] == ["output.factuality_regenerated", "output.factuality_degraded"]
+    # El registro del turno guarda lo que dijo el clasificador y por qué ruta salió (paso 0 del plan).
+    assert (result.classified, result.route) == ("busqueda_propiedad", "degraded")
 
 
 def test_the_lead_qualified_flag_never_changes_after_a_regeneration():
@@ -311,7 +314,7 @@ def test_an_address_in_prose_gets_one_chance_to_regenerate_and_the_fix_is_used()
                              text("It's in El Poblado, near Parque Lleras."))
     result = run(agent_for(client).run(turn(lead_qualified=False), FakeCatalog()))
     assert result.text == "It's in El Poblado, near Parque Lleras."
-    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 2})]
+    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 2, "kinds": ["address", "number"]})]
 
 
 def test_an_address_that_survives_regeneration_degrades_to_an_advisor_offer():
@@ -333,7 +336,7 @@ def test_an_unauthorized_promise_gets_one_chance_to_regenerate_and_the_fix_is_us
                              text("I'll check your situation with an agent."))
     result = run(agent_for(client).run(turn(lead_qualified=False), FakeCatalog()))
     assert result.text == "I'll check your situation with an agent."
-    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1})]
+    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1, "kinds": ["promise"]})]
 
 
 def test_an_unauthorized_promise_that_survives_regeneration_degrades_to_an_advisor_offer():
@@ -416,6 +419,29 @@ def test_the_bedrock_agent_answers_that_a_protected_characteristic_does_not_matt
     assert client.calls_to(CHAT) == []
 
 
+def test_the_classifier_is_told_something_was_removed_and_decides_if_the_lead_asks_whether_it_matters():
+    # #247: "Can foreigners buy property here?" llega sin "foreigners" y no es `otro`; igual se contesta fijo.
+    client = ScriptedBedrock(classification("busqueda_propiedad", asks_if_it_matters=True))
+    message = TurnInput(event=EVENT, text="Can buy property here?", protected_removed=True)
+    result = run(agent_for(client).run(message, FakeCatalog()))
+    assert (result.text, result.route) == (PROTECTED_ANSWER, "protected") and client.calls_to(CHAT) == []
+    assert REMOVED_NOTE in client.calls_to(FAST)[0]["messages"][0]["content"][0]["text"]
+
+
+def test_a_question_about_something_else_goes_to_the_model_even_if_something_was_removed():
+    # "Can I bring my partner to the visit?" ("wife" pasa a "partner"): con "?" e intención `otro` recibía la fija.
+    client = ScriptedBedrock(classification("otro", asks_if_it_matters=False), text("Sure, they're welcome."))
+    message = TurnInput(event=EVENT, text="Can I bring my partner to the visit?", protected_removed=True)
+    result = run(agent_for(client).run(message, FakeCatalog()))
+    assert result.text != PROTECTED_ANSWER and len(client.calls_to(CHAT)) == 1
+
+
+def test_without_a_removed_mention_the_classifier_gets_no_notice():
+    client = ScriptedBedrock(classification("otro"), text("Sure."))
+    run(agent_for(client).run(turn("does that matter?"), FakeCatalog()))
+    assert REMOVED_NOTE not in client.calls_to(FAST)[0]["messages"][0]["content"][0]["text"]
+
+
 def test_the_fake_agent_answers_that_a_protected_characteristic_does_not_matter():
     message = TurnInput(event=EVENT, text="does that matter?", protected_removed=True)
     result = run(FakeAgent().run(message, FakeCatalog()))
@@ -443,7 +469,17 @@ def test_announcing_a_lookup_without_calling_any_tool_is_regenerated():
                              text("There are no promotions I can confirm right now. What's your budget?"))
     result = run(agent_for(client).run(turn("Can you give me a discount?"), FakeCatalog()))
     assert result.text.startswith("There are no promotions")
-    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1})]
+    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 1, "kinds": ["promise"]})]
+
+
+def test_announcing_a_lookup_is_fine_when_the_same_reply_gives_the_data():
+    # #247, O5 t2: los marcadores salieron de la memoria, sin tool en el turno, y la respuesta se degradaba.
+    remembered = {"p1": {"price": 200000, "m2": 80}}
+    client = ScriptedBedrock(classification("consulta_precio"),
+                             text("Let me check the price per square meter: {p1.price_per_m2}."))
+    message = TurnInput(event=EVENT, text="What's the price per square meter?", remembered=remembered)
+    result = run(agent_for(client).run(message, FakeCatalog()))
+    assert result.text == "Let me check the price per square meter: $2,500." and result.guard_audits == []
 
 
 # --- #228: un traspaso solo si el mensaje lo pide ------------------------------------------------------------
@@ -610,12 +646,34 @@ def test_the_classifiers_answers_reach_the_turn():
     assert result.flags == {"wants_alert": True, "wants_visit": False}
 
 
+async def by_code(classification):
+    return VisitRoute(by_code=True)
+
+
+def test_a_property_that_cannot_be_visited_is_answered_by_the_model_with_similar_ones():
+    # Prueba de jurado O6 (#247): "Show me something similar that I can visit" desde el anuncio de una casa
+    # apartada -> la agenda contestaba "is reserved" y nadie buscaba las parecidas.
+    async def reserved(classification):
+        return VisitRoute(unvisitable={"id": "prop_00234", "title": "House in Usaquen", "status": "apartado"})
+    client = ScriptedBedrock(classification("busqueda_propiedad", wants_visit=True),
+                             text("That house is reserved, but here are similar ones."))
+    message = TurnInput(event=EVENT, text="Show me something similar that I can visit", visit_route=reserved)
+    result = run(agent_for(client).run(message, FakeCatalog()))
+    assert result.text == "That house is reserved, but here are similar ones." and result.route == "agent"
+    sent = client.calls_to(CHAT)[0]["messages"][-1]["content"][0]["text"]
+    assert ("The lead wants to visit House in Usaquen (ref. prop_00234), but it is reserved right now" in sent
+            and "search for similar properties that are available" in sent)
+
+
 def test_when_the_agenda_answers_only_the_classifier_is_called():
     """#229: en vivo el modelo contestaba igual a "1", copiaba los horarios, y se regeneraba para nada."""
     client = ScriptedBedrock(classification("otro", wants_visit=True))
     asked = []
-    message = TurnInput(event=EVENT, text="Can I go see it?",
-                        answered_by_code=lambda c: asked.append((c.intent, c.flags)) or True)
+
+    async def by_code(c):
+        asked.append((c.intent, c.flags))
+        return VisitRoute(by_code=True)
+    message = TurnInput(event=EVENT, text="Can I go see it?", visit_route=by_code)
     result = run(agent_for(client).run(message, FakeCatalog()))
     assert (result.text, result.flags) == ("", {"wants_visit": True}) and client.calls_to(CHAT) == []
     assert asked == [("otro", {"wants_visit": True})]
@@ -623,7 +681,7 @@ def test_when_the_agenda_answers_only_the_classifier_is_called():
 
 def test_a_human_request_is_answered_even_if_the_agenda_would_take_the_turn():
     client = ScriptedBedrock(classification("solicitud_humano", asks_for_person=True))
-    message = TurnInput(event=EVENT, text="I want to talk to an agent", answered_by_code=lambda c: True)
+    message = TurnInput(event=EVENT, text="I want to talk to an agent", visit_route=by_code)
     assert run(agent_for(client).run(message, FakeCatalog())).intent == "solicitud_humano"
 
 
@@ -652,7 +710,7 @@ def test_the_classifier_says_when_the_lead_wants_to_visit():
     client = ScriptedBedrock(classification("agendar_visita", visit_when={"days": ["sat", "sun"],
                                                                           "part_of_day": "morning"}))
     result = run(agent_for(client).run(TurnInput(event=EVENT, text="This weekend in the morning",
-                                                 answered_by_code=lambda c: True), FakeCatalog()))
+                                                 visit_route=by_code), FakeCatalog()))
     assert result.visit_when == {"days": [5, 6], "part": "morning", "other_day": False}
 
 
@@ -683,3 +741,79 @@ def test_the_model_sees_the_references_of_the_properties_already_shown():
     result = run(agent_for(client).run(message, FakeCatalog()))
     sent = client.calls_to(CHAT)[0]["messages"][-1]["content"][0]["text"]
     assert "prop_00242 (Commercial space for rent in Chapinero)" in sent and result.text == "It's 120 m²."
+
+
+def test_the_time_of_the_booked_visit_can_be_repeated_but_not_another_one():
+    # Prueba de jurado O9 (#247): "Can I bring my wife to the visit?" -> "See you both on Monday, October 19th at
+    # 10:00!" se degradaba: la hora la había escrito la agenda, pero no era fuente de nada.
+    reply = "Of course! See you both on Monday, October 19th at 10:00."
+    booked = TurnInput(event=EVENT, text="Can I bring my partner to the visit?", booked_at="2026-10-19T10:00:00-05:00")
+    client = ScriptedBedrock(classification("otro"), text(reply))
+    result = run(agent_for(client).run(booked, FakeCatalog(properties=[])))
+    assert (result.text, result.guard_audits) == (reply, [])
+    client = ScriptedBedrock(classification("otro"), text(reply.replace("10:00", "11:30")), text("See you then!"))
+    result = run(agent_for(client).run(booked, FakeCatalog(properties=[])))
+    assert result.guard_audits == [("output.factuality_regenerated", {"violations": 2, "kinds": ["number"]})]
+
+
+# --- #247: lo que necesita el catálogo se consulta antes de contestar -------------------------------------------
+
+def test_when_the_message_needs_the_catalog_the_first_round_must_call_a_tool():
+    # Evaluación de J, N, M y O (8-oct): "lot" y "whats the cheapest u have then" se contestaban pidiendo operación
+    # y ciudad, sin buscar.
+    client = ScriptedBedrock(classification("busqueda_propiedad", needs_lookup=True),
+                             tool_use("search_properties", {"kind": "terreno"}), text("There's a lot in Usaquen."))
+    run(agent_for(client).run(TurnInput(event=EVENT, text="lot"), FakeCatalog()))
+    first, second = client.calls_to(CHAT)
+    assert first["toolConfig"]["toolChoice"] == {"any": {}}
+    assert "toolChoice" not in second["toolConfig"]  # con los resultados, tiene que poder contestar
+
+
+def test_a_property_marker_without_a_value_makes_the_regeneration_call_a_tool():
+    # J5 t4: `check_requirements` no trae el múltiplo del ingreso y la regeneración repetía el mismo marcador.
+    client = ScriptedBedrock(classification("otro"), text("You need {p1.income_multiple} times the rent."),
+                             tool_use("get_property", {"property_id": "p1"}), text("How much do you earn a month?"))
+    run(agent_for(client).run(TurnInput(event=EVENT, text="What do I need?"), FakeCatalog()))
+    draft, regeneration, _ = client.calls_to(CHAT)
+    assert "toolChoice" not in draft["toolConfig"] and regeneration["toolConfig"]["toolChoice"] == {"any": {}}
+
+
+SHOWN = {"p1": {"id": "p1", "title": "3-bedroom house in Usaquen"},
+         "p2": {"id": "p2", "title": "4-bedroom house in Usaquen"}}
+
+
+@pytest.mark.parametrize("last, forced", [
+    ("I found 1 house available: 3-bedroom house in Usaquen (ref. p1).", True),  # J3 t2 (#247)
+    ("The 4-bedroom house in Usaquen is reserved.", False),
+    ("The house (ref. p2) has 4 bedrooms.", False),
+])
+def test_a_shown_property_the_last_reply_did_not_name_is_looked_up_first(last, forced):
+    client = ScriptedBedrock(classification("otro", refers_to="p2"),
+                             tool_use("get_property", {"property_id": "p2"}), text("Sure, let me tell you more."))
+    message = TurnInput(event=EVENT, text="Can I reserve the 4-bedroom one?", remembered=SHOWN,
+                        history=[("user", "Houses in Bogota?"), ("assistant", last)])
+    run(agent_for(client).run(message, FakeCatalog()))
+    assert ("toolChoice" in client.calls_to(CHAT)[0]["toolConfig"]) is forced
+
+
+def test_a_typed_number_no_marker_gives_makes_the_regeneration_call_a_tool():
+    # J5 t4: "minimum $3,450" a mano; corregido, el modelo escribía el marcador sin consultar.
+    client = ScriptedBedrock(classification("otro"), text("It's $2,000,000."),
+                             tool_use("get_property", {"property_id": "p1"}), text("What's your budget?"))
+    run(agent_for(client).run(TurnInput(event=EVENT, text="How much is it?"), FakeCatalog()))
+    assert client.calls_to(CHAT)[1]["toolConfig"]["toolChoice"] == {"any": {}}
+
+
+def test_a_violation_with_a_marker_to_use_does_not_force_a_tool():
+    remembered = {"p1": {"bathrooms": 2.5}, "p2": {"bathrooms": 2.5}}  # el número es de dos: la pista los nombra
+    client = ScriptedBedrock(classification("otro"), text("It has 2.5 baths."), text("It has {p1.bathrooms} baths."))
+    run(agent_for(client).run(TurnInput(event=EVENT, text="Baths?", remembered=remembered), FakeCatalog()))
+    assert "toolChoice" not in client.calls_to(CHAT)[1]["toolConfig"]
+
+
+@pytest.mark.parametrize("flag", [False, None])
+def test_without_needs_lookup_the_model_may_answer_without_tools(flag):
+    signal = {} if flag is None else {"needs_lookup": flag}
+    client = ScriptedBedrock(classification("saludo", **signal), text("Hi! How can I help?"))
+    run(agent_for(client).run(TurnInput(event=EVENT, text="hi there"), FakeCatalog()))
+    assert "toolChoice" not in client.calls_to(CHAT)[0]["toolConfig"]

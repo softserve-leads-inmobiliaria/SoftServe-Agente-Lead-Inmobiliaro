@@ -14,6 +14,7 @@ from app.bedrock_llm import (
     CLASSIFIER_SYSTEM,
     MARKER_FIELDS,
     MAX_TOOL_ROUNDS,
+    REMOVED_NOTE,
     BedrockLLM,
     LLMError,
     LLMFormatError,
@@ -132,7 +133,8 @@ def test_classify_returns_the_yes_or_no_answers_the_code_decides_with():
                                             wants_visit=False, frustrated=True))
     flags = run(llm(client).classify("I want to talk to an agent")).flags
     assert flags == {"asks_for_person": True, "wants_alert": False, "wants_visit": False, "frustrated": True}
-    assert all(f'"{flag}"' in CLASSIFIER_SYSTEM for flag in CLASSIFIER_FLAGS)
+    # `asks_if_it_matters` se pide solo cuando el guardrail quitó algo (`REMOVED_NOTE`).
+    assert all(f'"{flag}"' in CLASSIFIER_SYSTEM + REMOVED_NOTE for flag in CLASSIFIER_FLAGS)
 
 
 def test_a_yes_or_no_answer_that_is_missing_or_not_a_boolean_is_left_out():
@@ -419,3 +421,12 @@ def test_a_malformed_request_would_be_rejected_by_botocore():
 
 def test_the_catalog_specs_used_in_these_tests_have_the_shape_of_the_client():
     assert all({"name", "description", "input_schema"} <= set(spec) for spec in FakeCatalog.SPECS)
+
+
+def test_the_classifier_knows_every_amenity_a_listing_records():
+    # Gold set del clasificador (#247): "Does it have a garage?" venía con `asks_unlisted`, y el modelo contestaba
+    # que no tenía el dato aunque la ficha lo trae.
+    from app.promise_guard import _AMENITY_SYNONYMS
+
+    unlisted = CLASSIFIER_SYSTEM[CLASSIFIER_SYSTEM.index('"asks_unlisted"'):CLASSIFIER_SYSTEM.index('"visit_when"')]
+    assert all(amenity in unlisted for amenity in _AMENITY_SYNONYMS)

@@ -38,6 +38,12 @@ class Turn:
     # El dato ya lo dio una tool en un turno anterior: contestarlo de la memoria de hechos (#217), sin volver a
     # llamar `tools`, también está bien. Ese turno no cuenta para la tasa de tool esperada.
     remembered_ok: bool = False
+    # Quién tiene que escribir la respuesta, según `turn.decision` (paso 0 del plan de confiabilidad, #247): una de
+    # estas rutas. "agenda" vale para cualquier paso de la agenda ("agenda:offer", "agenda:booked"…). Vacío: no se
+    # exige.
+    route: tuple[str, ...] = ()
+    # De qué propiedad mostrada tiene que entender el clasificador que habla el mensaje (`refers_to`, DT-63).
+    about: str | None = None
 
 
 @dataclass(frozen=True)
