@@ -109,7 +109,7 @@ se construye.
 >
 > `[gap]` · P1 · Track core · Épica cierre
 
-**Criterio de salida, fijado antes de arreglar:** en un set de preguntas que el agente nunca vio, 0 errores
+**Criterio de salida, fijado antes de correr el set reservado:** en un set de preguntas que el agente nunca vio, 0 errores
 graves (dato inventado, promesa, dirección exacta, fair housing) y como mucho una degradada cada diez turnos.
 
 ```mermaid
@@ -167,13 +167,13 @@ flowchart LR
 flowchart LR
     M[Mensaje] --> GE[Guardrail de entrada<br/>e idioma]
     GE --> CL[Haiku clasifica:<br/>señales, intención,<br/>propiedad, visita]
-    CL --> SC[Score BANT-E<br/>en Python]
-    SC --> FSM[FSM<br/>9 estados]
-    FSM --> AG[Sonnet con<br/>tools MCP]
+    CL --> AG[Sonnet con<br/>tools MCP]
     AG --> MK[El código completa<br/>los marcadores]
     MK --> GS[Guardrails<br/>de salida]
-    GS -->|pasa| OUT[Respuesta]
     GS -->|no pasa| RG[Regenera o<br/>respuesta segura]
+    GS -->|pasa| SV[Score BANT-E y FSM<br/>en Python, en la misma<br/>transacción del turno]
+    RG --> SV
+    SV --> OUT[Respuesta]
 ```
 
 **Lo que cambió esta semana:** el clasificador (Haiku, una llamada que ya existía) devuelve ahora 11 campos
@@ -223,7 +223,7 @@ por conversación. El 96% de los tokens son de entrada (prompt e historial); la 
 | Qué | Cuánto |
 | :--- | :--- |
 | Tests automatizados | Más de 1 300, en las suites que corren en cada PR |
-| Gold sets como *gate* de merge | Fair housing (diferencia 0 en perfiles pareados), factualidad (75 casos), dirección reservada, idioma y marcadores |
+| Gold sets que dejan CI en rojo si bajan | Fair housing (54 pares, diferencia 0), factualidad (35 y 123 casos), marcadores (47), dirección reservada e idioma (71 mensajes). CI no bloquea el merge: el *gate* es el acuerdo del equipo |
 | Gold set del clasificador | 93 mensajes contra Bedrock real (`classifier_gold.py`, fuera de CI): sale con error si un campo baja |
 | *Contract tests* | Todos los contratos entre servicios |
 | Decisiones registradas | 71 (DT-1 a DT-71) |
@@ -296,7 +296,7 @@ El backlog está cerrado. Lo que queda no es alcance:
 | :--- | :--- |
 | ¿Qué pasa si el LLM inventa un precio? | No puede escribirlo: pone un marcador y el código pone el valor del catálogo (DT-60). Un número escrito a mano que no sea de la propiedad se bloquea: regenera y, si vuelve a fallar, manda una respuesta segura y ofrece un asesor |
 | ¿Cómo saben que no ajustaron el agente a sus propias pruebas? | Por el set reservado P: preguntas que el agente nunca vio, corridas una sola vez, sin tocar nada antes ni después. 0 graves y 0 degradadas. Su debilidad, declarada: lo escribió quien hizo los arreglos |
-| ¿Cómo evitan la discriminación? | El LLM solo extrae señales y la nota la pone Python. Si una categoría protegida importa lo decide el clasificador y la respuesta es fija (DT-69); el gold set de perfiles pareados exige diferencia 0 en el score para fusionar |
+| ¿Cómo evitan la discriminación? | El LLM solo extrae señales y la nota la pone Python. Si una categoría protegida importa lo decide el clasificador y la respuesta es fija (DT-69); el gold set de perfiles pareados exige diferencia 0 en el score para que CI quede en verde |
 | ¿Cuánto cuesta? | Menos de 2 centavos por turno y unos 8 por conversación, a precio de lista de Bedrock. El 96% es entrada: con *prompt caching* bajaría |
 | ¿Qué pasa si escriben muchos a la vez? | La cuenta tiene 10 llamadas por minuto: unos 4 turnos por minuto en total. Un limitador local hace esperar el turno; si pasa el tiempo máximo, responde un texto seguro. En producción se pediría más cuota |
 | ¿Por qué no usaron un segundo LLM como juez? | Sería una llamada más por turno con 10 RPM. Preferimos que el clasificador devuelva campos y que el código verifique |

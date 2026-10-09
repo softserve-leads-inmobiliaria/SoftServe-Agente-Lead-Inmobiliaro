@@ -163,7 +163,7 @@ Since October 7: 9 PRs merged and 6 issues closed, including the closing stories
 
 - Every story is an issue with epic, track, priority P0-P2 and points (1 point ≈ 2 h).
 - The GitHub Projects board is the **only** source of status.
-- Three parallel tracks: **core** (engine), **edge** (channel and panel) and **data** (catalog).
+- Parallel tracks: **core** (engine), **edge** (channel and panel), **data** (catalog) and **cross** (CI, docs, demo).
 - Whatever live testing finds becomes a `[gap]` or `[bug]` issue, without inflating the stories.
 - 71 architecture decisions recorded, each with its context and alternatives.
 
@@ -186,7 +186,7 @@ Show the board live if there is time (10 s). New this week: B-16, the public lan
 <div class="grid grid-cols-2 gap-8 text-sm">
 <div>
 
-**Exit criteria, fixed before any fix**
+**Exit criteria, fixed before running the held-out set**
 
 - On questions the agent **never saw**: 0 serious errors (made-up data, promises, exact address, fair housing).
 - At most one degraded answer every ten turns.
@@ -245,7 +245,7 @@ flowchart LR
 <div class="grid grid-cols-2 gap-x-8 text-xs mt-2">
 <div>
 
-- **Only `core` talks to the lead and the LLM.** The catalog knows nothing about conversations.
+- **Only `core` chats with the lead and calls the LLM.** The catalog knows nothing about conversations.
 - **The agent only sees what the catalog tools return** (MCP): that makes factuality checkable.
 
 </div>
@@ -270,15 +270,13 @@ Reading order: lead → core → catalog and Bedrock → Postgres → advisor pa
 <div class="flow-arrow">→</div>
 <div class="flow-step"><b>Haiku classifies</b><span>signals, intent, property, visit</span></div>
 <div class="flow-arrow">→</div>
-<div class="flow-step flow-hl"><b>BANT&#8209;E score</b><span>computed in Python</span></div>
-<div class="flow-arrow">→</div>
-<div class="flow-step"><b>FSM</b><span>9 states</span></div>
-<div class="flow-arrow">→</div>
 <div class="flow-step"><b>Sonnet + tools</b><span>only sees MCP tools</span></div>
 <div class="flow-arrow">→</div>
 <div class="flow-step flow-hl"><b>Code fills markers</b><span>listing data</span></div>
 <div class="flow-arrow">→</div>
 <div class="flow-step flow-hl"><b>Output guardrails</b><span>regenerate or safe answer</span></div>
+<div class="flow-arrow">→</div>
+<div class="flow-step flow-hl"><b>BANT&#8209;E score + FSM</b><span>Python, saved with the turn</span></div>
 </div>
 
 <div class="grid grid-cols-2 gap-8 mt-8 text-sm">
@@ -371,13 +369,13 @@ Honest caveat: P is a single set of 37 turns. "0 serious" is consistent with a l
 <div class="grid grid-cols-4 gap-4 mt-8 text-center">
 <div class="kpi"><div class="kpi-n">1 300+</div><div class="kpi-l">automated tests, on every PR</div></div>
 <div class="kpi"><div class="kpi-n">54 / 54</div><div class="kpi-l">fair housing paired profiles with a score difference of 0</div></div>
-<div class="kpi"><div class="kpi-n">6</div><div class="kpi-l">gold sets as merge gates: factuality (2), markers, address, fair housing, language</div></div>
+<div class="kpi"><div class="kpi-n">6</div><div class="kpi-l">gold sets that turn CI red: factuality (2), markers, address, fair housing, language</div></div>
 <div class="kpi"><div class="kpi-n">71</div><div class="kpi-l">architecture decisions recorded</div></div>
 </div>
 
 <div class="mt-10 text-sm">
 
-- **CI runs without the LLM:** gold sets use the real demo catalog output, so they are fast and repeatable.
+- **CI runs without the LLM:** the gold sets use deterministic inputs (most of them the real demo catalog output), so they are fast and repeatable.
 - **The live evaluation runs outside CI**, against the real model, and checks what ended up in Postgres
   (tools, guardrails, route, final state), not exact phrases.
 - **Evidence is versioned:** every turn of the closing runs, with its tokens, is in the repository.
@@ -457,7 +455,7 @@ Architecture, one diagram per component: <code>docs/DESIGN/arquitectura-por-piez
 Prepared answers:
 - What if the LLM makes up a price? It can't write it: it writes a marker and the code fills in the catalog value (DT-60). A hand-written number that isn't from that listing is blocked: it regenerates once, then sends a safe answer offering an advisor.
 - How do you know you didn't tune the agent to your own tests? The held-out set P: questions the agent never saw, run once, nothing touched before or after. 0 serious, 0 degraded. Declared weakness: it was written by the person who made the fixes.
-- How do you avoid discrimination? The LLM only extracts signals and Python scores. Whether a protected category matters is decided by the classifier and the answer is fixed (DT-69); 54 paired profiles must have a difference of 0 to merge.
+- How do you avoid discrimination? The LLM only extracts signals and Python scores. Whether a protected category matters is decided by the classifier and the answer is fixed (DT-69); 54 paired profiles must keep a difference of 0 for CI to stay green.
 - Which model and why? Claude on Amazon Bedrock: Sonnet 4.5 to converse, because Haiku didn't follow several prompt rules; Haiku 4.5 to classify in JSON (DT-6, DT-60).
 - Why not a second LLM as a judge? One more call per turn with 10 RPM. The classifier returns fields and the code checks.
 - How much does it cost? Under 2 cents per turn, about 8 per conversation, at list prices. 96% is input; prompt caching would lower it.
