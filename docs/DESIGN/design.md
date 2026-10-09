@@ -125,7 +125,7 @@ Las secciones 1-4 son el plan compartido y no se reescriben. Esta sección solo 
 verdad, para no tener que cruzar el backlog con el código. Es una foto del sistema, no el estado de
 las historias: ese vive en GitHub Issues/Project. Se actualiza en el PR que cambie algo de lo que dice.
 
-**Corte:** 2026-10-02, `main` en `d8d0425`.
+**Corte:** 2026-10-08, `main` en `bbbaa4f`.
 
 Tres niveles, de más a menos evidencia:
 
@@ -146,6 +146,7 @@ flowchart LR
     CORE --> PG[(Postgres<br/>+ pgvector)]
     CAT --> PG
     PANEL[panel<br/>de asesores] --> PG
+    LAND[landing pública<br/>/properties en el panel] -. deep-link .-> TG
     CORE -. OTLP .-> PHX[Phoenix]
     CORE -- avisos --> PG
     CORE -. avisos, opcional .-> ADV[Asesor<br/>por Telegram]
@@ -171,40 +172,69 @@ Las cajas con borde punteado no están construidas.
 | Conversaciones E2E contra los 3 servicios (`OBS-6`): con el agente *fake*, 8/8 guiones comprobados en Postgres y en la cola del panel, más una conversación manual por Telegram (deep-link, traspaso, `STOP`); con Bedrock (Haiku 4.5, 3-oct, `--sin-frases`), ningún turno al texto de respaldo. El modelo suele pedir la zona antes de buscar, así que algunos guiones terminan en `QUALIFY` o `SCHEDULE` en vez del estado del agente *fake*: caminos válidos que la corrida con el LLM real acepta | DT-43, #48 |
 | Llamadas reales a Bedrock con reintentos (`A-14`): ráfaga de 8 turnos, 36 `ThrottlingException` reintentadas, ningún turno cayó al texto de respaldo (Haiku 4.5, `us-east-1`) | DT-30 |
 | La conversación nueva tras un traspaso conserva el score del lead (#84): el caso se vio en vivo y quedó cubierto por un test | DT-29 |
+| **Evaluación en vivo con Bedrock** (#216, #247): los 12 escenarios de la demo × 5 (60 conversaciones, 285 turnos) dieron 99,6% de turnos OK, 0,4% degradadas, 0 respaldos y 100% de estado final, con latencia p50 6,3 s y p95 9,8 s. El guion de la demo pasó 5 de 5 hasta `HANDOFF` y HOT | `docs/evidencia/2026-10-08/`, `docs/presentations/2026-10-08-cierre-de-evaluacion.md` |
+| **Guardrails de salida contra Bedrock**: la factualidad regenera (6% de los turnos del cierre) y degrada (0,4%) en vivo; la dirección exacta se retiene hasta calificar y se da después; la respuesta fija de fair housing sale ante "I'm Colombian, is that a problem?"; las promesas (descuento, fijar el precio, apartar) no se hacen. En el set reservado P, leído turno a turno, 0 datos inventados en 37 turnos | DT-60, DT-66 a DT-70; sets J, N, M, O y P de `harness/scripts/jury_scenarios.py` |
+| **Visita desde cualquier estado** (`B-8`, DT-61, DT-67): desde la búsqueda y desde el anuncio, sin buscar antes, la agenda ofrece tres horarios y reserva el elegido (escenarios `09`, `11` y `12`, 15 de 15). Una propiedad apartada o cerrada no se agenda | DT-61, DT-67 |
+| **Cobertura por `list_zones`** (DT-58): pregunta por zonas y por ciudades sin inventario, sin nombrar barrios inventados (escenario `08`, 5 de 5) | DT-58 |
+| **Clasificador con campos** (DT-62 a DT-69): gold set de 93 mensajes contra Haiku real, con línea base por campo | `harness/gold/`, `docs/TESTING.md` |
 
 ### 5.2 Construido y probado con tests, sin verificar en vivo
 
 - **FSM** con los 9 estados y todas las aristas de la sección 2, `HUMAN_HANDOFF` desde cualquier estado
   no terminal por sus tres caminos (DT-12, DT-16). La suite de transiciones cubre cada arista (`OBS-3`).
 - **Score BANT-E** acumulado turno a turno en Postgres, en la misma transacción que la FSM (DT-14).
-- **Guardrail de entrada**: los 5 detectores de `guardrails.md` §1 (DT-15).
+- **Guardrail de entrada**: los 5 detectores de `guardrails.md` §1 (DT-15) y el filtro de idioma (#202,
+  DT-55). La respuesta fija a "does that matter?" la decide el campo `asks_if_it_matters` del clasificador
+  (DT-69).
 - **Fair housing en el scoring** (`A-11`, DT-38; #119, DT-40): `decision_maker` solo dice si el lead
   declaró cómo se decide, sin con quién. "mis hijos" se generaliza a "mi familia" y "mi esposa" o "mi
-  marido" a "mi pareja" en vez de borrarse. El gold set de perfiles pareados de `C-6` queda en 27 de 27
-  con diferencia 0. Lo que haga el modelo real con una mención protegida no se ha
-  probado: el gold set usa el extractor determinista.
+  marido" a "mi pareja" en vez de borrarse. El gold set de perfiles pareados de `C-6` queda en 54 de 54
+  (27 pares en español y 27 en inglés) con diferencia 0. El gold set usa el extractor determinista; con el
+  modelo real, la respuesta a una mención protegida se vio en vivo (§5.1).
 - **Guardrails de salida** con el agente de Bedrock: disponibilidad revalidada (`A-4`, DT-21),
   factualidad (`A-5`, DT-23), dirección reservada (`A-6`, DT-25) y 6 de los 8 *claims* prohibidos (`A-7`,
-  DT-26). Sus gold sets corren con la suite de `core` en CI. Ninguno se ha visto dispararse contra
-  Bedrock: el modelo no suele inventar a propósito y los casos se prueban con respuestas fijas.
+  DT-26). Sus gold sets corren con la suite de `core` en CI, y en vivo se ven dispararse (§5.1).
+- **Los datos de la propiedad los escribe el código** (DT-60): el modelo pone marcadores
+  (`{prop_00231.price}`) y `app/markers.py` los completa con lo que dieron las tools del turno o la memoria de
+  hechos (DT-59), que guarda los campos citables de cada propiedad durante 24 horas, nunca su estado. Un
+  marcador que no se puede completar o un número suelto sin respaldo regenera la respuesta, y la segunda vez
+  la degrada.
+- **El clasificador decide lo que antes se adivinaba sobre el texto** (DT-62, sin llamadas nuevas). Además de
+  la intención, devuelve `refers_to` (de qué propiedad habla, entre las ya mostradas, DT-63), `visit_when`
+  (cuándo quiere la visita, DT-64) y siete flags: `asks_for_person`, `wants_alert`, `wants_visit`,
+  `frustrated` (la racha sin resolver solo traspasa con molestia, DT-65), `asks_unlisted` (lo que la ficha no
+  tiene no se contesta con sí o no, DT-66), `needs_lookup` (fuerza una tool en la primera ronda, DT-68) y
+  `asks_if_it_matters` (DT-69). La conversación y el clasificador corren con `temperature` 0.
+- **Cada turno explica su decisión** (#247): una fila `turn.decision` en `audit_log` con la intención, las
+  flags, `refers_to`, `visit_when` y la ruta (`agent`, `agenda:*`, `protected`, `handoff`…). La traza del turno
+  lleva la ruta, la intención, las flags y `refers_to`. Las violaciones de salida quedan con su tipo, sin el valor.
+- **Inglés, Colombia y dólares** (DT-55): todo lo que lee el lead y el LLM está en inglés; el inventario está
+  en Medellín (El Poblado, Laureles, Envigado) y Bogotá (Usaquen, Chapinero), con precios en USD. El Markdown
+  del agente llega a Telegram como HTML (DT-53).
+- **Landing pública** (`B-16`, DT-71): `/properties` en el panel, sin token y de solo lectura, con las
+  propiedades disponibles y un enlace a Telegram por propiedad que abre la conversación con su *deep-link*.
 - **Ficha de traspaso** al asesor en `HANDOFF` y `HUMAN_HANDOFF`, con la transcripción completa partida
   en varios mensajes (`A-12`, DT-28). Usa el mismo envío que la tarjeta de `B-7`, que sí se verificó en
   vivo.
-- **Catálogo sobre Postgres** con las 5 tools por MCP (`C-1`). El arnés E2E recorre `core` → `catalog`
-  por red.
+- **Catálogo sobre Postgres** con las 6 tools por MCP (`C-1`): `search_properties` (con el filtro `kind`,
+  DT-54), `get_property` (con los requisitos de la operación, DT-56), `get_availability`, `get_promotions`,
+  `check_requirements` y `list_zones` (DT-58). Una búsqueda sin resultados trae alternativas con un filtro
+  menos, que busca el código (DT-57). El arnés E2E recorre `core` → `catalog` por red.
 - **Agenda en el catálogo** (`C-2`, DT-32): `assign_advisor`, `get_slots` y `book` por HTTP en
   `/scheduling`, fuera de MCP para que el LLM no las vea. `book` es idempotente, y la base impide dos
   visitas del mismo asesor a la misma hora. `core` usa las tres: `assign_advisor` para el ruteo, y
   `get_slots` y `book` para agendar la visita.
-- **Visita agendada desde la conversación** (`B-8`, DT-39): al pedirla, el lead elige entre 3 horarios
-  numerados de su asesor y `core` la reserva con `book`. Si la agenda no responde, el lead deja su horario
+- **Visita agendada desde la conversación** (`B-8`, DT-39, DT-61): se pide desde cualquier estado activo,
+  y la agenda ofrece 3 horarios numerados de su asesor, de lunes a sábado entre las 9:00 y las 18:00, filtrados
+  por lo que dijo el lead (`visit_when`, DT-64); `core` reserva el elegido con `book`. Si la agenda no responde, el lead deja su horario
   preferido y el asesor lo ve en la ficha de traspaso.
 - **Foto de la propiedad en Telegram** (`B-10`, DT-50): cuando el turno trata de una sola propiedad (el
   *deep-link* o un `get_property` sin búsqueda), el bot manda su foto con el texto del turno como
   *caption*. Sin foto, con un texto que no cabe en un *caption* o si Telegram la rechaza, va solo el
   texto. Las fotos de la demo son URLs de Unsplash que siembra `seed_catalog.py`.
 - **Botones en Telegram** (`B-11`, DT-51): bajo una respuesta sobre una propiedad van "Talk to an
-  agent" y, en `RECOMMEND`, "Schedule a visit". Tocar uno es lo mismo que escribir su texto fijo, en inglés
+  agent" y, en los estados desde los que se puede pedir la visita (`VISIT_STATES`, DT-61), "Schedule a
+  visit". Tocar uno es lo mismo que escribir su texto fijo, en inglés
   como todo lo que lee el lead (#202): pasa por el guardrail de entrada, la FSM y el score, y el evento CT-1
   no cambia.
 - **Ruteo del lead al asesor** (`A-10`, DT-33): la tarjeta y la ficha de traspaso van al asesor que
@@ -356,5 +386,17 @@ Las cajas con borde punteado no están construidas.
 - **El límite de tasa es por proceso** (DT-19): con varios *workers* se multiplica. El compose corre uno.
 - **Los avisos al asesor son de mejor esfuerzo:** si Telegram falla en ese turno no se reintentan
   (DT-24, DT-28). El asesor sigue viendo al lead en el panel.
-- **Factualidad literal:** no sabe de qué propiedad habla un número si es real en otro resultado del
-  mismo turno (DT-23).
+- **Factualidad literal fuera de los marcadores:** un número que el modelo escribe a mano se compara
+  literalmente. Si solo una propiedad del turno lo tiene, pasa aunque la frase hable de otra (DT-23, DT-60).
+  En vivo, copiar a mano un precio por m² con decimales todavía degrada la respuesta (O5).
+- **Lo que la ficha no tiene lo confirma un asesor** (DT-66): parqueo, mascotas, piso, administración,
+  servicios, cercanía. Es correcto pero repetitivo si el lead pregunta varias cosas así. Los detalles por
+  propiedad y la FAQ (`C-5`) no están construidos.
+- **Fallas conocidas del agente** (prueba de jurado, #247): no compara el ingreso del lead contra los requisitos
+  de dos propiedades a la vez (O2); sin ciudad, la pregunta en vez de buscar (O3); a veces repite el estado
+  ("reserved (reserved)") o dice que "el sistema" agenda en vez de ofrecer un asesor.
+- **Una persona a la vez.** Con 10 llamadas por minuto y por modelo (DT-6, DT-19) y 2,4 llamadas por turno,
+  dos personas escribiendo a la vez agotan el cupo. Dos evaluaciones en paralelo, además, compiten por la
+  agenda del mismo asesor.
+- **El prompt del clasificador es sensible:** una línea nueva en `CLASSIFIER_SYSTEM` cambió respuestas de
+  mensajes sin relación (DT-69). Cada cambio se mide contra el gold set del clasificador antes de aceptarlo.

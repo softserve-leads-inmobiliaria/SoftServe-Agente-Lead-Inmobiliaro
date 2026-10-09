@@ -22,7 +22,7 @@ Cada épica agrupa historias de una misma área funcional. El objetivo, alcance 
 
 **Objetivo:** el bot de Telegram, la conversión a/desde el evento canónico, la identidad del lead entre canales, y el panel interno de asesores (lista, ficha, cola priorizada, notificaciones, agenda).
 
-**Historias:** B-1 a B-14.
+**Historias:** B-1 a B-16.
 
 ## E3 — Datos y conocimiento
 
@@ -50,7 +50,7 @@ Cada épica agrupa historias de una misma área funcional. El objetivo, alcance 
 
 **Decisión de organización:** todo el esquema nuevo entra en una sola historia (N-1) y una sola migración, para que `core`, el panel y el *seed* trabajen en paralelo sin chocar en Alembic. Las consultas (N-6, N-7) y las vistas (N-8) son historias separadas que se coordinan por las firmas que fijan las consultas en su primer PR.
 
-**Historias:** N-1 a N-10. Las otras propuestas de `propuestas.md` van en su épica natural: A-15 a A-18 en E1 y B-10 a B-14 en E2.
+**Historias:** N-1 a N-10. Las otras propuestas de `propuestas.md` van en su épica natural: A-15 a A-18 en E1 y B-10 a B-14 en E2. B-15 (avisos en el panel) y B-16 (landing pública) vinieron después, también en E2.
 
 ---
 

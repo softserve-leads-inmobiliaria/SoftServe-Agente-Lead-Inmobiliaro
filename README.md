@@ -22,7 +22,7 @@ equipo: [`docs/ONBOARDING.md`](docs/ONBOARDING.md).
 | `services/core/` | Orquestador, FSM, guardrails, scoring y canal Telegram |
 | `services/catalog/` | Catalog Service (MCP + REST sobre Postgres) |
 | `services/panel/` | Panel interno de asesores |
-| `harness/` | Arnés de conversaciones E2E |
+| `harness/` | Arnés de conversaciones E2E y evaluación en vivo con el LLM real (escenarios, jurado, gold set del clasificador) |
 | `tests/` | Contract tests, pruebas del arnés E2E y validación del compose y los Dockerfiles |
 | `docs/` | Único árbol de documentación |
 

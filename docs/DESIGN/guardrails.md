@@ -108,7 +108,7 @@ estado futuro o posible (#247, prueba de jurado): "when it will become available
 available" no afirman el estado de ahora, y degradaban "When will it be free again?" (J3, O6). "This one is
 available again" sí cuenta.
 
-La regla se prueba contra el catálogo de demo real en el gold set de `C-7` (103 casos, y además la
+La regla se prueba contra el catálogo de demo real en el gold set de `C-7` (123 casos, y además la
 validación de cada turno contra `contracts/mcp/`, DT-36), que corre el `AvailabilityGuard` real de A-4
 como capa intermedia. El límite conocido —el guardrail compara
 literales y no sabe de qué propiedad habla el texto, así que un número real de *otra* propiedad del
@@ -158,12 +158,12 @@ existir) — se actualiza en el mismo PR que cierra la historia correspondiente.
 | Guardrail | Prueba | ¿*Gate* de CI? |
 | :--- | :--- | :--- |
 | Disponibilidad | `services/core/tests/test_availability.py` | Sí — corre con la suite de `core` |
-| Factualidad | Gold set de 32 casos, fusionado en `A-5` (`services/core/tests/test_factuality_gold_set.py`) | Sí — 100%. Sus `tool_results` están escritos a mano y ya no coinciden con el contrato desde C-1: **no se modifican** (prueban DT-23, y no se borran casos antiguos) |
-| Factualidad sobre el catálogo de demo | Gold set de 103 casos sobre la salida real de `CatalogService`, ya pasada por el `AvailabilityGuard` real (`C-7`, `services/core/tests/test_factuality_catalogo_gold_set.py`) + validación de cada turno contra `contracts/mcp/` | Sí — 100%, sin `xfail`. 28/28 turnos y 12/12 propiedades del inventario. Cierra el hueco que dejó el de A-5: sus fixtures ya no son la salida de ninguna tool y nada lo señalaba (DT-36) |
-| Marcadores (datos por construcción) | Gold set de 37 casos sobre la salida real del catálogo de demo (#243, `services/core/tests/test_markers_gold_set.py`): qué lee el lead y qué se bloquea | Sí — 100% |
+| Factualidad | Gold set de 35 casos, fusionado en `A-5` (`services/core/tests/test_factuality_gold_set.py`) | Sí — 100%. Sus `tool_results` están escritos a mano y ya no coinciden con el contrato desde C-1: **no se modifican** (prueban DT-23, y no se borran casos antiguos) |
+| Factualidad sobre el catálogo de demo | Gold set de 123 casos sobre la salida real de `CatalogService`, ya pasada por el `AvailabilityGuard` real (`C-7`, `services/core/tests/test_factuality_catalogo_gold_set.py`) + validación de cada turno contra `contracts/mcp/` | Sí — 100%, sin `xfail`. 28/28 turnos y 12/12 propiedades del inventario. Cierra el hueco que dejó el de A-5: sus fixtures ya no son la salida de ninguna tool y nada lo señalaba (DT-36) |
+| Marcadores (datos por construcción) | Gold set de 47 casos sobre la salida real del catálogo de demo (#243, `services/core/tests/test_markers_gold_set.py`): qué lee el lead y qué se bloquea | Sí — 100% |
 | Dirección reservada | Gold set de dirección reservada, fusionado en `A-6` (`services/core/tests/test_address_guard_gold_set.py`) — antes iba a ser `C-8`, ver notas de `A-06.md` | Sí — 0 fugas |
 | *Claims* prohibidos | Suite adversarial de A-7 (`services/core/tests/test_promise_guard.py`) — los 6 cubiertos con código, en positivo y negativo | Sí — corre con la suite de `core` |
-| Fair housing | Gold set de perfiles pareados, 27 pares (`C-6`, `services/core/tests/test_fair_housing_gold_set.py`) | Sí — 27/27 con diferencia 0, sin `xfail`. Los 6 pares de "con quién compras" daban −8/−12/−20 (DT-35) hasta que A-11 los arregló (DT-38) |
+| Fair housing | Gold set de perfiles pareados, 54 pares: 27 en español y 27 en inglés (`C-6`, #202, `services/core/tests/test_fair_housing_gold_set.py`) | Sí — 54/54 con diferencia 0, sin `xfail`. Los 6 pares de "con quién compras" daban −8/−12/−20 (DT-35) hasta que A-11 los arregló (DT-38) |
 | Idioma | Gold set de 71 mensajes: español típico de un lead, inglés y nombres propios (#202, `services/core/tests/test_language_guard_gold_set.py`) | Sí — todo el español detectado y 0 falsos positivos en inglés o en nombres |
 | PII/consentimiento | Test de privacidad + `/stop` | Manual (E2E) |
 | Contrato MCP del Catalog Service | *Contract test* dedicado | Sí |
