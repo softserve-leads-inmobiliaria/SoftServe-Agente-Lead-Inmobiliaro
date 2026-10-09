@@ -1,10 +1,10 @@
 # Arquitectura por piezas — 9 de octubre de 2026
 
 Material de apoyo para las preguntas de arquitectura de la presentación del
-[estado del 9 de octubre](2026-10-09-estado-del-proyecto.md). Hay un diagrama por pieza del sistema, con lo
+[estado del 9 de octubre](../internal/presentations/2026-10-09-estado-del-proyecto.md). Hay un diagrama por pieza del sistema, con lo
 mínimo para explicarla y las preguntas que suelen salir. Todo describe `main` al 9 de octubre (`06668ae`). El
 porqué de cada elección está en [`decisions.md`](../DECISIONS/decisions.md), las tablas compartidas en
-[`design.md`](../DESIGN/design.md) y el detalle de los guardrails en [`guardrails.md`](../DESIGN/guardrails.md).
+[`design.md`](design.md) y el detalle de los guardrails en [`guardrails.md`](guardrails.md).
 
 | # | Pieza | Para preguntas sobre… |
 | ---: | :--- | :--- |

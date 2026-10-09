@@ -3,7 +3,7 @@
 Guion de la presentación del equipo, con un máximo de 12 minutos. Cada sección responde un punto de la
 consigna. Los números son de `main` al 9 de octubre (`06668ae`, CI en verde). El estado vivo de cada
 historia está en el [Project](https://github.com/orgs/softserve-leads-inmobiliaria/projects/1). La foto
-anterior es el [estado del 7 de octubre](2026-10-07-estado-del-proyecto.md); el detalle de cada medición está
+anterior es el [estado del 7 de octubre](../../archive/presentations/2026-10-07-estado-del-proyecto.md); el detalle de cada medición está
 en el [cierre de la evaluación del 8 de octubre](2026-10-08-cierre-de-evaluacion.md).
 
 | Min. | Sección |
@@ -65,12 +65,12 @@ ellos Z-1 y Z-2) y el backlog en 0 historias abiertas.**
 | **La visita desde cualquier estado** | #229 · #246 | El lead que llega del anuncio pide la visita y recibe horarios; la FSM avanza por señales (DT-61, DT-67) |
 | **Set reservado P** | #247 · #256 | 37 turnos nunca vistos, corridos una sola vez: 0 errores graves, 0 degradadas |
 | **Guion de la demo medido** | #52 (Z-2) · #257, #258 | `docs/DEMO.md` y el escenario `12_guion_demo`, corrido 5 veces contra Bedrock: 5/5 terminan en `HANDOFF` con el lead HOT |
-| **Hardening y documentación** | #51 (Z-1) · #260 | Evidencia versionada en `docs/evidencia/2026-10-08/`; README en inglés con lo observado en vivo frente a lo cubierto solo por tests |
+| **Hardening y documentación** | #51 (Z-1) · #260 | Evidencia versionada en `docs/internal/evidencia/2026-10-08/`; README en inglés con lo observado en vivo frente a lo cubierto solo por tests |
 | **Landing pública** | #251 (B-16) · #252, #254 | `/properties` en el panel, sin token y de solo lectura, con un enlace a Telegram por propiedad disponible (DT-71) |
 | **C-5 (FAQ con embeddings)** | #31 · #250 | Pasa a tarea futura: el catálogo y DT-66 cubren lo que la FAQ iba a contestar |
 
 Las decisiones de arquitectura pasaron de 60 a **71** (DT-61…DT-71), todas en
-[`decisions.md`](../DECISIONS/decisions.md).
+[`decisions.md`](../../DECISIONS/decisions.md).
 
 ## 3. Cómo está el backlog
 
@@ -126,7 +126,7 @@ arreglar, así que solo miden regresión.
 
 ## 5. Arquitectura
 
-Cada pieza tiene su propio diagrama en [arquitectura por piezas](2026-10-09-arquitectura-por-piezas.md), para
+Cada pieza tiene su propio diagrama en [arquitectura por piezas](../../DESIGN/arquitectura-por-piezas.md), para
 contestar preguntas sin improvisar.
 
 ```mermaid
@@ -226,7 +226,7 @@ por conversación. El 96% de los tokens son de entrada (prompt e historial); la 
 | Gold set del clasificador | 93 mensajes contra Bedrock real (`classifier_gold.py`, fuera de CI): sale con error si un campo baja |
 | *Contract tests* | Todos los contratos entre servicios |
 | Decisiones registradas | 71 (DT-1 a DT-71) |
-| Evidencia versionada | [`docs/evidencia/2026-10-08/`](../evidencia/2026-10-08/README.md): informes, cada turno y sus tokens |
+| Evidencia versionada | [`docs/internal/evidencia/2026-10-08/`](../evidencia/2026-10-08/README.md): informes, cada turno y sus tokens |
 
 **Riesgos:**
 
@@ -234,12 +234,12 @@ por conversación. El 96% de los tokens son de entrada (prompt e historial); la 
 | :--- | :--- | :--- |
 | **Los créditos de AWS figuran vencidos** (8-oct, noche) | La demo en vivo usa Bedrock: unos US$0,20 por pasada del guion | Confirmar el saldo en Billing → Credits antes de presentar; si no hay, plan B sin Bedrock (§7) |
 | **La cuota de 10 RPM** | Si escriben varios a la vez aparece el texto de respaldo | Una persona escribe a la vez; nada más corriendo contra Bedrock |
-| **Una demo libre puede mostrar una falla de calidad** | Una respuesta prudente de más o una frase rara | Los límites conocidos están en [`DEMO.md`](../DEMO.md) §4 y en el [cierre](2026-10-08-cierre-de-evaluacion.md) §6 |
+| **Una demo libre puede mostrar una falla de calidad** | Una respuesta prudente de más o una frase rara | Los límites conocidos están en [`DEMO.md`](../../DEMO.md) §4 y en el [cierre](2026-10-08-cierre-de-evaluacion.md) §6 |
 | CI no bloquea el merge (repo privado, plan gratuito) | Un PR en rojo se puede fusionar | Acuerdo de equipo: nunca fusionar en rojo. El 8-oct `main` quedó en rojo tras #257 (evidencia sin enlazar desde el README) y #258 lo arregló minutos después |
 
 ## 7. Funcionalidad funcionando (demo)
 
-El guion completo, con qué decir en cada paso, está en [`docs/DEMO.md`](../DEMO.md). Es el escenario
+El guion completo, con qué decir en cada paso, está en [`docs/DEMO.md`](../../DEMO.md). Es el escenario
 `12_guion_demo` de la evaluación: **se corrió 5 veces contra Bedrock y salió bien las 5.**
 
 **Preparación:** `.env` con Bedrock y `TELEGRAM_BOT_TOKEN`, `bash scripts/demo/up.sh` justo antes (cada seed
@@ -267,7 +267,7 @@ cambia las URLs del panel), Telegram a la izquierda y el panel de Valeria Ortiz 
 - Sin Telegram: `python scripts/demo/conversar.py` reproduce los escenarios contra el stack.
 - Sin Bedrock: `docker compose run --rm --build harness` corre los guiones E2E con el agente *fake*, y se
   muestran el panel, el funnel, la landing y Phoenix.
-- Como evidencia: los informes versionados en `docs/evidencia/2026-10-08/` (cada turno de la demo × 5).
+- Como evidencia: los informes versionados en `docs/internal/evidencia/2026-10-08/` (cada turno de la demo × 5).
 
 ## 8. Qué queda
 
