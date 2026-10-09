@@ -16,7 +16,7 @@ frase la excluye (`_unhedged`). Es el mismo límite conocido que A-5/A-6: un pat
 
 De los 8 *claims*, esta historia cubre 6 con código (1, 2, 3, 4, 5, 7). El estado real de cada uno,
 incluidos los dos que quedan fuera (6 y 8) y por qué, vive en `docs/DESIGN/guardrails.md` §2.2 y §3 —
-no solo aquí (ver DT-26 y la nota de v1 en `docs/STORIES/A-07.md`).
+no solo aquí (ver DT-26 y la nota de v1 en `docs/internal/STORIES/A-07.md`).
 """
 from __future__ import annotations
 
