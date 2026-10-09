@@ -3119,3 +3119,47 @@ prueba), dos de ellas resultaron ser respuestas correctas que el guardrail no de
 
 **Consecuencias.** La tercera (J1 t9, una diferencia calculada al comparar) ya la cubre la regla de no calcular
 y la corrección: en la corrida siguiente pasó.
+
+## DT-71 — La landing pública vive en el panel, sin token, y el enlace a Telegram lleva un solo payload
+
+**Estado:** aceptada (B-16, #251).
+
+**Contexto.** El agente ya entiende `?start=prop_...` (B-3, `canonical.parse_deep_link`): el lead abre el bot
+por una propiedad y el turno arranca con esa propiedad. Pero no había una página pública desde donde tocar
+una propiedad; solo el catálogo por dentro. El panel ya es FastAPI con plantillas y lee Postgres, y el
+compose publica el panel en `127.0.0.1` (`BIND_ADDRESS`).
+
+**Decisión.**
+
+- **La landing es una ruta más del panel**, `/properties`, **sin token de asesor y de solo lectura**. No se
+  suma un contenedor, un healthcheck ni un despliegue. La autenticación por token de DT-5 sigue valiendo
+  para `/panel/...`; esta ruta es la única pública, además de `/health`.
+- **Solo datos de anuncio**: título, tipo de inmueble (`kind`, #188), operación (`type`), zona, precio, m²,
+  recámaras, baños y `photo_url`. Nunca `address_exact` (dirección reservada, `guardrails.md`), y nada de
+  leads, asesores, transcripciones ni del resto del panel. Las propiedades que no están `disponible`
+  (`apartado`, `cerrado`) no salen.
+- **Un enlace por propiedad**, `https://t.me/<TELEGRAM_BOT_USERNAME>?start=<property.id>`. El `id` ya trae el
+  prefijo `prop_`, así que el payload es el mismo que el bot entiende: no se toca `services/core`. Un payload
+  por enlace porque `parse_deep_link` acepta un solo prefijo (`prop_` o `camp_`).
+- **`TELEGRAM_BOT_USERNAME`** (público, no secreto) va en `config/panel.env` con default vacío, según DT-48,
+  y se puede pisar desde `.env` o la shell. Si queda vacío, el panel arranca igual y la landing muestra las
+  tarjetas sin botón, con un aviso de que el canal no está configurado. El código lo lee como "sin
+  configurar", así que `test_config_values_keep_a_default_and_can_be_overridden` admite un default vacío.
+- **El enlace se prueba con el parser real**: un test del panel genera el enlace de cada propiedad del seed y
+  lo pasa por `canonical.parse_deep_link` cargado por ruta, sin modificar `core`.
+
+**Alternativas.**
+
+- **Un servicio nuevo para la landing.** Descartada: otro contenedor, healthcheck y despliegue para una
+  página que ya tiene el panel (FastAPI + plantillas + Postgres).
+- **Meter la campaña en el mismo enlace** (`?start=prop_...camp_...`). Descartada: `parse_deep_link` toma un
+  solo prefijo; atribuir campaña y propiedad exige cambiar el parser de `core` y queda fuera de la historia.
+- **Listar `TELEGRAM_BOT_USERNAME` en `.env.example` como una asignación.** Descartada por DT-48: un ajuste
+  del producto vive en `config/`, no en `.env.example` (ahí solo queda documentado como comentario).
+
+**Consecuencias.**
+
+- El panel pasa a tener una ruta pública: se apoya en el mismo `BIND_ADDRESS` de #104 para la demo en el
+  celular, y el resto del panel sigue detrás del token.
+- Un QR por propiedad, filtros o SEO quedan fuera; el QR sumaría una dependencia y se puede agregar después.
+- La landing no escribe en la base, así que no puede alterar inventario ni leads.

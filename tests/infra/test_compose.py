@@ -74,9 +74,10 @@ def test_each_service_config_file_exists():
 @pytest.mark.parametrize("path", CONFIG_FILES, ids=lambda p: p.name)
 def test_config_values_keep_a_default_and_can_be_overridden(path):
     """Cada valor es `${CLAVE:-valor}` con su misma CLAVE: sale de este archivo salvo que `.env` o la shell
-    la pisen (Compose interpola los env_file)."""
+    la pisen (Compose interpola los env_file). El default puede ser vacío (B-16, `TELEGRAM_BOT_USERNAME`):
+    el código lo trata como "sin configurar" y el servicio arranca igual."""
     for name, value in _assignments(path).items():
-        assert re.fullmatch(rf"\$\{{{name}:-[^}}]+\}}", value), f"{name}={value}"
+        assert re.fullmatch(rf"\$\{{{name}:-[^}}]*\}}", value), f"{name}={value}"
 
 
 @pytest.mark.parametrize("path", CONFIG_FILES, ids=lambda p: p.name)

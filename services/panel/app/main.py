@@ -19,6 +19,7 @@ from app.auth import resolve_advisor
 from app.business import business_view, parse_period
 from app.funnel import funnel_report
 from app.inventory import LOCAL_TZ
+from app.landing import available_properties, bot_username_from_env, telegram_link
 from app.repo import (
     Closing,
     ClosingRejected,
@@ -70,6 +71,20 @@ CurrentAdvisor = Annotated[Advisor, Depends(current_advisor)]
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/properties", response_class=HTMLResponse)
+def public_properties(request: Request, session: DbSession) -> HTMLResponse:
+    """Landing pública (B-16): sin token, solo lectura. Con `TELEGRAM_BOT_USERNAME` cada tarjeta lleva su
+    enlace de Telegram; sin él, la landing sale igual y avisa que el canal no está configurado."""
+    bot = bot_username_from_env()
+    listings = [
+        {"property": prop, "telegram_url": telegram_link(bot, prop.id) if bot else None}
+        for prop in available_properties(session)
+    ]
+    return templates.TemplateResponse(request, "landing.html", {
+        "listings": listings, "telegram_configured": bot is not None,
+    })
 
 
 @app.get("/panel/{advisor_token}", response_class=HTMLResponse)
