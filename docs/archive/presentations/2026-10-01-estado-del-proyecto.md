@@ -66,7 +66,7 @@ concentraba 8 de las 16 historias abiertas, quedó resuelto.
 | Enlace del anuncio | #122 | `t.me/<bot>?start=prop_<id>` saluda con la propiedad y le asigna la zona al lead |
 
 Las decisiones de arquitectura pasaron de 31 a **38** (DT-32…DT-38), todas en
-[`decisions.md`](../DECISIONS/decisions.md).
+[`decisions.md`](../../DECISIONS/decisions.md).
 
 **Quién cerró qué en la semana:**
 

@@ -6,14 +6,14 @@ body:
   - type: markdown
     attributes:
       value: |
-        Para esto NO hace falta un archivo en `docs/STORIES/` — es trabajo que surge sobre la
+        Para esto NO hace falta un archivo en `docs/internal/STORIES/` — es trabajo que surge sobre la
         marcha, no una historia planificada. Usar el prefijo del título que corresponda:
         `[gap]` (falta algo que se asumía cubierto), `[bug]`, `[tech-debt]`, `[DevOps]`,
         `[constraint]` (una limitación de infra/entorno descubierta, ej. rate limit de un proveedor).
 
         Asignar labels `track:*` y `prio:*` igual que a cualquier historia. `epic:*` y `points:*`
         son opcionales acá — si termina siendo trabajo grande, mejor formalizarlo como historia
-        nueva en `docs/STORIES/`.
+        nueva en `docs/internal/STORIES/`.
 
   - type: textarea
     id: description

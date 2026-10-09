@@ -1,7 +1,7 @@
 # Decisiones de arquitectura
 
 Bitácora técnica de *por qué* — contexto, alternativas consideradas, consecuencias. El *qué* de
-cada historia vive en `docs/STORIES/`; el *estado* (hecha/pendiente) vive solo en GitHub
+cada historia vive en `docs/internal/STORIES/`; el *estado* (hecha/pendiente) vive solo en GitHub
 Issues/Project, nunca acá. Cada entrada enlaza al Issue/PR correspondiente cuando exista.
 
 Formato de cada entrada: Contexto → Decisión → Alternativas → Consecuencias.
@@ -26,7 +26,7 @@ migración de arquitectura a mitad de proyecto en vez de una decisión tomada un
 
 **Consecuencias.** Toda historia que lea/escriba `FsmState`/`LeadScore`/`Conversation` (`A-1`,
 `A-9`, `B-5`, `OBS-2`) depende de que `C-3` (migraciones) esté cerrada primero — ver el orden de
-`docs/STORIES/ROADMAP.md`.
+`docs/internal/STORIES/ROADMAP.md`.
 
 ---
 
@@ -1644,7 +1644,7 @@ historial, aunque revelan el estado civil, que `guardrails.md` §1 declara prote
 
 **Estado:** propuesta (`N-2`, #142). Pasa a aceptada cuando la revisen las tres personas del equipo.
 
-**Contexto.** La épica E6 (`docs/DESIGN/propuestas.md` §2) mide cuánto negocio trae el agente. `N-7`
+**Contexto.** La épica E6 (`docs/archive/propuestas.md` §2) mide cuánto negocio trae el agente. `N-7`
 cuenta los cierres atribuidos al bot y `N-8` los muestra en el panel, pero las dos dependen de tres
 cosas sin decidir: qué cuenta como "cerrada gracias al bot", quién ve las métricas de toda la
 inmobiliaria y qué no puede salir nunca en una vista agregada.

@@ -2,8 +2,8 @@
 
 Qué se encontró en la prueba de jurado (#247), qué estrategia se eligió, qué quedó hecho y qué sigue. Sirve para
 retomar el trabajo en otra sesión, incluso con la base de datos recién creada. Las decisiones están en
-[`decisions.md`](../DECISIONS/decisions.md): DT-57 (actualización), DT-62, DT-63, DT-64 y DT-65. Cómo correr la
-prueba está en [`TESTING.md`](../TESTING.md), "Prueba de jurado". El estado de cada issue vive en GitHub.
+[`decisions.md`](../../DECISIONS/decisions.md): DT-57 (actualización), DT-62, DT-63, DT-64 y DT-65. Cómo correr la
+prueba está en [`TESTING.md`](../../TESTING.md), "Prueba de jurado". El estado de cada issue vive en GitHub.
 
 ## 1. El problema
 

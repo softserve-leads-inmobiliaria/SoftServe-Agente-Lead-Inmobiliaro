@@ -159,7 +159,7 @@ y **2 tareas de deuda técnica** de seguridad de los contenedores (#65 cerrada, 
 
 ## 4. Una historia típica: A-9
 
-Cada historia tiene su archivo en `docs/STORIES/`, su Issue y su tarjeta en el Project.
+Cada historia tiene su archivo en `docs/internal/STORIES/`, su Issue y su tarjeta en el Project.
 
 > **A-9 — Scoring BANT-E integrado en la FSM** · Épica E1 · P0 · 2 puntos · Track A · Depende de C-4
 >
@@ -189,7 +189,7 @@ Total de 0 a 100: **COLD** ≤ 40 · **WARM** 41-70 · **HOT** ≥ 71.
 
 ```mermaid
 flowchart LR
-    S[docs/STORIES/A-09.md] --> I[Issue #11<br/>en el Project]
+    S[docs/internal/STORIES/A-09.md] --> I[Issue #11<br/>en el Project]
     I --> BR[Rama feature/...]
     BR --> PR[Pull Request<br/>en draft]
     PR --> CI{CI:<br/>ruff + 7 suites}
@@ -248,7 +248,7 @@ Mientras tanto, los tracks A y B apoyan al C con pares y revisiones, en lugar de
 Esto **no es la demo final**. La demo de punta a punta es Z-2 y necesita las historias que faltan (§5).
 Lo que sí se puede mostrar hoy son las piezas que ya funcionan por separado.
 
-**Qué se puede mostrar y con qué evidencia** ([`design.md` §5](../DESIGN/design.md#5-estado-real-del-sistema)):
+**Qué se puede mostrar y con qué evidencia** ([`design.md` §5](../../DESIGN/design.md#5-estado-real-del-sistema)):
 
 | Qué | Historias | Estado |
 | :--- | :--- | :--- |
@@ -297,8 +297,8 @@ Lo que sí se puede mostrar hoy son las piezas que ya funcionan por separado.
 - **Probar en vivo encuentra lo que los tests no.** Los 3 bugs de la semana (#81, #84, #89) aparecieron así,
   con todos los tests en verde, y ya están corregidos.
 - **Decisiones registradas.** 31 decisiones de arquitectura (DT-1…DT-31) con su porqué, en
-  [`decisions.md`](../DECISIONS/decisions.md).
-- **Honestidad sobre el estado.** [`design.md` §5](../DESIGN/design.md#5-estado-real-del-sistema) separa lo
+  [`decisions.md`](../../DECISIONS/decisions.md).
+- **Honestidad sobre el estado.** [`design.md` §5](../../DESIGN/design.md#5-estado-real-del-sistema) separa lo
   verificado en vivo, lo que solo tiene tests y lo que está diseñado pero no construido.
 
 **Riesgos**
@@ -329,4 +329,4 @@ Preguntas que probablemente aparezcan, con su respuesta corta:
 - **¿Por qué Telegram?** Con *long polling* no hace falta URL pública: se prueba desde cualquier laptop. El núcleo trabaja con un evento canónico, así que agregar otro canal es escribir un adaptador.
 - **¿Qué falta para producción?** El catálogo con inventario real, la agenda (C-2/B-8), el *scheduler* de
   seguimiento y exigir CI en verde para mergear. El detalle está en
-  [`design.md` §5.3 y §5.4](../DESIGN/design.md#53-diseñado-pero-no-construido).
+  [`design.md` §5.3 y §5.4](../../DESIGN/design.md#53-diseñado-pero-no-construido).

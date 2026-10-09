@@ -3,7 +3,7 @@
 épica, y — en el GitHub Project — los campos Priority/Track/Estimate/Lote
 seteados automáticamente en cada una de las 54 Issues, a partir de sus
 labels (creados por create_issues_from_stories.py) y del mapeo de lotes de
-docs/STORIES/ROADMAP.md §4.
+docs/internal/STORIES/ROADMAP.md §4.
 
 Requiere haber corrido antes create_issues_from_stories.py --apply (usa el
 mismo archivo de mapeo ID->#issue).
@@ -64,7 +64,7 @@ FIELD_SPECS = [
                                   "Lote 7", "Lote 8", "Lote 9", "Z-cierre", "Backlog"]),
 ]
 
-# Mapeo de docs/STORIES/ROADMAP.md §4 (batches que respetan dependencias) +
+# Mapeo de docs/internal/STORIES/ROADMAP.md §4 (batches que respetan dependencias) +
 # §6 (cierre). Todo lo que no aparece acá es "Backlog" (§5: resto de P0/P1/P2,
 # sin semana fija todavía).
 LOTE_MAP = {
@@ -74,7 +74,7 @@ LOTE_MAP = {
     "A-4": "Lote 4", "B-5": "Lote 4", "C-1b": "Lote 4", "C-7": "Lote 4", "C-9": "Lote 4",
     "A-5": "Lote 5", "B-7": "Lote 5",
     "A-6": "Lote 6", "A-12": "Lote 6",
-    # ROADMAP.md §8: propuestas de octubre (E6 y lo que sale de docs/DESIGN/propuestas.md).
+    # ROADMAP.md §8: propuestas de octubre (E6 y lo que sale de docs/archive/propuestas.md).
     "N-1": "Lote 7", "N-2": "Lote 7", "A-15": "Lote 7", "B-8": "Lote 7",
     "N-3": "Lote 8", "N-4": "Lote 8", "N-5": "Lote 8", "N-6": "Lote 8", "N-7": "Lote 8", "N-9": "Lote 8",
     "B-10": "Lote 8",
@@ -299,7 +299,7 @@ def main() -> int:
     ap.add_argument("--repo", required=True, help="owner/repo")
     ap.add_argument("--project-owner", required=True, help="dueño del Project: login de la org o usuario")
     ap.add_argument("--project-title", default="Agente de Leads — Backlog")
-    ap.add_argument("--stories-dir", default=str(Path(__file__).resolve().parent.parent.parent / "docs" / "STORIES"))
+    ap.add_argument("--stories-dir", default=str(Path(__file__).resolve().parent.parent.parent / "docs" / "internal" / "STORIES"))
     ap.add_argument("--map-file", default=None, help="mapeo ID->#issue de create_issues_from_stories.py")
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--only", default=None, help="IDs separados por coma, ej: CT-1,CT-2")

@@ -9,8 +9,9 @@ Built by Team #2 of the SoftServe Project Lab (Santiago Martínez, David Barreto
 ## Documentation
 
 This README is self-contained: it covers what the system does, how it works, how to run it and how it was
-evaluated. The team's working notes (design, decisions, test guide, in Spanish) are indexed in
-[`docs/README.md`](docs/README.md); they are internal and may not be part of every copy of this repository.
+evaluated. The design, a diagram per component, the architecture decisions and the test guide (in Spanish) are
+indexed in [`docs/README.md`](docs/README.md). The team's working notes live in `docs/internal/` and superseded
+documents in `docs/archive/`; they may not be part of every copy of this repository.
 
 ## What it does
 
@@ -217,7 +218,8 @@ Extra arguments go in `ARGS`, for example `make test-core ARGS="-k consent"`.
 | `harness/` | End-to-end conversation scripts and the live evaluation with the real model |
 | `scripts/` | Demo data, demo start and stop scripts, GitHub setup |
 | `config/` | Product settings per service (no secrets) |
+| `slides/` | Slides (Slidev) of the current project status presentation |
 | `tests/` | Contract tests, harness tests and checks of the Docker setup and documentation links |
-| `docs/` | The team's internal working notes, in Spanish |
+| `docs/` | Design, architecture decisions, test guide and demo script, in Spanish; team notes in `docs/internal/`, superseded documents in `docs/archive/` |
 
 Contributing rules are in [`CONTRIBUTING.md`](CONTRIBUTING.md).

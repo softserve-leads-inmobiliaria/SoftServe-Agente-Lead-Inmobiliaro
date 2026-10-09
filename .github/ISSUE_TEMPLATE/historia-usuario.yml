@@ -1,5 +1,5 @@
 name: Historia de usuario (backlog)
-description: Nueva historia del backlog planificado — copiarla primero a docs/STORIES/<ID>.md
+description: Nueva historia del backlog planificado — copiarla primero a docs/internal/STORIES/<ID>.md
 title: "[ID] Título breve"
 labels: []
 body:
@@ -7,8 +7,8 @@ body:
     attributes:
       value: |
         **Antes de crear este Issue:** la historia tiene que existir primero como archivo en
-        `docs/STORIES/<ID>.md` (copiando `docs/STORIES/PLANTILLA-HISTORIA.md`) y aparecer en la
-        tabla de su épica en `docs/STORIES/README.md`. Este Issue es el *tracking* de esa historia,
+        `docs/internal/STORIES/<ID>.md` (copiando `docs/internal/STORIES/PLANTILLA-HISTORIA.md`) y aparecer en la
+        tabla de su épica en `docs/internal/STORIES/README.md`. Este Issue es el *tracking* de esa historia,
         no reemplaza el archivo — el contenido completo (criterios de aceptación, DoD) vive ahí.
 
         Asignar labels: `track:core|borde|datos|cross`, `prio:P0|P1|P2`, `epic:contratos|motor-agente|canal-borde|datos|observabilidad|cierre|negocio`, `points:1|2|3|5|8`.

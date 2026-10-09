@@ -1,5 +1,5 @@
 # Sugiere reviewer automático según el Track/carpeta que se toque — reglas en CONTRIBUTING.md
-# ("Quién revisa"), asignación de Track por persona en docs/STORIES/ROADMAP.md §3.
+# ("Quién revisa"), asignación de Track por persona en docs/internal/STORIES/ROADMAP.md §3.
 #
 # Asignación: Track A = @dbarretol, Track B = @SantiagoMartinez22, Track C = @miguelvelezsk.
 #
@@ -20,4 +20,4 @@
 
 # Contratos y planificación — cualquiera de los 3 puede revisar, sin dueño único
 /contracts/          @dbarretol @SantiagoMartinez22 @miguelvelezsk
-/docs/STORIES/       @dbarretol @SantiagoMartinez22 @miguelvelezsk
+/docs/internal/STORIES/       @dbarretol @SantiagoMartinez22 @miguelvelezsk

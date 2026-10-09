@@ -431,7 +431,7 @@ conversaciones, 285 turnos, 122 minutos. Quedó dentro de los umbrales.
 - **La única falla:** `01_deep_link_hasta_asesor` #5 t6 ("We want to move in within the next two months"), degradada.
 - **Costo:** 679 llamadas al LLM, 2,4 por turno. Son 6.100 tokens por turno, el 96% de entrada, y unos US$5 las 60
   conversaciones.
-- **Detalle y evidencia:** `docs/presentations/2026-10-08-cierre-de-evaluacion.md` y `docs/evidencia/2026-10-08/`.
+- **Detalle y evidencia:** `docs/internal/presentations/2026-10-08-cierre-de-evaluacion.md` y `docs/internal/evidencia/2026-10-08/`.
   Es la nueva referencia: un cambio de comportamiento posterior se compara contra esta corrida.
 
 ### Prueba de jurado (#247)
@@ -472,7 +472,7 @@ python harness/scripts/jury.py M4_preguntas_trampa
 
   El criterio para la demo: ningún dato inventado, y a lo sumo 1 o 2 errores visibles por set.
 - **Informe:** `tmp/jury/<fecha>_<sets>.md`, que no se versiona. Los resultados de cada corrida y qué se
-  arregló están en `docs/presentations/2026-10-07-prueba-de-jurado.md`.
+  arregló están en `docs/archive/presentations/2026-10-07-prueba-de-jurado.md`.
 - **Por qué falló un turno:** la transcripción no trae el motivo. Está en el log del core
   (`docker compose logs core | grep "guardrail de salida"`): el tipo de violación (`number`, `address`,
   `reference`…), y el valor solo con `TRACE_CONTENT=1`.

@@ -2,7 +2,7 @@
 
 Esta guía asume que nunca trabajaste con Git/GitHub en equipo. Cubre el flujo completo de este
 repo, paso a paso, desde clonar hasta que tu código quede en `main`. Las *reglas* (qué no hacer)
-están en [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — esto es el *cómo*, con comandos concretos.
+están en [`../CONTRIBUTING.md`](../../CONTRIBUTING.md) — esto es el *cómo*, con comandos concretos.
 
 ## 0. Conceptos en una frase
 
@@ -47,10 +47,10 @@ están en [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — esto es el *cómo*, con
 2. Entrar a la vista **Table**, agrupada por **Track** — buscar el track correspondiente
    (Core / Borde / Datos).
 3. Elegir una historia con Status = **Todo**, respetando el orden de
-   [`docs/STORIES/ROADMAP.md`](STORIES/ROADMAP.md) (no elegir una que dependa de otra que
+   [`docs/internal/STORIES/ROADMAP.md`](STORIES/ROADMAP.md) (no elegir una que dependa de otra que
    todavía no está hecha — la columna "Depende de" del Issue indica si hay que esperar).
 4. **Antes de tocar código**, leer el archivo completo de esa historia en
-   `docs/STORIES/<ID>.md` (ej. `docs/STORIES/A-04.md`) — ahí está la Historia de Usuario, los
+   `docs/internal/STORIES/<ID>.md` (ej. `docs/internal/STORIES/A-04.md`) — ahí está la Historia de Usuario, los
    Criterios de Aceptación, y la Definition of Done específica. El Issue de GitHub es solo un
    resumen/tracking, el `.md` es la fuente real.
 
@@ -180,16 +180,16 @@ es casi siempre más rápido preguntar que buscar en Google el mensaje de error 
 
 ## 7. Reportar un bug, gap o deuda técnica (no una historia planificada)
 
-Todo lo de arriba asume una historia que ya existe en `docs/STORIES/`. Pero durante el desarrollo
+Todo lo de arriba asume una historia que ya existe en `docs/internal/STORIES/`. Pero durante el desarrollo
 va a aparecer trabajo que **no** estaba planificado: un bug, algo que se asumía cubierto y no lo
 está, una limitación de infraestructura descubierta, o deuda técnica. Para eso no se crea un
-archivo en `docs/STORIES/` — se abre un Issue directamente:
+archivo en `docs/internal/STORIES/` — se abre un Issue directamente:
 
 1. En GitHub, botón **"New issue"** (o `gh issue create` desde la terminal). El repo tiene
    `blank_issues_enabled: false`, así que siempre se va a pedir elegir entre dos plantillas — no
    se puede crear un Issue en blanco:
    - **"Historia de usuario"** — para una historia nueva que sí se va a formalizar en
-     `docs/STORIES/` (caso poco común para alguien nuevo en el equipo).
+     `docs/internal/STORIES/` (caso poco común para alguien nuevo en el equipo).
    - **"Gap, bug o deuda técnica"** — la que aplica en la mayoría de los casos: bug encontrado,
      algo que faltaba, deuda técnica, constraint de infra. El título queda con el prefijo
      `[gap]`, `[bug]`, `[tech-debt]`, `[DevOps]` o `[constraint]` según corresponda (la plantilla

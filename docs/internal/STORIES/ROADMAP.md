@@ -1,6 +1,6 @@
 # Roadmap — secuenciación con 3 personas en paralelo
 
-> **Plan de partida.** Los lotes, semanas y horas de esta página son la estimación inicial del equipo y no se actualizan con el avance: el estado real está en el [Project](https://github.com/orgs/softserve-leads-inmobiliaria/projects/1) y qué está construido, en [`design.md` §5](../DESIGN/design.md#5-estado-real-del-sistema). Reparto real: Persona 1 = `dbarretol` (track A), Persona 2 = `SantiagoMartinez22` (track B), Persona 3 = `miguelvelezsk` (track C).
+> **Plan de partida.** Los lotes, semanas y horas de esta página son la estimación inicial del equipo y no se actualizan con el avance: el estado real está en el [Project](https://github.com/orgs/softserve-leads-inmobiliaria/projects/1) y qué está construido, en [`design.md` §5](../../DESIGN/design.md#5-estado-real-del-sistema). Reparto real: Persona 1 = `dbarretol` (track A), Persona 2 = `SantiagoMartinez22` (track B), Persona 3 = `miguelvelezsk` (track C).
 
 Este documento responde dos preguntas que `README.md` (contenido y prioridad de cada historia) y GitHub Issues/Project (estado) no responden: **en qué orden conviene avanzar las historias** y **quién debería tomar cada una** para que 3 personas trabajando a la vez choquen lo menos posible — tanto por *conflictos de merge* (dos personas tocando el mismo archivo) como por *tiempo bloqueado* (esperando una dependencia).
 
@@ -46,7 +46,7 @@ Puntos de fricción conocidos que NO se resuelven con ownership por track (archi
 - `contracts/*.schema.json` (CT-1/2/3) — cada persona define el contrato que va a consumir (ver §4), pero el archivo `contracts/examples/` conviene revisarlo entre los tres antes de congelarlo.
 - `db/models.py`, `db/repo_root.py`, `db/logging_config.py` (CT-5, C-3) — un solo dueño (Persona 3) todo el proyecto; los otros dos consumen, no editan.
 - `docker-compose.yml`, `.github/workflows/ci.yml` (CT-5, CT-6) — cambios chicos y poco frecuentes; avisar en el canal del equipo antes de tocarlos, no por PR silencioso.
-- `docs/STORIES/README.md` — solo se edita al agregar una historia nueva (raro); nunca para marcar estado.
+- `docs/internal/STORIES/README.md` — solo se edita al agregar una historia nueva (raro); nunca para marcar estado.
 - `docs/DECISIONS/decisions.md` — apend-only por diseño (cada entrada es un bloque nuevo), bajo riesgo de conflicto real aunque lo toquen varias personas.
 
 ## 4. Orden recomendado (lotes que respetan dependencias)
@@ -126,7 +126,7 @@ Estos números son una estimación de partida, no un compromiso. Después de cer
 
 ## 8. Propuestas de octubre: E6 y lo que sale de `propuestas.md`
 
-Historias nuevas a partir de [`docs/DESIGN/propuestas.md`](../DESIGN/propuestas.md): N-1 a N-10 (E6), A-15 a A-18 y B-10 a B-14. Las P1 suman 29 puntos (~58 h) y las P2, 19 (~38 h). Con lo pendiente del backlog (B-8, OBS-6, C-5, #104 y #119, ~26 h) y unas 86 h netas hasta la semana 8 (`propuestas.md` §8), **caben las P1, sin margen; las P2 quedan fuera salvo que sobre tiempo**.
+Historias nuevas a partir de [`docs/archive/propuestas.md`](../../archive/propuestas.md): N-1 a N-10 (E6), A-15 a A-18 y B-10 a B-14. Las P1 suman 29 puntos (~58 h) y las P2, 19 (~38 h). Con lo pendiente del backlog (B-8, OBS-6, C-5, #104 y #119, ~26 h) y unas 86 h netas hasta la semana 8 (`propuestas.md` §8), **caben las P1, sin margen; las P2 quedan fuera salvo que sobre tiempo**.
 
 ### Lotes
 

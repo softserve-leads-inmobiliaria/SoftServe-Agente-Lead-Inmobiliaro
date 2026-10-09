@@ -46,7 +46,7 @@ Cada épica agrupa historias de una misma área funcional. El objetivo, alcance 
 
 ## E6 — Inteligencia comercial
 
-**Objetivo:** que la inmobiliaria sepa cuánto colocó en un periodo, qué propiedades no rotan, cuáles se cerraron después de conversar con el bot y qué demanda no está cubriendo. Pedido por el profesor; el análisis de qué faltaba está en [`docs/DESIGN/propuestas.md`](../DESIGN/propuestas.md).
+**Objetivo:** que la inmobiliaria sepa cuánto colocó en un periodo, qué propiedades no rotan, cuáles se cerraron después de conversar con el bot y qué demanda no está cubriendo. Pedido por el profesor; el análisis de qué faltaba está en [`docs/archive/propuestas.md`](../../archive/propuestas.md).
 
 **Decisión de organización:** todo el esquema nuevo entra en una sola historia (N-1) y una sola migración, para que `core`, el panel y el *seed* trabajen en paralelo sin chocar en Alembic. Las consultas (N-6, N-7) y las vistas (N-8) son historias separadas que se coordinan por las firmas que fijan las consultas en su primer PR.
 

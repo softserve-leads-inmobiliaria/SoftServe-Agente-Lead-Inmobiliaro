@@ -20,7 +20,7 @@ la ruta, la salida del clasificador y la latencia.
 ## Prueba de jurado (`harness/scripts/jury.py`, 7-oct)
 
 Son las transcripciones que se leyeron a mano. Los resultados de cada corrida están en
-[`2026-10-07-prueba-de-jurado.md`](../../presentations/2026-10-07-prueba-de-jurado.md).
+[`2026-10-07-prueba-de-jurado.md`](../../../archive/presentations/2026-10-07-prueba-de-jurado.md).
 
 | Set | Corridas |
 | :--- | :--- |

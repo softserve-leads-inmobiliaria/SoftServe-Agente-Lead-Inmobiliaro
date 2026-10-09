@@ -3,8 +3,8 @@
 Guion de la presentación del equipo, con un máximo de 12 minutos. Cada sección responde un punto de la
 consigna. Los números son de `main` al 5 de octubre (`17a4a59`). El estado vivo de cada historia está en el
 [Project](https://github.com/orgs/softserve-leads-inmobiliaria/projects/1). La foto anterior es el
-[estado del 1 de octubre](2026-10-01-estado-del-proyecto.md). Las diapositivas de este guion están en
-[`slides/`](slides/README.md).
+[estado del 1 de octubre](2026-10-01-estado-del-proyecto.md). Las diapositivas de este guion quedan en el historial
+de git; [`slides/`](../../../slides/README.md) tiene la versión vigente.
 
 | Min. | Sección |
 | ---: | :--- |
@@ -97,7 +97,7 @@ pie showData
 
 **Cómo se organiza:** cada historia es un issue con épica, *track* (core / borde / datos / cross),
 prioridad P0-P2 y puntos (1 punto ≈ 2 horas). El tablero del Project es la única fuente de estado; el
-archivo `docs/STORIES/<ID>.md` tiene el *qué* (historia, criterios, DoD), nunca el estado.
+archivo `docs/internal/STORIES/<ID>.md` tiene el *qué* (historia, criterios, DoD), nunca el estado.
 
 **Qué pasó desde el 1 de octubre:** 23 historias (60 puntos) y 12 *bugs* o *gaps* cerrados en 38 PRs. Se
 abrió y se completó entera la épica **E6 de inteligencia comercial**, que pidió el profesor, más las
@@ -111,7 +111,7 @@ propuestas de producto A-15 a A-18 y B-10 a B-15.
 
 ## 4. Una historia típica: B-11
 
-Elegimos [B-11](../STORIES/B-11.md) porque recorre todo el ciclo: nace de una propuesta de producto, toca
+Elegimos [B-11](../../internal/STORIES/B-11.md) porque recorre todo el ciclo: nace de una propuesta de producto, toca
 el canal sin romper contratos, deja una decisión de arquitectura y se verifica en vivo.
 
 > **Como lead, quiero botones para agendar una visita o hablar con un asesor, para no tener que
@@ -193,8 +193,8 @@ flowchart LR
   seguimientos, recordatorios y alertas guarda sus *jobs* en la misma base, así que un reinicio no los
   pierde.
 
-El detalle está en [`design.md`](../DESIGN/design.md) y en las **53 decisiones de arquitectura** de
-[`decisions.md`](../DECISIONS/decisions.md) (eran 38 el 1 de octubre).
+El detalle está en [`design.md`](../../DESIGN/design.md) y en las **53 decisiones de arquitectura** de
+[`decisions.md`](../../DECISIONS/decisions.md) (eran 38 el 1 de octubre).
 
 ## 6. Otros puntos clave
 

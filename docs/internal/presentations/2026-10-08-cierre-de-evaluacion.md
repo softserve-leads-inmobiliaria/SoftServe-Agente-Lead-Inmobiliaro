@@ -4,9 +4,9 @@ Registro final de todo lo que se midió del agente antes de la demo. Está pensa
 hacer más corridas contra Bedrock por un tiempo**: dice qué está medido, con qué código y con qué evidencia, qué
 quedó sin medir y cómo retomarlo.
 
-Continúa a [`2026-10-07-prueba-de-jurado.md`](2026-10-07-prueba-de-jurado.md) (sets J, N, M y O) y a
-[`2026-10-07-plan-confiabilidad.md`](2026-10-07-plan-confiabilidad.md) (pasos 0 a 5). El guion y los ensayos están en
-[`DEMO.md`](../DEMO.md). Issues: #247 (jurado), #51 (semana de endurecimiento, Z-1), #52 (demo, Z-2).
+Continúa a [`2026-10-07-prueba-de-jurado.md`](../../archive/presentations/2026-10-07-prueba-de-jurado.md) (sets J, N, M y O) y a
+[`2026-10-07-plan-confiabilidad.md`](../../archive/presentations/2026-10-07-plan-confiabilidad.md) (pasos 0 a 5). El guion y los ensayos están en
+[`DEMO.md`](../../DEMO.md). Issues: #247 (jurado), #51 (semana de endurecimiento, Z-1), #52 (demo, Z-2).
 
 ## 1. En una línea
 
@@ -323,7 +323,7 @@ creyendo que la fase 1 también se había cortado. Quedaron dos corridas **en pa
 ## 8. Dónde está la evidencia
 
 `tmp/` no se versiona y `down.sh` borra Phoenix. Por eso lo que sostiene este documento quedó copiado en
-[`docs/evidencia/2026-10-08/`](../evidencia/2026-10-08/README.md), con un índice de cada archivo:
+[`docs/internal/evidencia/2026-10-08/`](../evidencia/2026-10-08/README.md), con un índice de cada archivo:
 
 | Archivo | Qué es |
 | :--- | :--- |
