@@ -28,6 +28,7 @@ segundo árbol de documentación.
 | [`presentations/2026-10-07-plan-confiabilidad.md`](presentations/2026-10-07-plan-confiabilidad.md) | Plan de trabajo hasta la demo: principios (medir primero, un dueño por clase de error, el código decide), diagnóstico de O6, O9 y O2, pasos 0 a 5 y qué queda fuera |
 | [`presentations/2026-10-08-cierre-de-evaluacion.md`](presentations/2026-10-08-cierre-de-evaluacion.md) | Cierre de la evaluación antes de la demo: qué código se midió, demo × 5 contra la línea base, set reservado P, regresión de J a O, gold set, costo y facturación de AWS, límites conocidos, la fase 2 pendiente y dónde está la evidencia (`docs/evidencia/2026-10-08/`) |
 | [`presentations/2026-10-09-estado-del-proyecto.md`](presentations/2026-10-09-estado-del-proyecto.md) | Estado al 9 de octubre: backlog cerrado (0 historias abiertas), prueba de jurado y set reservado P, evaluación de cierre contra la línea base, landing pública, demo, qué queda y riesgos (créditos de AWS) |
+| [`presentations/2026-10-09-arquitectura-por-piezas.md`](presentations/2026-10-09-arquitectura-por-piezas.md) | Un diagrama por pieza del sistema para responder preguntas de arquitectura: canal, turno, guardrails de entrada y salida, clasificador, agente, marcadores, FSM, score, agenda, traspaso, catálogo MCP, *scheduler*, panel, datos, cuota del LLM, observabilidad y pruebas |
 
 El estado de cada historia (To Do / In Progress / Done) vive solo en GitHub Issues y en el
 [Project](https://github.com/orgs/softserve-leads-inmobiliaria/projects/1), nunca en estos

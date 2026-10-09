@@ -126,6 +126,9 @@ arreglar, así que solo miden regresión.
 
 ## 5. Arquitectura
 
+Cada pieza tiene su propio diagrama en [arquitectura por piezas](2026-10-09-arquitectura-por-piezas.md), para
+contestar preguntas sin improvisar.
+
 ```mermaid
 flowchart LR
     subgraph Usuarios
@@ -175,7 +178,7 @@ flowchart LR
 **Lo que cambió esta semana:** el clasificador (Haiku, una llamada que ya existía) devuelve ahora 11 campos
 en JSON: además de las señales del score, de qué propiedad se habla, si quiere visita y cuándo, si pide algo
 que el catálogo no tiene, si una categoría protegida importa y si hace falta consultar el catálogo. Un gold
-set de 80 mensajes lo mide contra Bedrock real (100% en intención, propiedad, visita, alerta y pedir una
+set de mensajes reales (93 hoy; las cifras son de cuando tenía 80) lo mide contra Bedrock real (100% en intención, propiedad, visita, alerta y pedir una
 persona; 95% en lo que el catálogo no tiene y 85% en cuándo quiere la visita).
 
 **La restricción que manda: 10 llamadas por minuto** por modelo, sin más cuota (DT-19). Un turno usa unas
@@ -220,7 +223,7 @@ por conversación. El 96% de los tokens son de entrada (prompt e historial); la 
 | :--- | :--- |
 | Tests automatizados | Más de 1 300, en las suites que corren en cada PR |
 | Gold sets como *gate* de merge | Fair housing (diferencia 0 en perfiles pareados), factualidad (75 casos), dirección reservada, idioma y marcadores |
-| Gold set del clasificador | 80 mensajes contra Bedrock real (`classifier_gold.py`, fuera de CI): sale con error si un campo baja |
+| Gold set del clasificador | 93 mensajes contra Bedrock real (`classifier_gold.py`, fuera de CI): sale con error si un campo baja |
 | *Contract tests* | Todos los contratos entre servicios |
 | Decisiones registradas | 71 (DT-1 a DT-71) |
 | Evidencia versionada | [`docs/evidencia/2026-10-08/`](../evidencia/2026-10-08/README.md): informes, cada turno y sus tokens |
