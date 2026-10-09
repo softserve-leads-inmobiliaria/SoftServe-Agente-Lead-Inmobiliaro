@@ -175,7 +175,8 @@ flowchart LR
 **Lo que cambió esta semana:** el clasificador (Haiku, una llamada que ya existía) devuelve ahora 11 campos
 en JSON: además de las señales del score, de qué propiedad se habla, si quiere visita y cuándo, si pide algo
 que el catálogo no tiene, si una categoría protegida importa y si hace falta consultar el catálogo. Un gold
-set de 80 mensajes lo mide (100% en intención, propiedad, visita, alerta y pedir una persona).
+set de 80 mensajes lo mide contra Bedrock real (100% en intención, propiedad, visita, alerta y pedir una
+persona; 95% en lo que el catálogo no tiene y 85% en cuándo quiere la visita).
 
 **La restricción que manda: 10 llamadas por minuto** por modelo, sin más cuota (DT-19). Un turno usa unas
 2,4 llamadas: el sistema entero aguanta **unos 4 turnos por minuto**. Por eso ningún arreglo de la semana
@@ -218,7 +219,8 @@ por conversación. El 96% de los tokens son de entrada (prompt e historial); la 
 | Qué | Cuánto |
 | :--- | :--- |
 | Tests automatizados | Más de 1 300, en las suites que corren en cada PR |
-| Gold sets como *gate* de merge | Fair housing (diferencia 0 en perfiles pareados), factualidad (75 casos), dirección reservada, idioma, marcadores y clasificador (80 mensajes) |
+| Gold sets como *gate* de merge | Fair housing (diferencia 0 en perfiles pareados), factualidad (75 casos), dirección reservada, idioma y marcadores |
+| Gold set del clasificador | 80 mensajes contra Bedrock real (`classifier_gold.py`, fuera de CI): sale con error si un campo baja |
 | *Contract tests* | Todos los contratos entre servicios |
 | Decisiones registradas | 71 (DT-1 a DT-71) |
 | Evidencia versionada | [`docs/evidencia/2026-10-08/`](../evidencia/2026-10-08/README.md): informes, cada turno y sus tokens |
@@ -230,7 +232,7 @@ por conversación. El 96% de los tokens son de entrada (prompt e historial); la 
 | **Los créditos de AWS figuran vencidos** (8-oct, noche) | La demo en vivo usa Bedrock: unos US$0,20 por pasada del guion | Confirmar el saldo en Billing → Credits antes de presentar; si no hay, plan B sin Bedrock (§7) |
 | **La cuota de 10 RPM** | Si escriben varios a la vez aparece el texto de respaldo | Una persona escribe a la vez; nada más corriendo contra Bedrock |
 | **Una demo libre puede mostrar una falla de calidad** | Una respuesta prudente de más o una frase rara | Los límites conocidos están en [`DEMO.md`](../DEMO.md) §4 y en el [cierre](2026-10-08-cierre-de-evaluacion.md) §6 |
-| CI no bloquea el merge (repo privado, plan gratuito) | Un PR en rojo se puede fusionar | Acuerdo de equipo: nunca fusionar en rojo. El 8-oct `bbbaa4f` quedó en rojo y se arregló en `06668ae` |
+| CI no bloquea el merge (repo privado, plan gratuito) | Un PR en rojo se puede fusionar | Acuerdo de equipo: nunca fusionar en rojo. El 8-oct `main` quedó en rojo tras #257 (evidencia sin enlazar desde el README) y #258 lo arregló minutos después |
 
 ## 7. Funcionalidad funcionando (demo)
 
