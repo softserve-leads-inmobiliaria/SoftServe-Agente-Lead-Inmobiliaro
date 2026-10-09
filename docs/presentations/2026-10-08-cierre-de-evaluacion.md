@@ -323,7 +323,7 @@ creyendo que la fase 1 también se había cortado. Quedaron dos corridas **en pa
 ## 8. Dónde está la evidencia
 
 `tmp/` no se versiona y `down.sh` borra Phoenix. Por eso lo que sostiene este documento quedó copiado en
-[`docs/evidencia/2026-10-08/`](../evidencia/2026-10-08/):
+[`docs/evidencia/2026-10-08/`](../evidencia/2026-10-08/README.md), con un índice de cada archivo:
 
 | Archivo | Qué es |
 | :--- | :--- |
