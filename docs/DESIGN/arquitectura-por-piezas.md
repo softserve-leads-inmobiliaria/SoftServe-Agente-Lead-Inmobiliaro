@@ -543,10 +543,18 @@ flowchart LR
 - **Phoenix autoalojado con OpenTelemetry** (DT-9), con la instrumentación de OpenInference para Bedrock y
   MCP.
 - **Trazas por turno sin el texto de los leads** (DT-18): ruta, intención, flags, tools y violaciones por
-  tipo, nunca el valor.
+  tipo, nunca el valor. En la UI de Phoenix, la entrada y la salida de las llamadas a Bedrock salen como
+  `__REDACTED__`: es a propósito, no una falla. **El texto vive en Postgres** (`messages`, ya filtrado, y la
+  decisión de cada turno en `audit_log`), y se lee en la ficha del panel o con `scripts/demo/exportar.py`.
+  `TRACE_CONTENT=1` lo muestra también en Phoenix, solo para depurar con datos de prueba.
 - **Los tokens de cada corrida** salen de Phoenix con `harness/scripts/tokens.py`.
 - **Logs JSON** en los tres servicios (DT-27). Ningún log imprime texto del lead.
 - **Plan B:** Jaeger recibe las mismas trazas cambiando solo el *endpoint* OTLP (OBS-8, DT-31).
+
+**Si preguntan:** *¿por qué las trazas están "vacías"?* No lo están: tienen tiempos, tokens, tools y
+decisiones. Lo que falta es el texto de la conversación, que es un dato personal. Separarlo es la decisión:
+Postgres es la fuente de verdad del contenido, con su control de acceso, y Phoenix se queda solo con
+métricas.
 
 ## 19. Cómo se prueba
 
