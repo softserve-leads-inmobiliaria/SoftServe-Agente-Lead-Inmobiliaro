@@ -89,7 +89,8 @@ Y lo que todavía no hace bien (medido, no por diseño):
   deja la transcripción en `tmp/demo/transcripciones/`. Se muestra la transcripción y después el panel.
 - **Sin Bedrock:** `docker compose run --rm --build harness` corre los guiones E2E con el agente *fake*, y después
   se muestran el panel, el funnel y Phoenix.
-- **Como evidencia:** los informes de `tmp/eval/` (cierre de J/N/M/O, el set P y la corrida `--reps 5`).
+- **Como evidencia:** los informes versionados en [`docs/evidencia/2026-10-08/`](evidencia/2026-10-08/README.md)
+  (cierre de J/N/M/O, el set P y la corrida `--reps 5`, con sus tokens).
 
 ## 6. Cosas que se ven raras y no son fallas
 
@@ -116,7 +117,7 @@ Cómo correr un ensayo medido sin perder nada:
 
 | Fecha | Cómo | Turnos OK | Degradadas | Estado y banda | Notas |
 | :--- | :--- | ---: | ---: | :--- | :--- |
-| 8-oct, 18:48 | `evaluate.py --reps 5` (`tmp/eval/2026-10-08_184806_evaluacion.md`) | 55/55 (100%) | 0 | 5/5 `HANDOFF`, 5/5 HOT | 7% regeneradas; latencia p50 6,0 s, p95 12,2 s. Una vez dijo "The system can arrange that for you" |
+| 8-oct, 18:48 | `evaluate.py --reps 5` ([informe](evidencia/2026-10-08/2026-10-08_184806_evaluacion.md)) | 55/55 (100%) | 0 | 5/5 `HANDOFF`, 5/5 HOT | 7% regeneradas; latencia p50 6,0 s, p95 12,2 s. Una vez dijo "The system can arrange that for you" |
 
 **La misma corrida, los 12 escenarios de la demo** (60 conversaciones, 285 turnos, 122 min), contra la línea base
 del 6-oct de `docs/TESTING.md`:

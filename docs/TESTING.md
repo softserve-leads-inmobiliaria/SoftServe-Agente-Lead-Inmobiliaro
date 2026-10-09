@@ -187,7 +187,8 @@ también el techo real, y el límite **lo comparten todas las conversaciones a l
   una persona y mantienen la cola por debajo de los 15 s. No tienen relación con el backoff. Una corrida
   completa de la evaluación (`--reps 5`) con los 8 escenarios originales no bajaba de unos 48 minutos con
   esta cuota: son unas 475 llamadas a 10 por minuto. Con la pausa fija tardaba unos 80. Con los 10
-  escenarios de #233 son unos 215 turnos: unos 95 minutos.
+  escenarios de #233 son unos 215 turnos: unos 95 minutos. Con los 12 de hoy (#229, #52), 285 turnos: unos
+  120 minutos.
 
 El historial de cada conversación se guarda en `messages` (solo el texto ya filtrado, sin PII ni
 categorías protegidas):
@@ -241,7 +242,8 @@ bash scripts/demo/down.sh     # exporta las conversaciones a txt y apaga borrand
   del `.env` (deep-link hasta el asesor, búsqueda y recomendación, guardrails, deep-link hasta HOT
   verificando los requisitos, lead que escribe en español, y requisitos y fair housing: se enumeran los
   requisitos antes de verificarlos y "does that matter?" se contesta, búsqueda vacía con alternativas y
-  cobertura de zonas), con 20 segundos entre turnos para no pasar el cupo de 10 llamadas por minuto:
+  cobertura de zonas, la visita desde la búsqueda y desde el anuncio, la alerta de propiedades y el guion de la
+  demo de `docs/DEMO.md`), con 20 segundos entre turnos para no pasar el cupo de 10 llamadas por minuto:
   un turno con herramientas hace 3 o 4. Los avisos al asesor no salen por esta vía: solo por Telegram.
   Los escenarios están en `harness/scripts/scenarios.py`, los mismos que mide la evaluación en vivo (ver
   "Evaluación en vivo repetible").
@@ -321,7 +323,8 @@ lo que quedó en Postgres:
 
 ```
 bash scripts/demo/up.sh                                   # con LLM_PROVIDER=bedrock
-python harness/scripts/evaluate.py --reps 5               # la corrida de referencia, ~95 min
+python harness/scripts/evaluate.py --reps 5               # la corrida de referencia, ~120 min
+python harness/scripts/tokens.py tmp/eval/<fecha>_evaluacion.json   # tokens y llamadas, antes de apagar
 python harness/scripts/evaluate.py --reps 3 07_busqueda_vacia_y_alternativas 08_cobertura_de_zonas
 ```
 
@@ -340,7 +343,9 @@ python harness/scripts/evaluate.py --reps 3 07_busqueda_vacia_y_alternativas 08_
   declara además el estado final o la banda que espera.
 - **Lo que cubren** (#233, además de los 8 originales): `09_busqueda_hasta_visita` pide la visita y reserva
   un horario de la agenda (B-8), y termina en `HANDOFF`; `10_alerta_de_propiedades` busca algo que no hay,
-  pide la alerta (A-18) y la recibe. La visita desde el deep-link, sin búsqueda, espera a #229.
+  pide la alerta (A-18) y la recibe. `11_deep_link_hasta_visita` pide la visita desde el anuncio, sin buscar
+  (#229, DT-61), y `12_guion_demo` es el guion de la demo turno por turno (`docs/DEMO.md`, #52): si se cambia
+  una frase del guion, se cambia en los dos lados.
 - **Métricas**, por escenario y en total:
   - turnos OK;
   - turnos con la tool esperada;
@@ -362,7 +367,15 @@ python harness/scripts/evaluate.py --reps 3 07_busqueda_vacia_y_alternativas 08_
 
   El script sale con 1 si alguno no se cumple.
 - **Informe:** queda en `tmp/eval/<fecha>_evaluacion.md`, con cada turno que falló y su respuesta, y un
-  `.json` con todas las observaciones para comparar corridas.
+  `.json` con todas las observaciones para comparar corridas: por turno, el texto, la respuesta, las tools, las
+  auditorías, la decisión (`turn.decision`: clasificador, ruta, propiedad), la latencia y el error.
+  - Se reescribe después de cada conversación. Si la corrida se corta (Ctrl+C, el equipo se suspende, se cae el
+    core), queda lo medido hasta ahí, marcado "Incompleta" (`complete: false` en el `.json`).
+  - Los tokens y las llamadas al LLM solo están en Phoenix, y `scripts/demo/down.sh` borra su volumen.
+    `harness/scripts/tokens.py <informe>.json` los cruza con las conversaciones del informe y deja
+    `<informe>_tokens.md` y `.json` al lado. Hay que correrlo antes de apagar el stack.
+  - Una sola corrida a la vez: dos en paralelo comparten el cupo de 10 RPM y la agenda del mismo asesor, y una
+    reserva la hora que la otra acaba de ofrecer ("That time was just taken", visto el 8-oct).
 - **CI:** no corre la evaluación, porque necesita Bedrock. Sí corre `tests/harness/test_evaluation.py`, que
   prueba las expectativas y las métricas, y que los escenarios sigan alineados con los contratos de las
   tools, el inventario y los textos fijos del core.
@@ -479,13 +492,15 @@ arreglo rompió otra. Para eso hay dos mediciones repetibles:
 
   ```
   python harness/scripts/evaluate.py O                # un set
-  python harness/scripts/evaluate.py J N M O          # los cuatro, ~1 h a 10 RPM
+  python harness/scripts/evaluate.py J N M O          # los cuatro de desarrollo, ~75 min a 10 RPM
+  python harness/scripts/evaluate.py P                # el reservado (paso 3 del plan), ~16 min
   ```
 
   Sin nombres, `evaluate.py` sigue corriendo solo los escenarios de la demo.
-- **El gold set del clasificador.** `harness/gold/classifier.jsonl` tiene unos 75 mensajes, de J, N, M, O y
+- **El gold set del clasificador.** `harness/gold/classifier.jsonl` tiene 93 mensajes, de J, N, M, O y
   sintéticos, cada uno con su contexto (las propiedades mostradas y la última respuesta del asistente) y los
-  campos esperados: intención, las cinco flags, `refers_to` y `visit_when`. `harness/scripts/classifier_gold.py`
+  campos esperados: intención, las siete flags de `CLASSIFIER_FLAGS`, `refers_to` y `visit_when`.
+  `needs_lookup` y `asks_if_it_matters` se miden solo en los mensajes que los traen (`LABELED_ONLY`). `harness/scripts/classifier_gold.py`
   llama al clasificador real con cada uno (~8 min) y da la exactitud por campo. **Un cambio al prompt del
   clasificador se acepta solo si ningún campo baja** de `harness/gold/classifier_baseline.json`. La línea base
   se actualiza con `--guardar`, en el mismo PR que la justifica. No corre en CI: necesita Bedrock.
@@ -593,10 +608,10 @@ búsqueda aparecen `catalog.get_availability` además de `catalog.search_propert
 (C-7) hace lo mismo sobre la **salida real** del catálogo de demo: sus fixtures las produce
 `services/core/tests/demo_catalogo.py`, que corre `CatalogService` de verdad contra la base migrada que ya
 monta el `conftest.py` de `core`, sembrada con `scripts/seed_catalog.seed()` — el mismo del compose, así que
-el inventario no está duplicado en ningún lado. **103 casos** (64 que pasan, 39 que bloquean) sobre **28
+el inventario no está duplicado en ningún lado. **123 casos** (79 que pasan, 44 que bloquean) sobre **28
 turnos**, que cubren las 12 propiedades del inventario y las 6 tools. No llama a ningún LLM.
 
-Es el complemento de A-5, no su reemplazo: los 32 casos de A-5 no se tocan (prueban un criterio que sigue
+Es el complemento de A-5, no su reemplazo: los 35 casos de A-5 no se tocan (prueban un criterio que sigue
 vivo, DT-23, y la política del repo es no borrar casos antiguos). Lo que C-7 agrega es que las fixtures
 **dejan de estar escritas a mano** y, con ellas, el gate que faltaba.
 
@@ -611,7 +626,7 @@ vivo, DT-23, y la política del repo es no borrar casos antiguos). Lo que C-7 ag
   `availability_checked_at` y `unavailable` (con solo `id`, `title` y `status`), `get_property` más
   `availability_checked_at`, y las otras tres tools pasan intactas. Además comprueba que el estado y el
   timestamp que,A-4 estampa son los de `get_availability` y no los del listado.
-- `test_gold_set_is_100_percent_green`: el gate de los 103 casos.
+- `test_gold_set_is_100_percent_green`: el gate de los 123 casos.
 
 **El catálogo corre en un subproceso.** `core` y `catalog` comparten el nombre de paquete `app` (los dos
 `conftest.py` lo ponen en `sys.path`, y CI corre cada carpeta en un proceso distinto por eso), así que el
@@ -650,7 +665,7 @@ búsqueda devuelve varias propiedades.
 ### Fair housing en el scoring (C-6)
 
 `services/core/tests/test_fair_housing_gold_set.py` prueba que el score no depende de una categoría
-protegida. Son **27 pares de leads** idénticos salvo la mención, y corre el pipeline completo de un
+protegida. Son **54 pares de leads** (27 en español y 27 en inglés, #202) idénticos salvo la mención, y corre el pipeline completo de un
 turno — `inspect_input().signal_text` → el extractor de señales → `score_turn()`— porque el sesgo
 puede entrar por cualquiera de las tres capas y probar solo la suma no encuentra nada. No llama a
 ningún LLM: el extractor es el determinista de `fakes/fake_llm.py`, así que corre en milisegundos y
@@ -661,7 +676,7 @@ banda, no solo el total, para que dos fugas que se compensen no se cuelen por el
 importa porque ordena la cola del panel (`B-6`) y porque por debajo de `COLD` 41 el lead deja de
 calificar y no llega a un asesor (`B-7`).
 
-**Los 27 pares están en verde, sin `xfail`.** Cuando C-6 se escribió, los 6 de "con quién compras"
+**Los 54 pares están en verde, sin `xfail`.** Cuando C-6 se escribió, los 6 de "con quién compras"
 daban −8 (`pareja`), −12 (`familia`) y −20 (`con mis hijos`, que el guardrail borraba y dejaba el lead en
 `no_declarado`). Los arregló `A-11` (DT-38), y #119 (DT-40) colapsó el enum para que el contrato no
 guarde con quién se decide:

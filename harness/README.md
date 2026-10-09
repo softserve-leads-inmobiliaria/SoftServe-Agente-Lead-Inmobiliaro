@@ -62,15 +62,20 @@ Los guiones de `fixtures/` fijan las frases del agente *fake*. La evaluación us
 cualquier modelo: qué tool consulta cada turno, qué texto aparece o no puede aparecer, qué auditoría deja y
 en qué estado termina. Los corre N veces y calcula, con lo que quedó en Postgres, las tasas de turnos OK,
 de tool esperada, de regeneraciones, de respuestas degradadas y de respaldo, y la latencia
-(`scripts/evaluation.py`, con sus umbrales). Detalle en `docs/TESTING.md`, "Evaluación en vivo repetible".
+(`scripts/evaluation.py`, con sus umbrales). El informe se reescribe después de cada conversación, y
+`scripts/tokens.py <informe>.json` agrega los tokens y las llamadas al LLM, leídos de Phoenix. Detalle en
+`docs/TESTING.md`, "Evaluación en vivo repetible".
 
 ## Prueba de jurado (#247)
 
     python harness/scripts/jury.py M                 # con LLM_PROVIDER=bedrock
 
-Son conversaciones no pautadas, como las de un jurado (sets J, N, M y O en `scripts/jury.py`), sin expectativas ni
-umbrales. Dejan la transcripción con las auditorías de cada turno, para leerla a mano. Detalle en
-`docs/TESTING.md`, "Prueba de jurado".
+Son conversaciones no pautadas, como las de un jurado: los sets de desarrollo J, N, M y O y el reservado P,
+en `scripts/jury_scenarios.py`. `jury.py` deja la transcripción con las auditorías y la decisión de cada turno,
+para leerla a mano. Los mismos sets llevan expectativas por turno, así que `evaluate.py J N M O` (o `P`) los
+mide con las reglas de la evaluación en vivo. El clasificador tiene su propio gold set: `gold/classifier.jsonl`,
+que mide `scripts/classifier_gold.py` contra `gold/classifier_baseline.json`. Detalle en `docs/TESTING.md`,
+"Prueba de jurado" y "Medir sin leer a mano".
 
 ## Agregar un guion nuevo
 

@@ -53,17 +53,20 @@ SoftServe-Agente-Lead-Inmobiliaro/
 │   │   ├── app/
 │   │   ├── tests/
 │   │   └── Dockerfile
-│   └── panel/                   # Panel de asesores (FastAPI + Jinja2)
+│   └── panel/                   # Panel de asesores (FastAPI + Jinja2) y la landing pública /properties (B-16)
 │       ├── app/
 │       ├── tests/
 │       └── Dockerfile
 ├── harness/                     # Arnés de conversaciones E2E contra el stack en Docker
 │   ├── fixtures/*.jsonl         # Un guion por archivo
-│   ├── scripts/                 # replay.py, run_all.py
+│   ├── gold/                    # Gold set del clasificador y su línea base (#247)
+│   ├── scripts/                 # replay.py y run_all.py (E2E); evaluate.py, scenarios.py, jury*.py,
+│   │                            # classifier_gold.py y tokens.py (evaluación en vivo con Bedrock)
 │   └── README.md                # Formato de los guiones
 ├── scripts/
 │   ├── seed_advisors.py         # Asesores de demo (servicio seed)
 │   ├── seed_catalog.py          # Inventario de demo: propiedades y promociones (C-9)
+│   ├── seed_history.py          # Seis meses de historia sintética para la vista de negocio (N-9)
 │   ├── demo/                    # Levantar y apagar la demo en vivo, ensayo automático, export de transcripciones
 │   └── github/                  # Labels, Issues desde las historias, Project, protección de main
 ├── tests/
@@ -75,6 +78,7 @@ SoftServe-Agente-Lead-Inmobiliaro/
     ├── ONBOARDING.md            # Tutorial de Git/GitHub para el equipo
     ├── ESTRUCTURA-DEL-PROYECTO.md
     ├── TESTING.md               # Levantar el stack, probar a mano, correr cada suite
+    ├── DEMO.md                  # Guion de la demo en vivo, límites por diseño y ensayos medidos (Z-2)
     ├── DECISIONS/decisions.md   # Bitácora de decisiones de arquitectura (DT-*)
     ├── DESIGN/
     │   ├── design.md            # Referencia compartida y estado real del sistema (§5)
@@ -82,7 +86,8 @@ SoftServe-Agente-Lead-Inmobiliaro/
     │   ├── panel-ui.md          # Boceto de UI/UX del panel de asesores (#178)
     │   └── propuestas.md        # Funcionalidades propuestas, todavía sin historias
     ├── STORIES/                 # Épicas, roadmap e historias de usuario, un archivo por historia
-    └── presentations/           # Presentaciones de avance, una por fecha
+    ├── presentations/           # Presentaciones de avance, una por fecha
+    └── evidencia/               # Informes de las corridas en vivo, una carpeta por fecha
 ```
 
 ## 2. `db/` — paquete compartido
