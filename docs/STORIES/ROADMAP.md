@@ -143,6 +143,11 @@ Igual que en §4: cada lote solo depende de los anteriores, y dentro de un lote 
 
 Después del lote 9 siguen `OBS-6` (una corrida real antes de la semana 8) y la semana 8 de §6. `Z-1` no admite alcance nuevo: lo que no esté en `main` antes de `Z-1` queda fuera.
 
+**El campo Lote del Project** sigue estas tablas, más dos reglas para lo que no se planeó en un lote:
+
+- **Z-cierre:** las historias `Z-*` y todo lo fusionado del 5-oct en adelante, después del lote 9: los `[gap]`, `[bug]` y `[tech-debt]` de la semana de *hardening*, el pase a inglés, la factualidad y la prueba de jurado (#247).
+- **Backlog:** "fuera de lote". Son las P2 de la tabla de arriba y las tareas futuras, y además lo que se hizo antes del 5-oct sin lote propio: el resto de P0 y P1 de §5 y los `[gap]` y `[bug]` de esas semanas. Que un issue cerrado diga Backlog no significa que quedó pendiente: el estado lo dice el campo Status.
+
 ### Por persona
 
 Mismo reparto por carpetas que §3, para que nadie edite el archivo de otro:
