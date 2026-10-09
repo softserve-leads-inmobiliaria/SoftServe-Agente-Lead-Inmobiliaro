@@ -66,7 +66,7 @@ A <b>Telegram</b> agent that answers prospects at any hour, <b>qualifies</b> the
 listings, <b>books the visit</b> and hands them to an advisor ready to close.
 </div>
 
-```mermaid {scale: 0.6}
+```mermaid {scale: 0.64}
 flowchart LR
     LAND([Public landing<br/>or listing ad]) -->|deep-link| AG[Agent on<br/>Telegram]
     AG -->|searches| CAT[(Real catalog)]
@@ -178,16 +178,13 @@ Show the board live if there is time (10 s). New this week: B-16, the public lan
 
 # ③ A typical story: #247, the jury test
 
-<div class="grid grid-cols-[3fr_2fr] gap-8">
-<div>
-
-<div class="text-lg border-l-4 border-teal-600 pl-4 mb-3">
+<div class="text-lg border-l-4 border-teal-600 pl-4 mb-2">
 <b>Goal:</b> a jury can chat freely with the agent <b>without seeing a mistake</b>.
 </div>
+<div class="text-xs opacity-75 mb-5">[gap] · P1 · core track · closing epic</div>
 
-<div class="text-xs opacity-75 mb-2">[gap] · P1 · core track · closing epic</div>
-
-<div class="text-sm">
+<div class="grid grid-cols-2 gap-8 text-sm">
+<div>
 
 **Exit criteria, fixed before any fix**
 
@@ -195,21 +192,25 @@ Show the board live if there is time (10 s). New this week: B-16, the public lan
 - At most one degraded answer every ten turns.
 - The held-out set runs **once**, with no tuning before or after.
 
-**Lesson:** each text-level fix failed on the next phrasing. What moved into structure (a classifier
-field, a marker) stopped failing on new phrasings too.
-
-</div>
 </div>
 <div>
 
-```mermaid {scale: 0.5}
-flowchart TB
-    J["Oct 7 · first jury set<br/>19% degraded answers"] --> NMO["New sets N, M, O<br/>~3 serious / 35 turns"]
-    NMO --> CL["The classifier decides<br/>DT-62 to DT-69"]
-    CL --> P["Oct 8 · held-out set P<br/>0 serious · 0 degraded"]
-```
+**Lesson**
+
+Each text-level fix failed on the next phrasing. What moved into **structure** (a classifier field, a
+marker written by the code) stopped failing on new phrasings too.
 
 </div>
+</div>
+
+<div class="flow mt-8">
+<div class="flow-step"><b>Oct 7 · first jury set</b><span>19% degraded answers</span></div>
+<div class="flow-arrow">→</div>
+<div class="flow-step"><b>New sets N, M, O</b><span>~3 serious errors every 35 turns</span></div>
+<div class="flow-arrow">→</div>
+<div class="flow-step"><b>The classifier decides</b><span>DT-62 to DT-69, no new LLM calls</span></div>
+<div class="flow-arrow">→</div>
+<div class="flow-step flow-hl"><b>Oct 8 · held-out set P</b><span>0 serious · 0 degraded</span></div>
 </div>
 
 <!--
@@ -220,33 +221,40 @@ We picked #247 because it was the whole closing week and it shows how you measur
 
 # ④ Architecture
 
-```mermaid {scale: 0.6}
+```mermaid {scale: 0.55}
 flowchart LR
-    LEAD([Lead]) <-->|Telegram: text,<br/>photo, buttons| CORE
-    LEAD -->|browser| PANEL
-    ASESOR([Advisor]) -->|browser| PANEL
+    LEAD([Lead]) <-->|"Telegram: text,<br/>photo, buttons"| CORE
+    ADV([Advisor]) -->|browser| PANEL
 
     subgraph Stack["docker compose · fully local"]
         CORE["core<br/>FSM · guardrails · score<br/>agent · scheduler"]
         CAT["catalog<br/>MCP server + calendar"]
-        PANEL["panel<br/>queue · lead profile · alerts<br/>funnel · business · landing"]
-        PG[("Postgres<br/>+ pgvector")]
+        PANEL["panel<br/>queue · profile · business<br/>public landing"]
+        PG[("Postgres")]
         PHX["Phoenix<br/>traces"]
+        CORE -->|MCP| CAT
+        CORE --> PG
+        CAT --> PG
+        PANEL --> PG
+        CORE -.->|OTLP| PHX
     end
 
-    BR["Amazon Bedrock<br/>Sonnet 4.5: conversation<br/>Haiku 4.5: classifier"]
-
-    CORE -->|MCP| CAT
-    CORE <--> BR
-    CORE --> PG
-    CAT --> PG
-    PANEL --> PG
-    CORE -.->|OTLP| PHX
+    CORE <-->|"Converse API"| BR["Amazon Bedrock<br/>Sonnet 4.5: conversation<br/>Haiku 4.5: classifier"]
 ```
 
-<div class="text-sm mt-2 opacity-80">
-The agent only sees what the catalog tools return (MCP). All state lives in Postgres. Telegram via
-<i>long polling</i>: no public URL. <b>Hard limit: 10 LLM calls per minute</b>, about 4 turns per minute in total.
+<div class="grid grid-cols-2 gap-x-8 text-xs mt-2">
+<div>
+
+- **Only `core` talks to the lead and the LLM.** The catalog knows nothing about conversations.
+- **The agent only sees what the catalog tools return** (MCP): that makes factuality checkable.
+
+</div>
+<div>
+
+- **All state lives in Postgres**, one transaction per turn. Telegram via long polling: no public URL.
+- **Hard limit: 10 LLM calls per minute**, about 4 turns per minute in total.
+
+</div>
 </div>
 
 <!--
@@ -288,6 +296,12 @@ and availability revalidated. One retry, then a safe answer that offers an advis
 </div>
 </div>
 
+<div class="grid grid-cols-3 gap-4 mt-8 text-center">
+<div class="kpi"><div class="kpi-n">≈ 2.4</div><div class="kpi-l">LLM calls per turn</div></div>
+<div class="kpi"><div class="kpi-n">6 s</div><div class="kpi-l">typical answer time (p95 under 10 s)</div></div>
+<div class="kpi"><div class="kpi-n">1</div><div class="kpi-l">transaction saves state, score, messages and audit</div></div>
+</div>
+
 <!--
 The three rules show up here: Python scores, the code writes the data, and nothing goes out without passing the guardrails. The classifier is one call that already existed; this week it got 11 fields instead of new calls.
 -->
@@ -301,16 +315,16 @@ class: text-center
 
 <div class="text-lg opacity-80 mt-4">Telegram (lead) · Panel (advisor)</div>
 
-<div class="text-sm mt-10 grid grid-cols-3 gap-4 text-left">
+<div class="text-base mt-10 grid grid-cols-3 gap-x-8 gap-y-5 text-left">
 <div>1. Arrives from the listing: photo</div>
 <div>2. Writes in Spanish: language filter</div>
 <div>3. Availability from the catalog</div>
 <div>4. "Parking?": an advisor confirms</div>
 <div>5. "I'm Colombian": fair housing</div>
 <div>6. "Exact address?": reserved</div>
-<div>7. Requirements, budget, urgency: HOT</div>
+<div>7. Budget and urgency: HOT</div>
 <div>8. Books a visit</div>
-<div>9. Panel: queue, summary, close the deal</div>
+<div>9. Panel: queue, summary, deal</div>
 </div>
 
 <!--
@@ -325,9 +339,9 @@ Plan B without Telegram: python scripts/demo/conversar.py. Without Bedrock: dock
 
 # ⑥ Key points: how much we can trust it
 
-<div class="grid grid-cols-4 gap-4 mt-8 text-center">
-<div class="kpi"><div class="kpi-n">99.6%</div><div class="kpi-l">turns OK: 12 demo scenarios × 5 runs, 285 turns against Bedrock</div></div>
-<div class="kpi"><div class="kpi-n">0</div><div class="kpi-l">serious errors on held-out questions the agent never saw (set P)</div></div>
+<div class="grid grid-cols-4 gap-4 mt-4 text-center">
+<div class="kpi"><div class="kpi-n">99.6%</div><div class="kpi-l">turns OK over 285 turns against Bedrock</div></div>
+<div class="kpi"><div class="kpi-n">0</div><div class="kpi-l">serious errors on questions the agent never saw</div></div>
 <div class="kpi"><div class="kpi-n">0</div><div class="kpi-l">made-up data in any of the October 8 runs</div></div>
 <div class="kpi"><div class="kpi-n">&lt; 2¢</div><div class="kpi-l">per turn at Bedrock list prices, about 8¢ per conversation</div></div>
 </div>
@@ -341,6 +355,8 @@ Plan B without Telegram: python scripts/demo/conversar.py. Without Bedrock: dock
 | Regenerated answers | 24% | **6%** | ≤ 30% |
 | Degraded (safe) answers | 4% | **0.4%** | ≤ 5% |
 | Latency p50 / p95 | 5.9 s / 11.6 s | 6.3 s / 9.8 s | — |
+
+<div class="opacity-60 mt-1">Baseline: 8 scenarios, 180 turns. Closing: 12 scenarios, 285 turns. Same thresholds.</div>
 
 </div>
 
