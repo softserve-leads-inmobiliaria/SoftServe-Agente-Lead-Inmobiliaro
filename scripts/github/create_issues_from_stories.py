@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Crea Issues de GitHub en masa a partir de docs/STORIES/*.md.
+"""Crea Issues de GitHub en masa a partir de docs/internal/STORIES/*.md.
 
-Parsea cada historia (formato fijado por docs/STORIES/PLANTILLA-HISTORIA.md):
+Parsea cada historia (formato fijado por docs/internal/STORIES/PLANTILLA-HISTORIA.md):
 
     # <ID> — <Título>
 
@@ -13,7 +13,7 @@ Parsea cada historia (formato fijado por docs/STORIES/PLANTILLA-HISTORIA.md):
     ...
 
 y crea un Issue por historia: título "[ID] Título", cuerpo = el resto del
-archivo, labels = prio:*/track:*/epic:* según la tabla de docs/STORIES/README.md.
+archivo, labels = prio:*/track:*/epic:* según la tabla de docs/internal/STORIES/README.md.
 
 Dos fases (se pueden correr juntas o por separado):
 
@@ -195,7 +195,7 @@ def gh_issue_edit_body(repo: str, number: int, body: str) -> None:
 
 def main() -> int:
     script_dir = Path(__file__).resolve().parent
-    default_stories_dir = script_dir.parent.parent / "docs" / "STORIES"
+    default_stories_dir = script_dir.parent.parent / "docs" / "internal" / "STORIES"
 
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--repo", required=True, help="owner/repo destino")
