@@ -42,7 +42,7 @@ SoftServe-Agente-Lead-Inmobiliaro/
 │   ├── session.py / settings.py / logging_config.py / repo_root.py
 │   ├── testing.py               # Base temporal ya migrada para los tests
 │   ├── migrations/              # Alembic
-│   ├── slides/                      # Diapositivas en Slidev de la presentación del 5-oct (Node, fuera del stack)
+│   ├── slides/                      # Diapositivas en Slidev de la presentación vigente, en inglés (Node, fuera del stack)
 ├── tests/
 │   └── Dockerfile               # Imagen de los servicios migrate y seed
 ├── services/

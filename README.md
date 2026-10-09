@@ -218,7 +218,7 @@ Extra arguments go in `ARGS`, for example `make test-core ARGS="-k consent"`.
 | `harness/` | End-to-end conversation scripts and the live evaluation with the real model |
 | `scripts/` | Demo data, demo start and stop scripts, GitHub setup |
 | `config/` | Product settings per service (no secrets) |
-| `slides/` | Slides (Slidev) of the October 5 progress presentation |
+| `slides/` | Slides (Slidev) of the current project status presentation |
 | `tests/` | Contract tests, harness tests and checks of the Docker setup and documentation links |
 | `docs/` | Design, architecture decisions, test guide and demo script, in Spanish; team notes in `docs/internal/`, superseded documents in `docs/archive/` |
 

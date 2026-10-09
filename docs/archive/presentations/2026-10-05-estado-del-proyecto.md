@@ -3,8 +3,8 @@
 Guion de la presentación del equipo, con un máximo de 12 minutos. Cada sección responde un punto de la
 consigna. Los números son de `main` al 5 de octubre (`17a4a59`). El estado vivo de cada historia está en el
 [Project](https://github.com/orgs/softserve-leads-inmobiliaria/projects/1). La foto anterior es el
-[estado del 1 de octubre](2026-10-01-estado-del-proyecto.md). Las diapositivas de este guion están en
-[`slides/`](../../../slides/README.md).
+[estado del 1 de octubre](2026-10-01-estado-del-proyecto.md). Las diapositivas de este guion quedan en el historial
+de git; [`slides/`](../../../slides/README.md) tiene la versión vigente.
 
 | Min. | Sección |
 | ---: | :--- |

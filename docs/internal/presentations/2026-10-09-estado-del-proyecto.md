@@ -4,7 +4,8 @@ Guion de la presentación del equipo, con un máximo de 12 minutos. Cada secció
 consigna. Los números son de `main` al 9 de octubre (`06668ae`, CI en verde). El estado vivo de cada
 historia está en el [Project](https://github.com/orgs/softserve-leads-inmobiliaria/projects/1). La foto
 anterior es el [estado del 7 de octubre](../../archive/presentations/2026-10-07-estado-del-proyecto.md); el detalle de cada medición está
-en el [cierre de la evaluación del 8 de octubre](2026-10-08-cierre-de-evaluacion.md).
+en el [cierre de la evaluación del 8 de octubre](2026-10-08-cierre-de-evaluacion.md). Las diapositivas, en inglés,
+están en [`slides/`](../../../slides/README.md).
 
 | Min. | Sección |
 | ---: | :--- |
