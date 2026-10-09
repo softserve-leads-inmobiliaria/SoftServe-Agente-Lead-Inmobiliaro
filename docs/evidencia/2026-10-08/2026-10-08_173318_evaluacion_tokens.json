@@ -1,0 +1,92 @@
+{
+  "report_started": "2026-10-08T17:33:18.978083",
+  "conversations": 6,
+  "conversations_with_traces": 6,
+  "turns": 37,
+  "calls": 88,
+  "tokens": {
+    "llm.token_count.prompt": 225769,
+    "llm.token_count.completion": 8247,
+    "llm.token_count.total": 234016
+  },
+  "per_turn": {
+    "calls_mean": 2.38,
+    "tokens_mean": 6341
+  },
+  "per_model": {
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0": {
+      "calls": 34,
+      "llm.token_count.prompt": 45396,
+      "llm.token_count.completion": 4555,
+      "llm.token_count.total": 49951
+    },
+    "us.anthropic.claude-sonnet-4-5-20250929-v1:0": {
+      "calls": 54,
+      "llm.token_count.prompt": 180373,
+      "llm.token_count.completion": 3692,
+      "llm.token_count.total": 184065
+    }
+  },
+  "per_conversation": [
+    {
+      "scenario": "P1_inversionista_en_preventa",
+      "rep": 1,
+      "conversation_id": "5d8dfe84-614b-4f07-9ba4-eae863c80e0f",
+      "turns": 6,
+      "calls": 20,
+      "llm.token_count.prompt": 59148,
+      "llm.token_count.completion": 2050,
+      "llm.token_count.total": 61198
+    },
+    {
+      "scenario": "P2_renta_desde_el_anuncio",
+      "rep": 1,
+      "conversation_id": "09984b4f-5b06-4c17-aeba-8b6d3b97a1b5",
+      "turns": 6,
+      "calls": 14,
+      "llm.token_count.prompt": 33596,
+      "llm.token_count.completion": 1247,
+      "llm.token_count.total": 34843
+    },
+    {
+      "scenario": "P3_local_en_bogota",
+      "rep": 1,
+      "conversation_id": "c1931338-9678-4ac1-ada1-2223f129f2cf",
+      "turns": 6,
+      "calls": 17,
+      "llm.token_count.prompt": 43495,
+      "llm.token_count.completion": 1381,
+      "llm.token_count.total": 44876
+    },
+    {
+      "scenario": "P4_casa_en_bogota_y_regateo",
+      "rep": 1,
+      "conversation_id": "52d51bd8-b0b4-44da-a601-08f119ff56c0",
+      "turns": 7,
+      "calls": 16,
+      "llm.token_count.prompt": 38479,
+      "llm.token_count.completion": 1582,
+      "llm.token_count.total": 40061
+    },
+    {
+      "scenario": "P5_fuera_de_dominio",
+      "rep": 1,
+      "conversation_id": "bce62d25-ea8e-4533-8530-676b0a5e58f0",
+      "turns": 6,
+      "calls": 11,
+      "llm.token_count.prompt": 28477,
+      "llm.token_count.completion": 918,
+      "llm.token_count.total": 29395
+    },
+    {
+      "scenario": "P6_espanol_y_luego_ingles",
+      "rep": 1,
+      "conversation_id": "6c77f2b9-3fe7-493b-b916-eb3eee3a6137",
+      "turns": 6,
+      "calls": 10,
+      "llm.token_count.prompt": 22574,
+      "llm.token_count.completion": 1069,
+      "llm.token_count.total": 23643
+    }
+  ]
+}

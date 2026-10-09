@@ -35,7 +35,7 @@ FACTUALITY_DEGRADE_REPLY = ("That's a detail I'd rather have one of our agents c
 # matter?"). Los dos agentes contestan esto con el mismo texto; si el mensaje pregunta otra cosa, el LLM
 # recibe la nota de `_with_notes` y contesta a su modo.
 PROTECTED_ANSWER = ("That doesn't affect how we help you or the requirements to buy or rent: we treat "
-                    "every client the same way. What kind of property are you looking for?")
+                    "every client the same way. What else would you like to know?")
 
 # #228: el clasificador dijo `solicitud_humano` pero el mensaje no pide una persona; el turno sigue sin traspaso.
 HUMAN_REQUEST_UNCONFIRMED = "intent.human_request_unconfirmed"

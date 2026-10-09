@@ -407,6 +407,20 @@ Corrida del 6-oct: 40 conversaciones, 180 turnos con LLM, 78 minutos. Quedó den
 - **Por qué se regenera:** por el mismo patrón. El modelo cita lo que ya dijo antes, o usa "available" para
   otras propiedades, aunque la segunda respuesta salga bien.
 
+**Corrida de cierre** (8-oct, 18:48, `cross/52-guion-demo` en `a693174`, 5 corridas de los 12 escenarios): 60
+conversaciones, 285 turnos, 122 minutos. Quedó dentro de los umbrales.
+
+| Corrida | Escenarios | Turnos OK | Tool esperada | Regeneradas | Degradadas | Respaldo | Estado final | p50 / p95 |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Línea base, 6-oct | 8 | 93% | 99% | 24% | 4% | 0 | 100% | 5,9 s / 11,6 s |
+| Cierre, 8-oct | 12 | 99,6% (284/285) | 100% | 6% | 0,4% (1) | 0 | 100% | 6,3 s / 9,8 s |
+
+- **La única falla:** `01_deep_link_hasta_asesor` #5 t6 ("We want to move in within the next two months"), degradada.
+- **Costo:** 679 llamadas al LLM, 2,4 por turno. Son 6.100 tokens por turno, el 96% de entrada, y unos US$5 las 60
+  conversaciones.
+- **Detalle y evidencia:** `docs/presentations/2026-10-08-cierre-de-evaluacion.md` y `docs/evidencia/2026-10-08/`.
+  Es la nueva referencia: un cambio de comportamiento posterior se compara contra esta corrida.
+
 ### Prueba de jurado (#247)
 
 La evaluación en vivo mide escenarios conocidos. Un jurado pregunta lo que quiere: amenidades que el catálogo

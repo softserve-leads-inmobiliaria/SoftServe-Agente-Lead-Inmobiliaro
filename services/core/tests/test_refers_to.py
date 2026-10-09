@@ -171,7 +171,7 @@ def test_the_visit_is_offered_for_the_property_the_lead_means(engine, agenda):  
     say, catalog = _conversation(engine, "prop_00233", {"prop_00233": "disponible", "prop_00234": "apartado"})
     say("Houses in Usaquen?")
     reply = say("I'd like to see the cheaper one")
-    assert reply.startswith("Here are the available times to visit 3-bedroom house in Usaquen")
+    assert reply.startswith("Here are the available times to visit the 3-bedroom house in Usaquen")
     assert catalog.checked == ["prop_00233"]
 
 
@@ -190,7 +190,7 @@ def test_without_asking_the_route_the_agenda_says_why_with_fixed_text(engine, ag
                            routes=False)
     say("Houses in Usaquen?")
     reply = say("Can I visit the 4-bedroom one?")
-    assert reply.startswith("4-bedroom house in Usaquen is reserved right now, so I can't book a visit to it.")
+    assert reply.startswith("The 4-bedroom house in Usaquen is reserved right now, so I can't book a visit to it.")
 
 
 @pytest.mark.parametrize("about", [UNCLEAR, None])
@@ -214,5 +214,5 @@ def test_a_remembered_reserved_property_gets_no_slots_either(engine, agenda):  #
 def test_an_available_property_still_gets_its_slots_from_the_agenda(engine, agenda):  # noqa: F811
     say, catalog = _conversation(engine, None, {"prop_00233": "disponible"}, first={"get_property": HOUSE})
     say("Tell me about the 3-bedroom house")
-    assert say("Can I visit it?").startswith("Here are the available times to visit 3-bedroom house in Usaquen")
+    assert say("Can I visit it?").startswith("Here are the available times to visit the 3-bedroom house in Usaquen")
     assert catalog.checked == ["prop_00233"]
