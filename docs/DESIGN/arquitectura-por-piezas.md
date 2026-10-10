@@ -236,7 +236,11 @@ flowchart LR
     CHK --> A6["A-6 dirección exacta<br/>solo si lead_qualified"]
     CHK --> A7["A-7 promesas<br/>crédito, mascotas, precio,<br/>apartar, garantía, amenidades"]
     CHK --> P234["#234 'te busco después'<br/>sin consultar"]
-    A5 & L230 & A6 & A7 & P234 --> V{"¿Alguna violación?"}
+    A5 --> V{"¿Alguna violación?"}
+    L230 --> V
+    A6 --> V
+    A7 --> V
+    P234 --> V
     V -->|no| SEND["Respuesta final"]
     V -->|sí| REGEN["Regenerar → degradar"]
 ```
@@ -321,7 +325,11 @@ flowchart LR
     F --> N["Need fit: 0 / 1-2 / 3+ resultados → 0 / 10 / 20"]
     F --> T["Timing: inmediata 20 · 3 meses 12 · explorando 5"]
     F --> E["Eligibility: cumple requisitos → 20"]
-    B & A & N & T & E --> TOT["Total 0-100<br/>COLD ≤ 40 · WARM 41-70 · HOT ≥ 71"]
+    B --> TOT["Total 0-100<br/>COLD ≤ 40 · WARM 41-70 · HOT ≥ 71"]
+    A --> TOT
+    N --> TOT
+    T --> TOT
+    E --> TOT
     TOT -->|"cruza a WARM o HOT"| CARD["Tarjeta al asesor<br/>lead_qualified = true"]
 ```
 
@@ -373,7 +381,8 @@ flowchart LR
     P2["Fuera del alcance del agente"] --> HH
     P3["3 turnos sin resolver<br/>+ frustrated"] --> HH
     P4["Visita reservada"] --> H["HANDOFF"]
-    HH & H --> R["Ruteo: asesor por zona,<br/>idioma y reparto por turnos"]
+    HH --> R["Ruteo: asesor por zona,<br/>idioma y reparto por turnos"]
+    H --> R
     R --> S["Resumen del LLM<br/>revisado por los guardrails"]
     S --> F["Ficha: score, resumen,<br/>transcripción, visita"]
     F --> PANEL["Aviso en el panel"]
@@ -534,7 +543,11 @@ flowchart LR
     T --> MCP["catalog.tool<br/>llamadas MCP"]
     T --> FSM["fsm.advance<br/>estado, trigger, score"]
     T --> AR["turn.after_reply"]
-    GI & LLM & MCP & FSM & AR -->|OTLP| PHX["Phoenix"]
+    GI -->|OTLP| PHX["Phoenix"]
+    LLM -->|OTLP| PHX
+    MCP -->|OTLP| PHX
+    FSM -->|OTLP| PHX
+    AR -->|OTLP| PHX
     FSM --> AUD[("audit_log<br/>turn.decision")]
     FSM --> FE[("funnel_events")]
     LOGS["Logs JSON<br/>3 servicios"] --> STD["stdout"]
