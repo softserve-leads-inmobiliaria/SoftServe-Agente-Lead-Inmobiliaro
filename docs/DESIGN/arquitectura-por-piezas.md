@@ -1,7 +1,7 @@
 # Arquitectura por piezas — 9 de octubre de 2026
 
 Material de apoyo para las preguntas de arquitectura de la presentación del
-[estado del 9 de octubre](../internal/presentations/2026-10-09-estado-del-proyecto.md). Hay un diagrama por pieza del sistema, con lo
+[estado del 9 de octubre](../archive/presentations/2026-10-09-estado-del-proyecto.md). Hay un diagrama por pieza del sistema, con lo
 mínimo para explicarla y las preguntas que suelen salir. Todo describe `main` al 9 de octubre (`06668ae`). El
 porqué de cada elección está en [`decisions.md`](../DECISIONS/decisions.md), las tablas compartidas en
 [`design.md`](design.md) y el detalle de los guardrails en [`guardrails.md`](guardrails.md).
@@ -236,7 +236,11 @@ flowchart LR
     CHK --> A6["A-6 dirección exacta<br/>solo si lead_qualified"]
     CHK --> A7["A-7 promesas<br/>crédito, mascotas, precio,<br/>apartar, garantía, amenidades"]
     CHK --> P234["#234 'te busco después'<br/>sin consultar"]
-    A5 & L230 & A6 & A7 & P234 --> V{"¿Alguna violación?"}
+    A5 --> V{"¿Alguna violación?"}
+    L230 --> V
+    A6 --> V
+    A7 --> V
+    P234 --> V
     V -->|no| SEND["Respuesta final"]
     V -->|sí| REGEN["Regenerar → degradar"]
 ```
@@ -321,7 +325,11 @@ flowchart LR
     F --> N["Need fit: 0 / 1-2 / 3+ resultados → 0 / 10 / 20"]
     F --> T["Timing: inmediata 20 · 3 meses 12 · explorando 5"]
     F --> E["Eligibility: cumple requisitos → 20"]
-    B & A & N & T & E --> TOT["Total 0-100<br/>COLD ≤ 40 · WARM 41-70 · HOT ≥ 71"]
+    B --> TOT["Total 0-100<br/>COLD ≤ 40 · WARM 41-70 · HOT ≥ 71"]
+    A --> TOT
+    N --> TOT
+    T --> TOT
+    E --> TOT
     TOT -->|"cruza a WARM o HOT"| CARD["Tarjeta al asesor<br/>lead_qualified = true"]
 ```
 
@@ -373,7 +381,8 @@ flowchart LR
     P2["Fuera del alcance del agente"] --> HH
     P3["3 turnos sin resolver<br/>+ frustrated"] --> HH
     P4["Visita reservada"] --> H["HANDOFF"]
-    HH & H --> R["Ruteo: asesor por zona,<br/>idioma y reparto por turnos"]
+    HH --> R["Ruteo: asesor por zona,<br/>idioma y reparto por turnos"]
+    H --> R
     R --> S["Resumen del LLM<br/>revisado por los guardrails"]
     S --> F["Ficha: score, resumen,<br/>transcripción, visita"]
     F --> PANEL["Aviso en el panel"]
@@ -534,7 +543,11 @@ flowchart LR
     T --> MCP["catalog.tool<br/>llamadas MCP"]
     T --> FSM["fsm.advance<br/>estado, trigger, score"]
     T --> AR["turn.after_reply"]
-    GI & LLM & MCP & FSM & AR -->|OTLP| PHX["Phoenix"]
+    GI -->|OTLP| PHX["Phoenix"]
+    LLM -->|OTLP| PHX
+    MCP -->|OTLP| PHX
+    FSM -->|OTLP| PHX
+    AR -->|OTLP| PHX
     FSM --> AUD[("audit_log<br/>turn.decision")]
     FSM --> FE[("funnel_events")]
     LOGS["Logs JSON<br/>3 servicios"] --> STD["stdout"]
@@ -543,10 +556,18 @@ flowchart LR
 - **Phoenix autoalojado con OpenTelemetry** (DT-9), con la instrumentación de OpenInference para Bedrock y
   MCP.
 - **Trazas por turno sin el texto de los leads** (DT-18): ruta, intención, flags, tools y violaciones por
-  tipo, nunca el valor.
+  tipo, nunca el valor. En la UI de Phoenix, la entrada y la salida de las llamadas a Bedrock salen como
+  `__REDACTED__`: es a propósito, no una falla. **El texto vive en Postgres** (`messages`, ya filtrado, y la
+  decisión de cada turno en `audit_log`), y se lee en la ficha del panel o con `scripts/demo/exportar.py`.
+  `TRACE_CONTENT=1` lo muestra también en Phoenix, solo para depurar con datos de prueba.
 - **Los tokens de cada corrida** salen de Phoenix con `harness/scripts/tokens.py`.
 - **Logs JSON** en los tres servicios (DT-27). Ningún log imprime texto del lead.
 - **Plan B:** Jaeger recibe las mismas trazas cambiando solo el *endpoint* OTLP (OBS-8, DT-31).
+
+**Si preguntan:** *¿por qué las trazas están "vacías"?* No lo están: tienen tiempos, tokens, tools y
+decisiones. Lo que falta es el texto de la conversación, que es un dato personal. Separarlo es la decisión:
+Postgres es la fuente de verdad del contenido, con su control de acceso, y Phoenix se queda solo con
+métricas.
 
 ## 19. Cómo se prueba
 

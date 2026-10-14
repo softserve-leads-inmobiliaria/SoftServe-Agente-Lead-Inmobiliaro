@@ -3,8 +3,8 @@
 Guion de la presentación del equipo, con un máximo de 12 minutos. Cada sección responde un punto de la
 consigna. Los números son de `main` al 9 de octubre (`06668ae`, CI en verde). El estado vivo de cada
 historia está en el [Project](https://github.com/orgs/softserve-leads-inmobiliaria/projects/1). La foto
-anterior es el [estado del 7 de octubre](../../archive/presentations/2026-10-07-estado-del-proyecto.md); el detalle de cada medición está
-en el [cierre de la evaluación del 8 de octubre](2026-10-08-cierre-de-evaluacion.md). Las diapositivas, en inglés,
+anterior es el [estado del 7 de octubre](2026-10-07-estado-del-proyecto.md); el detalle de cada medición está
+en el [cierre de la evaluación del 8 de octubre](../../internal/presentations/2026-10-08-cierre-de-evaluacion.md). Las diapositivas, en inglés,
 están en [`slides/`](../../../slides/README.md).
 
 | Min. | Sección |
@@ -227,7 +227,7 @@ por conversación. El 96% de los tokens son de entrada (prompt e historial); la 
 | Gold set del clasificador | 93 mensajes contra Bedrock real (`classifier_gold.py`, fuera de CI): sale con error si un campo baja |
 | *Contract tests* | Todos los contratos entre servicios |
 | Decisiones registradas | 71 (DT-1 a DT-71) |
-| Evidencia versionada | [`docs/internal/evidencia/2026-10-08/`](../evidencia/2026-10-08/README.md): informes, cada turno y sus tokens |
+| Evidencia versionada | [`docs/internal/evidencia/2026-10-08/`](../../internal/evidencia/2026-10-08/README.md): informes, cada turno y sus tokens |
 
 **Riesgos:**
 
@@ -235,7 +235,7 @@ por conversación. El 96% de los tokens son de entrada (prompt e historial); la 
 | :--- | :--- | :--- |
 | **Los créditos de AWS figuran vencidos** (8-oct, noche) | La demo en vivo usa Bedrock: unos US$0,20 por pasada del guion | Confirmar el saldo en Billing → Credits antes de presentar; si no hay, plan B sin Bedrock (§7) |
 | **La cuota de 10 RPM** | Si escriben varios a la vez aparece el texto de respaldo | Una persona escribe a la vez; nada más corriendo contra Bedrock |
-| **Una demo libre puede mostrar una falla de calidad** | Una respuesta prudente de más o una frase rara | Los límites conocidos están en [`DEMO.md`](../../DEMO.md) §4 y en el [cierre](2026-10-08-cierre-de-evaluacion.md) §6 |
+| **Una demo libre puede mostrar una falla de calidad** | Una respuesta prudente de más o una frase rara | Los límites conocidos están en [`DEMO.md`](../../DEMO.md) §4 y en el [cierre](../../internal/presentations/2026-10-08-cierre-de-evaluacion.md) §6 |
 | CI no bloquea el merge (repo privado, plan gratuito) | Un PR en rojo se puede fusionar | Acuerdo de equipo: nunca fusionar en rojo. El 8-oct `main` quedó en rojo tras #257 (evidencia sin enlazar desde el README) y #258 lo arregló minutos después |
 
 ## 7. Funcionalidad funcionando (demo)
@@ -280,7 +280,7 @@ El backlog está cerrado. Lo que queda no es alcance:
 | Ensayo humano del guion en Telegram | Pendiente desde el cierre del 8-oct | Sí (unos US$0,20) |
 | `down.sh` y `up.sh` antes de presentar | Para que el panel no muestre los leads de las corridas | No |
 
-**Trabajo futuro, fuera del capstone** (detalle en el [cierre](2026-10-08-cierre-de-evaluacion.md), §7.4):
+**Trabajo futuro, fuera del capstone** (detalle en el [cierre](../../internal/presentations/2026-10-08-cierre-de-evaluacion.md), §7.4):
 
 - FAQ con embeddings (C-5) y ampliar la ficha con `details` (lo que hoy "confirma un asesor").
 - Buscar sin ciudad y comparar el ingreso contra los requisitos de dos propiedades.

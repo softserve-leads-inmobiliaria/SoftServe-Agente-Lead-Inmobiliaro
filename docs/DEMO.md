@@ -38,7 +38,7 @@ esperado, se sigue con la siguiente frase: todas se entienden solas.
 | 11 | `1` | "… is booked for …" | La visita queda reservada y el lead pasa al asesor |
 | 12 | Panel de Valeria | El lead **arriba de la cola** por score, el aviso, la ficha con **el resumen de la conversación** y la visita | El asesor no lee el chat: lee el resumen y la nota |
 | 13 | En la ficha, **cerrar la operación**; abrir **Negocio** | La propiedad pasa a cerrada; colocación, rotación y demanda no cubierta | Para el dueño del negocio |
-| 14 | (Si hay tiempo) Phoenix, la traza del turno 6 | Clasificador → ruta → tools → guardrails, con la decisión (`turn.decision`) | Cada respuesta se puede explicar |
+| 14 | (Si hay tiempo) Phoenix, la traza del turno 6 | Clasificador → ruta → tools → guardrails, con la decisión (`turn.decision`). La entrada y la salida de Bedrock dicen `__REDACTED__` | Cada respuesta se puede explicar. **Decirlo antes de que lo pregunten:** el texto del lead no va a las trazas (DT-18); está en Postgres y en la ficha del panel |
 
 ## 3. Si el jurado quiere escribir
 
