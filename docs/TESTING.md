@@ -207,8 +207,19 @@ Con el stack arriba, `core` envía una traza por turno a Phoenix (OBS-1, DT-18).
 - `catalog.<tool>`: cada llamada al catálogo, con su duración y si falló;
 - `fsm.advance`: estado antes y después, *trigger*, motivo del traspaso a humano y score.
 
-Las trazas **no llevan el texto de los mensajes**. Para depurar en local con datos de prueba,
-arranca con `TRACE_CONTENT=1`. Si Phoenix no está levantado, `core` responde igual y las trazas se
+Las trazas **no llevan el texto de los mensajes**, a propósito (DT-18): son datos personales del lead y
+Phoenix no es el lugar para guardarlos. Por eso, en la UI de Phoenix, las columnas de entrada y salida de las
+llamadas a Bedrock muestran `__REDACTED__`, y los spans propios (`turn`, `fsm.advance`…) no tienen. **No es
+una falla de la observabilidad:** la traza sí guarda tiempos, modelo, tokens, tools, ruta, intención, flags,
+estado de la FSM, score y qué guardrail saltó. El texto vive en Postgres:
+
+| Qué | Dónde |
+| :--- | :--- |
+| Mensajes del lead (ya filtrados: sin PII ni categorías protegidas) y del agente, con sus tools | `messages` |
+| Por qué contestó así cada turno: intención, flags, propiedad, ruta | `audit_log`, acción `turn.decision` |
+| Transcripción para leer | La ficha del lead en el panel, o `python scripts/demo/exportar.py [minutos]` |
+
+Para depurar en local con datos de prueba, arranca con `TRACE_CONTENT=1` y Phoenix guarda también el texto. Si Phoenix no está levantado, `core` responde igual y las trazas se
 pierden. Sin `OTEL_EXPORTER_OTLP_ENDPOINT` (p. ej. al correr `uvicorn` a mano) las trazas están apagadas.
 
 Esto es el esqueleto end-to-end de CT-4: arnés → core → catálogo por MCP (sobre Postgres desde C-1) →

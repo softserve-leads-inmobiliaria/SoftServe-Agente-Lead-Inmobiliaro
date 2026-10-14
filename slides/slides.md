@@ -3,7 +3,7 @@ theme: default
 title: Real Estate Lead Agent
 info: |
   Project status as of October 9, 2026. Team #2, SoftServe Project Lab.
-  Full script (Spanish): docs/internal/presentations/2026-10-09-estado-del-proyecto.md
+  Full script (Spanish): docs/archive/presentations/2026-10-09-estado-del-proyecto.md
 colorSchema: light
 transition: slide-left
 mdc: true
@@ -258,7 +258,7 @@ flowchart LR
 </div>
 
 <!--
-Reading order: lead → core → catalog and Bedrock → Postgres → advisor panel. Phoenix keeps one trace per turn. The 10 RPM quota is why no fix this week added LLM calls.
+Reading order: lead → core → catalog and Bedrock → Postgres → advisor panel. Phoenix keeps one trace per turn with timings, tokens, tools and decisions, but NOT the message text (it shows __REDACTED__ on purpose, DT-18): conversations are personal data and live in Postgres, readable in the lead profile. The 10 RPM quota is why no fix this week added LLM calls.
 -->
 
 ---
@@ -461,5 +461,6 @@ Prepared answers:
 - How much does it cost? Under 2 cents per turn, about 8 per conversation, at list prices. 96% is input; prompt caching would lower it.
 - What if many people write at once? 10 calls per minute is about 4 turns per minute in total. A local limiter queues the turn; past the maximum wait, it answers with a safe text. Production would need more quota.
 - Why Telegram and not WhatsApp? Long polling keeps everything local with no public URL (DT-4). The channel sits behind a canonical event: WhatsApp would be another adapter (DT-20).
+- Why do the traces look empty? They aren't: they hold timings, tokens, tools, route and guardrail decisions. Only the message text is redacted, on purpose (DT-18): it's personal data, so it lives in Postgres (messages table, lead profile in the panel), not in the observability tool.
 - How do you know the bot sells? DT-41: a deal belongs to the bot if the lead touched that listing with the bot in the previous 60 days. The business view and the weekly report show it.
 -->

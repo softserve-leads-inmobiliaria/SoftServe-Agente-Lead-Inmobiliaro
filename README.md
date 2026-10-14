@@ -134,7 +134,7 @@ docker compose up --build
 | Advisor panel | http://localhost:8080/panel/&lt;token&gt;. The `seed` service prints each advisor's URL |
 | Public landing page | http://localhost:8080/properties |
 | Core API | http://localhost:8000/health. Conversation turns go to `POST /events` |
-| Traces (Phoenix) | http://localhost:6006 |
+| Traces (Phoenix) | http://localhost:6006. Timings, tokens, tools and decisions per turn. Message text shows as `__REDACTED__` by design: it is personal data and lives in PostgreSQL (`messages`, shown in the lead profile) |
 | PostgreSQL | `127.0.0.1:5432`, credentials in `.env.example` |
 
 The `seed` service loads the demo data: 3 advisors, 12 properties and 3 promotions. Ports can be changed in
