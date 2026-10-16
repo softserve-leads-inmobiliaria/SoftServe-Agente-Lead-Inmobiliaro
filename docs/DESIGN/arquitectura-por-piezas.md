@@ -574,7 +574,7 @@ métricas.
 ```mermaid
 flowchart TB
     subgraph CI["En cada PR · sin LLM"]
-        U["Más de 1 300 tests<br/>por servicio"]
+        U["Unos 2 700 tests<br/>en total"]
         G["Gold sets como gate<br/>factualidad · marcadores · dirección<br/>fair housing · idioma · promesas"]
         CT["Contract tests<br/>CT-1, MCP, FSM"]
     end

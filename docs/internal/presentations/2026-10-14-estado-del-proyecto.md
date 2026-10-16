@@ -166,7 +166,7 @@ automáticas, pero nadie lo usó en vivo.
 graves" es compatible con una tasa baja, no con una nula: de cada cien respuestas, una o dos salen como
 respuesta segura.
 
-**Cómo se comprueba:** más de 1 300 pruebas automáticas corren en cada cambio. Incluyen conjuntos de casos que
+**Cómo se comprueba:** unas 2 700 pruebas automáticas corren en cada cambio. Incluyen conjuntos de casos que
 fallan si el asistente inventa datos, filtra la dirección o puntúa distinto a dos personas que solo difieren en
 nacionalidad o familia. Las 71 decisiones de diseño están registradas con su porqué.
 
