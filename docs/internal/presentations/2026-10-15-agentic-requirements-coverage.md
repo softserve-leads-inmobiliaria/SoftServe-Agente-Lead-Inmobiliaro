@@ -44,7 +44,7 @@ fallback).
 | 8 | A designed system prompt per agent | **Met** | Three system prompts (classifier, chat, handoff summary) plus a correction prompt |
 | 9 | At least one tool (MCP) | **Met** | Own MCP server with 6 catalog tools and JSON Schema contracts |
 | 10 | Use a skill (agentskills.io) | **Not met** | No skill in the repository and no recorded decision about it |
-| 11 | Safety measures / guardrails | **Met** | 6 input detectors, 4 output checks, gold sets that fail CI if they regress |
+| 11 | Safety measures / guardrails | **Met** | 6 input detectors, output checks on facts, promises and the exact address, gold sets that fail CI if they regress |
 | 12 | Memory and context management | **Met** | Per-conversation state in PostgreSQL, 20-message window, row lock per conversation, handoff summary |
 
 Score for the slide: **8 met, 1 partial, 3 not met** (one of those three by explicit design decision).
@@ -219,7 +219,7 @@ transport, DT-2, DT-10). Six tools:
 
 | Tool | What it returns |
 | :--- | :--- |
-| `search_properties` | Matches by area, operation, property type and budget; closest alternatives when nothing matches (DT-57) |
+| `search_properties` | Matches by area, operation, property type and budget. When nothing matches, `core` repeats the search with one filter fewer (area, then property type, then operation) and offers the alternatives (DT-57) |
 | `get_property` | One listing, including the operation's requirements (DT-56); exact address only if `lead_qualified` |
 | `get_availability` | Current status of a property |
 | `get_promotions` | Active promotions |
@@ -251,25 +251,30 @@ or requirement-checking know-how as a skill would be future work; it has not bee
 | Detector | Action |
 | :--- | :--- |
 | Opt-out (`/stop`) | Cancels pending jobs, marks consent withdrawn, confirms |
-| Unrequested personal data (ID, card numbers) | Removed before storing or sending to the model |
-| Jailbreak / prompt extraction | Treated as a normal domain question; stored as `[message omitted]` so it never returns as history |
-| Off-topic, or formal legal/tax/credit advice | Bounded answer and offer of an advisor |
-| Protected characteristics (origin, religion, family, gender, nationality) | Never reaches the score or the model; if asked whether it matters, the answer is no |
-| Language | Non-English messages get a fixed request to write in English |
+| Unrequested personal data (ID documents, card numbers) | Removed before storing or sending to the model. Phone and email are not removed: a lead may give them on purpose |
+| Jailbreak / prompt extraction | Fixed generic reply without calling the model; adds nothing to the score; stored as `[message omitted]` so it never returns as history |
+| Off-topic, or formal legal/tax/credit advice | Fixed bounded answer; an advisor is offered if the lead insists |
+| Protected characteristics (origin, religion, family, gender, nationality) | Removed or generalised ("my wife" → "my partner") before the score and the model; if asked whether it matters, a fixed answer says no |
+| Language | Spanish messages get a fixed request to write in English. The filter tells Spanish from English only; a message in another language reaches the model |
 
-**Output (before anything is sent; `docs/DESIGN/guardrails.md` §2)**
+**Output (before anything is sent; `docs/DESIGN/guardrails.md` §2). Applies to the replies written by Sonnet**
 
-- **Factuality** (DT-23, DT-59, DT-60): figures in the reply must match what the tools returned; property data is
-  written by code from markers.
-- **Prohibited promises** (DT-26): discounts, holds, credit approval, closing.
+- **Factuality** (DT-23, DT-59, DT-60): property data is written by code from markers; a marker that can't be
+  filled or a number outside a marker blocks the reply; property status is verified against the catalog.
+- **Prohibited promises** (DT-26): discounts, holds, credit approval, closing (6 of the 8 listed claims enforced
+  in code), plus "I'll check and get back to you" without having consulted anything.
 - **Reserved address** (DT-25): the shape of an exact address before the lead is qualified.
-- **Fair housing.**
 - On failure the reply is **rewritten once**; if it fails again the lead gets a safe answer offering an advisor.
+
+There is **no fair-housing check on the output of chat replies**: fair housing is enforced at input, in the
+score contract (it has no field for a protected category) and in the prompt. Only the handoff summary filters
+protected mentions on output. Opinions and pressure to hurry are covered by the prompt only.
 
 **Code over model:** the score is a deterministic function and the model never sets it; availability is
 re-checked in code and fails closed (DT-21); a human is reachable from every state.
 
-**Evidence:** one gold set per check (invented data, exact address, promises, fair housing, language) runs with
+**Evidence:** one gold set per check (invented data, exact address, promises, language, and fair housing in the
+score: 54 pairs that must score identically) runs with
 the test suites, and a pull request that drops one below its threshold fails CI (DT-37). Live evaluation on 8
 October 2026 (285 turns): 6% of replies rewritten once, 0.4% fell back to the safe answer; a 37-turn held-out
 set read by hand showed no invented data and no unauthorized promises.
@@ -289,7 +294,8 @@ set read by hand showed no invented data and no unauthorized promises.
 - **Across sessions:** a returning lead's new conversation inherits the score signal and qualification
   (DT-29). Silence is handled by the scheduler: follow-ups after 24 hours, then NURTURE and LOST (DT-44).
 - **Handing context to a human:** at handoff the model writes a summary (what they want, objections, next step)
-  that is checked like any reply and stored on the lead (DT-46).
+  that goes through the factuality, address and promise checks plus a protected-mention filter, and is stored on
+  the lead. If it fails, it is discarded without a rewrite and the handoff card goes out without it (DT-46).
 
 **Not done:** no compaction or summarization of long conversations beyond the 20-message window, and no
 semantic long-term memory. Neither was needed for conversations of this length.
