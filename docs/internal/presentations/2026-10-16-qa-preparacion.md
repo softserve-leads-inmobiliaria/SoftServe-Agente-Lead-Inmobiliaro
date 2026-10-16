@@ -6,7 +6,20 @@ cost, limits. The answers are in English because the talk is; each one is writte
 20–40 seconds, with the decision (`DT-n`, in [`decisions.md`](../../DECISIONS/decisions.md)) or the document to
 open if they push further.
 
-Everything describes `main` as of 15 October 2026.
+Everything describes `main` as of 15 October 2026. **Checked against the code, not the design docs:** the score
+formula and bands (`scoring.py`), the six MCP tools (`server.py`), the tool loop, the 20-message window,
+temperature 0, `toolChoice` and the classifier fields (`bedrock_llm.py`, `agent.py`), which output checks
+actually run (`agent.py`), the input guard and language filter, rate limit, retries and scheduler settings
+(`config/core.env`), the 60-day attribution window, trace redaction, port binding and container hardening
+(`docker-compose.yml`), the empty FAQ table, the 12-listing inventory, and the evaluation numbers against the
+raw reports in `docs/internal/evidencia/2026-10-08/`. The test count comes from the last CI run on `main`.
+
+**Where the deck or older docs say something the code doesn't do:**
+- *"Output check … fair housing"*: there is no fair-housing check on chat replies (only on the handoff
+  summary). [`2026-10-15-agentic-requirements-coverage.md`](2026-10-15-agentic-requirements-coverage.md) §3.11
+  lists it among the output checks; that line is wrong.
+- *"Non-English messages get a fixed notice"*: only Spanish is detected.
+- *"1,300+ tests"* (slide 9): there are about 2,700.
 
 ## 0. Before answering
 
@@ -39,7 +52,7 @@ discriminate) are answered by that sentence.
 | Model calls per reply | ~2.4, ~6,100 tokens, 96% of them input | Phoenix traces, `tokens.py` |
 | Cost | < 2¢ per reply, ~8¢ per conversation, ~US$5 for the whole 60-conversation run | Bedrock list prices |
 | Bedrock quota | 10 calls/min per model → ~4 replies/min across all users | AWS account limit |
-| Automated tests | 1,300+ on every change | CI |
+| Automated tests | ~2,700 passing on every change (2,680 passed, 15 skipped in the last CI run on `main`, 15-oct). The deck says "1,300+": true, but understated | CI |
 | Backlog | 76 stories: 74 done, 2 moved to future work (B-14 voice notes, C-5 FAQ) — 214/220 points | backlog |
 | Design decisions recorded | 71 (DT-1 … DT-71) | `decisions.md` |
 | Live demo, Oct 9 | 10 messages in 5 min, 0 invented facts, 0 rewrites, ~13¢ | demo log |
@@ -87,7 +100,9 @@ with six months of synthetic history, not with real sales.
 A human is reachable from every state. Three paths to `HUMAN_HANDOFF` (DT-16, DT-65): the lead asks for one, the
 request is outside what the agent may do (discounts, legal advice…), or three unresolved turns in a row where
 the last message shows frustration. The advisor gets a summary — what they want, objections, next step —
-written by Sonnet and checked like any other reply (DT-46).
+written by Sonnet and passed through the same factuality, address and promise checks, plus a filter that rejects
+any protected-category mention. If it fails, it isn't rewritten: it's discarded and the handoff card goes out
+without a summary (DT-46).
 
 **Q: Why Telegram and not WhatsApp?**
 Telegram's long polling lets everything run locally with no public URL or business verification (DT-4).
@@ -97,7 +112,9 @@ Channels sit behind a canonical event, so WhatsApp would be one more adapter wit
 **Q: Why English only, if the listings are in Colombia?**
 A product decision for this presentation (DT-55): everything a person or the LLM reads is in English, prices in
 USD. A Spanish message gets a fixed English notice from a deterministic, local language check — before the LLM,
-the score or the state machine. Supporting Spanish means translating prompts, fixed texts and the guardrail
+the score or the state machine. The check only recognises **Spanish vs. English** (it counts words that belong
+to only one of the two, and lets the message through when in doubt); a message in Portuguese or French is not
+caught by it and reaches the model. Supporting Spanish means translating prompts, fixed texts and the guardrail
 recognisers and re-running the gold sets; the gold sets were originally written in Spanish, so it's work, not
 redesign.
 
@@ -123,8 +140,8 @@ tool; code offers three numbered slots from the calendar and books the one the l
 
 **Q: Why no Redis, no queue, no Kubernetes?**
 At this size they add moving parts without adding capability. The scheduler runs inside core with its jobs in
-PostgreSQL (DT-3, DT-44): visit reminders the day before, a follow-up after 24 h of silence, then NURTURE and
-LOST. One database also means one transaction per turn.
+PostgreSQL (DT-3, DT-44): a visit reminder at 6 pm the day before, follow-ups after 24 h of silence, then NURTURE
+and LOST. One database also means one transaction per turn.
 
 **Q: What does "one transaction per turn" buy you?**
 Each turn locks the conversation row (`SELECT … FOR UPDATE`), and saves the new state, the score, the audit
@@ -155,7 +172,7 @@ Six steps per message; two are AI, four are code.
 | 2. Classify | Haiku 4.5 | Structured JSON: intent, budget, who decides, urgency, wants a visit and when, which shown property they mean, frustration, asks for something not in the catalog… |
 | 3. Write | Sonnet 4.5 | Decides which catalog tools to call (up to 3 rounds) and writes the reply with **placeholders**, not data |
 | 4. Fill the data | Code | Replaces `{prop_00231.price}` with $185,000 from the tool result |
-| 5. Output check | Code | Every fact traced to a tool; no promises; no exact address before qualifying; fair housing. Fail → rewrite once → else safe answer offering an advisor |
+| 5. Output check | Code | Every placeholder filled from a tool and no number outside one; property status verified; no promises; no exact address before qualifying. Fail → rewrite once → else safe answer offering an advisor |
 | 6. Score + state | Code | Pure function for the score; table-driven state machine; saved in one transaction |
 
 The state machine route is picked by code from the classifier's fields — the model doesn't choose the next
@@ -201,14 +218,20 @@ treat a single-message drop as possible noise and compare it against the previou
 ## 4. Guardrails and fair housing (slide 7)
 
 **Q: List the guardrails.**
-- **Input (deterministic, before the LLM — DT-15):** opt-out (`/stop`); unrequested personal data like ID or
-  card numbers removed before storing or sending to the model; jailbreak / prompt-extraction treated as a normal
-  domain question and stored as `[message omitted]`; off-topic or formal legal/tax/credit advice gets a bounded
-  answer plus an advisor; protected characteristics never reach the score or the model; non-English gets a
-  fixed notice.
-- **Output (before anything is sent):** factuality (placeholders + traceability), prohibited promises
-  (discounts, holds, credit approval, closing — DT-26), reserved address (DT-25), fair housing.
+- **Input (deterministic, before the LLM — DT-15):** opt-out (`/stop`); unrequested personal data — ID
+  documents (cédula, passport, SSN…) and card numbers — removed before storing or sending to the model (phone and
+  email are not removed: a lead may give them on purpose); jailbreak / prompt extraction gets a fixed generic
+  reply **without calling the model** and is stored as `[message omitted]`; off-topic or formal legal/tax/credit
+  advice gets a fixed bounded answer, plus an advisor offer if the lead insists; protected characteristics are
+  removed or generalised before the score and the model; a Spanish message gets a fixed notice.
+- **Output (before anything is sent, Sonnet replies only):** placeholders and numbers (DT-60), property status,
+  prohibited promises (discounts, holds, credit approval, closing — 6 of the 8 listed claims are enforced in
+  code, DT-26), "I'll check and get back to you" without having looked anything up, reserved address (DT-25).
+- **There is no fair-housing check on the output of chat replies.** Fair housing is enforced at input (removal,
+  fixed answer), in the score contract (no field for it) and in the prompt. Only the handoff summary has an
+  output filter for protected mentions.
 - **Code over model:** availability re-checked in code and fails closed (DT-21).
+- **Prompt only, no code check:** no opinions, no legal advice, no pressure to hurry.
 
 **Q: How do you guarantee nationality or family don't affect the score?**
 Three layers. The score contract has **no field** for a protected category — it's structural, not a rule. The
@@ -229,8 +252,9 @@ person is *asking if it matters* is decided by a classifier field (`asks_if_it_m
 mention doesn't get a lecture.
 
 **Q: What about prompt injection or jailbreaks?**
-Detected deterministically at input, answered as a normal domain question and stored as `[message omitted]`, so
-the injection never comes back as history. More importantly, even a successful injection can't produce a fake
+Detected deterministically at input. A detected attempt never reaches the model: it gets a fixed generic reply,
+adds nothing to the score, triggers no handoff or search, and is stored as `[message omitted]`, so it never comes
+back as history. More importantly, even a successful injection can't produce a fake
 price, a discount, a booking or the exact address, because those don't depend on the model obeying the prompt.
 Honest limit: the detector is rule-based, so a novel phrasing can get through to the model — it just has very
 little it can break.
@@ -240,7 +264,9 @@ The classifier flags "asks for something the catalog doesn't record" (`asks_unli
 says an advisor will confirm. It never says yes or no. That was a real error class in the jury tests.
 
 **Q: Opinions — "is it a good investment"?**
-No opinions, no legal advice, no pressure: it gives the facts it has or offers an advisor.
+No opinions, no legal advice, no pressure: it gives the facts it has or offers an advisor. Be precise if asked:
+this one is a **prompt rule**, not a code check. Formal legal/tax/credit advice is also caught at input, but an
+opinion about a property relies on the model following the prompt (in set P it declined correctly).
 
 ---
 
@@ -251,7 +277,7 @@ Four layers, from cheapest to most realistic:
 
 1. **Gold sets in CI, no LLM.** One per guardrail — invented data, exact address, promises, fair housing,
    language — each with a threshold; a pull request that drops one below its threshold fails CI (DT-37). Plus
-   1,300+ unit, contract and state-machine tests.
+   about 2,700 unit, contract and state-machine tests.
 2. **Live scenario evaluation** (`harness/scripts/evaluate.py`). 12 scripted conversations, run 5 times each
    against the real model. Each turn declares what it expects: at least one of the expected tools, one of the
    expected texts, none of the forbidden ones, the audit entries it should produce; each scenario declares its
@@ -335,19 +361,20 @@ Three system prompts plus a correction prompt (`services/core/app/bedrock_llm.py
 - **Summary (Sonnet):** three keys — what they want, objections, next step — every fact from the conversation.
 - **Correction:** tells the model which check its draft failed, as system text.
 
-The point to make: the prompt is not the only safety layer. Each rule that protects the agency is also enforced
-in code.
+The point to make: the prompt is not the only safety layer. The rules about facts, score, booking, address and
+promises are also enforced in code. Opinions, tone and "don't pressure" rely on the prompt only.
 
 **Q: Which MCP tools?**
-`search_properties` (with closest alternatives when nothing matches — computed by code, DT-57),
+`search_properties` (when nothing matches, core repeats the search with one filter fewer — area, then property
+type, then operation — and offers what comes back; that's code, not the model, DT-57),
 `get_property` (including the operation's requirements), `get_availability`, `get_promotions`,
 `check_requirements`, `list_zones`. Up to 3 tool rounds per reply.
 
 **Q: How does the agent remember the conversation?**
 State lives in PostgreSQL, nothing in process memory. The chat model sees the last 20 messages; the classifier
 sees the current message, the last assistant reply and the list of properties already shown, so it can resolve
-"it" or "the cheaper one" (DT-63). Facts a tool already returned are remembered across turns, except status,
-which is always re-checked (DT-59). Personal data and protected mentions are removed before storing, so they
+"it" or "the cheaper one" (DT-63). Facts a tool already returned are remembered across turns, with an expiry,
+except status and the exact address: status is always re-checked (DT-59). Personal data and protected mentions are removed before storing, so they
 never come back as history. A returning lead inherits their score signal (DT-29).
 
 **Q: What about long conversations?**
@@ -361,7 +388,7 @@ turns, so it wasn't needed. It's a known gap.
 **Q: Why no LangChain / LangGraph / CrewAI?**
 We evaluated LangGraph piece by piece (DT-22). Its checkpointer would be a second source of truth next to
 PostgreSQL; a node graph would split the single transaction that saves state, score, audit and messages; the
-state machine is an 89-line pure function that would become longer and framework-dependent; and the only thing
+state machine is a ~100-line pure function that would become longer and framework-dependent; and the only thing
 it would really replace is a short tool loop that holds guarantees we want visible (arguments fixed by code,
 rate limiter, safe fallback). CrewAI, Pydantic AI and similar target multiple collaborating agents or tie to a
 provider; this is one agent with a state machine. Downsides we accept: we maintain the tool loop, retries and
@@ -558,8 +585,8 @@ Deliberately simple (DT-23): the guarantee the agency needs is "this wasn't inve
 Its blind spot — a real number from the wrong property — is what placeholders closed, without a second model.
 
 **Q: What happens with a lead who never answers?**
-The scheduler sends a follow-up after 24 h of silence; after more attempts the conversation moves to NURTURE
-(repeated every 7 days) and then LOST. If they write back from NURTURE, it returns to DISCOVERY; after LOST, the
+The scheduler sends a follow-up after 24 h of silence; after 2 unanswered follow-ups the conversation moves to
+NURTURE, which follows up every 7 days, and then to LOST. If they write back from NURTURE, it returns to DISCOVERY; after LOST, the
 next message opens a new conversation that inherits their score signal (DT-29, DT-44). LOST doesn't close the
 lead — that stays the advisor's call.
 
