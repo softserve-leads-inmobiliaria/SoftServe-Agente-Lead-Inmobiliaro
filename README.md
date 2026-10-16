@@ -32,7 +32,7 @@ observed working with the real model from what is built and covered only by auto
 | **Advisor notification** by Telegram when a lead qualifies | Verified live |
 | **Conversion funnel** dashboard | Verified live |
 | Lead profile in the panel with score, transcript, booked visits and in-panel notifications | Automated tests |
-| Hand-over summary for the advisor, written by the model and checked like any reply | Automated tests |
+| Hand-over summary for the advisor, written by the model and checked for invented data, promises, exact address and protected mentions (discarded if it fails) | Automated tests |
 | Hand-over when the lead is clearly frustrated after several unresolved turns | Automated tests |
 | Visit reminder the day before; follow-ups after 24 hours of silence | Automated tests |
 | Recording a closed deal from the lead profile | Automated tests |

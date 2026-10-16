@@ -54,7 +54,7 @@ Bien: es lo que se midió con P. Mientras escribe:
 
 | No hace | Qué contesta en su lugar | Por qué |
 | :--- | :--- | :--- |
-| Hablar en otro idioma que no sea inglés | Un aviso fijo | El catálogo y los guardrails están en inglés |
+| Hablar en español | Un aviso fijo que pide escribir en inglés (el filtro distingue español de inglés; otro idioma llega al modelo) | El catálogo y los guardrails están en inglés |
 | Confirmar lo que no está en la ficha: parqueo, mascotas, piso, administración, servicios, metro | Que lo confirma un asesor | Un dato que no está en el catálogo sería inventado |
 | Dar la dirección exacta antes de calificar | La zona aproximada | Seguridad del propietario (A-6) |
 | Descuentos, fijar el precio, apartar, negociar | Que lo ve un asesor | Una promesa compromete a la agencia (A-7) |
