@@ -124,7 +124,7 @@ El contador de Avisos sale del `unread` que ya calcula `main.py`; no se agrega n
 
 ## 6. Vistas
 
-### 6.1 Cola (`leads_list.html`) — `/panel/{token}`
+### 6.1 Cola (`leads_list.html`) — `/panel` (asesor, B-17)
 
 - **KPIs arriba:** leads en la cola, HOT sin tomar (con el umbral de `sla_minutes`), avisos sin leer.
 - **Tabla:** columnas Lead, Score (badge + total), Etapa, Estado (badge), Último mensaje, acción.
@@ -134,7 +134,7 @@ El contador de Avisos sale del `unread` que ya calcula `main.py`; no se agrega n
 - **SLA vencido (B-12):** fila con borde izquierdo `--danger`, badge "HOT sin tomar hace X min" con
   texto e icono; no solo el fondo rosado.
 
-### 6.2 Ficha (`lead_detail.html`) — `/panel/{token}/leads/{id}`
+### 6.2 Ficha (`lead_detail.html`) — `/panel/leads/{id}` (asesor)
 
 - **Encabezado:** `Lead <short>`, badge de banda y estado, y las acciones ("Marcar en gestión",
   "Cerrar operación") a la derecha.
@@ -145,21 +145,21 @@ El contador de Avisos sale del `unread` que ya calcula `main.py`; no se agrega n
 - **Cerrar operación:** el formulario usa `.field`; los errores de validación se muestran junto al
   campo (`close_error`), manteniendo los valores escritos (hoy ya se conservan).
 
-### 6.3 Avisos (`avisos.html`) — `/panel/{token}/avisos`
+### 6.3 Avisos (`avisos.html`) — `/panel/avisos` (asesor)
 
 - Lista con encabezado y contador; el aviso no leído lleva etiqueta "nuevo" + punto de color + negrita.
 - Se mantiene el auto-refresh (`<meta http-equiv="refresh" content="{{ refresh_seconds }}">`), que es
   lo que hace que los avisos "lleguen solos".
 - Estado vacío claro con la acción esperada.
 
-### 6.4 Funnel (`funnel.html`) — `/panel/{token}/funnel`
+### 6.4 Funnel (`funnel.html`) — `/panel/funnel` (gerente)
 
 - **KPIs:** total de leads y la etapa más avanzada con más caída.
 - **Tabla de etapas** con una barra proporcional (SVG inline) al lado del porcentaje, para comparar de
   un vistazo. Los estados laterales (NURTURE, LOST…) en una sección aparte.
 - Se conservan las notas de DT-17 (la entrada a GREETING no es una transición).
 
-### 6.5 Negocio (`negocio.html`) — `/panel/{token}/negocio`
+### 6.5 Negocio (`negocio.html`) — `/negocio` (gerente)
 
 - **Fila de KPIs:** colocadas, monto colocado, % atribuido al bot y tiempo de atención (B-12).
 - **Secciones por pregunta de negocio**, no 10 tarjetas iguales: "¿Qué se colocó?" (por zona/asesor),
@@ -201,7 +201,8 @@ El contador de Avisos sale del `unread` que ya calcula `main.py`; no se agrega n
 - **Sin datos nuevos:** todo sale de lo que `main.py` y `repo.py` ya calculan (`unread`, `overdue`,
   `report`, `view`). El rediseño no agrega consultas ni columnas.
 - **Rutas y auth intactas:** mismas URLs, mismo token estático (DT-5), mismo 404 uniforme para token o
-  lead ajenos. No se introducen roles ni login.
+  lead ajenos. No se introducen roles ni login. (Después, B-17 y DT-72 reemplazaron el token por un login
+  con roles de asesor y gerente; el 404 uniforme se conserva.)
 - **Privacidad intacta (DT-41):** funnel y negocio siguen sin mostrar leads, conversaciones ni
   contacto; la lista de estancadas muestra propiedades.
 

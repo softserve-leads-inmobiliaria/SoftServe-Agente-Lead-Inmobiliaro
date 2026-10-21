@@ -357,7 +357,7 @@ def main() -> None:
           f"{summary.deals} cierres, {summary.interest} interacciones y {summary.unmet} búsquedas sin resultado.")
     for property_id, reason in summary.skipped.items():
         print(f"  {property_id} no se tocó: {reason}")
-    print("Se ve en el panel con /panel/<token>/negocio?demo=1")
+    print("Se ve en el panel con /negocio?demo=1, entrando como gerente")
 
 
 if __name__ == "__main__":

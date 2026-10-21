@@ -451,16 +451,16 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    subgraph Publico["Sin token"]
+    subgraph Publico["Sin login"]
         LAND["/properties<br/>propiedades disponibles<br/>enlace a Telegram por propiedad"]
     end
-    subgraph Asesor["/panel/{token}"]
+    subgraph Asesor["/panel · rol asesor"]
         COLA["Cola por score<br/>HOT arriba · SLA de 30 min"]
         FICHA["Ficha: score, resumen,<br/>transcripción, visita"]
         CERRAR["Cerrar operación"]
         AVISOS["Avisos"]
     end
-    subgraph Gerencia["Cualquier token"]
+    subgraph Gerencia["/negocio · rol gerente"]
         FUN["Funnel"]
         NEG["Negocio: colocación, rotación,<br/>estancadas, demanda, atribución"]
     end
@@ -469,8 +469,9 @@ flowchart TB
     LAND -->|"t.me/bot?start=prop_…"| TG["Telegram"]
 ```
 
-- **FastAPI con plantillas, leyendo Postgres.** La autenticación es un token por asesor (DT-5); cada asesor
-  ve los leads de su zona y los asignados (DT-42).
+- **FastAPI con plantillas, leyendo Postgres.** Login con usuario y contraseña y dos roles (B-17, DT-72): cada
+  asesor ve los leads de su zona y los asignados (DT-42); el gerente, negocio y funnel. Lo que no es del rol da
+  404, y las URLs viejas con token solo redirigen al login.
 - **La landing es una ruta más del panel**, de solo lectura y sin datos sensibles: nunca `address_exact` ni
   leads (DT-71).
 - **Cerrar una operación** escribe en una transacción el `deal`, el lead en `closed_won` y la propiedad en

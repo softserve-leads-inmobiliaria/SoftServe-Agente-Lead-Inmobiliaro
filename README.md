@@ -230,7 +230,7 @@ docker compose up --build
 
 | What | Where |
 | :--- | :--- |
-| Advisor panel | http://localhost:8080/panel/&lt;token&gt;. The `seed` service prints each advisor's URL |
+| Advisor panel | http://localhost:8080/login. Advisors `valeria`, `andres`, `camila` (password `asesor-demo`) see their queue; `gerente` (`gerente-demo`) sees business and funnel. Change them in `.env` |
 | Public landing page | http://localhost:8080/properties |
 | Core API | http://localhost:8000/health. Conversation turns go to `POST /events` |
 | Traces (Phoenix) | http://localhost:6006. Timings, tokens, tools and decisions per turn. Message text shows as `__REDACTED__` by design: it is personal data and lives in PostgreSQL (`messages`, shown in the lead profile) |

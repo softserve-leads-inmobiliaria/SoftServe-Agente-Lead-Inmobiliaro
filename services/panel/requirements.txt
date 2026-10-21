@@ -3,4 +3,6 @@ uvicorn==0.53.0
 jinja2==3.1.6
 # Formularios del panel: "Cerrar operación" (N-3). FastAPI lo necesita para leer `Form`.
 python-multipart==0.0.32
+# Login del panel (B-17, DT-72): `SessionMiddleware` de Starlette firma la cookie de sesión con itsdangerous.
+itsdangerous==2.2.0
 -r ../../db/requirements.txt

@@ -16,7 +16,8 @@
     <dd>
       {{ ui.status_badge(lead.status) }}
       {% if lead.status in ("nuevo", "mql") %}
-      <form class="inline" method="post" action="/panel/{{ token }}/leads/{{ lead.id }}/gestionar">
+      <form class="inline" method="post" action="/panel/leads/{{ lead.id }}/gestionar">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="btn">Mark as in progress</button>
       </form>
       {% endif %}
@@ -106,7 +107,8 @@
   {% if close_options %}
   <details class="close"{% if close_error %} open{% endif %}>
     <summary>Close a deal</summary>
-    <form class="close" method="post" action="/panel/{{ token }}/leads/{{ lead.id }}/cerrar">
+    <form class="close" method="post" action="/panel/leads/{{ lead.id }}/cerrar">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <label class="field">Property
         <select name="property_id" required>
           <option value="" disabled{% if not closing %} selected{% endif %}>Choose the property</option>

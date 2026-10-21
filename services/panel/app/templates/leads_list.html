@@ -26,7 +26,7 @@
         {% set wait = overdue.get(lead.id) %}
         <tr{% if wait %} class="overdue"{% endif %}>
           <td>
-            {{ ui.lead_link(lead, token) }}
+            {{ ui.lead_link(lead) }}
             {% if wait %}<br>{{ ui.sla_badge(wait, sla_minutes) }}{% endif %}
           </td>
           <td>{{ ui.band_badge(lead.score_band, lead.score_total) }}</td>
@@ -37,7 +37,8 @@
           </td>
           <td>
             {% if lead.status in ("nuevo", "mql") %}
-            <form class="inline" method="post" action="/panel/{{ token }}/leads/{{ lead.id }}/gestionar">
+            <form class="inline" method="post" action="/panel/leads/{{ lead.id }}/gestionar">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
               <button type="submit" class="btn">Mark as in progress</button>
             </form>
             {% endif %}

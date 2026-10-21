@@ -53,6 +53,8 @@ INTEREST_KINDS = ("anuncio", "consulta", "busqueda", "visita")
 # Tareas diferidas (A-17, DT-44). Cada historia que agregue una clase de *job* la suma aquí y en una migración.
 JOB_KINDS = ("no_response", "visit_reminder", "alert_scan", "property_alert", "weekly_report_plan", "weekly_report")
 JOB_STATUSES = ("pending", "done", "failed", "cancelled")
+# Quién entra al panel (B-17, DT-72): el asesor ve su cola; el gerente, negocio y funnel.
+PANEL_ROLES = ("asesor", "gerente")
 
 # Dimensión del vector de la FAQ. Valor de partida (modelos de sentence embeddings habituales usan
 # 384); C-5 fija el modelo real (DT-7) y, si cambia, lo ajusta con una migración nueva.
@@ -257,6 +259,28 @@ class Advisor(Base):
     access_token: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     # A dónde llega la tarjeta del lead calificado (B-7). Lo completa el asesor al abrir el bot.
     telegram_chat_id: Mapped[str | None] = mapped_column(String, unique=True)
+
+
+class PanelUser(Base):
+    """Usuario del panel (B-17, DT-72). El asesor tiene su `advisor_id`; el gerente no tiene ninguno.
+
+    `password_hash` es scrypt con sal propia (`db/passwords.py`): la contraseña en claro no se guarda.
+    `Advisor.access_token` sigue existiendo para el registro en Telegram (B-7), pero ya no abre el panel.
+    """
+
+    __tablename__ = "panel_users"
+    __table_args__ = (
+        _one_of("role", PANEL_ROLES, "ck_panel_users_role"),
+        CheckConstraint("(role = 'asesor' AND advisor_id IS NOT NULL) OR (role = 'gerente' AND advisor_id IS NULL)",
+                        name="ck_panel_users_advisor_por_rol"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String, nullable=False)
+    role: Mapped[str] = mapped_column(String, nullable=False)
+    advisor_id: Mapped[str | None] = mapped_column(ForeignKey("advisors.id", ondelete="CASCADE"), unique=True)
+    created_at: Mapped[datetime] = _now()
 
 
 class Visit(Base):

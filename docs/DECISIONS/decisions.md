@@ -95,7 +95,7 @@ existe mientras alguien del equipo tiene el `docker-compose up` corriendo.
 
 ## DT-5 — Auth del panel de asesores: token estático por asesor
 
-**Estado:** aceptada
+**Estado:** reemplazada por DT-72 (B-17, #265). El 404 uniforme se conserva; el token ya no abre el panel.
 
 **Contexto.** El panel necesita distinguir la cola de cada asesor sin exponer datos de uno a otro.
 Son 3 asesores conocidos de antemano.
@@ -3133,7 +3133,8 @@ compose publica el panel en `127.0.0.1` (`BIND_ADDRESS`).
 
 - **La landing es una ruta más del panel**, `/properties`, **sin token de asesor y de solo lectura**. No se
   suma un contenedor, un healthcheck ni un despliegue. La autenticación por token de DT-5 sigue valiendo
-  para `/panel/...`; esta ruta es la única pública, además de `/health`.
+  para `/panel/...`; esta ruta es la única pública, además de `/health`. (Desde DT-72 el resto del panel
+  pide login; `/properties` y `/health` siguen públicas, y `/login` se suma a ellas.)
 - **Solo datos de anuncio**: título, tipo de inmueble (`kind`, #188), operación (`type`), zona, precio, m²,
   recámaras, baños y `photo_url`. Nunca `address_exact` (dirección reservada, `guardrails.md`), y nada de
   leads, asesores, transcripciones ni del resto del panel. Las propiedades que no están `disponible`
@@ -3163,3 +3164,69 @@ compose publica el panel en `127.0.0.1` (`BIND_ADDRESS`).
   celular, y el resto del panel sigue detrás del token.
 - Un QR por propiedad, filtros o SEO quedan fuera; el QR sumaría una dependencia y se puede agregar después.
 - La landing no escribe en la base, así que no puede alterar inventario ni leads.
+
+## DT-72 — Login propio del panel con roles de asesor y gerente, en una cookie firmada
+
+**Estado:** aceptada (B-17, #265). Reemplaza a DT-5.
+
+**Contexto.** Con DT-5 la URL `/panel/<token>` era la sesión: quien la tuviera entraba, no vencía, y la vista de
+negocio (N-8) y el funnel (B-9) los abría cualquier asesor. El gerente no tenía usuario propio. Los gold sets y
+las corridas medidas (J, N, M, O, P y el cierre del 8-oct) dependen del agente tal como está, así que el cambio
+tenía que quedar dentro del panel: sin tocar `services/core`, `services/catalog`, `contracts/` ni los prompts.
+El core ya manda enlaces `/panel/<token>` (avisos al asesor) y `/panel/<your token>/negocio` (reporte semanal),
+y `Advisor.access_token` también registra al asesor en Telegram (`?start=adv_<token>`, B-7).
+
+**Decisión.**
+
+- **Usuarios propios en `panel_users`** (migración 0018): `username` único, `password_hash`, `role`
+  (`asesor` o `gerente`, con CHECK) y `advisor_id`, obligatorio para el asesor y vacío para el gerente
+  (otro CHECK). `advisors` no cambia.
+- **Contraseñas con `hashlib.scrypt`** y sal por usuario (`db/passwords.py`, solo biblioteca estándar), comparadas
+  con `hmac.compare_digest`. Un usuario inexistente se verifica contra un hash de relleno, para que tarde lo
+  mismo que una contraseña incorrecta, y los dos casos muestran el mismo mensaje.
+- **Sesión en una cookie firmada** (`SessionMiddleware` de Starlette, con `itsdangerous` como única dependencia
+  nueva): `HttpOnly`, `SameSite=Lax`, 8 horas desde el login, sin tabla de sesiones. Guarda solo el id del
+  usuario y su token CSRF. El login descarta la sesión anterior entera.
+- **`PANEL_SESSION_SECRET`** firma la cookie. Sin él el panel no arranca, y el valor de ejemplo solo se acepta
+  con `PANEL_DEMO=1`. El secreto y las contraseñas de demo (`PANEL_ADVISOR_PASSWORD`, `PANEL_MANAGER_PASSWORD`)
+  siguen el patrón de `POSTGRES_PASSWORD`: default en `docker-compose.yml`, documentados en `.env.example` y
+  pisables desde `.env`. No van en `config/panel.env` porque DT-48 deja los secretos fuera de `config/`
+  (`test_config_files_hold_no_secrets`); ahí solo va `PANEL_DEMO`.
+- **Rutas por rol, sin token:** el asesor tiene `/panel`, `/panel/leads/{id}`, `/panel/avisos` y los POST de
+  "Gestionar" y "Cerrar operación"; el gerente, `/negocio` y `/panel/funnel`. El asesor va a su cola al entrar y
+  el gerente a negocio. La navegación muestra solo lo del rol, con quién inició sesión y el botón de salir.
+- **El 404 uniforme de DT-5 se conserva** para todo lo que no corresponde a la sesión: un asesor que pide negocio,
+  el funnel o un lead ajeno, y un gerente que pide la cola, una ficha o los avisos. Nunca 401 ni 403 por permisos.
+  Sin sesión, las rutas protegidas redirigen a `/login`.
+- **CSRF** en los formularios POST ("Gestionar", "Cerrar operación", logout): un token por sesión en un campo
+  oculto. Sin él, o con otro, el POST responde **403** y no escribe nada. Es un formulario rechazado, no una
+  sonda de recursos, así que no entra en la regla del 404.
+- **Las rutas viejas `/panel/{token}/…` solo redirigen** (303) a su ruta nueva, conservando el query string
+  (`?demo=1`), sin mirar el token: no revelan si existe ni autentican. Así siguen sirviendo los enlaces que ya
+  manda el core, sin tocarlo.
+- **Seed:** un usuario por asesor sembrado (`valeria`, `andres`, `camila`) y `gerente`. El seed reescribe el hash
+  en cada corrida, así una contraseña nueva en `.env` vale desde el próximo `seed`.
+
+**Alternativas.**
+
+- **Clerk.** Descartada: su SDK de Python verifica un token que obtiene un frontend con ClerkJS, y el panel son
+  plantillas Jinja sin JavaScript.
+- **Google (OIDC con Authlib).** Descartada para esta historia: encaja con FastAPI, pero exige un cliente OAuth en
+  Google Cloud, una cuenta Google real por asesor y por gerente en la lista de usuarios de prueba, y una URI de
+  callback exacta, con puerto incluido. Es más que puede fallar en vivo. Queda como mejora: un "Continuar con
+  Google" se puede sumar sobre esta misma sesión y estos roles, mapeando el correo a un `panel_users`.
+- **Mantener el token y sumar solo un rol de gerente.** Descartada: el token en la URL sigue siendo una sesión que
+  no vence y que se filtra en el historial del navegador y en los mensajes.
+- **Tabla de sesiones en Postgres.** Descartada: con un solo contenedor de panel, la cookie firmada alcanza y no
+  suma escrituras ni limpieza.
+
+**Consecuencias.**
+
+- Para cambiar de rol frente al jurado basta con salir y entrar con otro usuario. `up.sh` imprime los usuarios.
+- El gerente no ve leads: la cola de todos los asesores en lectura queda fuera de alcance.
+- Fuera de alcance: recuperar la contraseña, el alta de usuarios desde la UI, 2FA, el bloqueo por intentos
+  fallidos y el vencimiento por inactividad.
+- La corrida real (`harness/scripts/live_run.py`) entra al panel con el usuario del asesor de la zona; la
+  conversación con el agente no cambia.
+- El login no lleva token CSRF propio: `SameSite=Lax` impide que otro sitio mande la cookie en un POST, y un
+  login forzado solo abriría una sesión del atacante.

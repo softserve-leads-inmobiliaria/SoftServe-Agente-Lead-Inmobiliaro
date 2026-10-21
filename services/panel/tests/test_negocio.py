@@ -18,7 +18,7 @@ from db.testing import temporary_database
 
 TODAY = date(2026, 10, 3)  # sábado
 # La semana del 14 al 20 de septiembre, pedida como rango para que el test no dependa de la fecha de hoy.
-WEEK = "/panel/tok-v/negocio?periodo=rango&desde=2026-09-14&hasta=2026-09-20"
+WEEK = "/negocio?periodo=rango&desde=2026-09-14&hasta=2026-09-20"
 IN_WEEK = datetime(2026, 9, 16, 18, tzinfo=UTC)
 EMPTY = "No data for this period."
 SECTIONS = 9
@@ -59,6 +59,13 @@ def client(session_factory):
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def gerente(request):
+    """La vista de negocio es del gerente (B-17): los tests de la página entran con su sesión."""
+    if "client" in request.fixturenames:
+        request.getfixturevalue("login")()
 
 
 def _property(session, pid, *, zone, title, listed, status_now="disponible", synthetic=False):
@@ -151,12 +158,21 @@ def test_an_unknown_period_is_the_week():
 
 # --- la página -------------------------------------------------------------------------------------------
 
-def test_a_token_that_does_not_exist_is_404(client):
-    assert client.get("/panel/token-falso/negocio").status_code == 404
+def test_a_token_no_longer_opens_the_view_and_an_advisor_gets_404(client, session_factory, login):
+    # B-17: la ruta vieja solo redirige (conservando el periodo) y la vista pide la sesión del gerente.
+    client.post("/logout", data={"csrf_token": login()})
+    old = client.get("/panel/token-falso/negocio?demo=1", follow_redirects=False)
+    assert old.status_code == 303 and old.headers["location"] == "/negocio?demo=1"
+    assert client.get("/panel/token-falso/negocio").url.path == "/login"
+
+    with session_factory() as session:
+        valeria = session.get(Advisor, "adv_v")
+    login(valeria)
+    assert client.get("/negocio").status_code == 404
 
 
 def test_with_an_empty_database_every_section_says_no_data(client):
-    page = client.get("/panel/tok-v/negocio")
+    page = client.get("/negocio")
 
     assert page.status_code == 200
     assert page.text.count(EMPTY) == SECTIONS
@@ -194,15 +210,15 @@ def test_the_synthetic_history_only_shows_up_when_asked(client, mundo):
 
 
 def test_an_invalid_range_shows_the_week_with_a_notice(client):
-    page = client.get("/panel/tok-v/negocio?periodo=rango&desde=2026-09-20&hasta=2026-09-14")
+    page = client.get("/negocio?periodo=rango&desde=2026-09-20&hasta=2026-09-14")
 
     assert page.status_code == 200
     assert INVALID_RANGE in page.text
 
 
 def test_the_funnel_links_to_the_view_and_back(client):
-    assert 'href="/panel/tok-v/negocio"' in client.get("/panel/tok-v/funnel").text
-    assert 'href="/panel/tok-v/funnel"' in client.get("/panel/tok-v/negocio").text
+    assert 'href="/negocio"' in client.get("/panel/funnel").text
+    assert 'href="/panel/funnel"' in client.get("/negocio").text
 
 
 def test_the_view_shows_how_long_each_advisor_takes_to_claim(client, session_factory):

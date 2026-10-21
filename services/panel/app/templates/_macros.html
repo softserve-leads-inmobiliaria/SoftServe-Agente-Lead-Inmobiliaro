@@ -31,8 +31,8 @@
 {%- endmacro %}
 
 {# Identificador legible del lead (#178): el `telegram_user_id` queda en el `title` y en la ficha. #}
-{% macro lead_link(lead, token) -%}
-<a href="/panel/{{ token }}/leads/{{ lead.id }}" title="{{ lead.telegram_user_id }}">Lead {{ (lead.id|string|replace('-', ''))[:6] }}{% if lead.zone %} · {{ lead.zone }}{% endif %}</a>
+{% macro lead_link(lead) -%}
+<a href="/panel/leads/{{ lead.id }}" title="{{ lead.telegram_user_id }}">Lead {{ (lead.id|string|replace('-', ''))[:6] }}{% if lead.zone %} · {{ lead.zone }}{% endif %}</a>
 {%- endmacro %}
 
 {% macro sla_badge(wait, sla_minutes) -%}

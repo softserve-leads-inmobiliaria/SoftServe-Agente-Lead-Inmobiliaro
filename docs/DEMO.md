@@ -10,9 +10,11 @@ contesta a lo que el agente suele preguntar en ese punto, según las corridas en
 1. `.env` con `LLM_PROVIDER=bedrock`, las credenciales de Bedrock, los dos modelos (Sonnet 4.5 conversa, Haiku
    4.5 clasifica; IDs en `docs/TESTING.md`) y `TELEGRAM_BOT_TOKEN`. **Sin** `TRACE_CONTENT`.
 2. `bash scripts/demo/up.sh`. Levanta el stack, siembra asesores, catálogo y seis meses de historia, y al final
-   imprime el panel de cada asesor, el enlace del anuncio y Phoenix. Correrlo justo antes: cada seed cambia las
-   URLs del panel.
-3. Dos pantallas: Telegram (lead) a la izquierda y el panel de **Valeria Ortiz** (El Poblado) a la derecha.
+   imprime el login del panel con el usuario de cada asesor y el del gerente, el enlace del anuncio y Phoenix.
+3. Dos pantallas: Telegram (lead) a la izquierda y el panel a la derecha, en `http://localhost:8080/login`, con la
+   sesión de **Valeria Ortiz** (El Poblado): usuario `valeria`, contraseña `asesor-demo` (o la de
+   `PANEL_ADVISOR_PASSWORD` en `.env`). Para la parte del gerente: **Log out** y entrar como `gerente`
+   (`gerente-demo` o `PANEL_MANAGER_PASSWORD`). Cada rol ve solo lo suyo (B-17, DT-72).
 4. Nada más corriendo contra Bedrock: ni `evaluate.py` ni `conversar.py`. El cupo es de 10 llamadas por minuto.
 5. Un chat de Telegram limpio: el lead del ensayo ya quedó en `HANDOFF`. Usar otra cuenta o volver a correr
    `up.sh`.
@@ -37,7 +39,7 @@ esperado, se sigue con la siguiente frase: todas se entienden solas.
 | 10 | `Great, can I go see it?` | Horarios numerados (lunes a sábado, de 9:00 a 18:00) | La agenda la maneja el código, no el modelo |
 | 11 | `1` | "… is booked for …" | La visita queda reservada y el lead pasa al asesor |
 | 12 | Panel de Valeria | El lead **arriba de la cola** por score, el aviso, la ficha con **el resumen de la conversación** y la visita | El asesor no lee el chat: lee el resumen y la nota |
-| 13 | En la ficha, **cerrar la operación**; abrir **Negocio** | La propiedad pasa a cerrada; colocación, rotación y demanda no cubierta | Para el dueño del negocio |
+| 13 | En la ficha, **cerrar la operación**; **Log out**, entrar como `gerente` y abrir **Business** | La propiedad pasa a cerrada; colocación, rotación y demanda no cubierta | Para el dueño del negocio: el asesor no ve esta vista, el gerente no ve leads |
 | 14 | (Si hay tiempo) Phoenix, la traza del turno 6 | Clasificador → ruta → tools → guardrails, con la decisión (`turn.decision`). La entrada y la salida de Bedrock dicen `__REDACTED__` | Cada respuesta se puede explicar. **Decirlo antes de que lo pregunten:** el texto del lead no va a las trazas (DT-18); está en Postgres y en la ficha del panel |
 
 ## 3. Si el jurado quiere escribir

@@ -19,7 +19,8 @@ Usado por `CT-3` (contrato `FsmState`/`LeadScore`/`Conversation`) y `C-3` (migra
 | `LeadScore` | lead_id, need_fit, budget, authority, timing, eligibility, total, band (COLD/WARM/HOT), reasons | Persistido, nunca calculado por el LLM directamente |
 | `Property` | id, title, price, type (venta/renta/preventa), kind (departamento/casa/terreno/local/estudio), zone, m2, bedrooms, bathrooms, amenities, status (disponible/apartado/cerrado), address_exact, address_approx, photo_url | `type` es la operación y `kind` el inmueble (#188, DT-54). `address_exact` reservada hasta `lead_qualified=true`. `status` solo cambia por `db/property_history.py` (`N-1`) |
 | `Promotion` | id, property_id, title, description, valid_until | Siempre atada a una propiedad; alimenta `catalog.get_promotions` |
-| `Advisor` | id, name, zone, language, access_token | `access_token` = auth del panel (ver `decisions.md`) |
+| `Advisor` | id, name, zone, language, access_token | `access_token` registra al asesor en Telegram (`B-7`); ya no abre el panel (DT-72) |
+| `PanelUser` | id, username, password_hash, role (asesor/gerente), advisor_id, created_at | Login del panel (`B-17`, DT-72). `advisor_id` obligatorio para el asesor y vacío para el gerente. Solo el hash scrypt de la contraseña |
 | `Visit` | id, lead_id, property_id, advisor_id, scheduled_at, idempotency_key | Idempotente para evitar duplicados por reintento de webhook del proveedor de calendario |
 | `AdvisorNotification` | id, advisor_id, lead_id, kind (calificado/traspaso), body, created_at, read_at | Aviso al asesor en el panel; Telegram es un canal adicional (`B-15`, DT-42) |
 | `PropertyStatusEvent` | id, property_id, from_status, to_status, changed_at, actor, synthetic | Historial de estados de la propiedad; `from_status` nulo es el alta. Lo escribe solo `db/property_history.py` (`N-1`) |
@@ -242,10 +243,11 @@ Las cajas con borde punteado no están construidas.
   catálogo no responde, se usa la regla local de `B-7`. Verificado en el stack con Docker llamando a
   `notify_advisor`, sin Telegram real.
 - **Avisos al asesor en el panel** (`B-15`, DT-42): cada tarjeta y ficha de traspaso se guarda en
-  `advisor_notifications` y se ve en `/panel/<token>/avisos`, con el contador de no leídos. Telegram es
+  `advisor_notifications` y se ve en `/panel/avisos`, con el contador de no leídos. Telegram es
   un canal adicional para el asesor que registró su chat.
-- **Panel de asesores** con ficha, etapa y transcripción (`B-5`), autenticado por token (DT-5). Cada
-  asesor ve los leads de su zona y los que tiene asignados (DT-42).
+- **Panel de asesores** con ficha, etapa y transcripción (`B-5`), con login de usuario y contraseña y dos
+  roles (`B-17`, DT-72): el asesor ve los leads de su zona y los que tiene asignados (DT-42); el gerente,
+  negocio y funnel. Las URLs viejas con token solo redirigen al login.
 - **Cerrar operación desde la ficha** (`N-3`, DT-52): el asesor elige la propiedad (primero las que el lead
   tocó, después las disponibles o apartadas de su zona), renta o venta, precio y fecha. En una
   transacción quedan la fila en `deals`, el lead en `closed_won` y la propiedad en `cerrado` con su
@@ -317,8 +319,8 @@ Las cajas con borde punteado no están construidas.
   - El mensaje deja la propiedad como la de interés de la conversación. `/stop` desactiva la alerta.
   - Hoy ningún código da de alta propiedades: quien lo haga tiene que pasar por `db/property_history.py`
     para que la alerta las vea.
-- **Vista de inventario y negocio** (`N-8`, DT-41): `/panel/<token>/negocio`, con las consultas de `N-6` y
-  `N-7`. Como el funnel de `B-9`, la ve cualquier token de asesor y un token que no existe da 404. Periodo:
+- **Vista de inventario y negocio** (`N-8`, DT-41): `/negocio`, con las consultas de `N-6` y
+  `N-7`. Como el funnel de `B-9`, la ve solo el gerente (`B-17`, DT-72); un asesor recibe 404. Periodo:
   la última semana (por defecto), el último mes o un rango de fechas, en hora local; un rango inválido
   muestra la última semana con un aviso. "Include demo history" suma lo sintético de `N-9`. Solo
   agregados: las estancadas y el ranking listan propiedades, nunca leads ni enlaces a una ficha. Con la

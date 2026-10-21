@@ -19,8 +19,10 @@ from __future__ import annotations
 
 import argparse
 import html
+import http.cookiejar
 import os
 import sys
+import urllib.parse
 import urllib.request
 import uuid
 from dataclasses import dataclass, field
@@ -85,16 +87,31 @@ def _row_of(listing: str, lead_id: str) -> str | None:
     return None
 
 
-def check_panel(run: ScriptRun, panel_url: str, token: str, lead_id: str, expected_state: str | None) -> list[str]:
-    """El lead aparece en la cola del asesor de su zona con su etapa, y su ficha muestra la transcripción."""
-    base = f"{panel_url.rstrip('/')}/panel/{token}"
-    row = _row_of(_get(base), lead_id)
+def check_panel(run: ScriptRun, panel_url: str, username: str, lead_id: str, expected_state: str | None) -> list[str]:
+    """El lead aparece en la cola del asesor de su zona con su etapa, y su ficha muestra la transcripción.
+
+    Entra con el usuario del asesor (B-17): la contraseña de demo de los asesores, o `PANEL_ADVISOR_PASSWORD`.
+    """
+    base = f"{panel_url.rstrip('/')}"
+    session = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    form = urllib.parse.urlencode({"username": username,
+                                   "password": os.environ.get("PANEL_ADVISOR_PASSWORD") or "asesor-demo"})
+    with session.open(f"{base}/login", data=form.encode(), timeout=10.0) as response:
+        if urllib.parse.urlparse(response.geturl()).path != "/panel":
+            return [f"panel: no se pudo iniciar sesión como {username!r}"]
+        queue = response.read().decode("utf-8")
+
+    def get(path: str) -> str:
+        with session.open(f"{base}{path}", timeout=10.0) as response:
+            return response.read().decode("utf-8")
+
+    row = _row_of(queue, lead_id)
     if row is None:
         return [f"panel: el lead no aparece en la cola del asesor de {run.zone}"]
     problems = []
     if expected_state and f"<td>{expected_state}</td>" not in row:
         problems.append(f"panel: la cola no muestra la etapa {expected_state} para el lead")
-    card = html.unescape(_get(f"{base}/leads/{lead_id}"))
+    card = html.unescape(get(f"/panel/leads/{lead_id}"))
     missing = [text for text, _ in run.transcript if text and text not in card]
     if missing:
         problems.append(f"panel: la ficha no muestra {missing!r}")
@@ -123,18 +140,20 @@ def run_script(path: Path, *, run_id: str, core_url: str, panel_url: str, engine
                                              {"c": event["conversation_id"]}).scalar()
         run.zone = connection.execute(text("SELECT zone FROM leads WHERE id = :l"),
                                       {"l": event["lead_id"]}).scalar()
-        token = connection.execute(text("SELECT access_token FROM advisors WHERE zone = :z ORDER BY id LIMIT 1"),
-                                   {"z": run.zone}).scalar() if run.zone else None
+        # El usuario del panel (B-17) del asesor de la zona; antes, su token.
+        username = connection.execute(text("SELECT u.username FROM advisors a JOIN panel_users u ON u.advisor_id = a.id "
+                                           "WHERE a.zone = :z ORDER BY a.id LIMIT 1"),
+                                      {"z": run.zone}).scalar() if run.zone else None
     accepted = accepted_final_states(run.name, real_llm=not check_replies)
     if expected and run.final_state not in accepted:
         run.failures.append(f"estado final {run.final_state!r} en Postgres, se esperaba {expected!r}")
     elif expected:
         expected = run.final_state  # el panel tiene que mostrar el estado al que llegó, si es uno aceptado
-    if run.zone and token is None:
+    if run.zone and username is None:
         run.failures.append(f"no hay asesor para la zona {run.zone!r} (¿falta `docker compose run --rm seed`?)")
     elif run.zone:
         try:
-            panel_problems = check_panel(run, panel_url, token, event["lead_id"], expected)
+            panel_problems = check_panel(run, panel_url, username, event["lead_id"], expected)
         except OSError as exc:
             panel_problems = [f"panel: {describe(exc)}"]
         run.failures += panel_problems

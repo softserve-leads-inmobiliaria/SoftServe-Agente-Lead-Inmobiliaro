@@ -55,27 +55,32 @@ def mundo(session_factory):
         return {"advisor": advisor, "lead": lead, "token": advisor.access_token}
 
 
-def test_la_navegacion_esta_en_todas_las_vistas_y_marca_la_activa(client, mundo):
-    token = mundo["token"]
-    pages = {
-        "leads": client.get(f"/panel/{token}").text,
-        "avisos": client.get(f"/panel/{token}/avisos").text,
-        "funnel": client.get(f"/panel/{token}/funnel").text,
-        "negocio": client.get(f"/panel/{token}/negocio").text,
-    }
+def test_la_navegacion_esta_en_todas_las_vistas_y_marca_la_activa(client, mundo, login):
+    # B-17: cada rol navega solo lo suyo. El asesor, su cola y sus avisos; el gerente, negocio y funnel.
+    login(mundo["advisor"])
+    pages = {"leads": client.get("/panel").text, "avisos": client.get("/panel/avisos").text}
     for name, page in pages.items():
-        for href in (f"/panel/{token}", f"/panel/{token}/avisos", f"/panel/{token}/funnel",
-                     f"/panel/{token}/negocio"):
+        for href in ("/panel", "/panel/avisos"):
             assert f'href="{href}"' in page, (name, href)
+        assert 'href="/negocio"' not in page and 'href="/panel/funnel"' not in page
+        assert 'action="/logout"' in page
+    assert 'href="/panel" aria-current="page"' in pages["leads"]
+    assert 'href="/panel/avisos" aria-current="page"' in pages["avisos"]
 
-    assert f'href="/panel/{token}" aria-current="page"' in pages["leads"]
-    assert f'href="/panel/{token}/avisos" aria-current="page"' in pages["avisos"]
-    assert f'href="/panel/{token}/funnel" aria-current="page"' in pages["funnel"]
-    assert f'href="/panel/{token}/negocio" aria-current="page"' in pages["negocio"]
+    login()
+    pages = {"funnel": client.get("/panel/funnel").text, "negocio": client.get("/negocio").text}
+    for name, page in pages.items():
+        for href in ("/negocio", "/panel/funnel"):
+            assert f'href="{href}"' in page, (name, href)
+        assert 'href="/panel"' not in page and 'href="/panel/avisos"' not in page
+        assert 'action="/logout"' in page
+    assert 'href="/panel/funnel" aria-current="page"' in pages["funnel"]
+    assert 'href="/negocio" aria-current="page"' in pages["negocio"]
 
 
-def test_la_cola_identifica_al_lead_de_forma_legible(client, mundo):
-    page = client.get(f"/panel/{mundo['token']}").text
+def test_la_cola_identifica_al_lead_de_forma_legible(client, mundo, login):
+    login(mundo["advisor"])
+    page = client.get("/panel").text
     short = str(mundo["lead"].id).replace("-", "")[:6]
 
     assert f"Lead {short}" in page
@@ -83,26 +88,30 @@ def test_la_cola_identifica_al_lead_de_forma_legible(client, mundo):
     assert mundo["lead"].telegram_user_id in page
 
 
-def test_marcar_en_gestion_muestra_una_confirmacion(client, mundo):
-    token, lead = mundo["token"], mundo["lead"]
+def test_marcar_en_gestion_muestra_una_confirmacion(client, mundo, login):
+    lead = mundo["lead"]
+    csrf = login(mundo["advisor"])
 
-    page = client.post(f"/panel/{token}/leads/{lead.id}/gestionar", follow_redirects=True).text
+    page = client.post(f"/panel/leads/{lead.id}/gestionar", data={"csrf_token": csrf}, follow_redirects=True).text
 
     assert "Lead marked as in progress." in page
 
 
-def test_las_graficas_son_svg_inline(client, mundo):
-    assert '<svg class="bar"' in client.get(f"/panel/{mundo['token']}/funnel").text
+def test_las_graficas_son_svg_inline(client, mundo, login):
+    login()
+    assert '<svg class="bar"' in client.get("/panel/funnel").text
 
 
-def test_la_ficha_muestra_el_score_con_barras(client, mundo):
-    page = client.get(f"/panel/{mundo['token']}/leads/{mundo['lead'].id}").text
+def test_la_ficha_muestra_el_score_con_barras(client, mundo, login):
+    login(mundo["advisor"])
+    page = client.get(f"/panel/leads/{mundo['lead'].id}").text
 
     assert "Score BANT-E" in page and '<svg class="bar"' in page
 
 
-def test_el_modo_oscuro_sigue_la_preferencia_del_sistema(client, mundo):
+def test_el_modo_oscuro_sigue_la_preferencia_del_sistema(client, mundo, login):
     # Sin toggle ni JavaScript: los tokens oscuros se activan con prefers-color-scheme.
-    page = client.get(f"/panel/{mundo['token']}").text
+    login(mundo["advisor"])
+    page = client.get("/panel").text
 
     assert "@media (prefers-color-scheme: dark)" in page

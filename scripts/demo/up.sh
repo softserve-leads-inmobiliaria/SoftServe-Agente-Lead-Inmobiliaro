@@ -11,8 +11,8 @@
 #   3. Corre el seed (asesores, propiedades y promociones), que `up` de esos servicios no ejecuta, y
 #      siembra la historia sintética de seis meses (N-9) para la vista de negocio. La cola no la ve.
 #   4. Comprueba core, panel, catálogo y bot sin crear leads, para que la cola del panel quede limpia.
-#   5. Imprime la URL del panel de cada asesor (cambia en cada seed), su enlace opcional de Telegram y el
-#      enlace del anuncio para empezar la conversación.
+#   5. Imprime cómo entrar al panel (B-17): el usuario de cada asesor y el del gerente, con sus contraseñas
+#      de demo; además el enlace opcional de Telegram de cada asesor y el del anuncio para empezar.
 #
 # El puerto del panel sale de PANEL_PORT en el .env. Para apagar: bash scripts/demo/down.sh.
 
@@ -49,6 +49,8 @@ CORE_PORT=$(env_value CORE_PORT 8000)
 PHOENIX_PORT=$(env_value PHOENIX_UI_PORT 6006)
 LLM_PROVIDER=$(env_value LLM_PROVIDER fake)
 BOT_TOKEN=$(env_value TELEGRAM_BOT_TOKEN "")
+ADVISOR_PASSWORD=$(env_value PANEL_ADVISOR_PASSWORD asesor-demo)
+MANAGER_PASSWORD=$(env_value PANEL_MANAGER_PASSWORD gerente-demo)
 
 echo "==> Docker"
 if ! docker info >/dev/null 2>&1; then
@@ -101,17 +103,19 @@ echo
 echo "Asesores: trabajan desde el panel; los avisos de cada lead quedan en su sección Avisos (DT-42)."
 [[ -n "$bot" ]] && echo "Telegram es opcional: el enlace solo agrega una copia de cada aviso al chat de quien lo abra."
 echo
-while IFS='|' read -r id name zone token; do
+echo "Panel: http://localhost:$PANEL_PORT/login   (para cambiar de rol: Log out y entrar con otro usuario)"
+while IFS='|' read -r id name zone token username; do
   echo "  $id  $name ($zone)"
-  echo "      panel:    http://localhost:$PANEL_PORT/panel/$token"
+  echo "      usuario:  $username / $ADVISOR_PASSWORD"
   [[ -n "$bot" ]] && echo "      telegram: https://t.me/$bot?start=adv_$token   (opcional)"
-done < <(psql_value "select id, name, zone, access_token from advisors order by id")
+done < <(psql_value "select a.id, a.name, a.zone, a.access_token, u.username from advisors a
+                     join panel_users u on u.advisor_id = a.id order by a.id")
+echo "  gerente: usuario $(psql_value "select username from panel_users where role = 'gerente' order by id limit 1") / $MANAGER_PASSWORD   (negocio y funnel)"
 echo
 if [[ -n "$bot" ]]; then
   echo "Lead, entrando por el anuncio: https://t.me/$bot?start=prop_00231"
 fi
-token=$(psql_value "select access_token from advisors order by id limit 1")
-echo "Negocio, con la historia demo: http://localhost:$PANEL_PORT/panel/$token/negocio?demo=1"
+echo "Negocio, con la historia demo: http://localhost:$PANEL_PORT/negocio?demo=1   (como gerente)"
 echo "Trazas (Phoenix):              http://localhost:$PHOENIX_PORT"
 echo "Ensayo automático:             python scripts/demo/conversar.py"
 echo "Al terminar:                   bash scripts/demo/down.sh"
