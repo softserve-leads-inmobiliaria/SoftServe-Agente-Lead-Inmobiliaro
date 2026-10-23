@@ -1,4 +1,4 @@
-"""B-5: el asesor ve su cola y la ficha completa; todo lo demás es 404."""
+"""B-5: el asesor ve su cola y la ficha completa; todo lo demás es 404. Entra con su sesión (B-17)."""
 from __future__ import annotations
 
 import uuid
@@ -77,34 +77,40 @@ def mundo(session_factory):
         return {"valeria": valeria, "andres": andres, "lead": lead, "ajeno": ajeno}
 
 
-def test_la_lista_muestra_solo_los_leads_de_la_zona_del_asesor(client, mundo):
-    page = client.get(f"/panel/{mundo['valeria'].access_token}")
+def test_la_lista_muestra_solo_los_leads_de_la_zona_del_asesor(client, mundo, login):
+    login(mundo["valeria"])
+    page = client.get("/panel")
 
     assert page.status_code == 200
     assert mundo["lead"].telegram_user_id in page.text
     assert mundo["ajeno"].telegram_user_id not in page.text
 
 
-def test_un_token_invalido_es_404(client, mundo):
-    assert client.get("/panel/token-que-no-existe").status_code == 404
+def test_un_token_invalido_ya_no_abre_nada_y_pide_login(client, mundo):
+    # B-17: la ruta vieja solo redirige; sin sesión, la cola pide login. Ni el token ni su validez cuentan.
+    response = client.get("/panel/token-que-no-existe")
+
+    assert response.url.path == "/login"
+    assert mundo["lead"].telegram_user_id not in response.text
 
 
-def test_un_asesor_sin_leads_ve_la_lista_vacia_sin_romper(client, session_factory):
+def test_un_asesor_sin_leads_ve_la_lista_vacia_sin_romper(client, session_factory, login):
     with session_factory() as session:
         sola = Advisor(id=f"adv_{uuid.uuid4().hex[:6]}", name="Camila Reyes", zone="Envigado",
                        access_token=uuid.uuid4().hex)
         session.add(sola)
         session.commit()
-        token = sola.access_token
 
-    page = client.get(f"/panel/{token}")
+    login(sola)
+    page = client.get("/panel")
 
     assert page.status_code == 200
     assert "No leads in your area yet" in page.text
 
 
-def test_la_ficha_trae_score_visita_y_transcripcion_en_orden(client, mundo):
-    page = client.get(f"/panel/{mundo['valeria'].access_token}/leads/{mundo['lead'].id}")
+def test_la_ficha_trae_score_visita_y_transcripcion_en_orden(client, mundo, login):
+    login(mundo["valeria"])
+    page = client.get(f"/panel/leads/{mundo['lead'].id}")
 
     assert page.status_code == 200
     assert "WARM" in page.text and "59" in page.text
@@ -113,17 +119,18 @@ def test_la_ficha_trae_score_visita_y_transcripcion_en_orden(client, mundo):
     assert page.text.index("Hola, busco depa") < page.text.index("¡Hola! ¿En qué zona?")
 
 
-def test_un_lead_de_otra_zona_es_404_igual_que_uno_inexistente(client, mundo):
+def test_un_lead_de_otra_zona_es_404_igual_que_uno_inexistente(client, mundo, login):
     """El AC lo pide explícito: el código de estado no puede revelar si el lead existe."""
-    ajeno = client.get(f"/panel/{mundo['valeria'].access_token}/leads/{mundo['ajeno'].id}")
-    inexistente = client.get(f"/panel/{mundo['valeria'].access_token}/leads/{uuid.uuid4()}")
+    login(mundo["valeria"])
+    ajeno = client.get(f"/panel/leads/{mundo['ajeno'].id}")
+    inexistente = client.get(f"/panel/leads/{uuid.uuid4()}")
 
     assert ajeno.status_code == 404
     assert inexistente.status_code == 404
     assert ajeno.text == inexistente.text
 
 
-def test_un_lead_sin_score_no_rompe_la_ficha(client, mundo, session_factory):
+def test_un_lead_sin_score_no_rompe_la_ficha(client, mundo, session_factory, login):
     """Es el estado normal hasta que A-9 puntúa: la ficha tiene que abrir igual."""
     with session_factory() as session:
         lead = Lead(id=uuid.uuid4(), telegram_user_id=f"tg-{uuid.uuid4().hex[:8]}",
@@ -132,7 +139,8 @@ def test_un_lead_sin_score_no_rompe_la_ficha(client, mundo, session_factory):
         session.commit()
         lead_id = lead.id
 
-    page = client.get(f"/panel/{mundo['valeria'].access_token}/leads/{lead_id}")
+    login(mundo["valeria"])
+    page = client.get(f"/panel/leads/{lead_id}")
 
     assert page.status_code == 200
     assert "Not scored yet" in page.text
@@ -148,17 +156,19 @@ def _resumir(session_factory, lead_id, summary):
         session.commit()
 
 
-def test_la_ficha_muestra_el_resumen_antes_de_la_transcripcion(client, mundo, session_factory):
+def test_la_ficha_muestra_el_resumen_antes_de_la_transcripcion(client, mundo, session_factory, login):
     _resumir(session_factory, mundo["lead"].id,
              "Qué busca: depa en El Poblado.\nObjeciones: Ninguna.\nSiguiente paso: llamarle.")
 
-    page = client.get(f"/panel/{mundo['valeria'].access_token}/leads/{mundo['lead'].id}")
+    login(mundo["valeria"])
+    page = client.get(f"/panel/leads/{mundo['lead'].id}")
 
     assert "Handoff summary" in page.text and "Siguiente paso: llamarle." in page.text
     assert page.text.index("Handoff summary") < page.text.index("Hola, busco depa")
 
 
-def test_sin_traspaso_la_ficha_sale_sin_resumen_como_antes(client, mundo):
-    page = client.get(f"/panel/{mundo['valeria'].access_token}/leads/{mundo['lead'].id}")
+def test_sin_traspaso_la_ficha_sale_sin_resumen_como_antes(client, mundo, login):
+    login(mundo["valeria"])
+    page = client.get(f"/panel/leads/{mundo['lead'].id}")
 
     assert page.status_code == 200 and "Handoff summary" not in page.text

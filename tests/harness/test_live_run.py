@@ -42,7 +42,8 @@ def three_services():
         catalog = _start("catalog", catalog_port, {"DATABASE_URL": database_url})
         core = _start("core", core_port, {"CATALOG_SERVICE_URL": f"http://127.0.0.1:{catalog_port}",
                                           "DATABASE_URL": database_url})
-        panel = _start("panel", panel_port, {"DATABASE_URL": database_url})
+        panel = _start("panel", panel_port, {"DATABASE_URL": database_url,
+                                             "PANEL_SESSION_SECRET": "live-run-tests-secret"})
         yield {"core": f"http://127.0.0.1:{core_port}", "panel": f"http://127.0.0.1:{panel_port}",
                "database": database_url}
         for process in (panel, core, catalog):

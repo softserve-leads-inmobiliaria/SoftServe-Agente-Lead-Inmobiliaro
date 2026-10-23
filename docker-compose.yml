@@ -68,6 +68,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-leads}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-leads_dev_password}
       POSTGRES_DB: ${POSTGRES_DB:-leads}
+      # Firma la cookie de sesión del login (B-17, DT-72). El default es el de ejemplo: solo vale con
+      # PANEL_DEMO=1 (config/panel.env); fuera de la demo, poner uno propio en `.env`.
+      PANEL_SESSION_SECRET: ${PANEL_SESSION_SECRET:-demo-session-secret-change-me}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${PANEL_PORT:-8080}:8080"
@@ -110,6 +113,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-leads}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-leads_dev_password}
       POSTGRES_DB: ${POSTGRES_DB:-leads}
+      # Contraseñas de demo de los usuarios del panel (B-17): una para los asesores y otra para el gerente.
+      PANEL_ADVISOR_PASSWORD: ${PANEL_ADVISOR_PASSWORD:-asesor-demo}
+      PANEL_MANAGER_PASSWORD: ${PANEL_MANAGER_PASSWORD:-gerente-demo}
     depends_on:
       migrate:
         condition: service_completed_successfully

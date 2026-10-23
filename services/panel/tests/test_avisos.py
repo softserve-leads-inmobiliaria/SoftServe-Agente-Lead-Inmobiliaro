@@ -67,8 +67,9 @@ def mundo(session_factory):
         return {"valeria": valeria, "andres": andres, "sin_zona": sin_zona, "nuevo": nuevo, "ajeno": ajeno}
 
 
-def test_el_asesor_ve_sus_avisos_los_nuevos_primero_y_no_los_de_otros(client, mundo):
-    page = client.get(f"/panel/{mundo['valeria'].access_token}/avisos")
+def test_el_asesor_ve_sus_avisos_los_nuevos_primero_y_no_los_de_otros(client, mundo, login):
+    login(mundo["valeria"])
+    page = client.get("/panel/avisos")
 
     assert page.status_code == 200
     assert page.text.index("visit scheduled") < page.text.index("WARM · 60/100")
@@ -77,52 +78,60 @@ def test_el_asesor_ve_sus_avisos_los_nuevos_primero_y_no_los_de_otros(client, mu
     assert f'http-equiv="refresh" content="{REFRESH_SECONDS}"' in page.text
 
 
-def test_la_lista_de_leads_cuenta_los_avisos_sin_leer(client, mundo):
-    page = client.get(f"/panel/{mundo['valeria'].access_token}")
+def test_la_lista_de_leads_cuenta_los_avisos_sin_leer(client, mundo, login):
+    login(mundo["valeria"])
+    page = client.get("/panel")
 
     assert "1 unread" in page.text  # el contador de Avisos de la navegación (#178)
 
 
-def test_abrir_un_aviso_lo_marca_leido_y_lleva_a_la_ficha(client, mundo):
-    token, lead_id = mundo["valeria"].access_token, mundo["sin_zona"].id
+def test_abrir_un_aviso_lo_marca_leido_y_lleva_a_la_ficha(client, mundo, login):
+    lead_id = mundo["sin_zona"].id
+    login(mundo["valeria"])
 
-    response = client.get(f"/panel/{token}/avisos/{mundo['nuevo'].id}", follow_redirects=False)
+    response = client.get(f"/panel/avisos/{mundo['nuevo'].id}", follow_redirects=False)
 
     assert response.status_code == 303
-    assert response.headers["location"] == f"/panel/{token}/leads/{lead_id}"
-    assert "0 unread" in client.get(f"/panel/{token}/avisos").text
+    assert response.headers["location"] == f"/panel/leads/{lead_id}"
+    assert "0 unread" in client.get("/panel/avisos").text
 
 
-def test_la_ficha_de_un_lead_asignado_abre_aunque_no_sea_de_su_zona(client, mundo):
+def test_la_ficha_de_un_lead_asignado_abre_aunque_no_sea_de_su_zona(client, mundo, login):
     """La cola general le asigna a Valeria un lead sin zona: su aviso tiene que llevar a una ficha que abra."""
-    token = mundo["valeria"].access_token
+    login(mundo["valeria"])
 
-    assert client.get(f"/panel/{token}/leads/{mundo['sin_zona'].id}").status_code == 200
-    assert mundo["sin_zona"].telegram_user_id in client.get(f"/panel/{token}").text
+    assert client.get(f"/panel/leads/{mundo['sin_zona'].id}").status_code == 200
+    assert mundo["sin_zona"].telegram_user_id in client.get("/panel").text
     # Andrés no lo tiene asignado ni es de su zona.
-    assert client.get(f"/panel/{mundo['andres'].access_token}/leads/{mundo['sin_zona'].id}").status_code == 404
+    login(mundo["andres"])
+    assert client.get(f"/panel/leads/{mundo['sin_zona'].id}").status_code == 404
 
 
-def test_el_aviso_de_otro_asesor_es_404_igual_que_uno_inexistente(client, mundo):
-    token = mundo["valeria"].access_token
+def test_el_aviso_de_otro_asesor_es_404_igual_que_uno_inexistente(client, mundo, login):
+    login(mundo["valeria"])
 
-    ajeno = client.get(f"/panel/{token}/avisos/{mundo['ajeno'].id}", follow_redirects=False)
-    inexistente = client.get(f"/panel/{token}/avisos/{uuid.uuid4()}", follow_redirects=False)
+    ajeno = client.get(f"/panel/avisos/{mundo['ajeno'].id}", follow_redirects=False)
+    inexistente = client.get(f"/panel/avisos/{uuid.uuid4()}", follow_redirects=False)
 
     assert ajeno.status_code == inexistente.status_code == 404
     assert ajeno.text == inexistente.text
 
 
-def test_sin_avisos_la_pagina_lo_dice(client, session_factory):
+def test_sin_avisos_la_pagina_lo_dice(client, session_factory, login):
     with session_factory() as session:
         sola = _advisor(session, "Envigado")
         session.commit()
 
-    page = client.get(f"/panel/{sola.access_token}/avisos")
+    login(sola)
+    page = client.get("/panel/avisos")
 
     assert page.status_code == 200
     assert "No notifications yet" in page.text
 
 
-def test_un_token_invalido_es_404(client):
-    assert client.get("/panel/token-que-no-existe/avisos").status_code == 404
+def test_un_token_invalido_ya_no_abre_los_avisos_y_pide_login(client, mundo):
+    # B-17: la ruta vieja solo redirige; sin sesión, los avisos piden login.
+    response = client.get("/panel/token-que-no-existe/avisos")
+
+    assert response.url.path == "/login"
+    assert "Aviso de Andrés" not in response.text

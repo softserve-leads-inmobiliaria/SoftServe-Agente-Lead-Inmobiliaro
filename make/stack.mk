@@ -33,18 +33,20 @@ build: ## Construye las imágenes sin levantar nada
 shell: ## Abre una shell en un contenedor: make shell s=core
 	$(COMPOSE) exec $(or $(s),core) sh
 
-info: ## URLs de core, panel (por asesor), negocio y phoenix
+info: ## URLs de core, panel (usuarios por asesor y gerente), negocio y phoenix
 	@if ! $(PSQL) -Atc "select 1" >/dev/null 2>&1; then \
 	  echo "postgres no está arriba: make up"; exit 1; fi
 	@echo
 	@echo "Core:     http://localhost:$(CORE_PORT)/health"
 	@echo "Phoenix:  http://localhost:$(PHOENIX_UI_PORT)"
 	@echo "Catálogo: $$($(PSQL) -Atc 'select count(*) from properties') propiedades"
-	@echo "Paneles de los asesores (la URL cambia en cada seed):"
-	@$(PSQL) -Atc "select id, name, zone, access_token from advisors order by id" | \
-	  while IFS='|' read -r id name zone token; do \
-	    echo "  $$id  $$name ($$zone)  http://localhost:$(PANEL_PORT)/panel/$$token"; \
+	@echo "Panel:    http://localhost:$(PANEL_PORT)/login  (B-17: usuario y contraseña)"
+	@$(PSQL) -Atc "select u.username, u.role, coalesce(a.name, ''), coalesce(a.zone, '') from panel_users u \
+	  left join advisors a on a.id = u.advisor_id order by u.role, u.username" | \
+	  while IFS='|' read -r username role name zone; do \
+	    echo "  $$username  ($$role$${name:+: $$name, $$zone})"; \
 	  done
-	@token=$$($(PSQL) -Atc "select access_token from advisors order by id limit 1"); \
-	[ -z "$$token" ] && echo "  (sin asesores: make seed)" || \
-	echo "Negocio:  http://localhost:$(PANEL_PORT)/panel/$$token/negocio?demo=1"
+	@echo "  contraseñas de demo: PANEL_ADVISOR_PASSWORD y PANEL_MANAGER_PASSWORD (.env.example)"
+	@users=$$($(PSQL) -Atc "select count(*) from panel_users"); \
+	[ "$$users" = "0" ] && echo "  (sin usuarios: make seed)" || \
+	echo "Negocio:  http://localhost:$(PANEL_PORT)/negocio?demo=1  (como gerente)"

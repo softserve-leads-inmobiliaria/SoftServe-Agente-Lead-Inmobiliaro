@@ -17,9 +17,9 @@ No hace falta crear un `.env`: `docker-compose.yml` trae defaults de desarrollo.
 | :--- | :--- | :--- |
 | `postgres` | `127.0.0.1:5432` (usuario/clave/BD: ver `.env.example`; desde el host, mejor `127.0.0.1` que `localhost`, ver `db/settings.py`) | Postgres 16 con `pgvector` |
 | `phoenix` | http://localhost:6006 (OTLP/HTTP `/v1/traces`, OTLP/gRPC en `4317`) | Observabilidad (DT-9) |
-| `panel` | http://localhost:8080/panel/<token> (`/health` para el estado) | Panel de asesores: lista de leads de su zona y ficha con score y transcripción (B-5, DT-5) |
+| `panel` | http://localhost:8080/login (`/health` para el estado) | Panel con login (B-17, DT-72): el asesor ve su cola y la ficha con score y transcripción (B-5); el gerente, negocio y funnel |
 | `migrate` | — (termina al acabar) | Aplica `alembic upgrade head` (esquema completo, C-3) |
-| `seed` | — (termina al acabar) | Siembra los 3 asesores de demo (B-5) y el inventario de 12 propiedades y 3 promociones (C-9), idempotente. Imprime la URL del panel de cada asesor y el resumen del catálogo |
+| `seed` | — (termina al acabar) | Siembra los 3 asesores de demo (B-5), sus usuarios del panel y el del gerente (B-17), y el inventario de 12 propiedades y 3 promociones (C-9), idempotente. Imprime el usuario de cada asesor y el resumen del catálogo |
 | `catalog` | solo dentro de la red de Docker (`http://catalog:8000`, MCP en `/mcp`, agenda en `/scheduling`) | Catalog Service como servidor MCP sobre Postgres (C-1), más la agenda de asesores y visitas por HTTP (C-2, DT-32). El inventario de demo (C-9) lo siembra el servicio `seed` al levantar el stack; los tests que necesitan otras filas siembran las suyas |
 | `core` | http://localhost:8000/health (`POST /events`) | Core: turno completo (FSM, guardrails, scoring) con agente *fake* por defecto o LLM real (`LLM_PROVIDER`); arranca el bot de Telegram si hay `TELEGRAM_BOT_TOKEN` |
 | `harness` | — (termina al acabar) | Reproduce `harness/fixtures/*.jsonl` contra el core |
@@ -69,15 +69,18 @@ Al lead se le escribe en inglés (#202, DT-55): un mensaje en español recibe el
 
 ### Ver el panel de asesores (B-5)
 
-`docker compose up -d --build` ejecuta `seed`, que imprime una línea por asesor con su URL:
-`docker compose logs seed` → `adv_001  Valeria Ortiz  El Poblado  /panel/<token>`. Abrir
-`http://localhost:8080/panel/<token>`. El panel filtra por `Lead.zone`, que el core rellena con la zona de la
-primera propiedad que el lead consulta (#81; el ruteo por zona al asesor es A-10). Para verlo con datos sin
-pasar por una búsqueda, asignar la zona a mano (`update leads set zone='El Poblado' where ...`). Un token
-inventado y un lead de otra zona dan el mismo 404.
+`docker compose up -d --build` ejecuta `seed`, que imprime una línea por asesor con su usuario:
+`docker compose logs seed` → `adv_001  Valeria Ortiz  El Poblado  usuario: valeria`. Abrir
+`http://localhost:8080/login` y entrar como `valeria` con la contraseña de demo de los asesores
+(`PANEL_ADVISOR_PASSWORD`, `asesor-demo` por defecto; B-17, DT-72). El panel filtra por `Lead.zone`, que el core
+rellena con la zona de la primera propiedad que el lead consulta (#81; el ruteo por zona al asesor es A-10). Para
+verlo con datos sin pasar por una búsqueda, asignar la zona a mano (`update leads set zone='El Poblado' where ...`).
+Un lead de otra zona y uno inexistente dan el mismo 404. Las URLs viejas `/panel/<token>/…` solo redirigen: sin
+sesión, llevan al login.
 
-La vista de inventario y negocio (N-8) está en `http://localhost:8080/panel/<token>/negocio`, enlazada desde
-el funnel. Sin cierres ni historial de estados cada sección dice "No data for this period.": para verla con datos
+La vista de inventario y negocio (N-8) está en `http://localhost:8080/negocio` y es del gerente: entrar como
+`gerente` (`PANEL_MANAGER_PASSWORD`, `gerente-demo` por defecto). Un asesor que la pide recibe 404. Está enlazada
+desde el funnel. Sin cierres ni historial de estados cada sección dice "No data for this period.": para verla con datos
 hay que sembrar la historia sintética de N-9 (ver "Historia sintética para la demo") y marcar "Include demo
 history".
 
@@ -89,14 +92,14 @@ negocio una vez que alguien toma un lead calificado, o con la historia de N-9 y 
 ### Avisos al asesor: en el panel, y por Telegram si lo registró (B-7, A-12, B-15)
 
 El asesor recibe dos avisos, cada uno una sola vez por lead y en el turno exacto de la transición. Los dos
-quedan siempre en su panel, en `http://localhost:8080/panel/<token>/avisos`, con el contador de no leídos.
+quedan siempre en su panel, en `http://localhost:8080/panel/avisos`, con el contador de no leídos.
 La página se recarga sola cada 30 segundos, y abrir un aviso lo marca como leído y lleva a la ficha
 (B-15, DT-42). No hace falta registrar ningún asesor en Telegram: con una sola cuenta, la del lead, se
 prueba todo.
 
 Telegram es un canal adicional. Con `TELEGRAM_BOT_TOKEN` puesto, un asesor se registra una vez abriendo su
-enlace `https://t.me/<bot>?start=adv_<token>` (el `<token>` es el de su URL del panel:
-`docker compose logs seed`). El bot responde "I'll let you know here…" y guarda su chat en
+enlace `https://t.me/<bot>?start=adv_<token>` (el `<token>` es su `access_token`:
+`docker compose logs seed` o `bash scripts/demo/up.sh`). El bot responde "I'll let you know here…" y guarda su chat en
 `advisors.telegram_chat_id`; un enlace inválido no registra a nadie y no dice por qué. Registrado, recibe
 además cada aviso en el chat.
 
@@ -798,7 +801,7 @@ docker compose run --rm seed python scripts/seed_history.py --borrar # la borra 
 ```
 
 - Todo lleva `synthetic = true`. Solo lo ven la vista de negocio con "Include demo history"
-  (`/panel/<token>/negocio?demo=1`) y el reporte semanal con `WEEKLY_REPORT_INCLUDE_SYNTHETIC=1`. La
+  (`/negocio?demo=1`, como gerente) y el reporte semanal con `WEEKLY_REPORT_INCLUDE_SYNTHETIC=1`. La
   cola, la ficha, el funnel, el reparto de leads y las alertas no lo ven (DT-49).
 - No cambia el inventario: el historial de cada propiedad termina en el estado que ya tiene. Una propiedad
   con historial real, o en otro estado, no se toca, y el script lo dice.

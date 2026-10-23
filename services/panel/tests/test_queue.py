@@ -93,13 +93,14 @@ def test_un_lead_con_varias_conversaciones_aparece_una_sola_vez(session_factory,
     assert filas[0].fsm_state == "DISCOVERY"
 
 
-def test_marcar_en_gestion_pasa_a_sql_y_asigna_al_asesor(client, session_factory, zona):
+def test_marcar_en_gestion_pasa_a_sql_y_asigna_al_asesor(client, session_factory, zona, login):
     with session_factory() as session:
         valeria = _advisor(session, zona)
         lead = _lead(session, zona, status="mql")
         session.commit()
 
-    response = client.post(f"/panel/{valeria.access_token}/leads/{lead.id}/gestionar",
+    csrf = login(valeria)
+    response = client.post(f"/panel/leads/{lead.id}/gestionar", data={"csrf_token": csrf},
                            follow_redirects=False)
 
     assert response.status_code == 303
@@ -123,13 +124,14 @@ def test_marcar_dos_veces_es_inocuo_y_respeta_a_quien_ya_lo_tenia(session_factor
     assert fresh.status == "sql" and fresh.advisor_id == otro.id
 
 
-def test_marcar_un_lead_de_otra_zona_es_404_y_no_lo_toca(client, session_factory, zona):
+def test_marcar_un_lead_de_otra_zona_es_404_y_no_lo_toca(client, session_factory, zona, login):
     with session_factory() as session:
         valeria = _advisor(session, zona)
         ajeno = _lead(session, f"otra-{zona}", status="mql")
         session.commit()
 
-    response = client.post(f"/panel/{valeria.access_token}/leads/{ajeno.id}/gestionar",
+    csrf = login(valeria)
+    response = client.post(f"/panel/leads/{ajeno.id}/gestionar", data={"csrf_token": csrf},
                            follow_redirects=False)
 
     assert response.status_code == 404
@@ -138,24 +140,25 @@ def test_marcar_un_lead_de_otra_zona_es_404_y_no_lo_toca(client, session_factory
     assert fresh.status == "mql" and fresh.advisor_id is None
 
 
-def test_la_lista_y_la_ficha_muestran_el_boton_solo_si_corresponde(client, session_factory, zona):
+def test_la_lista_y_la_ficha_muestran_el_boton_solo_si_corresponde(client, session_factory, zona, login):
     with session_factory() as session:
         valeria = _advisor(session, zona)
         abierto = _lead(session, zona, status="mql")
         tomado = _lead(session, zona, status="sql")
         session.commit()
 
-    lista = client.get(f"/panel/{valeria.access_token}").text
+    login(valeria)
+    lista = client.get("/panel").text
     assert lista.count("Mark as in progress") == 1
     assert "in progress" in lista
 
-    ficha_tomado = client.get(f"/panel/{valeria.access_token}/leads/{tomado.id}").text
+    ficha_tomado = client.get(f"/panel/leads/{tomado.id}").text
     assert "Mark as in progress" not in ficha_tomado
-    ficha_abierto = client.get(f"/panel/{valeria.access_token}/leads/{abierto.id}").text
+    ficha_abierto = client.get(f"/panel/leads/{abierto.id}").text
     assert "Mark as in progress" in ficha_abierto
 
 
-def test_la_historia_sintetica_no_aparece_en_la_cola_ni_se_abre(client, session_factory, zona):
+def test_la_historia_sintetica_no_aparece_en_la_cola_ni_se_abre(client, session_factory, zona, login):
     # N-9: sus leads solo existen para la vista de negocio; nadie los atiende.
     with session_factory() as session:
         valeria = _advisor(session, zona)
@@ -166,6 +169,7 @@ def test_la_historia_sintetica_no_aparece_en_la_cola_ni_se_abre(client, session_
         session.commit()
         assert [lead.id for lead in leads_for_advisor(session, valeria)] == [real.id]
 
-    token = valeria.access_token
-    assert client.get(f"/panel/{token}/leads/{sintetico.id}").status_code == 404
-    assert client.post(f"/panel/{token}/leads/{sintetico.id}/gestionar", follow_redirects=False).status_code == 404
+    csrf = login(valeria)
+    assert client.get(f"/panel/leads/{sintetico.id}").status_code == 404
+    assert client.post(f"/panel/leads/{sintetico.id}/gestionar", data={"csrf_token": csrf},
+                       follow_redirects=False).status_code == 404

@@ -147,36 +147,43 @@ def test_la_historia_sintetica_no_cuenta_en_el_funnel(session_factory, mundo):
     assert {row.label: row.leads for row in report.by_advisor}["Valeria"] == 1
 
 
-def test_con_la_base_vacia_renderiza_sin_romper(client, session_factory):
+def test_con_la_base_vacia_renderiza_sin_romper(client, session_factory, login):
     with session_factory() as session:
         session.add(Advisor(id="adv_solo", name="Sola", zone="Envigado", access_token="tok-solo"))
         session.commit()
         assert session.execute(text("SELECT count(*) FROM leads")).scalar_one() == 0
 
-    page = client.get("/panel/tok-solo/funnel")
+    login()  # el funnel es del gerente (B-17)
+    page = client.get("/panel/funnel")
 
     assert page.status_code == 200
     assert "0 leads started" in page.text
     assert "No leads yet" in page.text
 
 
-def test_con_un_solo_lead_el_texto_va_en_singular(client, session_factory):
+def test_con_un_solo_lead_el_texto_va_en_singular(client, session_factory, login):
     with session_factory() as session:
         session.add(Advisor(id="adv_solo", name="Sola", zone="Envigado", access_token="tok-solo"))
         _lead(session, zone="Envigado", reached=("DISCOVERY",), reply_after=timedelta(seconds=3))
         session.commit()
 
-    page = client.get("/panel/tok-solo/funnel").text
+    login()
+    page = client.get("/panel/funnel").text
 
     assert "1 lead started a conversation" in page
     assert "over 1 conversation<" in page
     assert "1 conversations" not in page
 
 
-def test_el_dashboard_es_global_y_exige_token_valido(client, session_factory, mundo):
-    page = client.get("/panel/tok-v/funnel")
+def test_el_dashboard_es_global_y_exige_la_sesion_del_gerente(client, session_factory, mundo, login):
+    # B-17: antes lo abría cualquier asesor con token válido; ahora solo el gerente, y ve el negocio entero.
+    assert client.get("/panel/token-falso/funnel").url.path == "/login"  # el token ya no abre nada
+
+    login()
+    page = client.get("/panel/funnel")
     assert page.status_code == 200
-    assert "Usaquen" in page.text  # Valeria es de El Poblado y ve el negocio entero
+    assert "Usaquen" in page.text and "El Poblado" in page.text
     assert "75%" in page.text       # contención
 
-    assert client.get("/panel/token-falso/funnel").status_code == 404
+    login(mundo)  # un asesor (Valeria) no lo ve: el mismo 404 de siempre
+    assert client.get("/panel/funnel").status_code == 404

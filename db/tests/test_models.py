@@ -9,11 +9,12 @@ from db.repo_root import repo_root
 CONTRACT = json.loads((repo_root() / "contracts" / "fsm_state.schema.json").read_text(encoding="utf-8"))
 DEFS = CONTRACT["$defs"]
 
-# design.md §1: las 16 entidades, más el contexto de la FSM (DT-11).
+# design.md §1: las 16 entidades, más el contexto de la FSM (DT-11) y los usuarios del panel (B-17).
 EXPECTED_TABLES = {
     "leads", "conversations", "messages", "lead_scores", "properties", "promotions", "advisors",
     "visits", "advisor_notifications", "faq_entries", "funnel_events", "audit_log", "fsm_context",
     "property_status_events", "deals", "property_interest", "unmet_searches", "scheduled_jobs", "property_alerts",
+    "panel_users",
 }
 
 

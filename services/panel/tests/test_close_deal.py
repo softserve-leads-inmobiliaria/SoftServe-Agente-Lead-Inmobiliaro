@@ -91,10 +91,16 @@ def mundo(session_factory, zona):
         return {"valeria": valeria, "lead": lead, "consultada": consultada, "otra": otra}
 
 
-def _close(client, advisor, lead, prop_id, *, kind="venta", price="2350000", closed_on=None):
-    return client.post(f"/panel/{advisor.access_token}/leads/{lead.id}/cerrar", follow_redirects=False,
-                       data={"property_id": prop_id, "kind": kind, "price": price,
-                             "closed_on": closed_on or datetime.now(UTC).astimezone(LOCAL_TZ).date().isoformat()})
+@pytest.fixture
+def close(client, login):
+    """"Cerrar operación" como `advisor`: entra con su sesión y manda su token CSRF (B-17)."""
+    def _close(advisor, lead, prop_id, *, kind="venta", price="2350000", closed_on=None):
+        csrf = login(advisor)
+        return client.post(f"/panel/leads/{lead.id}/cerrar", follow_redirects=False,
+                           data={"csrf_token": csrf, "property_id": prop_id, "kind": kind, "price": price,
+                                 "closed_on": closed_on or datetime.now(UTC).astimezone(LOCAL_TZ).date().isoformat()})
+
+    return _close
 
 
 def _written(session_factory, lead, prop_id):
@@ -113,13 +119,13 @@ def _written(session_factory, lead, prop_id):
 # --- el cierre feliz ---------------------------------------------------------------------------------------
 
 def test_closing_writes_the_deal_closes_the_lead_and_the_property_and_goes_back_to_the_card(
-        client, session_factory, mundo):
+        client, session_factory, mundo, close):
     valeria, lead, prop = mundo["valeria"], mundo["lead"], mundo["consultada"]
 
-    response = _close(client, valeria, lead, prop.id, price="2350000.50")
+    response = close(valeria, lead, prop.id, price="2350000.50")
 
     assert response.status_code == 303
-    assert response.headers["location"].endswith(f"/panel/{valeria.access_token}/leads/{lead.id}")
+    assert response.headers["location"].endswith(f"/panel/leads/{lead.id}")
     with session_factory() as session:
         (deal,) = session.execute(select(Deal).where(Deal.lead_id == lead.id)).scalars()
         assert (deal.property_id, deal.advisor_id, deal.kind, deal.price, deal.synthetic) == (
@@ -132,11 +138,11 @@ def test_closing_writes_the_deal_closes_the_lead_and_the_property_and_goes_back_
         assert event.changed_at == deal.closed_at  # el historial y la operación cuentan el mismo momento
 
 
-def test_the_card_shows_the_deal_after_closing(client, mundo):
+def test_the_card_shows_the_deal_after_closing(client, mundo, close):
     valeria, lead, prop = mundo["valeria"], mundo["lead"], mundo["consultada"]
-    _close(client, valeria, lead, prop.id, price="2350000")
+    close(valeria, lead, prop.id, price="2350000")
 
-    page = client.get(f"/panel/{valeria.access_token}/leads/{lead.id}").text
+    page = client.get(f"/panel/leads/{lead.id}").text
 
     assert "No closed deal" not in page
     assert "Depa consultado" in page and "$2,350,000.00" in page
@@ -144,8 +150,8 @@ def test_the_card_shows_the_deal_after_closing(client, mundo):
     assert "<td>sale</td>" in page and "<td>venta</td>" not in page  # #202: el tipo, en inglés
 
 
-def test_a_lead_without_advisor_stays_with_whoever_closed_it(client, session_factory, mundo):
-    _close(client, mundo["valeria"], mundo["lead"], mundo["consultada"].id)
+def test_a_lead_without_advisor_stays_with_whoever_closed_it(client, session_factory, mundo, close):
+    close(mundo["valeria"], mundo["lead"], mundo["consultada"].id)
     with session_factory() as session:
         assert session.get(Lead, mundo["lead"].id).advisor_id == mundo["valeria"].id
 
@@ -156,36 +162,37 @@ def test_a_past_date_closes_at_local_noon_of_that_day():
     assert closing_time(date(2026, 9, 30), now) == datetime(2026, 9, 30, 12, tzinfo=LOCAL_TZ)
 
 
-def test_a_past_closing_date_is_kept(client, session_factory, mundo):
-    _close(client, mundo["valeria"], mundo["lead"], mundo["consultada"].id, closed_on="2026-09-01")
+def test_a_past_closing_date_is_kept(client, session_factory, mundo, close):
+    close(mundo["valeria"], mundo["lead"], mundo["consultada"].id, closed_on="2026-09-01")
     with session_factory() as session:
         deal = session.execute(select(Deal).where(Deal.lead_id == mundo["lead"].id)).scalar_one()
         assert deal.closed_at == datetime(2026, 9, 1, 12, tzinfo=LOCAL_TZ)
 
 
-def test_a_real_deal_counts_in_the_business_view(client, session_factory, mundo):
+def test_a_real_deal_counts_in_the_business_view(client, session_factory, mundo, close, login):
     """Las métricas de N-6 y N-7 leen `deals` sin la marca sintética: el cierre del panel ya cuenta."""
     valeria, lead, prop = mundo["valeria"], mundo["lead"], mundo["consultada"]
-    _close(client, valeria, lead, prop.id)
-    page = client.get(f"/panel/{valeria.access_token}/negocio?periodo=semana").text
+    close(valeria, lead, prop.id)
+    login()  # la vista de negocio es del gerente (B-17)
+    page = client.get("/negocio?periodo=semana").text
     assert prop.title in page
 
 
 # --- quién puede cerrar (DT-5, DT-42) ------------------------------------------------------------------------
 
-def test_an_advisor_of_another_zone_gets_404_and_nothing_is_written(client, session_factory, mundo):
+def test_an_advisor_of_another_zone_gets_404_and_nothing_is_written(client, session_factory, mundo, close):
     with session_factory() as session:
         andres = _advisor(session, f"otra-{uuid.uuid4().hex[:6]}")
         session.commit()
 
-    response = _close(client, andres, mundo["lead"], mundo["consultada"].id)
+    response = close(andres, mundo["lead"], mundo["consultada"].id)
 
     assert response.status_code == 404
     assert _written(session_factory, mundo["lead"], mundo["consultada"].id) == {
         "deals": 0, "lead": "sql", "property": "disponible", "events": 0}
 
 
-def test_the_assigned_advisor_of_another_zone_can_close(client, session_factory, zona):
+def test_the_assigned_advisor_of_another_zone_canclose(session_factory, zona, close):
     """Como en la ficha y "Marcar en gestión": el asesor asignado ve el lead aunque sea de otra zona."""
     with session_factory() as session:
         andres = _advisor(session, f"otra-{uuid.uuid4().hex[:6]}")
@@ -193,41 +200,43 @@ def test_the_assigned_advisor_of_another_zone_can_close(client, session_factory,
         prop = _property(session, zona)
         session.commit()
 
-    assert _close(client, andres, lead, prop.id).status_code == 303
+    assert close(andres, lead, prop.id).status_code == 303
     assert _written(session_factory, lead, prop.id)["lead"] == "closed_won"
 
 
-def test_a_synthetic_lead_gets_404(client, session_factory, zona):
+def test_a_synthetic_lead_gets_404(client, session_factory, zona, close):
     with session_factory() as session:
         valeria = _advisor(session, zona)
         lead = _lead(session, zona, synthetic=True)
         prop = _property(session, zona)
         session.commit()
 
-    assert _close(client, valeria, lead, prop.id).status_code == 404
+    assert close(valeria, lead, prop.id).status_code == 404
     assert _written(session_factory, lead, prop.id)["events"] == 0
 
 
-def test_an_unknown_token_or_lead_gets_the_same_404(client, mundo):
+def test_a_session_that_is_not_an_advisor_or_an_unknown_lead_gets_the_same_404(client, mundo, login):
+    # Antes con un token desconocido; desde B-17 la identidad es la sesión: el gerente no cierra operaciones.
     valeria, prop = mundo["valeria"], mundo["consultada"]
-    unknown_token = client.post(f"/panel/no-existe/leads/{mundo['lead'].id}/cerrar",
-                                data={"property_id": prop.id, "kind": "venta", "price": "1", "closed_on": "2026-10-01"})
-    unknown_lead = client.post(f"/panel/{valeria.access_token}/leads/{uuid.uuid4()}/cerrar",
-                               data={"property_id": prop.id, "kind": "venta", "price": "1", "closed_on": "2026-10-01"})
-    assert unknown_token.status_code == unknown_lead.status_code == 404
-    assert unknown_token.text == unknown_lead.text
+    form = {"property_id": prop.id, "kind": "venta", "price": "1", "closed_on": "2026-10-01"}
+    csrf = login()
+    not_an_advisor = client.post(f"/panel/leads/{mundo['lead'].id}/cerrar", data={"csrf_token": csrf, **form})
+    csrf = login(valeria)
+    unknown_lead = client.post(f"/panel/leads/{uuid.uuid4()}/cerrar", data={"csrf_token": csrf, **form})
+    assert not_an_advisor.status_code == unknown_lead.status_code == 404
+    assert not_an_advisor.text == unknown_lead.text
 
 
 # --- un cierre rechazado no escribe nada --------------------------------------------------------------------------
 
-def test_a_closed_property_cannot_be_closed_again(client, session_factory, mundo):
+def test_a_closed_property_cannot_be_closed_again(client, session_factory, mundo, close):
     valeria, lead, prop = mundo["valeria"], mundo["lead"], mundo["consultada"]
     with session_factory() as session:
         other_lead = _lead(session, lead.zone)
         session.commit()
-    assert _close(client, valeria, other_lead, prop.id).status_code == 303  # otro lead la cerró antes
+    assert close(valeria, other_lead, prop.id).status_code == 303  # otro lead la cerró antes
 
-    response = _close(client, valeria, lead, prop.id)
+    response = close(valeria, lead, prop.id)
 
     assert response.status_code == 422
     assert "That property is already off the market: nothing was recorded." in response.text
@@ -235,7 +244,7 @@ def test_a_closed_property_cannot_be_closed_again(client, session_factory, mundo
                                                         "events": 1}
 
 
-def test_the_form_marks_a_closed_property_and_does_not_let_it_be_picked(client, session_factory, zona):
+def test_the_form_marks_a_closed_property_and_does_not_let_it_be_picked(client, session_factory, zona, login):
     with session_factory() as session:
         valeria = _advisor(session, zona)
         lead = _lead(session, zona)
@@ -243,7 +252,8 @@ def test_the_form_marks_a_closed_property_and_does_not_let_it_be_picked(client, 
         _interest(session, lead, cerrada)
         session.commit()
 
-    page = client.get(f"/panel/{valeria.access_token}/leads/{lead.id}").text
+    login(valeria)
+    page = client.get(f"/panel/leads/{lead.id}").text
 
     option = page[page.index(f'value="{cerrada.id}"'):]
     assert option.index("disabled") < option.index(">") and "off the market" in option[:option.index("</option>")]
@@ -259,28 +269,28 @@ def test_the_form_marks_a_closed_property_and_does_not_let_it_be_picked(client, 
     ("closed_on", "ayer", "date is invalid"),
     ("closed_on", (date.today() + timedelta(days=2)).isoformat(), "cannot be in the future"),
 ])
-def test_an_invalid_form_shows_the_error_and_writes_nothing(client, session_factory, mundo, field, value, message):
+def test_an_invalid_form_shows_the_error_and_writes_nothing(client, session_factory, mundo, field, value, message, close):
     valeria, lead, prop = mundo["valeria"], mundo["lead"], mundo["consultada"]
-    response = _close(client, valeria, lead, prop.id, **{field: value})
+    response = close(valeria, lead, prop.id, **{field: value})
 
     assert response.status_code == 422 and message in response.text
     assert _written(session_factory, lead, prop.id) == {"deals": 0, "lead": "sql", "property": "disponible",
                                                         "events": 0}
 
 
-def test_a_property_that_is_not_offered_to_this_lead_is_rejected(client, session_factory, mundo):
+def test_a_property_that_is_not_offered_to_this_lead_is_rejected(client, session_factory, mundo, close):
     with session_factory() as session:
         ajena = _property(session, f"otra-{uuid.uuid4().hex[:6]}")
         session.commit()
 
-    response = _close(client, mundo["valeria"], mundo["lead"], ajena.id)
+    response = close(mundo["valeria"], mundo["lead"], ajena.id)
 
     assert response.status_code == 422 and "not linked to this lead" in response.text
     assert _written(session_factory, mundo["lead"], ajena.id)["events"] == 0
 
 
-def test_a_rejected_form_keeps_what_the_advisor_typed(client, mundo):
-    response = _close(client, mundo["valeria"], mundo["lead"], mundo["consultada"].id, price="-5")
+def test_a_rejected_form_keeps_what_the_advisor_typed(client, mundo, close):
+    response = close(mundo["valeria"], mundo["lead"], mundo["consultada"].id, price="-5")
     assert 'value="-5"' in response.text
     assert f'value="{mundo["consultada"].id}" data-kind="venta" selected' in response.text
 
@@ -326,8 +336,9 @@ def test_a_preventa_suggests_a_sale():
     assert PropertyOption("p", "t", "renta", "disponible", touched=False).kind == "renta"
 
 
-def test_the_card_offers_the_close_button_with_today_as_default(client, mundo):
-    page = client.get(f"/panel/{mundo['valeria'].access_token}/leads/{mundo['lead'].id}").text
+def test_the_card_offers_the_close_button_with_today_as_default(client, mundo, login):
+    login(mundo["valeria"])
+    page = client.get(f"/panel/leads/{mundo['lead'].id}").text
     today = datetime.now(timezone.utc).astimezone(LOCAL_TZ).date().isoformat()
     assert "<summary>Close a deal</summary>" in page
     assert f'name="closed_on" max="{today}" required value="{today}"' in page

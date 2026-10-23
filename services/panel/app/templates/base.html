@@ -81,6 +81,13 @@
     th { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .04em;
       color: var(--muted); background: var(--surface-2); }
     tr:last-child td { border-bottom: 0; }
+    .table-wrap + .table-wrap { margin-top: var(--space-3); }
+    /* Desgloses apilados (negocio): anchos fijos para que las columnas coincidan de una tabla a otra. */
+    table.breakdown { table-layout: fixed; }
+    table.breakdown .col-name { width: 40%; }
+    table.breakdown .col-count { width: 20%; }
+    td.num, th.num { font-variant-numeric: tabular-nums; }
+    td .value { display: inline-block; min-width: 6.5em; font-variant-numeric: tabular-nums; }
 
     .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: var(--text-xs);
       font-weight: 600; border: 1px solid var(--line); }
@@ -117,6 +124,7 @@
     dt { color: var(--muted); font-size: var(--text-sm); }
     dd { margin: 0; }
     form.inline { display: inline; margin: 0; }
+    form.logout { margin-top: var(--space-4); }
     .notice { padding: var(--space-3) 0; border-bottom: 1px solid var(--line); }
     .notice:last-child { border-bottom: 0; }
     .notice-body { white-space: pre-line; margin: var(--space-1) 0; }
@@ -135,29 +143,42 @@
       else 'funnel' if path.endswith('/funnel')
       else 'avisos' if '/avisos' in path
       else 'leads' %}
-  {% macro nav_links(token, unread, active) -%}
+  {# B-17: cada rol ve solo lo suyo. El asesor, su cola y sus avisos; el gerente, negocio y funnel. #}
+  {% macro nav_links(unread, active) -%}
   <ul class="nav">
-    <li><a href="/panel/{{ token }}"{% if active == 'leads' %} aria-current="page"{% endif %}>My leads</a></li>
-    <li><a href="/panel/{{ token }}/avisos"{% if active == 'avisos' %} aria-current="page"{% endif %}>
+    {% if user.role == 'asesor' %}
+    <li><a href="/panel"{% if active == 'leads' %} aria-current="page"{% endif %}>My leads</a></li>
+    <li><a href="/panel/avisos"{% if active == 'avisos' %} aria-current="page"{% endif %}>
       <span>Notifications</span>
       {% if unread %}<span class="badge badge-count" title="{{ unread }} unread">{{ unread }}</span>{% endif %}
     </a></li>
-    <li><a href="/panel/{{ token }}/funnel"{% if active == 'funnel' %} aria-current="page"{% endif %}>Funnel</a></li>
-    <li><a href="/panel/{{ token }}/negocio"{% if active == 'negocio' %} aria-current="page"{% endif %}>Business</a></li>
+    {% else %}
+    <li><a href="{{ business_url() }}"{% if active == 'negocio' %} aria-current="page"{% endif %}>Business</a></li>
+    <li><a href="/panel/funnel"{% if active == 'funnel' %} aria-current="page"{% endif %}>Funnel</a></li>
+    {% endif %}
   </ul>
+  <form class="logout" method="post" action="/logout">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="btn btn-ghost" type="submit">Log out</button>
+  </form>
   {%- endmacro %}
+  {% if user.role == 'asesor' %}
+    {% set who, where = advisor.name, 'Area ' ~ advisor.zone %}
+  {% else %}
+    {% set who, where = user.username, 'Manager' %}
+  {% endif %}
   <div class="shell">
     <aside class="sidebar">
-      <span class="brand-name">{{ advisor.name }}</span>
-      <span class="muted">Area {{ advisor.zone }}</span>
-      <nav aria-label="Main">{{ nav_links(token, unread, active) }}</nav>
+      <span class="brand-name">{{ who }}</span>
+      <span class="muted">{{ where }}</span>
+      <nav aria-label="Main">{{ nav_links(unread, active) }}</nav>
     </aside>
     <div class="main-col">
       <header class="topbar">
-        <span class="brand-name">{{ advisor.name }} · {{ advisor.zone }}</span>
+        <span class="brand-name">{{ who }} · {{ where }}</span>
         <details class="menu">
           <summary class="btn btn-ghost">Menu</summary>
-          <nav aria-label="Main">{{ nav_links(token, unread, active) }}</nav>
+          <nav aria-label="Main">{{ nav_links(unread, active) }}</nav>
         </details>
       </header>
       <main id="main">

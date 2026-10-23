@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in — Agent panel</title>
+  <style>
+    :root {
+      --bg: #f4f6f8; --surface: #ffffff; --ink: #1b1f24; --muted: #525a66; --line: #e3e6ea;
+      --brand: #1f4e79; --on-brand: #ffffff; --danger: #b3261e;
+      --radius: 12px; --radius-sm: 8px;
+      --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px;
+      --text-sm: 13px; --text-base: 15px; --text-xl: 24px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151a; --surface: #1b1f24; --ink: #e8eaed; --muted: #9aa4b2; --line: #2c323b;
+        --brand: #8ab4f8; --on-brand: #10151b; --danger: #f2b8b5;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: var(--space-4);
+      background: var(--bg); color: var(--ink);
+      font: var(--text-base)/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    main { width: 100%; max-width: 360px; background: var(--surface); border: 1px solid var(--line);
+      border-radius: var(--radius); padding: var(--space-5); }
+    h1 { font-size: var(--text-xl); margin: 0 0 var(--space-4); }
+    form { display: grid; gap: var(--space-3); }
+    label { display: grid; gap: 4px; font-size: var(--text-sm); color: var(--muted); }
+    input { font: inherit; padding: var(--space-2); border: 1px solid var(--line); border-radius: var(--radius-sm);
+      background: var(--surface); color: var(--ink); }
+    input:focus-visible, button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+    button { font: inherit; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); cursor: pointer;
+      border: 1px solid var(--brand); background: var(--brand); color: var(--on-brand); margin-top: var(--space-2); }
+    .error { color: var(--danger); margin: 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Agent panel</h1>
+    <form method="post" action="/login">
+      {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+      <label>Username<input name="username" value="{{ username }}" autocomplete="username" autocapitalize="none" required autofocus></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <button type="submit">Sign in</button>
+    </form>
+  </main>
+</body>
+</html>

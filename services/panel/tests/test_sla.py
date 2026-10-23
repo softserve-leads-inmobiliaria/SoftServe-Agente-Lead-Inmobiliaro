@@ -125,7 +125,7 @@ def test_only_unclaimed_hot_leads_past_the_threshold_are_marked(row, marked):
 
 # --- la cola -------------------------------------------------------------------------------------------
 
-def test_the_queue_marks_the_hot_leads_waiting_too_long(client, session_factory, zona, monkeypatch):
+def test_the_queue_marks_the_hot_leads_waiting_too_long(client, session_factory, zona, monkeypatch, login):
     monkeypatch.setattr(main, "SLA_HOT_WAIT", timedelta(minutes=30))
     with session_factory() as session:
         valeria = _advisor(session, zona)
@@ -136,7 +136,8 @@ def test_the_queue_marks_the_hot_leads_waiting_too_long(client, session_factory,
         _lead(session, zona, status="sql", qualified_ago=timedelta(hours=5))
         session.commit()
 
-    page = client.get(f"/panel/{valeria.access_token}").text
+    login(valeria)
+    page = client.get("/panel").text
 
     assert page.count("HOT unclaimed for") == 2
     assert "HOT unclaimed for 45 min" in page

@@ -20,26 +20,33 @@
   {%- if value is none -%}—{%- else -%}{{ "%.1f"|format(value.total_seconds() / 86400) }} days{%- endif -%}
 {%- endmacro %}
 {% macro empty() %}<p class="empty">No data for this period.</p>{% endmacro %}
+{# Los desgloses de una tarjeta (área, tipo, asesor) son tablas apiladas: con anchos fijos (`breakdown`) sus
+   columnas quedan alineadas entre sí y con las de la tarjeta siguiente. #}
 {% macro placed_table(title, rows) %}
   <div class="table-wrap">
-    <table>
+    <table class="breakdown">
+      <colgroup><col class="col-name"><col class="col-count"><col></colgroup>
       <thead><tr><th scope="col">{{ title }}</th><th scope="col">Deals</th><th scope="col">Amount</th></tr></thead>
       <tbody>
-        {% for row in rows %}<tr><td>{{ label("property_type", row.name) if title == "Type" else row.name }}</td><td>{{ row.deals }}</td><td>{{ money(row.amount) }}</td></tr>{% endfor %}
+        {% for row in rows %}<tr><td>{{ label("property_type", row.name) if title == "Type" else row.name }}</td><td class="num">{{ row.deals }}</td><td class="num">{{ money(row.amount) }}</td></tr>{% endfor %}
       </tbody>
     </table>
   </div>
 {% endmacro %}
+{# La barra compara cada mediana con la más lenta de la tabla; con una sola fila siempre estaría llena, así
+   que no se dibuja. #}
 {% macro market_table(title, rows) %}
   {% set top = rows|map(attribute="median_days")|max if rows else 1 %}
   <div class="table-wrap">
-    <table>
-      <thead><tr><th scope="col">{{ title }}</th><th scope="col">Median</th><th scope="col">Deals measured</th><th scope="col">Share</th></tr></thead>
+    <table class="breakdown">
+      <colgroup><col class="col-name"><col class="col-count"><col></colgroup>
+      <thead><tr><th scope="col">{{ title }}</th><th scope="col">Deals measured</th><th scope="col">Median</th></tr></thead>
       <tbody>
         {% for row in rows %}
         {% set name = label("property_type", row.name) if title == "Type" else row.name %}
-        <tr><td>{{ name }}</td><td>{{ row.median_days }} days</td><td>{{ row.deals }}</td>
-          <td>{{ ui.bar(row.median_days, top, name ~ ": " ~ row.median_days ~ " days") }}</td></tr>
+        <tr><td>{{ name }}</td><td class="num">{{ row.deals }}</td>
+          <td class="num"><span class="value">{{ row.median_days }} days</span>
+            {%- if rows|length > 1 %} {{ ui.bar(row.median_days, top, name ~ ": " ~ row.median_days ~ " days") }}{% endif %}</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -85,7 +92,9 @@
 <p class="group-title">What moves fast and what is stagnant?</p>
 <div class="card">
   <h2 class="section-title">Days on the market</h2>
-  <p class="muted">From first becoming available to closing. A deal with no status history isn't measured.</p>
+  <p class="muted">From first becoming available to closing. A deal with no status history isn't measured.
+  {%- if inv.days_on_market_by_zone|length > 1 or inv.days_on_market_by_type|length > 1 %}
+  The bar compares each median with the slowest one.{% endif %}</p>
   {% if inv.days_on_market_by_zone %}
   {{ market_table("Area", inv.days_on_market_by_zone) }}
   {{ market_table("Type", inv.days_on_market_by_type) }}
@@ -174,11 +183,11 @@
   {% if att.by_band | sum(attribute="leads") %}
   <div class="table-wrap">
     <table>
-      <thead><tr><th scope="col">Band</th><th scope="col">Leads</th><th scope="col">Closed</th><th scope="col">Conversion</th><th scope="col">Share</th></tr></thead>
+      <thead><tr><th scope="col">Band</th><th scope="col">Leads</th><th scope="col">Closed</th><th scope="col">Conversion</th></tr></thead>
       <tbody>
         {% for row in att.by_band %}
-        <tr><td>{{ ui.band_badge(row.band) }}</td><td>{{ row.leads }}</td><td>{{ row.won }}</td><td>{{ pct(row.rate) }}</td>
-          <td>{{ ui.bar(row.rate or 0, 1, row.band ~ ": " ~ pct(row.rate)) }}</td></tr>
+        <tr><td>{{ ui.band_badge(row.band) }}</td><td>{{ row.leads }}</td><td>{{ row.won }}</td><td><span class="value">{{ pct(row.rate) }}</span>
+          {{ ui.bar(row.rate or 0, 1, row.band ~ ": " ~ pct(row.rate)) }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
