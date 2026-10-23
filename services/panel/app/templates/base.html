@@ -81,6 +81,13 @@
     th { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .04em;
       color: var(--muted); background: var(--surface-2); }
     tr:last-child td { border-bottom: 0; }
+    .table-wrap + .table-wrap { margin-top: var(--space-3); }
+    /* Desgloses apilados (negocio): anchos fijos para que las columnas coincidan de una tabla a otra. */
+    table.breakdown { table-layout: fixed; }
+    table.breakdown .col-name { width: 40%; }
+    table.breakdown .col-count { width: 20%; }
+    td.num, th.num { font-variant-numeric: tabular-nums; }
+    td .value { display: inline-block; min-width: 6.5em; font-variant-numeric: tabular-nums; }
 
     .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: var(--text-xs);
       font-weight: 600; border: 1px solid var(--line); }
@@ -146,7 +153,7 @@
       {% if unread %}<span class="badge badge-count" title="{{ unread }} unread">{{ unread }}</span>{% endif %}
     </a></li>
     {% else %}
-    <li><a href="/negocio"{% if active == 'negocio' %} aria-current="page"{% endif %}>Business</a></li>
+    <li><a href="{{ business_url() }}"{% if active == 'negocio' %} aria-current="page"{% endif %}>Business</a></li>
     <li><a href="/panel/funnel"{% if active == 'funnel' %} aria-current="page"{% endif %}>Funnel</a></li>
     {% endif %}
   </ul>
