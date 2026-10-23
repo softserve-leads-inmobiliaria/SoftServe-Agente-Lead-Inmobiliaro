@@ -7,7 +7,8 @@
 # Qué hace:
 #   1. Arranca el daemon de Docker si no responde (`docker desktop start`).
 #   2. Levanta core, panel y phoenix sin el arnés: sus guiones esperan el agente fake y con Bedrock
-#      fallan y gastan cupo.
+#      fallan y gastan cupo. Si el .env no trae TELEGRAM_BOT_USERNAME, antes se lo pide a Telegram con el
+#      token, para que la landing pública (B-16) muestre los botones del chat.
 #   3. Corre el seed (asesores, propiedades y promociones), que `up` de esos servicios no ejecuta, y
 #      siembra la historia sintética de seis meses (N-9) para la vista de negocio. La cola no la ve.
 #   4. Comprueba core, panel, catálogo y bot sin crear leads, para que la cola del panel quede limpia.
@@ -51,12 +52,24 @@ LLM_PROVIDER=$(env_value LLM_PROVIDER fake)
 BOT_TOKEN=$(env_value TELEGRAM_BOT_TOKEN "")
 ADVISOR_PASSWORD=$(env_value PANEL_ADVISOR_PASSWORD asesor-demo)
 MANAGER_PASSWORD=$(env_value PANEL_MANAGER_PASSWORD gerente-demo)
+BOT_USERNAME=$(env_value TELEGRAM_BOT_USERNAME "")
+
+bot_username() {  # el @usuario del bot según Telegram (getMe), o vacío si no responde
+  curl -s --max-time 10 "https://api.telegram.org/bot$BOT_TOKEN/getMe" | grep -o '"username":"[^"]*"' | cut -d'"' -f4 || true
+}
 
 echo "==> Docker"
 if ! docker info >/dev/null 2>&1; then
   echo "    El daemon no responde: docker desktop start"
   docker desktop start --timeout 180 >/dev/null
   wait_for "el daemon de Docker" 180 docker info
+fi
+
+# La landing (B-16) arma los botones de Telegram con el usuario del bot. Si el .env no lo trae, se le pregunta
+# a Telegram; exportado, pisa al .env en `config/panel.env`, y el .env no se toca.
+if [[ -z "$BOT_USERNAME" && -n "$BOT_TOKEN" ]]; then
+  BOT_USERNAME=$(bot_username)
+  [[ -n "$BOT_USERNAME" ]] && export TELEGRAM_BOT_USERNAME="$BOT_USERNAME"
 fi
 
 echo "==> Stack (core, panel, phoenix y sus dependencias; sin el arnés)"
@@ -86,10 +99,13 @@ fi
 bot=""
 if [[ -n "$BOT_TOKEN" ]]; then
   wait_for "el bot de Telegram" 60 sh -c "docker compose logs core | grep -q 'bot de Telegram escuchando'"
-  bot=$(curl -s "https://api.telegram.org/bot$BOT_TOKEN/getMe" | grep -o '"username":"[^"]*"' | cut -d'"' -f4)
+  bot=$(bot_username)
   echo "    bot @$bot escuchando por long polling"
 else
   echo "    AVISO: sin TELEGRAM_BOT_TOKEN en el .env: no hay bot, solo POST /events"
+fi
+if [[ -z "$BOT_USERNAME" ]]; then
+  echo "    AVISO: sin TELEGRAM_BOT_USERNAME: la landing pública se ve sin los botones de Telegram"
 fi
 if [[ "$LLM_PROVIDER" != "bedrock" ]]; then
   echo "    AVISO: LLM_PROVIDER=$LLM_PROVIDER: las respuestas salen de plantillas, no de un LLM"
@@ -115,6 +131,7 @@ echo
 if [[ -n "$bot" ]]; then
   echo "Lead, entrando por el anuncio: https://t.me/$bot?start=prop_00231"
 fi
+echo "Landing pública:               http://localhost:$PANEL_PORT/properties"
 echo "Negocio, con la historia demo: http://localhost:$PANEL_PORT/negocio?demo=1   (como gerente)"
 echo "Trazas (Phoenix):              http://localhost:$PHOENIX_PORT"
 echo "Ensayo automático:             python scripts/demo/conversar.py"
