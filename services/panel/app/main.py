@@ -7,6 +7,7 @@ viejas con el token (`/panel/<token>/…`, las que manda el core) solo redirigen
 """
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -55,7 +56,20 @@ templates.env.globals["label"] = label
 NOT_FOUND = HTTPException(status_code=404, detail="Not found")
 CSRF_REJECTED = HTTPException(status_code=403, detail="Invalid form, reload the page")
 LOGIN_ERROR = "Wrong username or password."  # el mismo para los dos casos: no revela qué usuarios existen
-HOME = {"asesor": "/panel", "gerente": "/negocio"}
+
+
+def business_url(environ=os.environ) -> str:
+    """A dónde va el gerente: en la demo (PANEL_DEMO=1), negocio con la historia sintética de N-9. Sin ella
+    la base recién sembrada no tiene operaciones reales y la vista se ve vacía."""
+    return "/negocio?demo=1" if environ.get("PANEL_DEMO", "").strip() == "1" else "/negocio"
+
+
+def home_url(role: str) -> str:
+    return "/panel" if role == "asesor" else business_url()
+
+
+templates.env.globals["business_url"] = business_url  # el enlace "Business" de la cabecera
+
 REFRESH_SECONDS = 30  # los avisos no llegan solos al navegador: la página se recarga (B-15)
 SLA_HOT_WAIT = hot_wait_from_env()  # B-12: un valor inválido falla al arrancar
 
@@ -160,7 +174,7 @@ def login(request: Request, session: DbSession, username: Annotated[str, Form()]
         return templates.TemplateResponse(request, "login.html", {"error": LOGIN_ERROR, "username": username})
     request.session.clear()
     request.session.update({"uid": user.id, "csrf": new_csrf_token()})
-    return RedirectResponse(url=HOME[user.role], status_code=303)
+    return RedirectResponse(url=home_url(user.role), status_code=303)
 
 
 @app.post("/logout")
