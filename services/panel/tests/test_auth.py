@@ -71,6 +71,15 @@ def test_the_advisor_lands_on_the_queue_and_the_manager_on_the_business_view(cli
     assert response.status_code == 303 and response.headers["location"] == "/negocio"
 
 
+def test_in_the_demo_the_manager_lands_on_the_business_view_with_the_demo_history(client, login, monkeypatch):
+    """Con PANEL_DEMO=1 la base solo tiene la historia sintética (N-9): sin `demo=1` el gerente vería todo vacío."""
+    monkeypatch.setenv("PANEL_DEMO", "1")
+    login()
+    response = client.post("/login", data={"username": MANAGER, "password": PASSWORD}, follow_redirects=False)
+    assert response.status_code == 303 and response.headers["location"] == "/negocio?demo=1"
+    assert 'href="/negocio?demo=1"' in client.get("/panel/funnel").text  # y el enlace "Business" también
+
+
 def test_the_login_page_is_public(client):
     page = client.get("/login")
     assert page.status_code == 200

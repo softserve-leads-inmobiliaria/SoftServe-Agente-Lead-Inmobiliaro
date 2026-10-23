@@ -209,6 +209,29 @@ def test_the_synthetic_history_only_shows_up_when_asked(client, mundo):
     assert "Includes the demo's synthetic history" in with_demo
 
 
+def _section(page: str, title: str, until: str) -> str:
+    """La tarjeta `title` de la página, hasta la tarjeta `until` (por sus títulos, no por el texto)."""
+    heading = '<h2 class="section-title">'
+    return page[page.index(heading + title):page.index(heading + until)]
+
+
+def test_the_stacked_breakdowns_share_fixed_columns(client, mundo):
+    """Área, tipo y asesor son tablas apiladas: con `breakdown` sus columnas quedan alineadas entre sí."""
+    page = client.get(WEEK + "&demo=1").text
+    assert _section(page, "Placed", "Days on the market").count('<table class="breakdown">') == 3
+    assert _section(page, "Days on the market", "Stagnant").count('<table class="breakdown">') == 2
+
+
+def test_days_on_market_draws_a_bar_only_when_there_is_something_to_compare(client, mundo):
+    """La barra compara cada mediana con la más lenta: con una sola fila siempre estaría llena."""
+    one = _section(client.get(WEEK).text, "Days on the market", "Stagnant")
+    assert "days" in one and '<svg class="bar"' not in one and "slowest" not in one
+
+    two = _section(client.get(WEEK + "&demo=1").text, "Days on the market", "Stagnant")
+    assert '<svg class="bar"' in two and "The bar compares each median with the slowest one." in two
+    assert "Share" not in two
+
+
 def test_an_invalid_range_shows_the_week_with_a_notice(client):
     page = client.get("/negocio?periodo=rango&desde=2026-09-20&hasta=2026-09-14")
 
